@@ -1,0 +1,21 @@
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Dependências e builds
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# Dados locais
+.data/
+*.log
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
