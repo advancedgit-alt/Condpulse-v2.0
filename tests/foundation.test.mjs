@@ -16,7 +16,7 @@ test('rastreabilidade preserva 68 tickets e 60 cenarios sem marcar aceite fictic
 test('contrato publica somente a superficie implementada da fundacao',()=>{
  const spec=json('contracts/openapi.json');
  assert.equal(spec.openapi,'3.1.0');
- assert.deepEqual(Object.keys(spec.paths),['/v1/me']);
+ assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout']); for(const op of ['login','refresh','logout']) {const route=spec.paths['/auth/'+op].post; assert.equal(route['x-feature-flag'],'CP_BFF_ENABLED'); assert.ok(route.parameters.some(p=>p.name==='X-CSRF-Token' && p.required));}
  assert.ok(spec.paths['/v1/me'].get.security[0].bearerAuth);
  const refs=JSON.stringify(spec).matchAll(/"\$ref":"#\/components\/schemas\/([^"]+)"/g);
  for(const [,name] of refs) assert.ok(spec.components.schemas[name],name);
@@ -33,3 +33,4 @@ test('tokens mantem a identidade propria CondPulse e alvo de toque',()=>{
  assert.equal(tokens.brand,'CondPulse'); assert.ok(tokens.minimumTouchTargetPx>=48);
  assert.equal(tokens.colors.navy,'#102A43'); assert.equal(tokens.colors.teal,'#007F86');
 });
+

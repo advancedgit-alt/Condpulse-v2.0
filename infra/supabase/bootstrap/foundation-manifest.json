@@ -1,0 +1,2249 @@
+{
+  "projectRef": "rpnrqfrfwywglvyykgrg",
+  "region": "sa-east-1",
+  "sourceCommit": "b933891c784de8cc88c5886768bd52b7b6134c30",
+  "appVersions": [
+    "001",
+    "002"
+  ],
+  "supabaseMigration": "20261027225434",
+  "sha256": [
+    {
+      "name": "V001__foundation.sql",
+      "sha256": "4db4bab3b11d93951d154a17c629b810063ed5029617d48ba6454d6cf5c654b4"
+    },
+    {
+      "name": "V002__roles_and_rls.sql",
+      "sha256": "d897dc09b4be141bdeb60e248ad2840665b91a09eb4b74a958ebd27e3bdf31d8"
+    }
+  ],
+  "owner": "postgres",
+  "futureFlywayBaselineVersion": "002",
+  "baselineExecuted": false,
+  "attestation": {
+    "acl": [
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=r/postgres}",
+        "table": "accounts",
+        "schema": "platform"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=r/postgres}",
+        "table": "tenants",
+        "schema": "platform"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=r/postgres}",
+        "table": "memberships",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=r/postgres}",
+        "table": "blocks",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=r/postgres}",
+        "table": "units",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=r/postgres}",
+        "table": "amenities",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=arw/postgres}",
+        "table": "parcels",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=arw/postgres}",
+        "table": "arrival_requests",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=ar/postgres}",
+        "table": "parcel_handoffs",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=arw/postgres}",
+        "table": "idempotency_keys",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=a/postgres,cp_worker=rw/postgres}",
+        "table": "outbox",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=arw/postgres,cp_worker=rw/postgres}",
+        "table": "reservations",
+        "schema": "cp"
+      },
+      {
+        "acl": "{postgres=arwdDxtm/postgres,cp_api=a/postgres,cp_worker=a/postgres}",
+        "table": "audit_log",
+        "schema": "cp"
+      }
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "amenities",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "table": "amenities",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "capacity",
+        "type": "integer",
+        "table": "amenities",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "approval_required",
+        "type": "boolean",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "true",
+        "nullable": "NO"
+      },
+      {
+        "name": "fee_cents",
+        "type": "bigint",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "buffer_minutes",
+        "type": "integer",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "policy_version",
+        "type": "integer",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "1",
+        "nullable": "NO"
+      },
+      {
+        "name": "policy",
+        "type": "jsonb",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      {
+        "name": "active",
+        "type": "boolean",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "true",
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "version",
+        "type": "bigint",
+        "table": "amenities",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "unit_id",
+        "type": "uuid",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "state",
+        "type": "text",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": "'WAITING'::text",
+        "nullable": "NO"
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "decided_by",
+        "type": "uuid",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "decided_at",
+        "type": "timestamp with time zone",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "version",
+        "type": "bigint",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "actor_id",
+        "type": "uuid",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "action",
+        "type": "text",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "resource_type",
+        "type": "text",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "resource_id",
+        "type": "uuid",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "trace_id",
+        "type": "uuid",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "audit_log",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "blocks",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "blocks",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "table": "blocks",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "blocks",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "actor_id",
+        "type": "uuid",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "request_key",
+        "type": "text",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "method",
+        "type": "text",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "route",
+        "type": "text",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "body_hash",
+        "type": "text",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "response_status",
+        "type": "integer",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "response_body",
+        "type": "jsonb",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "memberships",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "account_id",
+        "type": "uuid",
+        "table": "memberships",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "unit_id",
+        "type": "uuid",
+        "table": "memberships",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "display_name",
+        "type": "text",
+        "table": "memberships",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "role",
+        "type": "text",
+        "table": "memberships",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "permissions",
+        "type": "jsonb",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "'{}'::jsonb",
+        "nullable": "NO"
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "'PENDING'::text",
+        "nullable": "NO"
+      },
+      {
+        "name": "valid_from",
+        "type": "timestamp with time zone",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "valid_until",
+        "type": "timestamp with time zone",
+        "table": "memberships",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "version",
+        "type": "bigint",
+        "table": "memberships",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "outbox",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "outbox",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "event_type",
+        "type": "text",
+        "table": "outbox",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "aggregate_id",
+        "type": "uuid",
+        "table": "outbox",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "aggregate_version",
+        "type": "bigint",
+        "table": "outbox",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "payload",
+        "type": "jsonb",
+        "table": "outbox",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "state",
+        "type": "text",
+        "table": "outbox",
+        "schema": "cp",
+        "default": "'PENDING'::text",
+        "nullable": "NO"
+      },
+      {
+        "name": "attempts",
+        "type": "integer",
+        "table": "outbox",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "available_at",
+        "type": "timestamp with time zone",
+        "table": "outbox",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "lease_until",
+        "type": "timestamp with time zone",
+        "table": "outbox",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "outbox",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "parcel_id",
+        "type": "uuid",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "operator_id",
+        "type": "uuid",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "recipient_name",
+        "type": "text",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "evidence_kind",
+        "type": "text",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "parcels",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "parcels",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "unit_id",
+        "type": "uuid",
+        "table": "parcels",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "table": "parcels",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "table": "parcels",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "storage_location",
+        "type": "text",
+        "table": "parcels",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "table": "parcels",
+        "schema": "cp",
+        "default": "'RECEIVED'::text",
+        "nullable": "NO"
+      },
+      {
+        "name": "received_by",
+        "type": "uuid",
+        "table": "parcels",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "received_at",
+        "type": "timestamp with time zone",
+        "table": "parcels",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "parcels",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "parcels",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "version",
+        "type": "bigint",
+        "table": "parcels",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "reservations",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "amenity_id",
+        "type": "uuid",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "unit_id",
+        "type": "uuid",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "kind",
+        "type": "text",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "starts_at",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "ends_at",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "occupied_from",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "occupied_until",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "rule_snapshot",
+        "type": "jsonb",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "fee_cents",
+        "type": "bigint",
+        "table": "reservations",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "decision_reason",
+        "type": "text",
+        "table": "reservations",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "reservations",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "version",
+        "type": "bigint",
+        "table": "reservations",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "units",
+        "schema": "cp",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "tenant_id",
+        "type": "uuid",
+        "table": "units",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "block_id",
+        "type": "uuid",
+        "table": "units",
+        "schema": "cp",
+        "default": null,
+        "nullable": "YES"
+      },
+      {
+        "name": "label",
+        "type": "text",
+        "table": "units",
+        "schema": "cp",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "table": "units",
+        "schema": "cp",
+        "default": "'ACTIVE'::text",
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "units",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "table": "units",
+        "schema": "cp",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "version",
+        "type": "bigint",
+        "table": "units",
+        "schema": "cp",
+        "default": "0",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "accounts",
+        "schema": "platform",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "table": "accounts",
+        "schema": "platform",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "accounts",
+        "schema": "platform",
+        "default": "now()",
+        "nullable": "NO"
+      },
+      {
+        "name": "id",
+        "type": "uuid",
+        "table": "tenants",
+        "schema": "platform",
+        "default": "extensions.gen_random_uuid()",
+        "nullable": "NO"
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "table": "tenants",
+        "schema": "platform",
+        "default": null,
+        "nullable": "NO"
+      },
+      {
+        "name": "time_zone",
+        "type": "text",
+        "table": "tenants",
+        "schema": "platform",
+        "default": "'America/Sao_Paulo'::text",
+        "nullable": "NO"
+      },
+      {
+        "name": "active",
+        "type": "boolean",
+        "table": "tenants",
+        "schema": "platform",
+        "default": "false",
+        "nullable": "NO"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "table": "tenants",
+        "schema": "platform",
+        "default": "now()",
+        "nullable": "NO"
+      }
+    ],
+    "history": [
+      {
+        "name": "condpulse_bootstrap_restrict_rls_event_function",
+        "version": "20261027210735",
+        "has_statements": true,
+        "statements_digest_sha256": "6ec5e6a7509febe9bde6dda29257ce96ca0c86b28754c95700087a6ddc5d8ffd"
+      },
+      {
+        "name": "condpulse_foundation_v001_v002_atomic_bootstrap",
+        "version": "20261027225434",
+        "has_statements": true,
+        "statements_digest_sha256": "f5c95c7f1abfcc569dccf08be21b2fe896126fd140e6341f9244516330c9df2e"
+      }
+    ],
+    "indexes": [
+      {
+        "indexdef": "CREATE UNIQUE INDEX amenities_pkey ON cp.amenities USING btree (id)",
+        "indexname": "amenities_pkey",
+        "tablename": "amenities",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX amenities_tenant_id_id_key ON cp.amenities USING btree (tenant_id, id)",
+        "indexname": "amenities_tenant_id_id_key",
+        "tablename": "amenities",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX arrival_requests_pkey ON cp.arrival_requests USING btree (id)",
+        "indexname": "arrival_requests_pkey",
+        "tablename": "arrival_requests",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX arrival_requests_tenant_id_id_key ON cp.arrival_requests USING btree (tenant_id, id)",
+        "indexname": "arrival_requests_tenant_id_id_key",
+        "tablename": "arrival_requests",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX audit_by_resource ON cp.audit_log USING btree (tenant_id, resource_type, resource_id, created_at)",
+        "indexname": "audit_by_resource",
+        "tablename": "audit_log",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX audit_log_pkey ON cp.audit_log USING btree (id)",
+        "indexname": "audit_log_pkey",
+        "tablename": "audit_log",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX audit_log_tenant_id_id_key ON cp.audit_log USING btree (tenant_id, id)",
+        "indexname": "audit_log_tenant_id_id_key",
+        "tablename": "audit_log",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX blocks_pkey ON cp.blocks USING btree (id)",
+        "indexname": "blocks_pkey",
+        "tablename": "blocks",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX blocks_tenant_id_id_key ON cp.blocks USING btree (tenant_id, id)",
+        "indexname": "blocks_tenant_id_id_key",
+        "tablename": "blocks",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX blocks_tenant_id_name_key ON cp.blocks USING btree (tenant_id, name)",
+        "indexname": "blocks_tenant_id_name_key",
+        "tablename": "blocks",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX idempotency_keys_pkey ON cp.idempotency_keys USING btree (id)",
+        "indexname": "idempotency_keys_pkey",
+        "tablename": "idempotency_keys",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX idempotency_keys_tenant_id_actor_id_method_route_request_ke_key ON cp.idempotency_keys USING btree (tenant_id, actor_id, method, route, request_key)",
+        "indexname": "idempotency_keys_tenant_id_actor_id_method_route_request_ke_key",
+        "tablename": "idempotency_keys",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX idempotency_keys_tenant_id_id_key ON cp.idempotency_keys USING btree (tenant_id, id)",
+        "indexname": "idempotency_keys_tenant_id_id_key",
+        "tablename": "idempotency_keys",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX memberships_account_current ON cp.memberships USING btree (account_id, status, tenant_id)",
+        "indexname": "memberships_account_current",
+        "tablename": "memberships",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX memberships_pkey ON cp.memberships USING btree (id)",
+        "indexname": "memberships_pkey",
+        "tablename": "memberships",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX memberships_tenant_id_account_id_unit_id_role_key ON cp.memberships USING btree (tenant_id, account_id, unit_id, role) NULLS NOT DISTINCT",
+        "indexname": "memberships_tenant_id_account_id_unit_id_role_key",
+        "tablename": "memberships",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX memberships_tenant_id_id_key ON cp.memberships USING btree (tenant_id, id)",
+        "indexname": "memberships_tenant_id_id_key",
+        "tablename": "memberships",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX outbox_pkey ON cp.outbox USING btree (id)",
+        "indexname": "outbox_pkey",
+        "tablename": "outbox",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX outbox_ready ON cp.outbox USING btree (tenant_id, state, available_at)",
+        "indexname": "outbox_ready",
+        "tablename": "outbox",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX outbox_tenant_id_event_type_aggregate_id_aggregate_version_key ON cp.outbox USING btree (tenant_id, event_type, aggregate_id, aggregate_version)",
+        "indexname": "outbox_tenant_id_event_type_aggregate_id_aggregate_version_key",
+        "tablename": "outbox",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX outbox_tenant_id_id_key ON cp.outbox USING btree (tenant_id, id)",
+        "indexname": "outbox_tenant_id_id_key",
+        "tablename": "outbox",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX parcel_handoffs_pkey ON cp.parcel_handoffs USING btree (id)",
+        "indexname": "parcel_handoffs_pkey",
+        "tablename": "parcel_handoffs",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX parcel_handoffs_tenant_id_id_key ON cp.parcel_handoffs USING btree (tenant_id, id)",
+        "indexname": "parcel_handoffs_tenant_id_id_key",
+        "tablename": "parcel_handoffs",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX parcel_handoffs_tenant_id_parcel_id_key ON cp.parcel_handoffs USING btree (tenant_id, parcel_id)",
+        "indexname": "parcel_handoffs_tenant_id_parcel_id_key",
+        "tablename": "parcel_handoffs",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX parcels_pending ON cp.parcels USING btree (tenant_id, unit_id, received_at) WHERE (status = 'RECEIVED'::text)",
+        "indexname": "parcels_pending",
+        "tablename": "parcels",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX parcels_pkey ON cp.parcels USING btree (id)",
+        "indexname": "parcels_pkey",
+        "tablename": "parcels",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX parcels_tenant_id_id_key ON cp.parcels USING btree (tenant_id, id)",
+        "indexname": "parcels_tenant_id_id_key",
+        "tablename": "parcels",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX reservations_by_unit ON cp.reservations USING btree (tenant_id, unit_id, starts_at)",
+        "indexname": "reservations_by_unit",
+        "tablename": "reservations",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX reservations_expiry ON cp.reservations USING btree (tenant_id, expires_at) WHERE (status = ANY (ARRAY['HELD'::text, 'PENDING_APPROVAL'::text]))",
+        "indexname": "reservations_expiry",
+        "tablename": "reservations",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE INDEX reservations_no_overlap ON cp.reservations USING gist (tenant_id, amenity_id, tstzrange(occupied_from, occupied_until, '[)'::text)) WHERE (status = ANY (ARRAY['HELD'::text, 'PENDING_APPROVAL'::text, 'CONFIRMED'::text]))",
+        "indexname": "reservations_no_overlap",
+        "tablename": "reservations",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX reservations_pkey ON cp.reservations USING btree (id)",
+        "indexname": "reservations_pkey",
+        "tablename": "reservations",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX reservations_tenant_id_id_key ON cp.reservations USING btree (tenant_id, id)",
+        "indexname": "reservations_tenant_id_id_key",
+        "tablename": "reservations",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX units_pkey ON cp.units USING btree (id)",
+        "indexname": "units_pkey",
+        "tablename": "units",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX units_tenant_id_block_id_label_key ON cp.units USING btree (tenant_id, block_id, label) NULLS NOT DISTINCT",
+        "indexname": "units_tenant_id_block_id_label_key",
+        "tablename": "units",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX units_tenant_id_id_key ON cp.units USING btree (tenant_id, id)",
+        "indexname": "units_tenant_id_id_key",
+        "tablename": "units",
+        "schemaname": "cp",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX accounts_pkey ON platform.accounts USING btree (id)",
+        "indexname": "accounts_pkey",
+        "tablename": "accounts",
+        "schemaname": "platform",
+        "tablespace": null
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX tenants_pkey ON platform.tenants USING btree (id)",
+        "indexname": "tenants_pkey",
+        "tablename": "tenants",
+        "schemaname": "platform",
+        "tablespace": null
+      }
+    ],
+    "policies": [
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "amenities",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "arrival_requests",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "audit_log",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "blocks",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "((tenant_id = platform.current_tenant_id()) AND (actor_id = platform.current_actor_id()))",
+        "roles": [
+          "cp_api"
+        ],
+        "tablename": "idempotency_keys",
+        "permissive": "PERMISSIVE",
+        "policyname": "idempotency_actor",
+        "schemaname": "cp",
+        "with_check": "((tenant_id = platform.current_tenant_id()) AND (actor_id = platform.current_actor_id()))"
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "(account_id = platform.current_actor_id())",
+        "roles": [
+          "cp_api"
+        ],
+        "tablename": "memberships",
+        "permissive": "PERMISSIVE",
+        "policyname": "membership_self",
+        "schemaname": "cp",
+        "with_check": null
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "outbox",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "parcel_handoffs",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "parcels",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "reservations",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(tenant_id = platform.current_tenant_id())",
+        "roles": [
+          "cp_api",
+          "cp_worker"
+        ],
+        "tablename": "units",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_boundary",
+        "schemaname": "cp",
+        "with_check": "(tenant_id = platform.current_tenant_id())"
+      },
+      {
+        "cmd": "ALL",
+        "qual": "(id = platform.current_actor_id())",
+        "roles": [
+          "cp_api"
+        ],
+        "tablename": "accounts",
+        "permissive": "PERMISSIVE",
+        "policyname": "account_self",
+        "schemaname": "platform",
+        "with_check": null
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "(active AND (EXISTS ( SELECT 1\n   FROM cp.memberships m\n  WHERE ((m.tenant_id = tenants.id) AND (m.account_id = platform.current_actor_id()) AND (m.status = 'ACTIVE'::text) AND (m.valid_from <= now()) AND ((m.valid_until IS NULL) OR (m.valid_until > now()))))))",
+        "roles": [
+          "cp_api"
+        ],
+        "tablename": "tenants",
+        "permissive": "PERMISSIVE",
+        "policyname": "tenant_membership",
+        "schemaname": "platform",
+        "with_check": null
+      },
+      {
+        "cmd": "SELECT",
+        "qual": "active",
+        "roles": [
+          "cp_worker"
+        ],
+        "tablename": "tenants",
+        "permissive": "PERMISSIVE",
+        "policyname": "worker_tenant_catalog",
+        "schemaname": "platform",
+        "with_check": null
+      }
+    ],
+    "constraints": [
+      {
+        "name": "amenities_buffer_minutes_check",
+        "type": "c",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "CHECK (((buffer_minutes >= 0) AND (buffer_minutes <= 1440)))"
+      },
+      {
+        "name": "amenities_capacity_check",
+        "type": "c",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "CHECK ((capacity > 0))"
+      },
+      {
+        "name": "amenities_fee_cents_check",
+        "type": "c",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "CHECK ((fee_cents >= 0))"
+      },
+      {
+        "name": "amenities_pkey",
+        "type": "p",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "amenities_policy_check",
+        "type": "c",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "CHECK ((jsonb_typeof(policy) = 'object'::text))"
+      },
+      {
+        "name": "amenities_policy_version_check",
+        "type": "c",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "CHECK ((policy_version > 0))"
+      },
+      {
+        "name": "amenities_tenant_id_fkey",
+        "type": "f",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "amenities_tenant_id_id_key",
+        "type": "u",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "amenities_version_check",
+        "type": "c",
+        "table": "amenities",
+        "schema": "cp",
+        "definition": "CHECK ((version >= 0))"
+      },
+      {
+        "name": "arrival_requests_check",
+        "type": "c",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "CHECK ((expires_at > created_at))"
+      },
+      {
+        "name": "arrival_requests_check1",
+        "type": "c",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "CHECK ((((state = ANY (ARRAY['APPROVED'::text, 'DENIED'::text])) AND (decided_by IS NOT NULL) AND (decided_at IS NOT NULL)) OR ((state = ANY (ARRAY['WAITING'::text, 'EXPIRED'::text])) AND (decided_by IS NULL) AND (decided_at IS NULL))))"
+      },
+      {
+        "name": "arrival_requests_decided_by_fkey",
+        "type": "f",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (decided_by) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "arrival_requests_pkey",
+        "type": "p",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "arrival_requests_state_check",
+        "type": "c",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "CHECK ((state = ANY (ARRAY['WAITING'::text, 'APPROVED'::text, 'DENIED'::text, 'EXPIRED'::text])))"
+      },
+      {
+        "name": "arrival_requests_tenant_id_fkey",
+        "type": "f",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "arrival_requests_tenant_id_id_key",
+        "type": "u",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "arrival_requests_tenant_id_unit_id_fkey",
+        "type": "f",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)"
+      },
+      {
+        "name": "arrival_requests_version_check",
+        "type": "c",
+        "table": "arrival_requests",
+        "schema": "cp",
+        "definition": "CHECK ((version >= 0))"
+      },
+      {
+        "name": "audit_log_actor_id_fkey",
+        "type": "f",
+        "table": "audit_log",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (actor_id) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "audit_log_pkey",
+        "type": "p",
+        "table": "audit_log",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "audit_log_tenant_id_fkey",
+        "type": "f",
+        "table": "audit_log",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "audit_log_tenant_id_id_key",
+        "type": "u",
+        "table": "audit_log",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "blocks_pkey",
+        "type": "p",
+        "table": "blocks",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "blocks_tenant_id_fkey",
+        "type": "f",
+        "table": "blocks",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "blocks_tenant_id_id_key",
+        "type": "u",
+        "table": "blocks",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "blocks_tenant_id_name_key",
+        "type": "u",
+        "table": "blocks",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, name)"
+      },
+      {
+        "name": "idempotency_keys_actor_id_fkey",
+        "type": "f",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (actor_id) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "idempotency_keys_body_hash_check",
+        "type": "c",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "CHECK ((body_hash ~ '^[0-9a-f]{64}$'::text))"
+      },
+      {
+        "name": "idempotency_keys_check",
+        "type": "c",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "CHECK ((expires_at > created_at))"
+      },
+      {
+        "name": "idempotency_keys_pkey",
+        "type": "p",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "idempotency_keys_request_key_check",
+        "type": "c",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "CHECK (((length(request_key) >= 16) AND (length(request_key) <= 200)))"
+      },
+      {
+        "name": "idempotency_keys_response_status_check",
+        "type": "c",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "CHECK (((response_status >= 200) AND (response_status <= 599)))"
+      },
+      {
+        "name": "idempotency_keys_tenant_id_actor_id_method_route_request_ke_key",
+        "type": "u",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, actor_id, method, route, request_key)"
+      },
+      {
+        "name": "idempotency_keys_tenant_id_fkey",
+        "type": "f",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "idempotency_keys_tenant_id_id_key",
+        "type": "u",
+        "table": "idempotency_keys",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "memberships_account_id_fkey",
+        "type": "f",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (account_id) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "memberships_check",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK (((valid_until IS NULL) OR (valid_until > valid_from)))"
+      },
+      {
+        "name": "memberships_check1",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK (((role <> ALL (ARRAY['RESIDENT'::text, 'RESPONSIBLE'::text, 'DEPENDENT'::text, 'OWNER'::text])) OR (unit_id IS NOT NULL)))"
+      },
+      {
+        "name": "memberships_display_name_check",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK (((length(btrim(display_name)) >= 1) AND (length(btrim(display_name)) <= 160)))"
+      },
+      {
+        "name": "memberships_permissions_check",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK ((jsonb_typeof(permissions) = 'object'::text))"
+      },
+      {
+        "name": "memberships_pkey",
+        "type": "p",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "memberships_role_check",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK ((role = ANY (ARRAY['RESIDENT'::text, 'RESPONSIBLE'::text, 'DEPENDENT'::text, 'OWNER'::text, 'CONCIERGE'::text, 'MANAGER'::text, 'SUPPORT'::text])))"
+      },
+      {
+        "name": "memberships_status_check",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK ((status = ANY (ARRAY['PENDING'::text, 'ACTIVE'::text, 'SUSPENDED'::text, 'REVOKED'::text])))"
+      },
+      {
+        "name": "memberships_tenant_id_account_id_unit_id_role_key",
+        "type": "u",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "UNIQUE NULLS NOT DISTINCT (tenant_id, account_id, unit_id, role)"
+      },
+      {
+        "name": "memberships_tenant_id_fkey",
+        "type": "f",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "memberships_tenant_id_id_key",
+        "type": "u",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "memberships_tenant_id_unit_id_fkey",
+        "type": "f",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)"
+      },
+      {
+        "name": "memberships_version_check",
+        "type": "c",
+        "table": "memberships",
+        "schema": "cp",
+        "definition": "CHECK ((version >= 0))"
+      },
+      {
+        "name": "outbox_attempts_check",
+        "type": "c",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "CHECK ((attempts >= 0))"
+      },
+      {
+        "name": "outbox_payload_check",
+        "type": "c",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "CHECK ((jsonb_typeof(payload) = 'object'::text))"
+      },
+      {
+        "name": "outbox_pkey",
+        "type": "p",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "outbox_state_check",
+        "type": "c",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "CHECK ((state = ANY (ARRAY['PENDING'::text, 'LEASED'::text, 'DELIVERED'::text, 'FAILED'::text])))"
+      },
+      {
+        "name": "outbox_tenant_id_event_type_aggregate_id_aggregate_version_key",
+        "type": "u",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, event_type, aggregate_id, aggregate_version)"
+      },
+      {
+        "name": "outbox_tenant_id_fkey",
+        "type": "f",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "outbox_tenant_id_id_key",
+        "type": "u",
+        "table": "outbox",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "parcel_handoffs_evidence_kind_check",
+        "type": "c",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "CHECK ((evidence_kind = ANY (ARRAY['ASSISTED'::text, 'CODE'::text, 'DELEGATION'::text])))"
+      },
+      {
+        "name": "parcel_handoffs_operator_id_fkey",
+        "type": "f",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (operator_id) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "parcel_handoffs_pkey",
+        "type": "p",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "parcel_handoffs_recipient_name_check",
+        "type": "c",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "CHECK (((length(btrim(recipient_name)) >= 1) AND (length(btrim(recipient_name)) <= 160)))"
+      },
+      {
+        "name": "parcel_handoffs_tenant_id_fkey",
+        "type": "f",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "parcel_handoffs_tenant_id_id_key",
+        "type": "u",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "parcel_handoffs_tenant_id_parcel_id_fkey",
+        "type": "f",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, parcel_id) REFERENCES cp.parcels(tenant_id, id)"
+      },
+      {
+        "name": "parcel_handoffs_tenant_id_parcel_id_key",
+        "type": "u",
+        "table": "parcel_handoffs",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, parcel_id)"
+      },
+      {
+        "name": "parcels_description_check",
+        "type": "c",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "CHECK ((length(description) <= 500))"
+      },
+      {
+        "name": "parcels_pkey",
+        "type": "p",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "parcels_quantity_check",
+        "type": "c",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "CHECK (((quantity >= 1) AND (quantity <= 1000)))"
+      },
+      {
+        "name": "parcels_received_by_fkey",
+        "type": "f",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (received_by) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "parcels_status_check",
+        "type": "c",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "CHECK ((status = ANY (ARRAY['RECEIVED'::text, 'DELIVERED'::text])))"
+      },
+      {
+        "name": "parcels_storage_location_check",
+        "type": "c",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "CHECK (((length(btrim(storage_location)) >= 1) AND (length(btrim(storage_location)) <= 160)))"
+      },
+      {
+        "name": "parcels_tenant_id_fkey",
+        "type": "f",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "parcels_tenant_id_id_key",
+        "type": "u",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "parcels_tenant_id_unit_id_fkey",
+        "type": "f",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)"
+      },
+      {
+        "name": "parcels_version_check",
+        "type": "c",
+        "table": "parcels",
+        "schema": "cp",
+        "definition": "CHECK ((version >= 0))"
+      },
+      {
+        "name": "reservations_check",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((((kind = 'BOOKING'::text) AND (unit_id IS NOT NULL)) OR ((kind = 'BLOCK'::text) AND (unit_id IS NULL))))"
+      },
+      {
+        "name": "reservations_check1",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((isfinite(starts_at) AND isfinite(ends_at) AND isfinite(occupied_from) AND isfinite(occupied_until)))"
+      },
+      {
+        "name": "reservations_check2",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK (((starts_at < ends_at) AND (occupied_from <= starts_at) AND (occupied_until >= ends_at)))"
+      },
+      {
+        "name": "reservations_check3",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK (((status <> ALL (ARRAY['HELD'::text, 'PENDING_APPROVAL'::text])) OR ((expires_at IS NOT NULL) AND (expires_at <= starts_at))))"
+      },
+      {
+        "name": "reservations_created_by_fkey",
+        "type": "f",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (created_by) REFERENCES platform.accounts(id)"
+      },
+      {
+        "name": "reservations_fee_cents_check",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((fee_cents >= 0))"
+      },
+      {
+        "name": "reservations_kind_check",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((kind = ANY (ARRAY['BOOKING'::text, 'BLOCK'::text])))"
+      },
+      {
+        "name": "reservations_no_overlap",
+        "type": "x",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "EXCLUDE USING gist (tenant_id WITH =, amenity_id WITH =, tstzrange(occupied_from, occupied_until, '[)'::text) WITH &&) WHERE ((status = ANY (ARRAY['HELD'::text, 'PENDING_APPROVAL'::text, 'CONFIRMED'::text])))"
+      },
+      {
+        "name": "reservations_pkey",
+        "type": "p",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "reservations_rule_snapshot_check",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((jsonb_typeof(rule_snapshot) = 'object'::text))"
+      },
+      {
+        "name": "reservations_status_check",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((status = ANY (ARRAY['HELD'::text, 'PENDING_APPROVAL'::text, 'CONFIRMED'::text, 'REJECTED'::text, 'CANCELLED'::text, 'EXPIRED'::text])))"
+      },
+      {
+        "name": "reservations_tenant_id_amenity_id_fkey",
+        "type": "f",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, amenity_id) REFERENCES cp.amenities(tenant_id, id)"
+      },
+      {
+        "name": "reservations_tenant_id_fkey",
+        "type": "f",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "reservations_tenant_id_id_key",
+        "type": "u",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "reservations_tenant_id_unit_id_fkey",
+        "type": "f",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)"
+      },
+      {
+        "name": "reservations_version_check",
+        "type": "c",
+        "table": "reservations",
+        "schema": "cp",
+        "definition": "CHECK ((version >= 0))"
+      },
+      {
+        "name": "units_label_check",
+        "type": "c",
+        "table": "units",
+        "schema": "cp",
+        "definition": "CHECK (((length(btrim(label)) >= 1) AND (length(btrim(label)) <= 40)))"
+      },
+      {
+        "name": "units_pkey",
+        "type": "p",
+        "table": "units",
+        "schema": "cp",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "units_status_check",
+        "type": "c",
+        "table": "units",
+        "schema": "cp",
+        "definition": "CHECK ((status = ANY (ARRAY['ACTIVE'::text, 'INACTIVE'::text])))"
+      },
+      {
+        "name": "units_tenant_id_block_id_fkey",
+        "type": "f",
+        "table": "units",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id, block_id) REFERENCES cp.blocks(tenant_id, id)"
+      },
+      {
+        "name": "units_tenant_id_block_id_label_key",
+        "type": "u",
+        "table": "units",
+        "schema": "cp",
+        "definition": "UNIQUE NULLS NOT DISTINCT (tenant_id, block_id, label)"
+      },
+      {
+        "name": "units_tenant_id_fkey",
+        "type": "f",
+        "table": "units",
+        "schema": "cp",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES platform.tenants(id)"
+      },
+      {
+        "name": "units_tenant_id_id_key",
+        "type": "u",
+        "table": "units",
+        "schema": "cp",
+        "definition": "UNIQUE (tenant_id, id)"
+      },
+      {
+        "name": "units_version_check",
+        "type": "c",
+        "table": "units",
+        "schema": "cp",
+        "definition": "CHECK ((version >= 0))"
+      },
+      {
+        "name": "accounts_pkey",
+        "type": "p",
+        "table": "accounts",
+        "schema": "platform",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "name": "accounts_status_check",
+        "type": "c",
+        "table": "accounts",
+        "schema": "platform",
+        "definition": "CHECK ((status = ANY (ARRAY['PENDING'::text, 'ACTIVE'::text, 'SUSPENDED'::text, 'CLOSED'::text])))"
+      },
+      {
+        "name": "tenants_name_check",
+        "type": "c",
+        "table": "tenants",
+        "schema": "platform",
+        "definition": "CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 160)))"
+      },
+      {
+        "name": "tenants_pkey",
+        "type": "p",
+        "table": "tenants",
+        "schema": "platform",
+        "definition": "PRIMARY KEY (id)"
+      }
+    ]
+  }
+}

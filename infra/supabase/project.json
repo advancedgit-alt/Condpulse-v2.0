@@ -7,7 +7,12 @@
   "statusObserved": "ACTIVE_HEALTHY",
   "postgresVersionObserved": "17.11.0.003",
   "environmentClassification": "INICIAL_A_CLASSIFICAR_ANTES_DO_DEPLOY",
-  "applicationSchemasApplied": false,
-  "privateBucketsCreated": false,
+  "applicationSchemasApplied": true,
+  "appliedApplicationVersions": ["001", "002"],
+  "applicationBootstrapMigration": "20261027225434",
+  "flywayBaselineExecuted": false,
+  "privateBucketsCreated": true,
+  "privateBuckets": ["cp-documents", "cp-parcel-photos", "cp-upload-quarantine"],
   "providerHardeningMigration": "20261027210735"
 }
+

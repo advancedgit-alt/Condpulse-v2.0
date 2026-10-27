@@ -3,6 +3,9 @@ import java.net.URI;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import br.com.condpulse.identity.bff.BffSecurityConfigurer;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpMethod;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,13 +47,18 @@ public class SecurityConfiguration {
    {"type":"urn:condpulse:problem:%s","title":"Acesso não autorizado.","status":%d,"code":"%s","traceId":"%s"}
    """.formatted(code,status,code,UUID.randomUUID()));
  }
- @Bean SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
-  // Somente Bearer/GET nesta fundação. BFF e mutações com CSRF são entrega posterior.
+ @Bean SecurityFilterChain apiSecurity(HttpSecurity http,ObjectProvider<BffSecurityConfigurer> bff) throws Exception {
+  var configurer=bff.getIfAvailable();
+  if(configurer!=null) configurer.configure(http);
+  // BFF é opcional e permanece desligado até configurar/homologar sua origem e segredos.
   return http.sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .requestCache(c->c.disable())
    .authorizeHttpRequests(a->a
     .requestMatchers("/actuator/health","/actuator/health/liveness","/actuator/health/readiness").permitAll()
-    .requestMatchers("/v1/me").authenticated().anyRequest().denyAll())
+    .requestMatchers("/v1/me").authenticated()
+    .requestMatchers(HttpMethod.GET,"/auth/csrf").permitAll()
+    .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout").permitAll()
+    .anyRequest().denyAll())
    .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults())
     .authenticationEntryPoint((req,res,ex)->problem(res,401))
     .accessDeniedHandler((req,res,ex)->problem(res,403)))
@@ -61,3 +69,4 @@ public class SecurityConfiguration {
    .build();
  }
 }
+
