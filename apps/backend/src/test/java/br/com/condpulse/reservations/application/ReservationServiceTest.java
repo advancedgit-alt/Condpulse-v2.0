@@ -1,0 +1,175 @@
+package br.com.condpulse.reservations.application;
+
+import java.sql.SQLException;
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Function;
+import br.com.condpulse.reservations.domain.ReservationPolicy;
+import br.com.condpulse.reservations.infrastructure.ReservationStore;
+import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.tenancy.application.TenantContext;
+import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
+
+class ReservationServiceTest {
+ private final UUID actor=UUID.fromString("11111111-1111-4111-8111-111111111111");
+ private final UUID tenant=UUID.fromString("22222222-2222-4222-8222-222222222222");
+ private final UUID unit=UUID.fromString("33333333-3333-4333-8333-333333333333");
+ private final UUID area=UUID.fromString("44444444-4444-4444-8444-444444444444");
+ private final UUID reservation=UUID.fromString("55555555-5555-4555-8555-555555555555");
+ private final String key="synthetic-operation-0001";
+ private final Instant now=Instant.parse("2030-01-01T12:00:00Z");
+ private final Instant start=Instant.parse("2030-01-02T14:00:00Z");
+ private final Instant end=Instant.parse("2030-01-02T15:00:00Z");
+ private final TenantTransactionExecutor transactions=mock(TenantTransactionExecutor.class);
+ private final ReservationStore store=mock(ReservationStore.class);
+ private final ReservationService service=new ReservationService(transactions,store);
+ private TenantContext context;
+ private final ReservationPolicy policy=new ReservationPolicy(1,EnumSet.allOf(DayOfWeek.class),
+  LocalTime.of(6,0),LocalTime.of(23,59),0,30,240,1,0);
+
+ @SuppressWarnings("unchecked")
+ @BeforeEach void setup() {
+  context=new TenantContext(actor,tenant,ZoneId.of("America/Sao_Paulo"),List.of(
+   new TenantContext.Membership(UUID.randomUUID(),unit,"RESIDENT",false,false)));
+  doAnswer(invocation->{
+   Function<TenantContext,Object> action=invocation.getArgument(2);
+   return action.apply(context);
+  }).when(transactions).execute(eq(actor),eq(tenant),any());
+  when(store.begin(eq(tenant),eq(actor),anyString(),eq(key),anyString()))
+   .thenReturn(new ReservationStore.IdempotentReply(true,null,0));
+  when(store.currentTime()).thenReturn(now);
+ }
+ private ReservationModels.Create request() { return new ReservationModels.Create(unit,area,start,end,1); }
+ private ReservationStore.AmenityData amenity(boolean approval,ReservationPolicy rules) {
+  return new ReservationStore.AmenityData(area,"Área sintética",10,approval,5000,10,1,"{}",0,rules);
+ }
+ private ReservationModels.View view(String status,long version) {
+  return new ReservationModels.View(reservation,unit,area,status,start,end,start,end.plusSeconds(600),1,5000,version);
+ }
+ @Test void createWritesReservationAuditEventAndReplyWithinTheSameContext() {
+  var areaData=amenity(false,policy); var value=view("CONFIRMED",0);
+  when(store.amenity(tenant,area)).thenReturn(areaData);
+  when(store.create(eq(tenant),eq(actor),eq(request()),eq(areaData),any(),eq("America/Sao_Paulo"))).thenReturn(value);
+  var result=service.create(actor,tenant,key,request());
+  assertEquals(201,result.responseStatus()); assertFalse(result.replayed()); assertEquals(value,result.reservation());
+  var order=inOrder(store);
+  order.verify(store).begin(eq(tenant),eq(actor),anyString(),eq(key),anyString());
+  order.verify(store).lockUnit(tenant,unit);
+  order.verify(store).amenity(tenant,area);
+  order.verify(store).currentTime();
+  order.verify(store).activeCount(tenant,unit,now);
+  order.verify(store).create(eq(tenant),eq(actor),eq(request()),eq(areaData),any(),eq("America/Sao_Paulo"));
+  order.verify(store).record(eq(tenant),eq(actor),eq(value),eq("RESERVATION_CREATED"),any(UUID.class));
+  order.verify(store).finish(eq(tenant),eq(actor),anyString(),eq(key),eq(value),eq(201));
+ }
+ @Test void successfulReplayReturnsOriginalResponseWithoutRepeatingBusinessEffects() {
+  var value=view("CONFIRMED",0);
+  when(store.begin(eq(tenant),eq(actor),anyString(),eq(key),anyString()))
+   .thenReturn(new ReservationStore.IdempotentReply(false,value,201));
+  var result=service.create(actor,tenant,key,request());
+  assertTrue(result.replayed()); assertEquals(value,result.reservation());
+  verify(store).begin(eq(tenant),eq(actor),anyString(),eq(key),anyString());
+  verifyNoMoreInteractions(store);
+ }
+ @Test void deniedUnitCannotReadEvenAnExistingIdempotentReply() {
+  context=new TenantContext(actor,tenant,ZoneId.of("America/Sao_Paulo"),List.of(
+   new TenantContext.Membership(UUID.randomUUID(),UUID.randomUUID(),"RESIDENT",false,false)));
+  var error=assertThrows(BusinessProblem.class,()->service.create(actor,tenant,key,request()));
+  assertEquals(404,error.status()); assertEquals("UNIT_ACCESS_DENIED",error.code());
+  verifyNoInteractions(store);
+ }
+ @Test void ownerWithoutResidentMembershipCannotBookUnit() {
+  context=new TenantContext(actor,tenant,ZoneId.of("America/Sao_Paulo"),List.of(
+   new TenantContext.Membership(UUID.randomUUID(),unit,"OWNER",true,true)));
+  assertEquals(404,assertThrows(BusinessProblem.class,()->service.create(actor,tenant,key,request())).status());
+  verifyNoInteractions(store);
+ }
+ @Test void catalogAlsoRequiresResidentialReservationCapability() {
+  context=new TenantContext(actor,tenant,ZoneId.of("America/Sao_Paulo"),List.of(
+   new TenantContext.Membership(UUID.randomUUID(),null,"MANAGER",true,true)));
+  assertEquals("RESERVATION_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->service.amenities(actor,tenant)).code());
+  verifyNoInteractions(store);
+ }
+ @Test void incompletePolicyFailsClosed() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(false,null));
+  assertEquals("AMENITY_POLICY_NOT_CONFIGURED",assertThrows(BusinessProblem.class,
+   ()->service.create(actor,tenant,key,request())).code());
+  verify(store,never()).create(any(),any(),any(),any(),any(),anyString());
+  verify(store,never()).record(any(),any(),any(),anyString(),any());
+ }
+ @Test void approvalRequiredAreaDoesNotCreateAnUnmanagedPendingReservation() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(true,policy));
+  assertEquals("AMENITY_APPROVAL_UNAVAILABLE",assertThrows(BusinessProblem.class,
+   ()->service.create(actor,tenant,key,request())).code());
+  verify(store,never()).create(any(),any(),any(),any(),any(),anyString());
+ }
+ @Test void acceptedPolicyMustMatchTheCurrentVersion() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(false,policy));
+  var changed=new ReservationModels.Create(unit,area,start,end,2);
+  assertEquals("AMENITY_POLICY_CHANGED",assertThrows(BusinessProblem.class,
+   ()->service.create(actor,tenant,key,changed)).code());
+  verify(store,never()).create(any(),any(),any(),any(),any(),anyString());
+ }
+ @Test void quotaAcrossAmenitiesIsCheckedAfterUnitLock() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(false,policy));
+  when(store.activeCount(tenant,unit,now)).thenReturn(1L);
+  assertEquals("UNIT_RESERVATION_QUOTA_REACHED",assertThrows(BusinessProblem.class,
+   ()->service.create(actor,tenant,key,request())).code());
+  var order=inOrder(store); order.verify(store).lockUnit(tenant,unit); order.verify(store).activeCount(tenant,unit,now);
+  verify(store,never()).create(any(),any(),any(),any(),any(),anyString());
+ }
+ @Test void exclusionConstraintIsTranslatedAfterExecutorThrowsWithoutLeakingSql() {
+  doThrow(new DataIntegrityViolationException("synthetic SQL must not leak",new SQLException("conflict","23P01")))
+   .when(transactions).execute(eq(actor),eq(tenant),any());
+  var error=assertThrows(BusinessProblem.class,()->service.create(actor,tenant,key,request()));
+  assertEquals(409,error.status()); assertEquals("RESERVATION_CONFLICT",error.code());
+  assertFalse(error.getMessage().contains("SQL")); verifyNoInteractions(store);
+ }
+ @Test void repeatedCancellationWithNewKeyDoesNotWriteEventOrAdvanceVersion() {
+  var cancelled=view("CANCELLED",1);
+  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0));
+  var result=service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0));
+  assertEquals(200,result.responseStatus()); assertEquals(1,result.reservation().version());
+  verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
+  verify(store).finish(eq(tenant),eq(actor),anyString(),eq(key),eq(cancelled),eq(200));
+ }
+ @Test void cancellationUsesAcceptedSnapshotRatherThanCurrentAmenityRules() {
+  var current=view("CONFIRMED",0); var cancelled=view("CANCELLED",1);
+  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(current,0));
+  when(store.cancel(tenant,actor,current)).thenReturn(cancelled);
+  var result=service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0));
+  assertEquals(cancelled,result.reservation());
+  verify(store,never()).amenity(any(),any());
+  verify(store).record(eq(tenant),eq(actor),eq(cancelled),eq("RESERVATION_CANCELLED"),any());
+ }
+ @Test void staleVersionCannotCancelConfirmedReservation() {
+  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",1),0));
+  assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
+   ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
+  verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
+ }
+ @Test void readOnlyWindowIsBoundedBeforeQueryingDatabase() {
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.reservations(actor,tenant,unit,start,start.plusSeconds(32*86400L))).code());
+  verifyNoInteractions(transactions,store);
+ }
+ @Test void extremeInstantsAreRejectedBeforeJdbcTimestampConversion() {
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.reservations(actor,tenant,unit,Instant.MAX.minusSeconds(3600),Instant.MAX)).code());
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.reservations(actor,tenant,unit,Instant.MIN,Instant.MIN.plusSeconds(3600))).code());
+  verifyNoInteractions(transactions,store);
+ }
+}

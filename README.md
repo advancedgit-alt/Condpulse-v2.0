@@ -19,6 +19,7 @@ Uma estrutura de banco e um scaffold não equivalem ao produto homologado.
 - [Banco único: PostgreSQL](docs/adr/0002-postgresql.md)
 - [Bootstrap auditável e transição ao Flyway](docs/adr/0003-bootstrap-supabase.md)
 - [Integração e habilitação do BFF](docs/BFF_INTEGRACAO.md)
+- [Fatia residencial e limites de reservas](docs/adr/0004-fatia-residencial-reservas.md)
 - [Modelo e autorização](docs/DADOS_E_AUTORIZACAO.md)
 - [Operação e recuperação](docs/OPERACAO.md)
 - [Estado e pendências](docs/STATUS.md)
@@ -39,6 +40,7 @@ node --test tests/foundation.test.mjs
 mvn -f apps/backend/pom.xml verify
 ```
 Teste PostgreSQL: leia `tests/database/README.md`.
+Ensaio JDBC com login runtime e pool real: leia `tests/database/JDBC.md`.
 Não usar credenciais ou dados da Advanced. Nenhuma migration pode ser aplicada diretamente
 ao projeto Advanced gerenciado anterior ou à produção self-hosted da Advanced.
 

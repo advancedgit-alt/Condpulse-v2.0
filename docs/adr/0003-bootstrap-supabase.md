@@ -4,7 +4,7 @@ Decisão de 27/10/2026, revisada independentemente.
 
 O projeto existe em sa-east-1, com Auth já cadastrado, mas cp/platform não possuem objetos
 de negócio. O terminal não resolve DNS externo e não há conexão JDBC disponível nesta sessão.
-Para iniciar a estrutura real, o bootstrap executa exatamente V001/V002 validados pelo CI,
+Para iniciar a estrutura real, o bootstrap executa as mesmas instruções SQL de V001/V002 validadas pelo CI,
 em um único bloco transacional pelo mecanismo nativo de migrations do Supabase.
 
 O source permanece exclusivamente em db/migrations. O manifesto registra source commit,
@@ -24,6 +24,12 @@ Owner de bootstrap é postgres; o futuro migrador usa a mesma identidade DDL ou 
 transferência de ownership explícita e revisada. Runtime nunca recebe essa identidade.
 Flyway administra somente platform/cp; extensions pertence ao recurso gerenciado.
 clean-disabled permanece true.
+
+Precisão da atestação: os arquivos locais usados no comando de bootstrap continham um
+LF final adicional em relação aos blobs Git. O manifesto preserva os hashes exatos da
+representação executada e registra separadamente canonicalGitSourceSha256, com hash e
+blob de cada arquivo do commit original. Nenhuma instrução SQL difere e nenhuma migration
+aplicada ou seu histórico nativo foi reescrito. A distinção deve ser conferida no baseline.
 
 Referências oficiais: https://documentation.red-gate.com/flyway/reference/commands/baseline
 e https://documentation.red-gate.com/flyway/reference/configuration/flyway-namespace/flyway-baseline-on-migrate-setting
