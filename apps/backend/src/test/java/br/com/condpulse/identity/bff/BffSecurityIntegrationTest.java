@@ -79,7 +79,9 @@ class BffSecurityIntegrationTest {
   String header=response.getHeader("Set-Cookie");
   assertNotNull(header); assertTrue(header.startsWith("__Host-cp_csrf="));
   assertTrue(header.contains("Path=/")); assertTrue(header.contains("Secure"));
-  assertTrue(header.contains("HttpOnly")); assertTrue(header.contains("SameSite=Lax"));
+  assertTrue(header.contains("HttpOnly"));
+  // O mock omite no header o atributo SameSite de Cookie Servlet comum.
+  assertEquals("Lax",response.getCookie("__Host-cp_csrf").getAttribute("SameSite"));
   assertFalse(header.contains("Domain="));
   verifyNoInteractions(sessions,decoder);
  }

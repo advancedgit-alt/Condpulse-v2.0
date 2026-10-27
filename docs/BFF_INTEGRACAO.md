@@ -1,5 +1,5 @@
 # CP-011 — integração da sessão web BFF
-Estado: código inicial e testes preparados, ainda sem execução Maven/JDBC/HTTP nesta sessão.
+Estado: código em revisão na PR#2; conferir evidência atualizada em docs/STATUS.md.
 Nenhum token real foi usado. O BFF permanece desligado por padrão e não simula login.
 
 ## Arquivos novos
@@ -14,34 +14,17 @@ com logout não recria linha.
 Logout remove sessão durável antes da revogação remota. Revogação no provedor é best-effort:
 indisponibilidade do Auth não reativa a sessão local.
 
-## Integração obrigatória em SecurityConfiguration
-Adicionar imports:
-```java
-import br.com.condpulse.identity.bff.BffSecurityConfigurer;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.HttpMethod;
-```
-Alterar assinatura de apiSecurity:
-```java
-SecurityFilterChain apiSecurity(HttpSecurity http,ObjectProvider<BffSecurityConfigurer> bff) throws Exception
-```
-Antes da cadeia atual:
-```java
-var configurer=bff.getIfAvailable();
-if(configurer!=null) configurer.configure(http);
-```
-Antes de anyRequest().denyAll(), acrescentar:
-```java
-.requestMatchers(HttpMethod.GET,"/auth/csrf").permitAll()
-.requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout").permitAll()
-```
-Não desativar CSRF nem dispensá-lo por header Bearer. BffOriginFilter rejeita mutações /auth sem Origin
-exatamente igual ao configurado, inclusive se houver Authorization. Cookie autentica /v1 apenas quando
-não há Authorization; um Bearer inválido nunca cai para a conta do cookie.
-Filtros BFF são criados dentro do configurer e registrados só na cadeia Security, evitando dupla execução Servlet.
+## Integração aplicada
+SecurityConfiguration usa BffSecurityConfigurer opcional e publica apenas GET /auth/csrf e
+POST /auth/login, /auth/refresh, /auth/logout quando os controllers condicionais estão ativos.
+O configurer e os controllers dependem de CP_BFF_ENABLED=true. O padrão false preserva o acesso Bearer.
+
+CSRF permanece ativo. BffOriginFilter rejeita mutações /auth sem Origin exatamente igual ao
+configurado, inclusive com Authorization. Cookie autentica /v1 apenas quando não há Authorization;
+Bearer inválido nunca cai para a conta do cookie. Filtros existem apenas na cadeia Security.
 
 ## Configuração necessária em application.yaml
-No mesmo nível de condpulse.auth:
+Configuração já integrada em application.yaml:
 ```yaml
 condpulse:
   bff:
@@ -73,13 +56,13 @@ Todas as respostas /auth são no-store. Nenhum localStorage, token em URL ou con
 ## CI
 - A contagem de migrations no suite tests/database/run.py passa de2 para3.
 - Depois do suite PostgreSQL, executar psql -X -v ON_ERROR_STOP=1 -f tests/database/bff_sessions.sql
-  no mesmo banco descartável. O arquivo faz rollback das suas fixtures.
+  no mesmo banco descartável. O arquivo faz rollback das fixtures principais e remove as fixtures do ensaio entre transações; nenhuma persiste ao terminar com sucesso.
 - Novos testes Java usam somente dependências já existentes: Spring Test/MockRestServiceServer/JUnit/Mockito.
-  Nenhum spring-security-test adicional necessário.
+  Nenhum spring-security-test adicional necessário. Oito cenários MockMvc adicionais exercitam a cadeia Security real com serviço/decoder isolados, sem rede/JDBC.
 - Os26 testes novos cobrem cifra/AAD/tamper/chave, cookie/CSRF/Origin, principal autenticado, DTO/provider protocol,
   rejeição sem vazar corpo, refresh concorrente/timeout/crash com lease vencida, commit de invalidação,
   conta divergente e corrida com logout.
-- Executar Maven e corrigir eventuais incompatibilidades de API; não foram compilados localmente.
+- Java/PostgreSQL são executados no CI; ambiente local não possui Java/Maven. Conferir run/commit em STATUS.
 
 ## Gates ainda necessários
 - Teste HTTP integrado da cadeia Security configurada, banco e provedor sandbox em HTTPS.

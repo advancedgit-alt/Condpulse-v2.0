@@ -47,7 +47,9 @@ class BffProtocolTest {
   assertNotNull(cookie);
   assertTrue(cookie.contains("__Host-cp_csrf="));
   assertTrue(cookie.contains("Secure")); assertTrue(cookie.contains("HttpOnly"));
-  assertTrue(cookie.contains("SameSite=Lax")); assertTrue(cookie.contains("Path=/"));
+  // MockHttpServletResponse não serializa SameSite de Cookie Servlet comum no header.
+  assertEquals("Lax",getResponse.getCookie("__Host-cp_csrf").getAttribute("SameSite"));
+  assertTrue(cookie.contains("Path=/"));
   assertFalse(cookie.contains("Domain="));
   String raw=cookie.substring(cookie.indexOf('=')+1,cookie.indexOf(';'));
   var rejected=request("POST","/auth/logout"); rejected.setCookies(new Cookie("__Host-cp_csrf",raw));
