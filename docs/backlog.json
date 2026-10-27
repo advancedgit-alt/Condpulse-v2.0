@@ -1,0 +1,523 @@
+{
+  "source": "PRD CondPulse v1.0 27/10/2026",
+  "tickets": [
+    {
+      "id": "CP-001",
+      "delivery": "Congelar escopo e dois pilotos. Assinar matriz P0/P1, pacote e processos preservados por condomínio.",
+      "acceptance": "Nenhuma função vendida fica sem responsável ou critério de aceite.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-002",
+      "delivery": "Fixar toolchain e ADRs. Java 25, Spring Boot compatível, Node LTS e Expo SDK compatível; arquivos de lock e SBOM.",
+      "acceptance": "Build reproduzível de checkout limpo e relatório de dependências, sem versões flutuantes.",
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
+    },
+    {
+      "id": "CP-003",
+      "delivery": "Criar monólito modular e limites. Pacotes por domínio com testes de dependência; controllers não acessam repositórios de outros módulos.",
+      "acceptance": "Teste de arquitetura falha em dependência circular ou acesso proibido.",
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
+    },
+    {
+      "id": "CP-004",
+      "delivery": "Provisionar ambientes isolados. Projetos e segredos separados de desenvolvimento, homologação e produção CondPulse.",
+      "acceptance": "Dados e credenciais de um ambiente não acessam outro; nenhum recurso Advanced é alterado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-005",
+      "delivery": "Executar migrações de referência. Validar V001/V002 em Postgres descartável compatível; ajustar migrations por revisão.",
+      "acceptance": "Execução limpa, constraints testadas e nenhuma alteração manual fora de migration.",
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
+    },
+    {
+      "id": "CP-006",
+      "delivery": "Implementar contexto e RLS. JWT, conta ativa, tenant validado e contexto transacional no pool.",
+      "acceptance": "Requests alternando tenants não herdam contexto; role comum não tem BYPASSRLS.",
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
+    },
+    {
+      "id": "CP-007",
+      "delivery": "Criar design system CondPulse. Tokens, botões, formulário, tabelas, modais, status, navegação e estados de erro.",
+      "acceptance": "Contraste verificado, foco por teclado e toques de 48 px nas ações principais.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-008",
+      "delivery": "Abrir homologação do parceiro. Obter documentação, contrato, sandbox, modelo/firmware e integrador nomeado.",
+      "acceptance": "Disponibilidade e licença verificadas; sem isso facial segue desabilitado e gate é registrado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-009",
+      "delivery": "Configurar pipeline protegido. Testes, análise estática, lockfiles, scanner e artefatos por commit.",
+      "acceptance": "PR externo não lê segredo nem publica; release exige aprovação e artefato identificado.",
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
+    },
+    {
+      "id": "CP-010",
+      "delivery": "Preparar cadastros e autorização legal. Modelo de unidades, responsáveis, aviso de privacidade e fluxo de alternativa não biométrica.",
+      "acceptance": "Condomínio valida responsáveis, finalidade e procedimento antes de importar dados reais.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-011",
+      "delivery": "Sessão web BFF. Login, cookie HttpOnly, CSRF, renovação, expiração e logout.",
+      "acceptance": "Tokens não ficam no localStorage; logout invalida sessão; requests CSRF falham.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-012",
+      "delivery": "Sessão nativa segura. Integração Auth com armazenamento seguro e limpeza de dados no logout.",
+      "acceptance": "Reinstalação, token expirado e troca de usuário não mostram dados anteriores.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-013",
+      "delivery": "MFA de operadores. Exigir AAL2 nas ações privilegiadas e procedimento de recuperação auditado.",
+      "acceptance": "Token AAL1 de porteiro/gestor não autoriza operação protegida.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-014",
+      "delivery": "Vínculos e capacidades. Morador, titular, operador, gestor, suporte temporário; vigência por unidade.",
+      "acceptance": "Conhecer número da unidade não permite entrar nela; revogação bloqueia novas operações.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-015",
+      "delivery": "Troca segura de contexto. Selecionar apenas vínculos ativos e limpar cache por usuário/tenant/unidade.",
+      "acceptance": "Resposta atrasada do contexto anterior não aparece na nova unidade.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-016",
+      "delivery": "Importação em staging. CSV, preview, validação, duplicatas, erros por linha e aprovação de lote.",
+      "acceptance": "Repetir o mesmo lote não duplica unidades ou vínculos; origem e contagens são registradas.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-017",
+      "delivery": "Upload privado e download autorizado. Intenção, tamanho/MIME, quarentena, conclusão e link curto após autorização.",
+      "acceptance": "Objeto de outro tenant e arquivo com tipo inválido são negados; upload não vira público.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-018",
+      "delivery": "Auditoria mínima de ações. Ator, escopo, ação, objeto, motivo e correlação; segredos/fotos fora dos logs.",
+      "acceptance": "Mudanças sensíveis têm trilha; role comum não edita nem apaga auditoria.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-019",
+      "delivery": "Testar isolamento de identidade. Matriz de papéis e tenants incluindo inválido, suspenso, expirado e suporte.",
+      "acceptance": "Todos os testes negativos passam nas rotas, arquivos e stream.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-020",
+      "delivery": "Onboarding e recuperação. Convite validado, primeiro acesso, tutorial curto, recuperação e troca de dispositivo.",
+      "acceptance": "Usuário convidado conclui ativação sem intervenção de banco; convite expirado não cria vínculo.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-021",
+      "delivery": "Configuração de áreas e regras. Cadastro de área, horário, capacidade, taxa informativa, buffer e versão de regulamento.",
+      "acceptance": "Regra inválida é rejeitada e edição não reescreve silenciosamente reservas existentes.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-022",
+      "delivery": "Disponibilidade e reserva transacional. Constraint de intervalo efetivo, idempotência e versão das regras aceitas.",
+      "acceptance": "Teste concorrente confirma uma única reserva bloqueante no mesmo período.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-023",
+      "delivery": "Aprovação, rejeição e cancelamento. Estados, autorização do gestor, prazo, cancelamento e propagação aos convites.",
+      "acceptance": "Decisão repetida não duplica evento; cancelamento desativa convites associados.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-024",
+      "delivery": "Reserva no celular. Área, calendário, horário, regras, taxa e estado da solicitação.",
+      "acceptance": "Pedido pendente não é mostrado como confirmado; conflito oferece nova disponibilidade.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-025",
+      "delivery": "Autorização de visitante. Identidade mínima, responsável, validade e revogação.",
+      "acceptance": "Token de convite não expõe CPF/unidade e não pode autorizar fora do prazo.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-026",
+      "delivery": "Chegada sem convite. Solicitação vinculada à pessoa/unidade; decisão única com prazo.",
+      "acceptance": "Push sem resposta não libera visita; resposta antiga não decide nova chegada.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-027",
+      "delivery": "Fila operacional de portaria. Busca, chegadas, autorizações, ocorrências e ações contextuais.",
+      "acceptance": "Não há botão que marque entrada de visitante ainda não autorizado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-028",
+      "delivery": "Registro de acesso manual. Direção, evidência manual, operador e motivo de correção por evento adicional.",
+      "acceptance": "Entrada manual não é rotulada como passagem detectada por sensor.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-029",
+      "delivery": "Recebimento de encomendas. Unidade, volumes, posição de guarda, foto opcional e outbox.",
+      "acceptance": "Clique repetido com mesma chave gera apenas um registro e uma intenção de notificação.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-030",
+      "delivery": "Retirada de encomendas. Transação de entrega, recebedor, operador e constraint única.",
+      "acceptance": "Duas retiradas simultâneas produzem um sucesso e um conflito, sem sobrescrever histórico.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-031",
+      "delivery": "Painel de encomendas. Listas, detalhes e confirmação explícita da pessoa recebedora.",
+      "acceptance": "Lista do morador inclui somente entregas autorizadas; portaria filtra por posição e unidade.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-032",
+      "delivery": "Publicação de avisos e documentos. Rascunho, público-alvo, publicação e registro de abertura.",
+      "acceptance": "Rascunho não aparece para morador e abertura não é tratada como ciência jurídica.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-033",
+      "delivery": "Pedidos e conversa vinculada. Solicitação, mensagem, anexo, responsável e atualização de estado.",
+      "acceptance": "Conversa permanece no pedido certo; acesso indevido por ID conhecido é negado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-034",
+      "delivery": "Outbox e worker duráveis. Lease, backoff, dead-letter operacional, correlação e replay seletivo.",
+      "acceptance": "Interrupção entre efeito e ack é testada; efeitos não idempotentes não recebem retry cego.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-035",
+      "delivery": "Push e caixa interna. Consentimento, instalações, preferências, receipts e falhas.",
+      "acceptance": "Provider aceitou não vira morador visualizou; token inválido é desativado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-036",
+      "delivery": "Atualizações em tempo real. SSE autenticado e consulta de estado na reconexão.",
+      "acceptance": "Revogação fecha stream; eventos não são transmitidos a usuários sem autorização.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-037",
+      "delivery": "Convites compartilháveis de uso controlado. Token opaco com validade, hash no banco e limites de tentativas.",
+      "acceptance": "Token bruto não aparece em logs, analytics nem URL persistida.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-038",
+      "delivery": "Convidados de uma reserva. Autorizações derivadas da janela do evento e do responsável.",
+      "acceptance": "Reserva cancelada deixa todos os convites dependentes revogados, inclusive após retry.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-039",
+      "delivery": "Prestador recorrente. Dias locais, horas, vigência, revogação e expansão da próxima janela.",
+      "acceptance": "Acesso fora de dia/horário falha; fuso da unidade não depende do celular.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-040",
+      "delivery": "Fila de espera. Ordem estável, oferta com prazo e reserva de slot durante oferta.",
+      "acceptance": "Duas ofertas não capturam o mesmo slot; oferta vencida avança a fila sem dupla confirmação.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-041",
+      "delivery": "Retirada delegada e código. Delegação por encomenda, validade, código com hash e limite de tentativas.",
+      "acceptance": "Código gasto não é reutilizado; delegação de outra encomenda não é aceita.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-042",
+      "delivery": "Mudança e entrega de móveis. Formulário específico, período e aprovação, avisos à portaria.",
+      "acceptance": "Aprovação não promete reserva de elevador inexistente; regras configuradas são exibidas.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-043",
+      "delivery": "Adaptador simulado de acesso. Implementar contrato interno com cenários de timeout, duplicata e confirmação parcial.",
+      "acceptance": "Testes determinísticos cobrem cada estado sem contato com dispositivo real.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-044",
+      "delivery": "Adaptador real do parceiro. Mapeamento documentado de operações e erros para contrato interno.",
+      "acceptance": "Somente endpoints documentados; sandbox confirma operações, idempotência e limites.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-045",
+      "delivery": "Cadastro e atualização facial. Revisão, legalidade, destinatários, envio e confirmação por versão/dispositivo.",
+      "acceptance": "ACK de recebimento não gera estado ativo; uma falha aparece por destino.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-046",
+      "delivery": "Revogação prioritária. Estado desejado, prioridade, reconciliação e tratamento de callback antigo.",
+      "acceptance": "Confirmação de versão antiga não reativa credencial revogada.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-047",
+      "delivery": "Inbox autenticada e eventos. Assinatura do parceiro, timestamp, deduplicação e mapeamento de evidência/direção.",
+      "acceptance": "Callback de conector A não escreve tenant B; repetição não duplica evento.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-048",
+      "delivery": "Saúde e reconciliação. Heartbeat, relógio, backlog e comparação do estado desejado/aplicado.",
+      "acceptance": "Equipamento offline aparece como offline; reconciliação recupera estado final, não reproduz fila obsoleta.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-049",
+      "delivery": "Histórico residencial protegido. Mostrar acessos pertinentes e distinguir autorização, abertura e passagem.",
+      "acceptance": "Sem identificador de saída, exibir sem registro de saída; nada de presença inferida.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-050",
+      "delivery": "Ciclo de vida biométrico. Upload transitório, remoção, alternativa não facial e pedidos do titular.",
+      "acceptance": "Purge e exclusão no parceiro têm evidência; falha gera pendência, não sucesso falso.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-051",
+      "delivery": "Teste de concorrência e banco. Executar constraints, migrações, replay e pools na mesma família Postgres do destino.",
+      "acceptance": "Nenhuma reserva ou retirada duplicada; sem dependência em H2 para integridade.",
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
+    },
+    {
+      "id": "CP-052",
+      "delivery": "Teste de carga representativo. 100 rps/1.000 sessões como carga-alvo inicial; misturar leituras e gravações.",
+      "acceptance": "Relatório p50/p95/p99, erros, saturação e custo; comparar com metas, sem declarar capacidade sem dados.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-053",
+      "delivery": "Teste mobile e acessibilidade. Aparelhos Android/iOS reais, fontes ampliadas, leitor de tela e rede instável.",
+      "acceptance": "Jornadas críticas usáveis com teclado/leitor e sem botões inacessíveis.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-054",
+      "delivery": "Homologar instalação física. Cadastro, expiração, bloqueio, sensor, retorno de energia/rede e cada turno.",
+      "acceptance": "Modelo/firmware registrados e termo de aceite assinado; preservar saída de emergência.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-055",
+      "delivery": "Restaurar banco e objetos. Restore em ambiente isolado, validar contagens, vínculos e hashes de arquivos.",
+      "acceptance": "Cronometrar RTO/RPO reais; não religar integrações antes de reconciliar revogações.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-056",
+      "delivery": "Revisão de ameaças e segredos. Isolamento, BOLA, CSRF, upload, callbacks, logs e cofre.",
+      "acceptance": "Nenhum achado crítico/alto aberto; nenhum segredo detectado no repositório.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-057",
+      "delivery": "Treinar todos os turnos. Roteiro de chegada, encomenda, falha de internet e escalonamento.",
+      "acceptance": "Cada turno executa as tarefas sem depender de agente de IA.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-058",
+      "delivery": "Reconciliar dados migrados. Cadastros, reservas futuras, encomendas pendentes e permissões válidas.",
+      "acceptance": "Contagens e exceções aprovadas pelo condomínio; lote rastreável.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-059",
+      "delivery": "Pilotar condomínio sem sistema. Ativar escopo Essencial com suporte nomeado e observação.",
+      "acceptance": "Conclusões/erros medidos por jornada e autorização de continuidade registrada.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-060",
+      "delivery": "Pilotar condomínio em substituição. Cutover por processo e fornecedor anterior preservado até aceite.",
+      "acceptance": "Uma agenda oficial, continuidade do acesso e rollback acordado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-061",
+      "delivery": "Corrigir defeitos do piloto. Classificação por risco, reprodução e regressão automatizada.",
+      "acceptance": "Incidentes críticos resolvidos antes de expansão; nenhuma correção sem teste associado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-062",
+      "delivery": "Preparar distribuição. Assinatura, builds, política de privacidade, contas e submissão às lojas.",
+      "acceptance": "Build de teste instalável; data de aprovação externa não é tratada como garantida.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-063",
+      "delivery": "Formalizar atendimento e contratos. Matriz software/hardware, horários, severidade e escalonamento.",
+      "acceptance": "Cliente sabe quem atende falha de leitor versus software e quais custos foram contratados.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-064",
+      "delivery": "Concluir aceite do Completo. Revisar fila de espera, delegação, recorrência e integração vendida.",
+      "acceptance": "Função sem aceite fica desabilitada e fora de promessa comercial.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-065",
+      "delivery": "Medir margem e suporte. Custos reais de infraestrutura, parceiro, comunicação e minutos de atendimento.",
+      "acceptance": "Preço confrontado com custo por condomínio, sem chamar faturamento de lucro.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-066",
+      "delivery": "Publicar release por artefato. Promover digest homologado, migrations compatíveis e smoke em produção.",
+      "acceptance": "Versão rastreável, monitoramento ativo e rollback de aplicação demonstrado.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-067",
+      "delivery": "Aplicar gate de lançamento. Revisar todos os critérios D20 com responsáveis e evidências.",
+      "acceptance": "Liberar apenas escopo aprovado; não usar a data para ignorar teste ou homologação.",
+      "status": "PLANEJADO",
+      "evidence": []
+    },
+    {
+      "id": "CP-068",
+      "delivery": "Preparar próxima implantação. Checklist replicável, inventário, treinamento e limites de capacidade.",
+      "acceptance": "Terceiro condomínio usa o mesmo procedimento; exceções viram tarefas, não alterações manuais.",
+      "status": "PLANEJADO",
+      "evidence": []
+    }
+  ]
+}

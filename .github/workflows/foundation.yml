@@ -1,0 +1,83 @@
+name: CondPulse foundation
+on:
+  push:
+permissions:
+  contents: read
+concurrency:
+  group: condpulse-foundation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_DB: condpulse_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: condpulse_ci_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d condpulse_ci"
+          --health-interval 3s --health-timeout 3s --health-retries 30
+    env:
+      # Somente credenciais sinteticas do container descartavel do job.
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGDATABASE: condpulse_ci
+      PGUSER: postgres
+      PGPASSWORD: condpulse_ci_only
+      CP_DB_TEST_OK: DISPOSABLE
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Foundation and contract checks
+        run: node --test tests/foundation.test.mjs
+      - name: Compile and unit tests
+        run: mvn -B -ntp -f apps/backend/pom.xml verify
+      - name: Migrate with Flyway and validate replay
+        env:
+          SPRING_PROFILES_ACTIVE: migrate
+          DATABASE_URL: jdbc:postgresql://localhost:5432/condpulse_ci
+          DATABASE_USER: postgres
+          DATABASE_PASSWORD: condpulse_ci_only
+        run: |
+          java -jar apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar
+          java -jar apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar
+      - name: PostgreSQL isolation and concurrency
+        env:
+          CP_SCHEMA_ALREADY_MIGRATED: "true"
+        run: python3 tests/database/run.py
+      - name: HTTP readiness and missing-token smoke
+        env:
+          SPRING_PROFILES_ACTIVE: api
+          DATABASE_URL: jdbc:postgresql://localhost:5432/condpulse_ci
+          DATABASE_USER: cp_ci_login
+          DATABASE_PASSWORD: synthetic_ci_runtime_only
+          CP_JWT_ISSUER: https://auth.example.invalid
+          CP_JWT_JWK_SET_URI: https://auth.example.invalid/jwks.json
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c "CREATE ROLE cp_ci_login LOGIN PASSWORD 'synthetic_ci_runtime_only' IN ROLE cp_api"
+          java -jar apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar > /tmp/condpulse-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/actuator/health/readiness; then ready=1; break; fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then cat /tmp/condpulse-api.log; exit 1; fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then cat /tmp/condpulse-api.log; exit 1; fi
+          status=$(curl -sS -o /tmp/condpulse-auth.json -w '%{http_code}' http://127.0.0.1:8080/v1/me)
+          test "$status" = "401"
+          node -e "const p=JSON.parse(require('fs').readFileSync('/tmp/condpulse-auth.json','utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)"
+

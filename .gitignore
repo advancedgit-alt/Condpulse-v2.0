@@ -2,17 +2,25 @@
 .env
 .env.*
 !.env.example
+*.pem
+*.p12
+*.key
 
 # Dependências e builds
 node_modules/
 dist/
 build/
+target/
 .next/
+.expo/
 coverage/
+__pycache__/
+*.pyc
 
-# Dados locais
+# Dados e relatórios locais
 .data/
 *.log
+tests/database/results.json
 
 # Sistema e editores
 .DS_Store

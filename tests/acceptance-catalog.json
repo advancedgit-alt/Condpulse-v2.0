@@ -1,0 +1,425 @@
+{
+  "source": "PRD CondPulse v1.0 27/10/2026",
+  "cases": [
+    {
+      "id": "AC-001",
+      "scenario": "Identidade — Morador tenta unidade alheia",
+      "expected": "Retorna 404/403 sem vazar existência ou conteúdo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-002",
+      "scenario": "Identidade — Tenant alternado no pool",
+      "expected": "Cada transação usa seu contexto e nenhuma herda o anterior.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-003",
+      "scenario": "Identidade — Vínculo revogado com token válido",
+      "expected": "Vínculo de negócio é revalidado e operação é negada.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-004",
+      "scenario": "Identidade — Operador sem MFA",
+      "expected": "Recebe exigência de MFA e nenhuma alteração ocorre.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-005",
+      "scenario": "Identidade — Sessão após logout",
+      "expected": "Não há nova ação nem renovação da sessão.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-006",
+      "scenario": "Identidade — Ataque CSRF",
+      "expected": "BFF rejeita antes de executar regra de negócio.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-007",
+      "scenario": "Identidade — Recuperação de conta",
+      "expected": "Identidade é verificada, acesso é auditado e MFA não é desabilitado informalmente.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-008",
+      "scenario": "Identidade — Suporte expirado",
+      "expected": "Consulta é negada e tentativa auditada.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-009",
+      "scenario": "Reservas — Dupla reserva simultânea",
+      "expected": "Apenas uma ocupa o slot; outra recebe conflito.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-010",
+      "scenario": "Reservas — Intervalo de limpeza",
+      "expected": "Constraint impede o conflito operacional.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-011",
+      "scenario": "Reservas — Repetição idempotente",
+      "expected": "Retorna mesmo resultado sem nova reserva.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-012",
+      "scenario": "Reservas — Chave reaproveitada indevidamente",
+      "expected": "Retorna conflito de idempotência.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-013",
+      "scenario": "Reservas — Aprovação vencida",
+      "expected": "Pedido expira ou exige nova disponibilidade; não ignora conflito.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-014",
+      "scenario": "Reservas — Mudança de regra",
+      "expected": "Versão aceita continua rastreável e mudanças exigidas são explícitas.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-015",
+      "scenario": "Reservas — Cancelamento com convidados",
+      "expected": "Convites ficam revogados e integração recebe estado desejado final.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-016",
+      "scenario": "Reservas — Fila de espera concorrente",
+      "expected": "Oferta segue ordem e apenas uma ocupa a vaga.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-017",
+      "scenario": "Reservas — Oferta expirada",
+      "expected": "Nova reserva não é criada e fila pode seguir ao próximo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-018",
+      "scenario": "Reservas — Fuso de horário",
+      "expected": "Apresenta fuso da área com período correto.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-019",
+      "scenario": "Visitas — Convite expirado",
+      "expected": "Não libera visita e informa expiração.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-020",
+      "scenario": "Visitas — Revogação imediata lógica",
+      "expected": "Backend rejeita com estado atualizado.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-021",
+      "scenario": "Visitas — Sem resposta do morador",
+      "expected": "Não há autorização automática; segue procedimento de portaria.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-022",
+      "scenario": "Visitas — Duas respostas contraditórias",
+      "expected": "Uma transição é aceita e outra recebe estado final.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-023",
+      "scenario": "Visitas — Prestador fora de janela",
+      "expected": "Autorização não vale para essa chegada.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-024",
+      "scenario": "Visitas — Link vazado",
+      "expected": "Token dá somente escopo mínimo e não cria sessão autenticada ampla.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-025",
+      "scenario": "Encomendas — Entrega duplicada",
+      "expected": "Apenas um handoff é gravado.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-026",
+      "scenario": "Encomendas — Delegação trocada",
+      "expected": "Operação rejeitada mesmo dentro do mesmo tenant.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-027",
+      "scenario": "Encomendas — Código consumido",
+      "expected": "Não confirma nova entrega.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-028",
+      "scenario": "Encomendas — Conferência humana",
+      "expected": "Imagem só aparece no escopo permitido e não comprova entrega sozinha.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-029",
+      "scenario": "Comunicação — Aviso não publicado",
+      "expected": "Não acessa conteúdo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-030",
+      "scenario": "Comunicação — Notificação sem entrega",
+      "expected": "Mantém sem confirmação de leitura e registra apenas aceitação.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-031",
+      "scenario": "Comunicação — Troca de conta no aparelho",
+      "expected": "Tokens/caches antigos não entregam conteúdo de A para B.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-032",
+      "scenario": "Arquivos — Objeto de outro condomínio",
+      "expected": "API nega e bucket não possui leitura pública.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-033",
+      "scenario": "Arquivos — Arquivo disfarçado",
+      "expected": "Permanece em quarentena/rejeitado conforme verificação.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-034",
+      "scenario": "Facial — Recebimento não é aplicação",
+      "expected": "Mostra pendente de aplicação, não ativo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-035",
+      "scenario": "Facial — Aplicação parcial",
+      "expected": "Mostra cada destino e pendência do segundo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-036",
+      "scenario": "Facial — Callback antigo após revogação",
+      "expected": "Não reativa e agenda reconciliação se necessário.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-037",
+      "scenario": "Facial — Timeout desconhecido",
+      "expected": "Estado UNKNOWN e consulta/reconciliação antes de nova mutação.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-038",
+      "scenario": "Facial — Equipamento offline",
+      "expected": "Não afirma disponibilidade; aplica procedimento de contingência.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-039",
+      "scenario": "Facial — Revogação urgente offline",
+      "expected": "Pendência crítica visível e acionamento do procedimento local.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-040",
+      "scenario": "Facial — Abertura antiga",
+      "expected": "Comando não é executado nem repetido.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-041",
+      "scenario": "Facial — Webhook repetido",
+      "expected": "Ack seguro sem duplicar histórico.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-042",
+      "scenario": "Facial — Assinatura inválida",
+      "expected": "Rejeita sem persistir evento de negócio.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-043",
+      "scenario": "Facial — Conector cruza tenant",
+      "expected": "Escopo deriva da credencial validada, nunca do campo arbitrário.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-044",
+      "scenario": "Facial — Relé sem passagem",
+      "expected": "Texto informa acionamento, não entrada de pessoa.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-045",
+      "scenario": "Facial — Saída não identificada",
+      "expected": "Mostra sem registro de saída, não infere permanência.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-046",
+      "scenario": "Facial — Retorno de energia",
+      "expected": "Executa reconciliação e não envia abertura histórica.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-047",
+      "scenario": "Facial — Remoção de foto",
+      "expected": "Foto transitória é removida e resultado auditado sem guardar a própria foto.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-048",
+      "scenario": "Facial — Recusa de biometria",
+      "expected": "Alternativa operacional documentada permanece disponível.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-049",
+      "scenario": "Infra — Worker cai após efeito",
+      "expected": "Reprocessamento não duplica o efeito.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-050",
+      "scenario": "Infra — Stream após revogação",
+      "expected": "Stream deixa de entregar conteúdo e exige reautorização.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-051",
+      "scenario": "Infra — Restore sem efeitos colaterais",
+      "expected": "Worker e integrações ficam desativados até reconciliação.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-052",
+      "scenario": "Infra — Backup sem arquivos",
+      "expected": "Faltas são detectadas; backup só do banco não recebe aceite completo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-053",
+      "scenario": "Migração — Lote repetido",
+      "expected": "Não duplica unidades nem reservas.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-054",
+      "scenario": "Migração — Dados conflitantes",
+      "expected": "Exibe conflito e impede aplicação cega.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-055",
+      "scenario": "Migração — Duas agendas",
+      "expected": "Somente uma fonte aceita novas reservas por processo.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-056",
+      "scenario": "Operação — Cobrança em atraso",
+      "expected": "Não bloqueia automaticamente passagem física de moradores.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-057",
+      "scenario": "UX — Fonte ampliada",
+      "expected": "Campos e botões permanecem legíveis e alcançáveis.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-058",
+      "scenario": "UX — Rede interrompida na confirmação",
+      "expected": "Consulta estado pelo identificador e evita falsa falha ou duplicação.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-059",
+      "scenario": "UX — Navegação por teclado",
+      "expected": "Foco visível e sequência lógica permitem conclusão.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    },
+    {
+      "id": "AC-060",
+      "scenario": "Release — Escopo não homologado",
+      "expected": "Feature física fica desligada e contrato não a promete como entregue.",
+      "status": "NAO_EXECUTADO",
+      "evidence": []
+    }
+  ]
+}
