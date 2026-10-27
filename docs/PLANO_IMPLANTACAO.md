@@ -37,7 +37,7 @@ Local usa PostgreSQL descartável e dados sintéticos.
 Consulta de custo da organização em 27/10/2026:
 US$10/mês por novo projeto, total-base incremental US$20/mês para dois projetos.
 Consumo adicional, PITR, SMTP, domínio, lojas e servidor não estão nesse total.
-A criação solicitada foi interrompida; consulta posterior não encontrou projetos CondPulse.
+O projeto Condpulse-v2.0 (rpnrqfrfwywglvyykgrg) foi posteriormente encontrado ACTIVE_HEALTHY em sa-east-1, com PostgreSQL17.11.0.003. Não atribuir sua criação a esta execução: a chamada anterior foi interrompida. Um segundo ambiente isolado ainda não foi provisionado.
 Não registrar projeto como provisionado sem retorno e read-back ACTIVE_HEALTHY.
 Não habilitar adicional pago sem aceite específico do custo.
 

@@ -1,7 +1,7 @@
 # SOMENTE banco descartavel para testes. Nunca usar como stack de producao.
 services:
   postgres:
-    image: postgres:17.6
+    image: postgres:17.11
     environment:
       POSTGRES_DB: condpulse_ci
       POSTGRES_USER: postgres

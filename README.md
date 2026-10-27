@@ -1,7 +1,7 @@
 # CondPulse
 Sistema residencial independente para moradores, portaria e gestão de condomínios.
 
-**Estado: fundação em desenvolvimento. Nenhum ambiente Supabase CondPulse ou deploy foi concluído.**
+**Estado: fundação em desenvolvimento. Projeto Supabase Condpulse-v2.0 ativo em São Paulo; schema de negócio e deploy da aplicação ainda pendentes.**
 Uma estrutura de banco e um scaffold não equivalem ao produto homologado.
 
 ## Base adotada

@@ -20,7 +20,7 @@ Resultado do job foundation: SUCCESS, conferido pelos passos e logs.
 - 9 testes Java de claims/issuer/expiração e intervalo/limpeza: passaram.
 - Maven verify: BUILD SUCCESS.
 - Flyway aplicou V001/V002 e validou segunda execução sem reaplicar schema.
-- 25 verificações em PostgreSQL17.6 descartável: passaram.
+- 25 verificações em PostgreSQL17.6 descartável: passaram. O CI foi atualizado para17.11, a versão-base do projeto real; resultado desse head ainda a conferir.
 - Inclui 50 reservas concorrentes com uma vencedora, 20 retiradas com um handoff,
   primeira decisão, FK/RLS cruzados, contexto após commit, auditoria,
   idempotência por ator, rollback de outbox e vínculo revogado.
@@ -32,7 +32,12 @@ O teste de contexto usa mesma conexão SQL; ensaio de pool JDBC real com tenants
 As confirmações de sucesso são restritas à fatia exercitada no CI.
 
 ## Infraestrutura e pendências
-- Nenhum projeto Supabase CondPulse criado: chamada de criação interrompida.
+- Projeto Condpulse-v2.0 encontrado ACTIVE_HEALTHY em sa-east-1: rpnrqfrfwywglvyykgrg, PostgreSQL17.11.0.003.
+- Sua criação não foi atribuída a esta execução. A tentativa anterior de criação foi interrompida.
+- Nenhuma tabela de negócio ou bucket encontrado na inspeção inicial.
+- Hardening da função administrativa rls_auto_enable aplicado via migração nativa20261027210735: EXECUTE de anon/authenticated removido, corpo/event trigger preservados; read-backfalse/false e security advisorlints=[].
+- Migrations de negócio Flyway não aplicadas no projeto remoto: falta executor com conexão autorizada. Não forjar histórico nem criar um segundo dono do schema.
+- Storage/Auth pelo painel/API pendentes. Browser e shell desta sessão falharam por configuração de caminhos de permissões do executor; nenhuma credencial foi solicitada em chat.
 - Organização conectada Sindico Advanced; região pretendida sa-east-1.
 - Custo consultado US$10/mês/projeto; homologação+produção US$20/mês base incremental,
   sujeitos a consumo/adicionais. PITR e outros opcionais não habilitados.

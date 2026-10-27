@@ -27,7 +27,8 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 
 ## Estado e pendências
 - docs/STATUS.md registra evidências e limitações.
-- Supabase CondPulse ainda não criado: chamada de criação interrompida.
+- Projeto Condpulse-v2.0 encontrado ativo em São Paulo: rpnrqfrfwywglvyykgrg, PostgreSQL17.11.0.003.
 - Custo-base consultado US$10/mês/projeto; dois projetos US$20/mês adicionais, sem opcionais.
-- Domínio, host dedicado, cofre, SMTP, PITR, restore e parceiro físico pendentes.
+- Migrations de negócio via Flyway ainda não aplicadas no projeto remoto; ver STATUS.
+- Segundo ambiente, buckets privados, Auth/SMTP, host dedicado, cofre, PITR, restore e parceiro físico pendentes.
 - Código de fundação não equivale ao produto P0/P1 implementado/homologado.

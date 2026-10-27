@@ -1,0 +1,13 @@
+{
+  "projectRef": "rpnrqfrfwywglvyykgrg",
+  "name": "Condpulse-v2.0",
+  "organizationId": "hkbgyjyyacyiltxqotwj",
+  "organizationName": "Sindico Advanced",
+  "region": "sa-east-1",
+  "statusObserved": "ACTIVE_HEALTHY",
+  "postgresVersionObserved": "17.11.0.003",
+  "environmentClassification": "INICIAL_A_CLASSIFICAR_ANTES_DO_DEPLOY",
+  "applicationSchemasApplied": false,
+  "privateBucketsCreated": false,
+  "providerHardeningMigration": "20261027210735"
+}
