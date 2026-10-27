@@ -94,7 +94,7 @@ class JdbcPoolIsolationTest {
  }
  @Test void validatedTenantExecutorAlternatesTenantsAndRollsBackWithoutPoolContextLeak() {
   var transactions=new TenantTransactionExecutor(db.jdbc,db.manager); int pid=db.backendPid();
-  assertEquals(2,transactions.execute(db.accountA,db.tenantA,context->{
+  assertEquals(2,transactions.<Integer>execute(db.accountA,db.tenantA,context->{
    assertEquals(db.accountA,context.accountId()); assertEquals(db.tenantA,context.tenantId());
    context.requireBookableUnit(db.unitA);
    assertEquals("",db.jdbc.queryForObject("select current_setting('app.session_hash',true)",String.class));
@@ -105,7 +105,7 @@ class JdbcPoolIsolationTest {
    throw new IllegalStateException("Rollback sintético da fronteira tenant.");
   }));
   db.assertEmptyContext();
-  assertEquals(1,transactions.execute(db.accountB,db.tenantB,context->{
+  assertEquals(1,transactions.<Integer>execute(db.accountB,db.tenantB,context->{
    assertEquals(db.accountB,context.accountId()); assertEquals(db.tenantB,context.tenantId());
    context.requireBookableUnit(db.unitB);
    return db.jdbc.queryForObject("select count(*) from cp.units",Integer.class);

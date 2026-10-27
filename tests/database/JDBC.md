@@ -33,6 +33,7 @@ gerenciado, TLS externo ou Auth/refresh reais.
 
 Reservas: criar e repetir chave sem duplicar; concorrência da mesma chave; mesma chave com corpo diferente; disputa de
 slot entre unidades; disputa da cota da mesma unidade entre áreas; versão de cancelamento,
-retries sem duplicar auditoria/outbox; revogação negando replay; unidade e área alheias
+retries sem duplicar auditoria/outbox; outro morador da mesma unidade sem poder cancelar
+a reserva do autor; revogação negando replay; unidade e área alheias
 sem acesso; cancelamento pelas regras aceitas mesmo após alteração da política atual.
 A consulta administrativa de contagens confirma o estado efetivamente commitado.
