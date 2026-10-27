@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: condpulse
+  profiles:
+    default: api
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:8}
+      minimum-idle: 0
+      connection-timeout: 5000
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+condpulse:
+  auth:
+    issuer: ${CP_JWT_ISSUER:}
+    jwk-set-uri: ${CP_JWT_JWK_SET_URI:}
+---
+spring:
+  config:
+    activate:
+      on-profile: worker
+  main:
+    web-application-type: none
+    keep-alive: true
+---
+spring:
+  config:
+    activate:
+      on-profile: migrate
+  main:
+    web-application-type: none
+  flyway:
+    enabled: true
+    default-schema: platform
+    schemas: platform,cp,extensions
+    locations: classpath:db/migration
+    clean-disabled: true
+    validate-migration-naming: true
+    baseline-on-migrate: false

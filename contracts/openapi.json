@@ -1,0 +1,117 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CondPulse — API da fundação",
+    "version": "0.1.0",
+    "description": "Somente leitura inicial. BFF, mutações e demais jornadas continuam pendentes."
+  },
+  "paths": {
+    "/v1/me": {
+      "get": {
+        "operationId": "currentIdentity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conta ativa e vínculos atuais do próprio ator",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentIdentity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido"
+          },
+          "403": {
+            "description": "Conta inativa ou ação negada"
+          },
+          "503": {
+            "description": "Banco indisponível"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "CurrentIdentity": {
+        "type": "object",
+        "required": [
+          "accountId",
+          "memberships"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Membership"
+            }
+          }
+        }
+      },
+      "Membership": {
+        "type": "object",
+        "required": [
+          "membershipId",
+          "tenantId",
+          "tenantName",
+          "timeZone",
+          "role",
+          "unitId"
+        ],
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "RESPONSIBLE",
+              "DEPENDENT",
+              "OWNER",
+              "CONCIERGE",
+              "MANAGER",
+              "SUPPORT"
+            ]
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      }
+    }
+  }
+}
