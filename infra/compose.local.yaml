@@ -1,0 +1,18 @@
+# SOMENTE banco descartavel para testes. Nunca usar como stack de producao.
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: condpulse_ci
+      POSTGRES_USER: postgres
+      # Credencial sintetica local, nao usada por nenhum ambiente remoto.
+      POSTGRES_PASSWORD: condpulse_ci_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d condpulse_ci"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
