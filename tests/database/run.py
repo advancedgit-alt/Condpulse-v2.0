@@ -76,8 +76,8 @@ def main():
         for migration in sorted((ROOT / "db/migrations").glob("V*.sql")):
             subprocess.run(["psql", "-X", "-v", "ON_ERROR_STOP=1", "-f", str(migration)], check=True)
     else:
-        expect(value("select count(*) from platform.flyway_schema_history where success and version is not null") == "2",
-               "Flyway executou as duas migrations de fundação")
+        expect(value("select count(*) from platform.flyway_schema_history where success and version is not null") == "3",
+               "Flyway executou as migrations de fundação e sessão BFF")
     query(f"""
         INSERT INTO platform.accounts(id,status) VALUES('{AA}','ACTIVE'),('{AB}','ACTIVE');
         INSERT INTO platform.tenants(id,name,active) VALUES('{TA}','FICTICIO A',true),('{TB}','FICTICIO B',true);
@@ -160,3 +160,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

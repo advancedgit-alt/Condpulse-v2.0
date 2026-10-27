@@ -3,7 +3,7 @@
   "info": {
     "title": "CondPulse — API da fundação",
     "version": "0.1.0",
-    "description": "Somente leitura inicial. BFF, mutações e demais jornadas continuam pendentes."
+    "description": "Leitura inicial e BFF condicional CP_BFF_ENABLED; tokens Auth permanecem no servidor."
   },
   "paths": {
     "/v1/me": {
@@ -12,6 +12,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "webSession": []
           }
         ],
         "responses": {
@@ -36,6 +39,241 @@
           }
         }
       }
+    },
+    "/auth/csrf": {
+      "get": {
+        "operationId": "csrfToken",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "responses": {
+          "200": {
+            "description": "Cookie HttpOnly e token CSRF para cabeçalho",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "headerName",
+                    "token"
+                  ],
+                  "properties": {
+                    "headerName": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessão protegida; resposta sem tokens do provedor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accountId",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "accountId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessão ou credencial inválida"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido"
+          },
+          "409": {
+            "description": "Renovação em andamento"
+          },
+          "429": {
+            "description": "Limite de autenticação"
+          },
+          "503": {
+            "description": "Provedor indisponível"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "writeOnly": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessão protegida; resposta sem tokens do provedor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accountId",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "accountId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessão ou credencial inválida"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido"
+          },
+          "409": {
+            "description": "Renovação em andamento"
+          },
+          "429": {
+            "description": "Limite de autenticação"
+          },
+          "503": {
+            "description": "Provedor indisponível"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sessão local invalidada"
+          },
+          "401": {
+            "description": "Sessão ou credencial inválida"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido"
+          },
+          "409": {
+            "description": "Renovação em andamento"
+          },
+          "429": {
+            "description": "Limite de autenticação"
+          },
+          "503": {
+            "description": "Provedor indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -44,6 +282,11 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      },
+      "webSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-cp_session"
       }
     },
     "schemas": {

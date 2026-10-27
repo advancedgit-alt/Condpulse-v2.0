@@ -58,6 +58,7 @@ jobs:
           CP_SCHEMA_ALREADY_MIGRATED: "true"
         run: python3 tests/database/run.py
       - name: HTTP readiness and missing-token smoke
+        # BFF exige origem/chave HTTPS reais; o teste de API abaixo permanece Bearer.
         env:
           SPRING_PROFILES_ACTIVE: api
           DATABASE_URL: jdbc:postgresql://localhost:5432/condpulse_ci
@@ -80,4 +81,6 @@ jobs:
           status=$(curl -sS -o /tmp/condpulse-auth.json -w '%{http_code}' http://127.0.0.1:8080/v1/me)
           test "$status" = "401"
           node -e "const p=JSON.parse(require('fs').readFileSync('/tmp/condpulse-auth.json','utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)"
+      - name: Durable BFF session database invariants
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/database/bff_sessions.sql
 

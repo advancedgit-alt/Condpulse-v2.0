@@ -37,6 +37,12 @@ management:
         readiness:
           include: readinessState,db
 condpulse:
+  bff:
+    enabled: ${CP_BFF_ENABLED:false}
+    origin: ${CP_BFF_ORIGIN:}
+    publishable-key: ${CP_SUPABASE_PUBLISHABLE_KEY:}
+    encryption-key: ${CP_BFF_ENCRYPTION_KEY:}
+    session-hours: ${CP_BFF_SESSION_HOURS:8}
   auth:
     issuer: ${CP_JWT_ISSUER:}
     jwk-set-uri: ${CP_JWT_JWK_SET_URI:}
@@ -58,8 +64,9 @@ spring:
   flyway:
     enabled: true
     default-schema: platform
-    schemas: platform,cp,extensions
+    schemas: platform,cp
     locations: classpath:db/migration
     clean-disabled: true
     validate-migration-naming: true
     baseline-on-migrate: false
+
