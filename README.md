@@ -3,6 +3,8 @@ Sistema residencial independente para moradores, portaria e gestão de condomín
 
 **Estado: fundação integrada; V001/V002 e arquivos privados configurados no Supabase de São Paulo. Autenticação BFF em validação; aplicação ainda sem deploy.**
 Uma estrutura de banco e um scaffold não equivalem ao produto homologado.
+O backend inclui identidade/BFF, unidades próprias e a primeira fatia residencial de
+reservas, com ensaios JDBC reais. BFF e reservas continuam desligados até os gates de habilitação.
 
 ## Base adotada
 - Java 25 LTS e Spring Boot 4.1.2; API/BFF e worker separados, no mesmo monólito modular.

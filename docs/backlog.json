@@ -68,6 +68,12 @@
           "environment": "GitHub Actions/PostgreSQL descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
           "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "Executor e contexto real no pool, vínculo/unidade e RLS; TLS/pooler gerenciado pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
@@ -110,8 +116,15 @@
       "id": "CP-011",
       "delivery": "Sessão web BFF. Login, cookie HttpOnly, CSRF, renovação, expiração e logout.",
       "acceptance": "Tokens não ficam no localStorage; logout invalida sessão; requests CSRF falham.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "BFF revisado e store real no JDBC; Auth/HTTPS reais, rate limiting e habilitação pública pendentes. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-012",
@@ -138,8 +151,15 @@
       "id": "CP-015",
       "delivery": "Troca segura de contexto. Selecionar apenas vínculos ativos e limpar cache por usuário/tenant/unidade.",
       "acceptance": "Resposta atrasada do contexto anterior não aparece na nova unidade.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "Contexto e catálogo de unidades no backend; frontend/cache e mobile pendentes. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-016",
@@ -180,22 +200,43 @@
       "id": "CP-021",
       "delivery": "Configuração de áreas e regras. Cadastro de área, horário, capacidade, taxa informativa, buffer e versão de regulamento.",
       "acceptance": "Regra inválida é rejeitada e edição não reescreve silenciosamente reservas existentes.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "Catálogo e política1 explícita, versão e snapshot; cadastro administrativo e regras avançadas pendentes. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-022",
       "delivery": "Disponibilidade e reserva transacional. Constraint de intervalo efetivo, idempotência e versão das regras aceitas.",
       "acceptance": "Teste concorrente confirma uma única reserva bloqueante no mesmo período.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "Criação idempotente, cota de admissão e disputa GiST no serviço real; jornada completa e habilitação pendentes. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-023",
       "delivery": "Aprovação, rejeição e cancelamento. Estados, autorização do gestor, prazo, cancelamento e propagação aos convites.",
       "acceptance": "Decisão repetida não duplica evento; cancelamento desativa convites associados.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "Somente cancelamento pelo autor; aprovação/rejeição/expiração e convidados/revogação pendentes. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-024",
@@ -397,6 +438,12 @@
           "environment": "GitHub Actions/PostgreSQL descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
           "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "8d790ad22f7152e274d93f8267255107a92972d8",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
+          "scope": "PostgreSQL17.11, SQL,24 JDBC reais, replay e pool; carga e ambiente gerenciado pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
