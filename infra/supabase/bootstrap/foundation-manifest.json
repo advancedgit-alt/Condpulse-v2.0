@@ -2245,5 +2245,30 @@
         "definition": "PRIMARY KEY (id)"
       }
     ]
-  }
+  },
+  "executedSourceSha256": [
+    {
+      "name": "V001__foundation.sql",
+      "sha256": "4db4bab3b11d93951d154a17c629b810063ed5029617d48ba6454d6cf5c654b4"
+    },
+    {
+      "name": "V002__roles_and_rls.sql",
+      "sha256": "d897dc09b4be141bdeb60e248ad2840665b91a09eb4b74a958ebd27e3bdf31d8"
+    }
+  ],
+  "canonicalGitSourceSha256": [
+    {
+      "name": "V001__foundation.sql",
+      "gitBlob": "5c37836466ac173716a520677a23e3e0856e2756",
+      "sha256": "3c733f81a3cc0eda27f5f139b351848e02b3674d2241799fa84f0b676acc2402",
+      "bytes": 9510
+    },
+    {
+      "name": "V002__roles_and_rls.sql",
+      "gitBlob": "474e69d51038cbfd323487a5aa6f67e560cddc8a",
+      "sha256": "37235ddb43f981b98675c0ab3a4b0c5740b995edb60993bcde70c841cdefc998",
+      "bytes": 3987
+    }
+  ],
+  "sourceRepresentationNote": "O comando de bootstrap usou os arquivos locais com um LF final adicional em cada migration. Os hashes sha256/executedSourceSha256 preservam exatamente essa representação executada. canonicalGitSourceSha256 registra os blobs exatos do commit sourceCommit; nenhuma instrução SQL difere. Não reescrever a migration nativa nem seu digest."
 }

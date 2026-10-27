@@ -66,7 +66,7 @@ Todas as respostas /auth são no-store. Nenhum localStorage, token em URL ou con
 
 ## Gates ainda necessários
 - Teste HTTP integrado da cadeia Security configurada, banco e provedor sandbox em HTTPS.
-- Teste JDBC real com store e pool reutilizado entre sessões/contas, incluindo expiração.
+- Store e pool real já exercitados no PostgreSQL descartável do CI; falta ensaio do pooler/TLS gerenciado no ambiente de destino. Ver tests/database/JDBC.md e STATUS.
 - Teste de refresh/logout concorrente com Auth real e interrupção de rede controlada.
 - Rate limiting de login/recuperação por mecanismo de produção e observabilidade sem credenciais.
 - MFA CP-013, onboarding/recuperação CP-020 e interface web são tickets separados, não implementados.

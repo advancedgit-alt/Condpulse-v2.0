@@ -3,6 +3,8 @@ Sistema residencial independente para moradores, portaria e gestão de condomín
 
 **Estado: fundação integrada; V001/V002 e arquivos privados configurados no Supabase de São Paulo. Autenticação BFF em validação; aplicação ainda sem deploy.**
 Uma estrutura de banco e um scaffold não equivalem ao produto homologado.
+O backend inclui identidade/BFF, unidades próprias e a primeira fatia residencial de
+reservas, com ensaios JDBC reais. BFF e reservas continuam desligados até os gates de habilitação.
 
 ## Base adotada
 - Java 25 LTS e Spring Boot 4.1.2; API/BFF e worker separados, no mesmo monólito modular.
@@ -19,6 +21,7 @@ Uma estrutura de banco e um scaffold não equivalem ao produto homologado.
 - [Banco único: PostgreSQL](docs/adr/0002-postgresql.md)
 - [Bootstrap auditável e transição ao Flyway](docs/adr/0003-bootstrap-supabase.md)
 - [Integração e habilitação do BFF](docs/BFF_INTEGRACAO.md)
+- [Fatia residencial e limites de reservas](docs/adr/0004-fatia-residencial-reservas.md)
 - [Modelo e autorização](docs/DADOS_E_AUTORIZACAO.md)
 - [Operação e recuperação](docs/OPERACAO.md)
 - [Estado e pendências](docs/STATUS.md)
@@ -39,6 +42,7 @@ node --test tests/foundation.test.mjs
 mvn -f apps/backend/pom.xml verify
 ```
 Teste PostgreSQL: leia `tests/database/README.md`.
+Ensaio JDBC com login runtime e pool real: leia `tests/database/JDBC.md`.
 Não usar credenciais ou dados da Advanced. Nenhuma migration pode ser aplicada diretamente
 ao projeto Advanced gerenciado anterior ou à produção self-hosted da Advanced.
 

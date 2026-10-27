@@ -3,7 +3,7 @@
   "info": {
     "title": "CondPulse — API da fundação",
     "version": "0.1.0",
-    "description": "Leitura inicial e BFF condicional CP_BFF_ENABLED; tokens Auth permanecem no servidor."
+    "description": "Identidade, BFF condicional e primeira fatia residencial; conferir flags e limites da ADR-0004."
   },
   "paths": {
     "/v1/me": {
@@ -274,6 +274,443 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/units": {
+      "get": {
+        "operationId": "ownTenantUnits",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados próprios autorizados",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TenantUnit"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, horário, cota ou idempotência"
+          },
+          "422": {
+            "description": "Regra ou configuração não permite a operação"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/amenities": {
+      "get": {
+        "operationId": "tenantAmenities",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados próprios autorizados",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Amenity"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, horário, cota ou idempotência"
+          },
+          "422": {
+            "description": "Regra ou configuração não permite a operação"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/reservations": {
+      "get": {
+        "operationId": "ownUnitReservations",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Janela obrigatória; intervalo máximo de31dias."
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Janela obrigatória; intervalo máximo de31dias."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados próprios autorizados",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, horário, cota ou idempotência"
+          },
+          "422": {
+            "description": "Regra ou configuração não permite a operação"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOwnReservation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReservation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado durável; replay revalida acesso",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, horário, cota ou idempotência"
+          },
+          "422": {
+            "description": "Regra ou configuração não permite a operação"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/reservations/{reservationId}/cancel": {
+      "post": {
+        "operationId": "cancelOwnReservation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reservationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelReservation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado durável; replay revalida acesso",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, horário, cota ou idempotência"
+          },
+          "422": {
+            "description": "Regra ou configuração não permite a operação"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -352,6 +789,303 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "TenantUnit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "blockId",
+          "blockName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "blockId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReservationPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "weekDays",
+          "opensAt",
+          "closesAt",
+          "minimumLeadMinutes",
+          "maximumAdvanceDays",
+          "maximumDurationMinutes",
+          "maximumActivePerUnit",
+          "cancellationLeadMinutes"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "weekDays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            }
+          },
+          "opensAt": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "closesAt": {
+            "type": "string",
+            "example": "22:00"
+          },
+          "minimumLeadMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 525600
+          },
+          "maximumAdvanceDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 366
+          },
+          "maximumDurationMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "maximumActivePerUnit": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Critério de admissão desta área: contagem ativa da unidade em todas as áreas deve estar abaixo deste valor; não é teto permanente único do condomínio.",
+            "maximum": 100
+          },
+          "cancellationLeadMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 525600
+          }
+        }
+      },
+      "Amenity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "amenityId",
+          "name",
+          "capacity",
+          "policyVersion",
+          "feeCents",
+          "bufferMinutes",
+          "approvalRequired",
+          "bookingState",
+          "policy"
+        ],
+        "properties": {
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "feeCents": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "bufferMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "approvalRequired": {
+            "type": "boolean"
+          },
+          "bookingState": {
+            "type": "string",
+            "enum": [
+              "POLICY_NOT_CONFIGURED",
+              "APPROVAL_UNAVAILABLE",
+              "AVAILABLE_FOR_REQUEST"
+            ]
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReservationPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "CreateReservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "amenityId",
+          "startsAt",
+          "endsAt",
+          "acceptedPolicyVersion"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedPolicyVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "CancelReservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "expectedVersion"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "Reservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reservationId",
+          "unitId",
+          "amenityId",
+          "status",
+          "startsAt",
+          "endsAt",
+          "occupiedFrom",
+          "occupiedUntil",
+          "acceptedPolicyVersion",
+          "feeCents",
+          "version"
+        ],
+        "properties": {
+          "reservationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedPolicyVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "feeCents": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ReservationPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reservations",
+          "truncated"
+        ],
+        "properties": {
+          "reservations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Reservation"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       }

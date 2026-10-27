@@ -83,4 +83,10 @@ jobs:
           node -e "const p=JSON.parse(require('fs').readFileSync('/tmp/condpulse-auth.json','utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)"
       - name: Durable BFF session database invariants
         run: psql -X -v ON_ERROR_STOP=1 -f tests/database/bff_sessions.sql
+      - name: JDBC runtime and connection pool isolation
+        env:
+          CP_JDBC_TEST_OK: DISPOSABLE
+          CP_TEST_DB_USER: cp_ci_login
+          CP_TEST_DB_PASSWORD: synthetic_ci_runtime_only
+        run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest test
 

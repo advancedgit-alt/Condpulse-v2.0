@@ -37,6 +37,8 @@ management:
         readiness:
           include: readinessState,db
 condpulse:
+  reservations:
+    enabled: ${CP_RESERVATIONS_ENABLED:false}
   bff:
     enabled: ${CP_BFF_ENABLED:false}
     origin: ${CP_BFF_ORIGIN:}
