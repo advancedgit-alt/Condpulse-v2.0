@@ -12,15 +12,29 @@
       "id": "CP-002",
       "delivery": "Fixar toolchain e ADRs. Java 25, Spring Boot compatível, Node LTS e Expo SDK compatível; arquivos de lock e SBOM.",
       "acceptance": "Build reproduzível de checkout limpo e relatório de dependências, sem versões flutuantes.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-003",
       "delivery": "Criar monólito modular e limites. Pacotes por domínio com testes de dependência; controllers não acessam repositórios de outros módulos.",
       "acceptance": "Teste de arquitetura falha em dependência circular ou acesso proibido.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-004",
@@ -33,15 +47,29 @@
       "id": "CP-005",
       "delivery": "Executar migrações de referência. Validar V001/V002 em Postgres descartável compatível; ajustar migrations por revisão.",
       "acceptance": "Execução limpa, constraints testadas e nenhuma alteração manual fora de migration.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-006",
       "delivery": "Implementar contexto e RLS. JWT, conta ativa, tenant validado e contexto transacional no pool.",
       "acceptance": "Requests alternando tenants não herdam contexto; role comum não tem BYPASSRLS.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-007",
@@ -61,8 +89,15 @@
       "id": "CP-009",
       "delivery": "Configurar pipeline protegido. Testes, análise estática, lockfiles, scanner e artefatos por commit.",
       "acceptance": "PR externo não lê segredo nem publica; release exige aprovação e artefato identificado.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-010",
@@ -355,8 +390,15 @@
       "id": "CP-051",
       "delivery": "Teste de concorrência e banco. Executar constraints, migrações, replay e pools na mesma família Postgres do destino.",
       "acceptance": "Nenhuma reserva ou retirada duplicada; sem dependência em H2 para integridade.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "8aed52a327c03912333907b3f2efddef45a24185",
+          "environment": "GitHub Actions/PostgreSQL descartável",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
+          "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-052",
