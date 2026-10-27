@@ -1,7 +1,6 @@
 name: CondPulse foundation
 on:
   push:
-    branches: ["feat/condpulse-foundation-20261027"]
 permissions:
   contents: read
 concurrency:
@@ -81,3 +80,4 @@ jobs:
           status=$(curl -sS -o /tmp/condpulse-auth.json -w '%{http_code}' http://127.0.0.1:8080/v1/me)
           test "$status" = "401"
           node -e "const p=JSON.parse(require('fs').readFileSync('/tmp/condpulse-auth.json','utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)"
+

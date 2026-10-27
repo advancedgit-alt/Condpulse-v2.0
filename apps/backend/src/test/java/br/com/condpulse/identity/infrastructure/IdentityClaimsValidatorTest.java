@@ -20,6 +20,12 @@ class IdentityClaimsValidatorTest {
  @Test void differentAudienceIsRejected() {
   assertTrue(validator.validate(token("11111111-1111-4111-8111-111111111111",List.of("other"))).hasErrors());
  }
+ @Test void missingAudienceIsRejectedWithoutThrowing() {
+  var token=Jwt.withTokenValue("synthetic-test-token").header("alg","ES256")
+   .subject("11111111-1111-4111-8111-111111111111")
+   .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300)).build();
+  assertTrue(validator.validate(token).hasErrors());
+ }
  @Test void malformedSubjectIsRejected() {
   assertTrue(validator.validate(token("not-an-account",List.of("authenticated"))).hasErrors());
  }
@@ -36,3 +42,4 @@ class IdentityClaimsValidatorTest {
   assertTrue(JwtValidators.createDefaultWithIssuer("https://auth.example.invalid").validate(token).hasErrors());
  }
 }
+

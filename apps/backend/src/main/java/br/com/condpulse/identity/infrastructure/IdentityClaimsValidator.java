@@ -7,7 +7,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 public final class IdentityClaimsValidator implements OAuth2TokenValidator<Jwt> {
  @Override public OAuth2TokenValidatorResult validate(Jwt token) {
-  if(!token.getAudience().contains("authenticated") || !validSubject(token.getSubject())
+  if(token.getAudience()==null || !token.getAudience().contains("authenticated") || !validSubject(token.getSubject())
     || token.getExpiresAt()==null || token.getIssuedAt()==null) {
    return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token","Identidade inválida.",null));
   }
@@ -19,3 +19,4 @@ public final class IdentityClaimsValidator implements OAuth2TokenValidator<Jwt> 
   catch(IllegalArgumentException ex) { return false; }
  }
 }
+
