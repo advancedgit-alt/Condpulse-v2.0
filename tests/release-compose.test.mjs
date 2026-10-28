@@ -10,6 +10,10 @@ import { validateRelease } from '../infra/validate-release.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão remota', () => {
+  const version = execFileSync('docker', ['compose', 'version', '--short'], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+  }).trim().replace(/^v/, '');
+  assert.equal(version, '5.2.0', 'Preflight exige a versao revisada Compose5.2.0');
   const temporary = mkdtempSync(join(tmpdir(), 'condpulse-compose-'));
   try {
     const emptyEnv = join(temporary, 'empty.env');

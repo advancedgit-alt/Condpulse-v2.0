@@ -56,6 +56,13 @@ Os exemplos contêm marcadores inválidos intencionais, não credenciais utiliz�
 
 ## Validação antes da operação
 
+Usar Docker Compose5.2.0, a versão revisada neste pacote (`docker compose version --short`).
+O CI instala o binário oficial Linux por versão e confere seu SHA256. Não substituir
+pela versão embutida no runner. A representação JSON de `bind.create_host_path=false`
+mudou entre versões: o preflight exige o false explícito e rejeita campo ausente,
+pois versões antigas/novas podem omitir valores com semânticas diferentes. Atualizações
+de Compose precisam repetir os testes antes de mudar esta versão de referência.
+
 Executar a partir da raiz, em shell com falha de pipeline habilitada. Os caminhos abaixo
 são locais ao operador/cofre; não são arquivos entregues pelo projeto.
 
@@ -155,4 +162,5 @@ Referências oficiais consultadas para a configuração:
 - https://docs.docker.com/reference/compose-file/services/
 - https://docs.docker.com/reference/compose-file/networks/
 - https://coolify.io/docs/applications/builds/docker-compose
+- https://github.com/docker/compose/releases/tag/v5.2.0
 - docs/adr/0003-bootstrap-supabase.md
