@@ -77,7 +77,7 @@ antes da etapa com segredo. A CA publica vem somente da URL observada no painel:
 `https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt`.
 O download exige TLS, timeout, tamanho limitado, certificado CA valido por pelo menos
 um dia e verificacao da assinatura da raiz. A CA fica readonly no caminho exigido e
-e removida ao encerrar. Uma rotacao do endpoint/certificado exige revisao deste pacote.
+e removida ao encerrar. A origem HTTPS e fixa, mas nao ha fingerprint pinado: uma raiz valida renovada no mesmo endpoint nao e bloqueada automaticamente; seu fingerprint publico e registrado para auditoria.
 
 A senha entra somente no ambiente do passo operacional e do subprocesso Java,
 sem argv, arquivo, echo ou xtrace. O subprocesso recebe allowlist minima de variaveis;
@@ -98,8 +98,8 @@ O procedimento manual com imagens/Compose permanece em BASELINE_FLYWAY.md.
 Erro apos iniciar uma escrita pode significar resultado desconhecido, especialmente
 se houver timeout/perda de conexao perto do commit. Suspender a promocao e conferir
 o historico por leitura autorizada; nao repetir cegamente, fabricar linhas, usar
-repair, alterar marcador, afrouxar RLS ou resetar senha. Guard e Flyway rejeitam drift,
-falhas, gaps e versoes acima de005. Replay de migrate validado pode resultar em zero
+repair, alterar marcador, afrouxar RLS ou resetar senha. Guard e Flyway rejeitam divergencias de historico/checksums,
+falhas, gaps e versoes acima de005. Esse guard nao atesta alteracoes estruturais ou de RLS feitas fora das migrations depois do baseline. Replay de migrate validado pode resultar em zero
 migrations; isso nao autoriza repeticao apos erro sem conferir o estado.
 
 O pacote nao comprova que GitHub tenha rota/permissao de rede ate o banco. Firewall,
