@@ -317,7 +317,10 @@ async function exercise(origin, tls) {
   ensure(sql(`select encrypted_refresh_token from platform.web_sessions where token_hash='${hash}'`) !== beforeRefresh, 'REFRESH_TOKEN_NOT_ROTATED');
   ensure((await client.call('/v1/me')).status === 200, 'REFRESHED_ME_FAILED');
   sql(`update cp.memberships set status='REVOKED' where tenant_id='${tenant}' and account_id='${account}'`);
-  ensure((await client.call(`${base}/units`)).status === 403, 'REVOKED_MEMBERSHIP_ALLOWED');
+  const revoked = await client.call(`${base}/units`);
+  // O contrato oculta a existencia do tenant para vinculos ausentes/revogados.
+  ensure(revoked.status === 404 && revoked.body?.code === 'TENANT_ACCESS_DENIED',
+    `REVOKED_MEMBERSHIP_${responseDiagnostic(revoked)}`);
   csrf = await client.csrf();
   const replayClient = new Client(origin, tls.cert, new Map(client.cookies));
   const logout = await client.call('/auth/logout', { method: 'POST', csrf });
