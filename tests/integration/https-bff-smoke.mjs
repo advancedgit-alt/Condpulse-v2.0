@@ -19,6 +19,20 @@ let temporary, api, sandbox, web, seeded = false;
 let stage = 'guard', startupError = false;
 let passwordCalls = 0, refreshCalls = 0, logoutCalls = 0, jwksCalls = 0;
 const accessTokens = new Set(), refreshTokens = new Set();
+// Diagnostics may expose only these known backend codes, never arbitrary bodies.
+const problemCodes = new Set(['AUTHENTICATION_REQUIRED', 'ACTION_FORBIDDEN', 'ACCOUNT_INACTIVE',
+  'SESSION_EXPIRED', 'SESSION_REFRESH_REQUIRED', 'TENANT_ACCESS_DENIED', 'UNIT_ACCESS_DENIED',
+  'RESERVATION_ACCESS_DENIED', 'RESERVATION_RESOURCE_UNAVAILABLE', 'RESERVATION_DEPENDENCY_UNAVAILABLE',
+  'IDEMPOTENCY_KEY_INVALID', 'IDEMPOTENCY_KEY_EXPIRED', 'IDEMPOTENCY_KEY_REUSED', 'REQUEST_IN_PROGRESS',
+  'DEPENDENCY_UNAVAILABLE', 'RESERVATION_CONFLICT', 'UNIT_RESERVATION_QUOTA_REACHED',
+  'AMENITY_POLICY_CHANGED', 'AMENITY_POLICY_NOT_CONFIGURED', 'RESERVATION_WINDOW_INVALID']);
+
+function responseDiagnostic(response) {
+  const status = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599
+    ? String(response.status) : 'INVALID';
+  const code = problemCodes.has(response.body?.code) ? response.body.code : 'NO_ALLOWLISTED_PROBLEM';
+  return `RESPONSE_STATUS_${status}_${code}`;
+}
 
 function guard() {
   ensure(process.env.CP_DB_TEST_OK === 'DISPOSABLE', 'DISPOSABLE_ACK_REQUIRED');
@@ -281,7 +295,11 @@ async function exercise(origin, tls) {
   const create = await client.call(`${base}/reservations`, { method: 'POST', body: booking, csrf, headers: { 'Idempotency-Key': bookingKey } });
   ensure(create.status === 201 && create.body?.status === 'CONFIRMED', 'REAL_RESERVATION_FAILED');
   const replay = await client.call(`${base}/reservations`, { method: 'POST', body: booking, csrf, headers: { 'Idempotency-Key': bookingKey } });
-  ensure(replay.status === 201 && replay.body?.reservationId === create.body.reservationId && replay.headers['idempotency-replayed'] === 'true', 'RESERVATION_REPLAY_FAILED');
+  ensure(replay.status === 201, `RESERVATION_REPLAY_${responseDiagnostic(replay)}`);
+  ensure(typeof replay.body?.reservationId === 'string', 'RESERVATION_REPLAY_BODY_ID_MISSING');
+  ensure(replay.body.reservationId === create.body.reservationId, 'RESERVATION_REPLAY_BODY_ID_MISMATCH');
+  ensure(Object.hasOwn(replay.headers, 'idempotency-replayed'), 'RESERVATION_REPLAY_HEADER_MISSING');
+  ensure(replay.headers['idempotency-replayed'] === 'true', 'RESERVATION_REPLAY_HEADER_MISMATCH');
   const cancel = await client.call(`${base}/reservations/${create.body.reservationId}/cancel`, { method: 'POST', body: { unitId: unit, expectedVersion: create.body.version }, csrf, headers: { 'Idempotency-Key': `https-ci-cancel:${randomUUID()}` } });
   ensure(cancel.status === 200 && cancel.body?.status === 'CANCELLED', 'REAL_CANCELLATION_FAILED');
   ensure(sql(`select (select count(*) from cp.reservations where tenant_id='${tenant}' and status='CANCELLED') || ':' || (select count(*) from cp.audit_log where tenant_id='${tenant}') || ':' || (select count(*) from cp.outbox where tenant_id='${tenant}')`) === '1:2:2', 'RESERVATION_COMMIT_COUNTS_WRONG');
