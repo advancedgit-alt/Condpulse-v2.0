@@ -89,6 +89,12 @@ retroativos: a equivalência é demonstrada pela atestação, não pelo marcador
 7. Somente depois desse aceite, executar validate/migrate paraV003 pelo job separado
    descrito em DEPLOY_COOLIFY.md. O baseline não habilita BFF ou reservas.
 
+Após o baseline, `validate` isolado sinaliza V003 ainda pendente. Conferir que essa
+é a única migration pendente e o único diagnóstico de validação. O migrador normal
+mantém validateOnMigrate habilitado, aplica V003 e então passa na validação estrita
+e no replay sem alterações. Não ignorar erros de checksum, migrations ausentes ou
+qualquer outro diagnóstico para liberar a execução.
+
 ## Falha e recuperação
 
 Em erro anterior à chamada Flyway, o executor não cria histórico. Em

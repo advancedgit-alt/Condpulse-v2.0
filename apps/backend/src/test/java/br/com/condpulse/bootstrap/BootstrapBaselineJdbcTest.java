@@ -12,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.CoreErrorCode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -141,8 +142,18 @@ class BootstrapBaselineJdbcTest {
         var flyway = Flyway.configure().dataSource(URL, USER, PASSWORD)
             .defaultSchema("platform").schemas("platform", "cp").createSchemas(false)
             .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true)
-            .validateMigrationNaming(true).load();
-        flyway.validate();
+            .validateMigrationNaming(true).validateOnMigrate(true).load();
+        // Antes da primeira migracao, a validacao estrita deve apontar somente
+        // V003 pendente. Isso e diferente de ignorar validacao ou drift aplicado.
+        var beforeMigration = flyway.validateWithResult();
+        assertFalse(beforeMigration.validationSuccessful);
+        assertEquals(1, beforeMigration.invalidMigrations.size());
+        var unapplied = beforeMigration.invalidMigrations.getFirst();
+        assertEquals(BigInteger.valueOf(3), new BigInteger(unapplied.version));
+        assertEquals(CoreErrorCode.RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED, unapplied.errorDetails.errorCode);
+        var pending = flyway.info().pending();
+        assertEquals(1, pending.length);
+        assertEquals(BigInteger.valueOf(3), new BigInteger(pending[0].getVersion().toString()));
         assertEquals(1, flyway.migrate().migrationsExecuted);
         flyway.validate();
         assertTrue(relationExists("platform.web_sessions"));
