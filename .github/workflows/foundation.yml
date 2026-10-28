@@ -62,7 +62,9 @@ jobs:
       - name: PostgreSQL isolation and concurrency
         env:
           CP_SCHEMA_ALREADY_MIGRATED: "true"
-        run: python3 tests/database/run.py
+        run: |
+          python3 -m unittest discover -s tests/database -p 'test_reservation_race.py'
+          python3 tests/database/run.py
       - name: HTTP readiness and missing-token smoke
         # BFF exige origem/chave HTTPS reais; o teste de API abaixo permanece Bearer.
         env:

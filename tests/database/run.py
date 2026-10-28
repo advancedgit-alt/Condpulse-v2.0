@@ -2,6 +2,7 @@
 import concurrent.futures
 import os
 from pathlib import Path
+import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +60,44 @@ def error(statement, state, **kwargs):
     result = query(statement, check=False, **kwargs)
     return result.returncode != 0 and state in result.stderr
 
+def reservation_error_state(result):
+    # SQL errors from psql -c / ON_ERROR_STOP have exit 1 or 3. Killed processes,
+    # connection failures (2) and missing/ambiguous SQLSTATEs remain unclassified.
+    if result.returncode not in (1, 3):
+        return None
+    states = re.findall(r"(?m)^(ERROR|FATAL|PANIC):[ \t]+([0-9A-Z]{5}):", result.stderr)
+    return states[0][1] if len(states) == 1 and states[0][0] == "ERROR" else None
+
+
+def reconcile_reservation_race(results, retry_aborted):
+    """Recheck only proven GiST deadlock aborts after the whole wave finished.
+
+    This is a direct-SQL test harness, not application retry policy. PostgreSQL
+    may abort competing exclusion-index inserts with 40P01 before a winner
+    commits. Once all 50 psql processes ended and one committed, each such
+    aborted insert must observe 23P01, without retrying uncertain outcomes.
+    """
+    completed = list(results)
+    if len(completed) != 50 or sum(r.returncode == 0 for r in completed) != 1:
+        raise AssertionError("A onda deve encerrar 50 transacoes e exatamente um commit.")
+    deadlocks = []
+    # Validate every first-wave result before making any sequential recheck.
+    for index, result in enumerate(completed):
+        if result.returncode == 0:
+            continue
+        state = reservation_error_state(result)
+        if state not in ("23P01", "40P01"):
+            raise AssertionError(f"Perdedora {index} sem conflito/abort conhecido: {state}.")
+        if state == "40P01":
+            deadlocks.append(index)
+    for index in deadlocks:
+        result = retry_aborted(index)
+        if reservation_error_state(result) != "23P01":
+            raise AssertionError(f"Deadlock abortado {index} nao confirmou conflito apos a onda.")
+        completed[index] = result
+    return completed
+
+
 def reservation(tenant=TA, area=RA, unit=UA, actor=AA,
                 start="12:00", end="13:00", occupied_end=None, identifier=None):
     columns = "tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot"
@@ -113,7 +152,15 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=50) as pool:
         results = list(pool.map(book, range(50)))
     expect(sum(r.returncode == 0 for r in results) == 1, "50 reservas simultaneas produzem somente uma vencedora")
-    expect(all(r.returncode == 0 or "23P01" in r.stderr for r in results), "perdedoras recebem conflito de exclusao")
+    # The pool context has joined every process; rechecks cannot overlap the wave.
+    reconciled = reconcile_reservation_race(results, book)
+    expect(all(r.returncode == 0 or reservation_error_state(r) == "23P01" for r in reconciled),
+           "perdedoras confirmam conflito de exclusao apos rechecagem somente de deadlocks abortados")
+    expect(value(f"select count(*) from cp.reservations where tenant_id='{TA}' and amenity_id='{RA}' "
+                 "and tstzrange(occupied_from,occupied_until,'[)') && "
+                 "tstzrange('2030-01-01 12:00+00'::timestamptz,'2030-01-01 13:00+00'::timestamptz,'[)')",
+                 tenant=TA, role="cp_api") == "1",
+           "banco mantem exatamente uma reserva sobreposta apos todas as transacoes e rechecagens")
     expect(bool(query(reservation(start="13:00",end="14:00"),tenant=TA,role="cp_api").stdout.strip()),
            "intervalos adjacentes sem buffer sao permitidos")
     query(reservation(start="14:00",end="15:00",occupied_end="15:30"),tenant=TA,role="cp_api")
