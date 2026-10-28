@@ -188,8 +188,12 @@ consulta Auth antes de banco, transações/RLS, idempotência, divergência e co
 em PostgreSQL descartável. O launcher da imagem passou no ensaio sem rede. O estado de
 execução por commit fica em `STATUS.md` e nas evidências dos tickets.
 
-Faltam ainda ensaios com Supabase Auth/CA/pooler reais, credenciais operacionais no
-cofre, aplicação remota das migrations e um manifesto de negócio aprovado. Não há
+Baseline002 e V003–V005 já foram aplicadas remotamente conforme STATUS.md; não
+repetir essas operações como novo pré-requisito do cadastro. O runtime da API tem
+prova JDBC pontual no pooler após inicialização. Ainda faltam o ensaio do principal
+operacional separado com Supabase Auth/CA/pooler reais, suas credenciais no cofre
+e um manifesto de negócio aprovado. A preparação das chaves BFF segue
+CONFIGURACAO_BFF.md e não cadastra usuários/vínculos nem ativa o produto. Não há
 autoconvite, recuperação de acesso, AAL2 administrativo, edição posterior de
 cadastros ou importação CSV com aprovação de lote nesta entrega. CP-020, CP-013,
 CP-014 e CP-016 não podem ser tratados como integralmente concluídos por este job.

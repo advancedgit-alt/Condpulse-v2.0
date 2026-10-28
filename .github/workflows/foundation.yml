@@ -42,6 +42,8 @@ jobs:
           node-version: "24.18.0"
       - name: Foundation and contract checks
         run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
+      - name: BFF staging guards and protocol without managed credentials
+        run: node --test tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
       - name: Compile and unit tests
         run: mvn -B -ntp -f apps/backend/pom.xml verify
       - name: Manual database executor guards without managed credentials
