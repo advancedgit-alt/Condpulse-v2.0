@@ -4,11 +4,21 @@
 
 - PR#1 integrada em b933891: fundação, JWT, migrations e isolamento SQL.
 - PR#2 integrada em1446d171: BFF com tokens cifrados, cookie opaco, CSRF/Origin, refresh lease/CAS e logout durável. CP_BFF_ENABLED=false.
-- PR#3: fatia residencial de unidades, áreas, criação e cancelamento de reservas. Revisão independente favorável; CI40602994695 passou no head8d790ad. CP_RESERVATIONS_ENABLED=false.
+- PR#3 integrada em c05501e: fatia residencial de unidades, áreas, criação e cancelamento de reservas. CI40602994695 passou no head8d790ad. CP_RESERVATIONS_ENABLED=false.
 - TenantTransactionExecutor revalida conta/vínculo/unidade, usa transação própria e limpa contexto local na mesma conexão.
 - Reservas usam política explícita, aceite de versão, snapshot, GiST, cota de admissão por unidade, idempotência e auditoria/outbox atômicos. Cancelamento exige autoria.
 - Catálogo de unidades é próprio e ativo; catálogo de áreas exige capacidade residencial. Contrato OpenAPI corresponde às rotas implementadas.
-- ADR-0004 delimita o subset e as jornadas ainda ausentes. Interface web/mobile ainda não implementada.
+- ADR-0004 delimita o subset e as jornadas ainda ausentes. Portal web residencial implementado na etapa PR#4; demais módulos e aplicativo Expo pendentes.
+
+## Etapa web residencial
+
+- React/TypeScript estrito, Router e Query; versões diretas fixadas, lockfile e Lato local com licença OFL.
+- Login, escolha de contexto, regras/agenda, criação/cancelamento e saída chamam somente a API da própria origem, com cookie/CSRF e sem tokens persistidos.
+- Resposta incerta mantém corpo/chave, sem retry cego ou confirmação otimista. Troca e negação de contexto removem dados antigos; revalidação válida preserva o rascunho.
+- Verificação local: build/typecheck,29 testes Vitest,7 jornadas Chromium (API sintética só no runner), inspeção desktop/móvel e controles50px. Auditoria npm de produção retornou zero alertas na consulta.
+- CI40606655792 / head2402a38 passou nos jobs web e foundation:29 Vitest, build/typecheck, imagem Docker readonly/CSP e7 jornadas Chromium contra Nginx em4180. Regressões de Java, JDBC, SQL e Flyway também passaram.
+- Dockerfile web com bases por digest, Nginx sem root, CSP e proxy privado. Evidências vinculadas aos tickets e à PR#4.
+- Estado real sem API responde com aviso de indisponibilidade e entrada bloqueada; não simula login ou reservas. Ver docs/WEB_IMPLANTACAO.md.
 
 ## Evidência automatizada
 
@@ -36,5 +46,5 @@
 - Aplicação sem deploy: host dedicado, domínio HTTPS, cofre, SMTP e segundo ambiente ainda pendentes.
 - Atestar bootstrap e executar baseline002 oficial via migrador JDBC; validate/migrate paraV003. Não fabricar flyway_schema_history nem usar baseline-on-migrate.
 - Ensaiar TLS/pooler gerenciado e Auth/refresh/logout reais, limites de tentativas e expiração sob falha de rede. O JDBC descartável não substitui esse ensaio.
-- Configuração revisada de áreas, aprovação/rejeição/expiração, convidados/revogação, fila/recorrência, gestão, frontend/mobile, MFA, onboarding, carga, restore/PITR e integração física permanecem pendentes.
+- Configuração revisada de áreas, aprovação/rejeição/expiração, convidados/revogação, fila/recorrência, gestão, demais telas web, aplicativo Expo, MFA, onboarding, carga, restore/PITR e integração física permanecem pendentes.
 - Os tickets evoluem como EM_IMPLEMENTACAO e os60 cenários de aceite de produto continuam não concluídos. Nenhuma alteração na Advanced.

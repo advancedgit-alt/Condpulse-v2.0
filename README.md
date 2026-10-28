@@ -5,6 +5,8 @@ Sistema residencial independente para moradores, portaria e gestão de condomín
 Uma estrutura de banco e um scaffold não equivalem ao produto homologado.
 O backend inclui identidade/BFF, unidades próprias e a primeira fatia residencial de
 reservas, com ensaios JDBC reais. BFF e reservas continuam desligados até os gates de habilitação.
+A web residencial implementa login, contexto e reservas. Build e testes locais estão prontos;
+validação de publicação e limitações em docs/WEB_IMPLANTACAO.md.
 
 ## Base adotada
 - Java 25 LTS e Spring Boot 4.1.2; API/BFF e worker separados, no mesmo monólito modular.
@@ -22,6 +24,7 @@ reservas, com ensaios JDBC reais. BFF e reservas continuam desligados até os ga
 - [Bootstrap auditável e transição ao Flyway](docs/adr/0003-bootstrap-supabase.md)
 - [Integração e habilitação do BFF](docs/BFF_INTEGRACAO.md)
 - [Fatia residencial e limites de reservas](docs/adr/0004-fatia-residencial-reservas.md)
+- [Interface web e publicação na mesma origem](docs/WEB_IMPLANTACAO.md)
 - [Modelo e autorização](docs/DADOS_E_AUTORIZACAO.md)
 - [Operação e recuperação](docs/OPERACAO.md)
 - [Estado e pendências](docs/STATUS.md)
@@ -29,7 +32,8 @@ reservas, com ensaios JDBC reais. BFF e reservas continuam desligados até os ga
 
 ## Diretórios
 `apps/backend`: API, domínios e infraestrutura Java.
-`apps/web` e `apps/mobile`: contratos de implementação; interfaces ainda pendentes.
+`apps/web`: portal residencial React com cliente BFF e testes de navegador.
+`apps/mobile`: contrato de implementação; aplicativo Expo ainda pendente.
 `packages`: tokens de design e contrato futuro do cliente.
 `db/migrations`: fonte do schema controlado por Flyway, com a exceção inicial documentada na ADR-0003.
 `contracts`: OpenAPI da superfície realmente implementada na fundação.

@@ -17,7 +17,13 @@ API nao recebe credencial migradora. O perfil migrate termina apos Flyway valida
 Worker: perfil worker sem porta publica. O consumidor outbox ainda nao foi implementado:
 nao subir processo vazio como se notificacoes estivessem operacionais.
 
-BFF: sessao duravel/cifra/cookie/CSRF ainda pendentes; nao habilitar login web com localStorage.
-Web/mobile: ainda nao implementados, sem Dockerfile/manifest que anuncie interface funcional.
+BFF: CP_BFF_ENABLED=false por padrao. Para habilitar depois da homologacao:
+- CP_BFF_ORIGIN: origem HTTPS exata da web, sem caminho/barra final.
+- CP_SUPABASE_PUBLISHABLE_KEY: chave publica do proprio projeto/ambiente.
+- CP_BFF_ENCRYPTION_KEY:32bytes aleatorios Base64, mantidos apenas no cofre.
+- CP_BFF_SESSION_HOURS:8 como limite absoluto inicial; ver docs/BFF_INTEGRACAO.md.
+Reservas: CP_RESERVATIONS_ENABLED=false ate homologar regras e jornadas reais.
+Web: imagem infra/Dockerfile.web, mesma origem e reverse proxy privado para api:8080;
+ver docs/WEB_IMPLANTACAO.md. Mobile permanece pendente.
 Coolify: host exclusivo CondPulse, regiao Sao Paulo, cofre, firewall, limites e checks.
 DNS/host/imagens por digest dependem de provisionamento e aceite.
