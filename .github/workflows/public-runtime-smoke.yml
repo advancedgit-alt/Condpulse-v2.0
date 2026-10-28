@@ -13,7 +13,7 @@ jobs:
   public-smoke:
     if: github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -120,14 +120,26 @@ jobs:
             console.log(JSON.stringify({phase: 'WAITING_FOR_VERCEL', sourceSha: sha}));
             const deployment = await waitForDeployment();
             await requireCurrentHead();
-            const probes = await Promise.all([
+            const initialProbes = await Promise.all([
               probe('/actuator/health/readiness', 200),
               probe('/v1/me', 401)
             ]);
+            const probes = initialProbes.map(item => ({...item, checks: [...item.checks]}));
+            const startupReadiness = [];
+            const startupOnly = item => item.status === 503 && item.bodyStatus === 'OUT_OF_SERVICE' &&
+              item.checks.length === 2 && item.checks.every(code =>
+                code === 'HTTP_STATUS_UNEXPECTED' || code === 'READINESS_NOT_UP');
+            for (let attempt = 0; attempt < 2 && startupOnly(probes[0]); attempt++) {
+              await sleep(1000);
+              const result = await probe('/actuator/health/readiness', 200);
+              startupReadiness.push(result);
+              probes[0] = {...result, checks: [...result.checks]};
+            }
             await requireCurrentHead();
             const passed = probes.every(item => item.ok);
-            console.log(JSON.stringify({version: 1, sourceSha: sha, vercelDeployment: deployment,
-              observedAt: new Date().toISOString(), headUnchanged: true, passed, probes}));
+            console.log(JSON.stringify({version: 2, sourceSha: sha, vercelDeployment: deployment,
+              observedAt: new Date().toISOString(), headUnchanged: true,
+              startupGraceUsed: startupReadiness.length > 0, initialProbes, startupReadiness, passed, probes}));
             if (!passed) process.exitCode = 1;
           } catch (error) {
             console.log(JSON.stringify({phase: 'FAILED', sourceSha: sha,
