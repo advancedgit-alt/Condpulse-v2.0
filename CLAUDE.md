@@ -33,6 +33,7 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 - Login runtime exclusivo e configuração JDBC/CA aplicados na Vercel Production pelo apply40757578769, source2f1abf3547736c247fc082b2cc6ed76c18f2d38b. BFF/reservas permanecem false; Auth real e onboarding continuam pendentes.
 - O limite da role foi ajustado separadamente de 4 para 16 por SQL operacional revisado/CI 40774877934, com Hikari 2 e guardas de margem da ADR-0006; é orçamento provisório, sem aceite de capacidade.
 - Smoke40777572663/source 5060fec7d4bcff0ae8df49801f1fecd55b7c0925 confirmou readiness 200/JSON/UP após uma consulta extra;503 inicial OUT_OF_SERVICE e /v1/me 401 esperado foram preservados. Prova JDBC pontual, sem homologação de login, cold start ou capacidade.
-- Segundo ambiente, SMTP, worker contínuo, segredos de ativação BFF/onboarding, rotação, PITR, restore e parceiro físico pendentes.
+- Duas Secrets BFF e a Config publicável foram preparadas pelo apply40787895235, sourcecbb0cc12d6f97c79555037bc19c7e2269acb4e64, geração1eec1437-1cdc-4976-b086-000ae350425b: STAGED, com readback de metadados; valores Secret não foram lidos de volta. BFF/reservas continuam false; onboarding aprovado e Auth real permanecem pendentes.
+- Segundo ambiente, SMTP, worker contínuo, credenciais operacionais de onboarding, rotação, PITR, restore e parceiro físico pendentes.
 - Código de fundação não equivale ao produto P0/P1 implementado/homologado.
 

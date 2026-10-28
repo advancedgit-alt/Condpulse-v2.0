@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-28",
+  "timeZone": "America/Sao_Paulo",
+  "scope": {
+    "repository": "advancedgit-alt/Condpulse-v2.0",
+    "supabaseProject": "rpnrqfrfwywglvyykgrg",
+    "vercelProject": "prj_IeUa4Zjg1IwaPqJQwv525H14I837",
+    "vercelTeam": "team_6fzA029jxhDb1LpnrnphWGQ0",
+    "vercelTarget": "production",
+    "origin": "https://project-rhvdq.vercel.app",
+    "acceptance": "BFF configuration staging only"
+  },
+  "source": {
+    "credentialSourceSha": "cbb0cc12d6f97c79555037bc19c7e2269acb4e64",
+    "generation": "1eec1437-1cdc-4976-b086-000ae350425b",
+    "marker": "condpulse-bff:rpnrqfrfwywglvyykgrg:1eec1437-1cdc-4976-b086-000ae350425b:cbb0cc12d6f97c79555037bc19c7e2269acb4e64",
+    "pr": 19,
+    "reviewedHeadSha": "cb0b738a0751f8540edc6123beb26cae6eb793c7",
+    "reviewedTreeSha": "a5e208d722aa4d1f941a6361dbf1de81720fc2bf",
+    "mergeTreeEqualsReviewedTree": true,
+    "reviewedCiRunId": 40786385258,
+    "reviewedCiConclusion": "success",
+    "mergeCiRunId": 40786884195,
+    "mergeCiConclusion": "success",
+    "threeJobs": "foundation, web, release-config"
+  },
+  "ci": {
+    "bffChecksPassed": 22,
+    "bffChecksSkipped": 0,
+    "pureRaceHarnessTestsPassed": 8,
+    "disposablePostgresChecksPassed": 26,
+    "firstReviewedHeadSha": "6e912b6c285cd1acaba5a51d74a85585cc0e28c6",
+    "firstCiRunId": 40785600891,
+    "firstCiConclusion": "failure",
+    "firstCiCause": "Direct-SQL GiST race had one winner, but some losers had40P01 instead of the assertion's23P01-only expectation.",
+    "fix": "Require50 completed processes and one commit; allow only23P01/40P01 losers, recheck only known deadlock aborts after the wave and require23P01; final overlap count must equal1. No application/schema change."
+  },
+  "inspectAttempts": [
+    {"runId":40787099354,"attempt":1,"jobId":123162993902,"conclusion":"failure","observedAt":"2026-10-28T23:24:32.5141893Z","report":{"version":1,"eligible":false,"applied":false,"alreadyStaged":false,"state":"BLOCKED","fingerprint":"","secretValuesVerified":false,"code":"BFF_PUBLISHABLE_KEY_INVALID"},"providerRequestsStarted":false,"mutationAttempted":false},
+    {"runId":40787099354,"attempt":2,"jobId":123164478545,"gateJobId":123164479580,"conclusion":"success","observedAt":"2026-10-28T23:28:19.6228920Z","after":"responsible user updated publishable-key input in protected Environment","report":{"version":1,"eligible":true,"applied":false,"alreadyStaged":false,"state":"ABSENT","fingerprint":"72359a9847d91b1b0488a272d6140a1c0ed219269da3259cb32b1e78c41fd2bc","secretValuesVerified":false,"code":""},"mutationAttempted":false}
+  ],
+  "applyGateRejected": {
+    "runId": 40787745517,
+    "gateJobId": 123165094966,
+    "helperJobId": 123165184507,
+    "conclusion": "failure",
+    "maintenanceConfirmed": false,
+    "code": "BFF_MANUAL_REQUEST_DENIED",
+    "helperConclusion": "skipped",
+    "environmentCredentialStepExecuted": false,
+    "mutationAttempted": false
+  },
+  "apply": {
+    "runId": 40787895235,
+    "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40787895235",
+    "attempt": 1,
+    "gateJobId": 123165584338,
+    "helperJobId": 123165690539,
+    "conclusion": "success",
+    "operation": "apply",
+    "maintenanceConfirmed": true,
+    "ackMatchedReviewedInspect": true,
+    "observedAt": "2026-10-28T23:31:29.7530077Z",
+    "observedAtLocal": "2026-10-28T20:31:29.7530077-03:00",
+    "report": {
+      "version": 1,
+      "eligible": true,
+      "applied": true,
+      "alreadyStaged": false,
+      "state": "STAGED",
+      "fingerprint": "64c51478aa82ac0e60f63edde3dd9961913af76a0781ba7be6121cf0f01c9c41",
+      "secretValuesVerified": false,
+      "code": ""
+    },
+    "secretKeys": [
+      "CP_BFF_ENCRYPTION_KEY",
+      "CP_BFF_RATE_LIMIT_KEY"
+    ],
+    "publicConfigKeys": [
+      "CP_SUPABASE_PUBLISHABLE_KEY"
+    ],
+    "generation": "two distinct CSPRNG32-byte keys; canonical Base64; runner memory only",
+    "write": "one create-only Vercel POST without upsert or retry",
+    "readback": "own metadata and revisions confirmed, not stored Secret values",
+    "secretValuesReadBack": false,
+    "bffFlag": false,
+    "reservationsFlag": false,
+    "databaseWrites": false,
+    "authWrites": false,
+    "deploymentRequestedByHelper": false
+  },
+  "publicSmokeAttempts": [
+    {"runId":40786884133,"attempt":1,"jobId":123162199031,"conclusion":"failure","phase":"FAILED","code":"VERCEL_DEPLOYMENT_TIMEOUT","failedAt":"2026-10-28T23:25:34.3140905Z","publicHttpRequestsStarted":false,"vercelSuccessStatusAt":"2026-10-28T23:25:51Z","delayAfterDeadlineSecondsApprox":17,"report":{"phase":"FAILED","sourceSha":"cbb0cc12d6f97c79555037bc19c7e2269acb4e64","code":"VERCEL_DEPLOYMENT_TIMEOUT"}},
+    {"runId":40786884133,"attempt":2,"jobId":123164070610,"conclusion":"success","rerunReason":"Vercel success status arrived after the original deployment-wait deadline; checks unchanged.","report":{"version":2,"sourceSha":"cbb0cc12d6f97c79555037bc19c7e2269acb4e64","vercelDeployment":"https://vercel.com/sindicoadvanced/condpulse/2mdtTBudVeNKTjjSdXzPwhxg7Lkv","observedAt":"2026-10-28T23:27:31.775Z","headUnchanged":true,"startupGraceUsed":true,"initialProbes":[{"path":"/actuator/health/readiness","status":503,"contentType":"application/json","cacheControl":"no-cache, no-store, max-age=0, must-revalidate","elapsedMs":16049,"bodyStatus":"OUT_OF_SERVICE","problemCode":null,"ok":false,"checks":["HTTP_STATUS_UNEXPECTED","READINESS_NOT_UP"]},{"path":"/v1/me","status":401,"contentType":"application/problem+json;charset=UTF-8","cacheControl":"no-cache, no-store, max-age=0, must-revalidate","elapsedMs":14684,"bodyStatus":401,"problemCode":"AUTHENTICATION_REQUIRED","ok":true,"checks":[]}],"startupReadiness":[{"path":"/actuator/health/readiness","status":200,"contentType":"application/json","cacheControl":"no-cache, no-store, max-age=0, must-revalidate","elapsedMs":363,"bodyStatus":"UP","problemCode":null,"ok":true,"checks":[]}],"passed":true,"probes":[{"path":"/actuator/health/readiness","status":200,"contentType":"application/json","cacheControl":"no-cache, no-store, max-age=0, must-revalidate","elapsedMs":363,"bodyStatus":"UP","problemCode":null,"ok":true,"checks":[]},{"path":"/v1/me","status":401,"contentType":"application/problem+json;charset=UTF-8","cacheControl":"no-cache, no-store, max-age=0, must-revalidate","elapsedMs":14684,"bodyStatus":401,"problemCode":"AUTHENTICATION_REQUIRED","ok":true,"checks":[]}]}}
+  ],
+  "limitations": [
+    "Credential source/generation are independent of a later documentation release; do not rerun apply on a new source or change generation to hide partial state.",
+    "STAGED means creation and metadata readback; secretValuesVerified remains false.",
+    "The passing public smoke preserved an initial503 OUT_OF_SERVICE and used one extra readiness GET.",
+    "Successive requests may reach different instances; no same-instance recovery, healthy fleet, cold-start SLO, p95 or capacity is proved.",
+    "No actual password, token, Auth Admin key, Secret values or individual business data is included.",
+    "No real Auth login/refresh/logout, operational onboarding or product P0/P1 acceptance was completed."
+  ],
+  "pending": [
+    "Approved private pilot manifest: condominium, existing Auth users, units, roles/validity and amenities/policies.",
+    "Separate restricted onboarding principal and Auth Admin credential in the operational cofre; inspect/review/ACK/apply.",
+    "Controlled BFF/reservations activation in homologation and real Auth/session/context/booking/revocation journeys.",
+    "Isolated environments, SMTP, continuous worker, observability, load/capacity, backup/restore and remaining product gates."
+  ]
+}
