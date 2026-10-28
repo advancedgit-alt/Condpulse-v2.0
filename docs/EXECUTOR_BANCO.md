@@ -114,7 +114,18 @@ o guard de dispatch e a allowlist do subprocesso com dados sinteticos, alem de c
 isolamento do workflow e ordem de validacao do guard Java. Um teste adicional extrai
 o JAR compilado, compila o mesmo Java embutido no YAML e executa seu caminho fechado
 com senha sintetica e sem projeto/URL. Sem JDK25/JAR local, esse teste fica marcado
-como nao executado; no CI deve rodar logo depois de Maven verify. Nao conectam banco.
+como nao executado; no CI deve rodar logo depois de Maven verify.
+
+O nono teste usa o mesmo helper extraido do YAML e um harness separado, ausente
+dos artefatos de producao. Exige explicitamente CP_DB_TEST_OK=DISPOSABLE, PostgreSQL
+loopback, condpulse_ci e credenciais sinteticas especificas. Cria somente bancos
+novos `condpulse_dbops_<id>_*`, reconstroi V001/V002 como fixture legada e gera o
+marcador por Flyway.baseline oficial. Confere V003/V004/V005 aplicadas, replay zero,
+rejeicao de historico sem baseline, checksum divergente numa copia temporaria de
+V003 e versao006 sintetica aplicada por Flyway. Nao fabrica linhas de historico.
+Fecha as conexoes e remove somente os bancos criados pela propria execucao, sem
+FORCE ou terminacao de sessoes alheias. Sem o ambiente descartavel, fica marcado
+como nao executado. Esses testes nunca recebem credenciais ou alvo remoto.
 
 Referencias oficiais consultadas:
 

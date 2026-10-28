@@ -146,23 +146,17 @@ jobs:
               for (int version = 3; version < 3 + applied.size(); version++) require(applied.contains(version));
               return applied;
             }
-            public static void main(String[] args) {
-              java.util.logging.LogManager.getLogManager().reset();
-              LogFactory.setLogCreator(new BootstrapBaseline.QuietLogCreator());
+            static int execute(Connection c, Flyway flyway) throws Exception {
+              boolean locked=false;
               try {
-                require(args.length == 0);
-                BootstrapBaseline.productionConfig(System.getenv());
-                require(BootstrapManifest.sourceCodes(BootstrapManifest.load()).isEmpty());
-                require("postgres.rpnrqfrfwywglvyykgrg".equals(System.getenv("DATABASE_USER")));
-                var properties = new Properties();
-                properties.setProperty("user", System.getenv("DATABASE_USER"));
-                properties.setProperty("password", System.getenv("DATABASE_PASSWORD"));
-                properties.setProperty("connectTimeout", "5"); properties.setProperty("socketTimeout", "20");
-                try (var c = DriverManager.getConnection(System.getenv("DATABASE_URL"), properties)) {
+                  require(c.getAutoCommit());
                   c.setReadOnly(true);
                   try (var q = c.prepareStatement("select current_user,pg_try_advisory_lock(?)")) {
                     q.setQueryTimeout(10); q.setLong(1, BootstrapBaseline.LOCK_KEY);
-                    try (var r = q.executeQuery()) { require(r.next() && "postgres".equals(r.getString(1)) && r.getBoolean(2)); }
+                    try (var r = q.executeQuery()) {
+                      require(r.next()); locked=r.getBoolean(2);
+                      require("postgres".equals(r.getString(1)) && locked);
+                    }
                   }
                   try (var q = c.prepareStatement("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('platform','cp') and c.relkind in ('r','p','S') and pg_get_userbyid(c.relowner)<>'postgres'")) {
                     q.setQueryTimeout(10);
@@ -173,11 +167,6 @@ jobs:
                     try (var r = q.executeQuery()) { require(r.next() && r.getLong(1)==0); }
                   }
                   Set<Integer> applied = history(c);
-                  var flyway = Flyway.configure().dataSource(System.getenv("DATABASE_URL"), System.getenv("DATABASE_USER"), System.getenv("DATABASE_PASSWORD"))
-                    .defaultSchema("platform").schemas("platform", "cp").createSchemas(false)
-                    .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true)
-                    .validateMigrationNaming(true).validateOnMigrate(true).outOfOrder(false).target("005")
-                    .loggers(BootstrapBaseline.QuietLogCreator.class.getName()).load();
                   Set<Integer> expected = new TreeSet<>(Set.of(3,4,5)); expected.removeAll(applied);
                   Set<Integer> pending = new TreeSet<>();
                   for (var migration : flyway.info().pending()) require(pending.add(new BigInteger(migration.getVersion().toString()).intValueExact()));
@@ -193,7 +182,33 @@ jobs:
                   var result = flyway.migrate();
                   flyway.validate(); require(history(c).equals(Set.of(3,4,5)));
                   require(flyway.info().pending().length == 0);
-                  System.out.println("{\"migrated\":true,\"validated\":true,\"target\":\"005\",\"migrationsExecuted\":" + result.migrationsExecuted + "}");
+                  return result.migrationsExecuted;
+              } finally {
+                if(locked) try(var q=c.prepareStatement("select pg_advisory_unlock(?)")) {
+                  q.setQueryTimeout(10); q.setLong(1,BootstrapBaseline.LOCK_KEY); q.execute();
+                }
+              }
+            }
+            public static void main(String[] args) {
+              java.util.logging.LogManager.getLogManager().reset();
+              LogFactory.setLogCreator(new BootstrapBaseline.QuietLogCreator());
+              try {
+                require(args.length == 0);
+                BootstrapBaseline.productionConfig(System.getenv());
+                require(BootstrapManifest.sourceCodes(BootstrapManifest.load()).isEmpty());
+                require("postgres.rpnrqfrfwywglvyykgrg".equals(System.getenv("DATABASE_USER")));
+                var properties = new Properties();
+                properties.setProperty("user", System.getenv("DATABASE_USER"));
+                properties.setProperty("password", System.getenv("DATABASE_PASSWORD"));
+                properties.setProperty("connectTimeout", "5"); properties.setProperty("socketTimeout", "20");
+                try (var c = DriverManager.getConnection(System.getenv("DATABASE_URL"), properties)) {
+                  var flyway = Flyway.configure().dataSource(System.getenv("DATABASE_URL"), System.getenv("DATABASE_USER"), System.getenv("DATABASE_PASSWORD"))
+                    .defaultSchema("platform").schemas("platform", "cp").createSchemas(false)
+                    .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true)
+                    .validateMigrationNaming(true).validateOnMigrate(true).outOfOrder(false).target("005")
+                    .loggers(BootstrapBaseline.QuietLogCreator.class.getName()).load();
+                  int executed=execute(c,flyway);
+                  System.out.println("{\"migrated\":true,\"validated\":true,\"target\":\"005\",\"migrationsExecuted\":" + executed + "}");
                 }
               } catch (Exception ignored) {
                 System.out.println("{\"migrated\":false,\"code\":\"MIGRATION_GUARD_FAILED_OR_RESULT_UNKNOWN\"}");

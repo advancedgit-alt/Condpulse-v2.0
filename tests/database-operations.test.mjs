@@ -129,3 +129,32 @@ test('exact embedded Java guard compiles and fails closed without project before
     assert.equal(lstatSync(temporary).isSymbolicLink(),false);rmSync(actual,{recursive:true,force:true});
   }
 });
+
+const disposable=process.env.CP_DB_TEST_OK==='DISPOSABLE' && ['localhost','127.0.0.1'].includes(process.env.PGHOST)
+  && process.env.PGDATABASE==='condpulse_ci' && process.env.PGUSER==='postgres' && process.env.PGPASSWORD==='condpulse_ci_only'
+  && /^[0-9]{1,5}$/.test(process.env.PGPORT??'');
+test('exact migration guard applies official legacy baseline then replays and blocks incompatible history/checksum',
+  {skip:!existsSync(jar)||!hasCompiler||!disposable?'Requires JDK25, built JAR and explicitly disposable loopback PostgreSQL; runs after Maven in foundation CI.':false},()=>{
+  const temporary=resolve(mkdtempSync(join(tmpdir(),'condpulse-dbops-jdbc-')));
+  try {
+    const unpack=spawnSync('jar',['-xf',jar],{cwd:temporary,env:minimal,encoding:'utf8',timeout:30000,windowsHide:true});
+    assert.equal(unpack.status,0);
+    const source=join(temporary,'DatabaseOperationsMigrateGuard.java');writeFileSync(source,section('MIGRATION_GUARD'),{mode:0o600});
+    const classes=join(temporary,'BOOT-INF/classes'),classpath=[classes,join(temporary,'BOOT-INF/lib/*')].join(delimiter);
+    const harness=join(root,'tests/database/DatabaseOperationsHarness.java');
+    const compile=spawnSync('javac',['-cp',classpath,'-d',classes,source,harness],{env:minimal,encoding:'utf8',timeout:30000,windowsHide:true});
+    assert.equal(compile.status,0,`Compile exact workflow and isolated harness: ${compile.stderr}`);
+    const run=spawnSync('java',[`-Dlogback.configurationFile=${join(classes,'bootstrap/logback-baseline.xml')}`,
+      '-cp',classpath,'br.com.condpulse.bootstrap.DatabaseOperationsHarness',temporary],
+      {env:{...minimal,CP_DB_TEST_OK:'DISPOSABLE',PGHOST:process.env.PGHOST,PGPORT:process.env.PGPORT,
+        PGDATABASE:'condpulse_ci',PGUSER:'postgres',PGPASSWORD:'condpulse_ci_only'},
+      encoding:'utf8',timeout:120000,windowsHide:true});
+    assert.equal(run.status,0,`Disposable guard scenarios: ${run.stderr}`);
+    assert.deepEqual(JSON.parse(run.stdout.trim()),{passed:true,positive:3,replay:0,missingBaselineDenied:true,checksumDriftDenied:true,aboveHeadDenied:true});
+    assert.equal(run.stderr.trim(),'');
+  } finally {
+    const actual=realpathSync(temporary),base=realpathSync(tmpdir());
+    assert.equal(dirname(actual),base);assert.ok(basename(actual).startsWith('condpulse-dbops-jdbc-'));
+    assert.equal(lstatSync(temporary).isSymbolicLink(),false);rmSync(actual,{recursive:true,force:true});
+  }
+});
