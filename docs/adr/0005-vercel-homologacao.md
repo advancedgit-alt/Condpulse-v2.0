@@ -29,7 +29,7 @@ especifica; esta etapa nao sobe um worker vazio nem afirma notificacoes operacio
 
 ## Provisionamento observado
 
-Projeto criado pelo painel autenticado, sem build, Git conectado ou deployment:
+Projeto criado pelo painel autenticado e depois observado com Git conectado e primeiro build:
 
 - Nome: condpulse.
 - ID: prj_IeUa4Zjg1IwaPqJQwv525H14I837.
@@ -39,7 +39,18 @@ Projeto criado pelo painel autenticado, sem build, Git conectado ou deployment:
 Organizacao/faturamento compartilhados nao autorizam importar variaveis, recursos ou
 segredos da Advanced. A conexao automatica recusou criacao com403 e nao enxerga o novo
 projeto; o painel do proprio responsavel permitiu a criacao. Nao foi feito upgrade,
-adicionado dominio pago, contratado VPS ou iniciado build nesta operacao.
+adicionado dominio pago ou contratado VPS. Durante a continuacao solicitada pelo
+responsavel, o painel passou a mostrar o deployment dpl_7NBrikhozHriUpTWymxr7KmwgJmA,
+head 9e5b5fb638c261b6d6f6f26c936f85a6e48d1160, como Ready. Os logs mostram o
+build e push da imagem Java, alem da web. Esse estado nao comprova acesso ao banco.
+
+Alias inicial observado: https://project-rhvdq.vercel.app. A interface carrega, mas
+informa que nao pode verificar o acesso, pois o ambiente nao possui credenciais de
+runtime/CA e as migracoes remotas ainda nao foram executadas. Configuracoes publicas
+PORT=8080, pool2, issuer/JWKS do projeto dedicado, origem HTTPS e flags false foram
+salvas apenas em Production. Nenhum segredo de outro sistema foi importado.
+On-demand concurrent builds foi desativado apenas neste projeto para evitar
+paralelismo faturado desnecessario; builds ficam em fila, um por vez.
 
 ## Gates restantes
 

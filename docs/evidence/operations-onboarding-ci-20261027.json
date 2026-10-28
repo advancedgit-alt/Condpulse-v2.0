@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-27",
+  "project": "CondPulse",
+  "pull_request": "https://github.com/advancedgit-alt/Condpulse-v2.0/pull/8",
+  "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+  "workflow_run": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142",
+  "workflow_result": "PASSED",
+  "jobs": { "foundation": "success", "web": "success", "release-config": "success" },
+  "environment": "GitHub Actions/Ubuntu/Java25/PostgreSQL17.11 descartavel/HTTPS loopback",
+  "web": { "vitest_passed": 40, "chromium_journeys_passed": 12, "build_and_typecheck": "PASSED" },
+  "java": { "unit_http_passed": 136, "initial_discovered": 180, "initial_jdbc_skipped": 44, "runtime_onboarding_rate_jdbc_passed": 36, "baseline_jdbc_passed": 8 },
+  "verified_steps": [
+    "Java compile and unit tests",
+    "Flyway V001-V005 migration and replay in disposable PostgreSQL",
+    "SQL isolation, concurrency and durable BFF session invariants",
+    "JDBC runtime, pool isolation, auth-rate limits and operational onboarding",
+    "integrated HTTPS web/BFF with real JAR, JDBC, cipher and local Auth sandbox",
+    "hardened API/web images and proxy DNS replacement",
+    "official bootstrap baseline in disposable database and isolated launcher",
+    "isolated onboarding launcher with sanitized errors and no network",
+    "Vercel container image and fail-closed launcher",
+    "Compose and Vercel configuration validation"
+  ],
+  "local_verification": {
+    "node_passed_in_documented_command": 21,
+    "command": "node --test tests/foundation.test.mjs tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs",
+    "compose_version": "5.2.0",
+    "web_vitest_passed": 40,
+    "web_build_and_typecheck": "PASSED",
+    "local_chromium": "ERR_NETWORK_ACCESS_DENIED before assertions; CI passed all12 journeys"
+  },
+  "deployment_observation": {
+    "project_id": "prj_IeUa4Zjg1IwaPqJQwv525H14I837",
+    "deployment_id": "dpl_7NBrikhozHriUpTWymxr7KmwgJmA",
+    "source_commit_prefix": "9e5b5fb",
+    "status": "Ready",
+    "observed_alias": "https://project-rhvdq.vercel.app",
+    "observed_api_image_digest": "sha256:f4148627f9f5c35ffcbb802a54dbf66af008c04d254ddb1e8ff8c36b22dda850",
+    "trigger_attributed_to_this_task": false,
+    "managed_database_and_auth_journey_verified": false,
+    "production_configuration_saved": ["PORT8080", "pool2", "CondPulse issuer and JWKS", "observed HTTPS origin", "BFF false", "reservations false"],
+    "database_credentials_or_api_secrets_provided": false,
+    "observed_portal_state": "Published UI shows access unavailable; login remains blocked without configured database"
+  },
+  "limits": [
+    "Auth sandbox and synthetic fixtures in automated tests",
+    "no managed Supabase Auth/CA/pooler validation",
+    "baseline and V003-V005 not applied remotely in this batch",
+    "no real onboarding manifest or remote onboarding apply",
+    "deployment Ready is not application or production acceptance",
+    "CP-020, MFA, CSV import and post-bootstrap editing remain incomplete"
+  ]
+}

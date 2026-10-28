@@ -16,11 +16,9 @@ done
 [ "${SPRING_PROFILES_ACTIVE:-api}" = api ] || fail VERCEL_API_PROFILE_EXACT
 case "${DATABASE_USER:-}" in cp_runtime_*) ;; *) fail VERCEL_API_RUNTIME_IDENTITY_REQUIRED ;; esac
 [ -n "${DATABASE_PASSWORD:-}" ] || fail VERCEL_API_DATABASE_PASSWORD_REQUIRED
-case "${DATABASE_URL:-}" in
-  jdbc:postgresql://*'?sslmode=verify-full&sslrootcert=/tmp/condpulse-db-ca.crt') ;;
-  *) fail VERCEL_API_DATABASE_TLS_REQUIRED ;;
-esac
+[ -n "${DATABASE_URL:-}" ] || fail VERCEL_API_DATABASE_TARGET_INVALID
 [ -n "${CP_VERCEL_DB_CA_BASE64:-}" ] || fail VERCEL_API_CA_REQUIRED
+java -Xmx16m -XX:+UseSerialGC -cp /app/preflight VercelRuntimePreflight
 
 # /tmp is ephemeral. Only the validated public CA is written here, never a secret.
 umask 077

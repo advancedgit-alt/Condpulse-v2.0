@@ -51,8 +51,26 @@
       "id": "CP-004",
       "delivery": "Provisionar ambientes isolados. Projetos e segredos separados de desenvolvimento, homologação e produção CondPulse.",
       "acceptance": "Dados e credenciais de um ambiente não acessam outro; nenhum recurso Advanced é alterado.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "Vercel projeto exclusivo/deployment Ready observado e configuracao validada no CI",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142",
+          "commands": [
+            "node --test tests/foundation.test.mjs tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs",
+            "docker build -f Dockerfile.vercel -t condpulse-vercel:ci .",
+            "bash tests/database/vercel-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_DEPLOYMENT_READY_MANAGED_RUNTIME_PENDING",
+          "scope": "Projeto condpulse prj_IeUa4Zjg1IwaPqJQwv525H14I837 possui Git conectado e deployment Ready observado no painel, source9e5b5fb, com web/API construidas. Gatilho da publicacao nao atribuido a esta tarefa. Services/Container Runtime beta e launcher passaram no CI conforme ADR-0005. Ready nao comprova JDBC/Auth ou rotas de negocio. Sem baseline/V003-V005 remotos, credenciais/CA/cofre e homologacao. Nenhum upgrade, dominio/VPS ou reutilizacao de segredos Advanced; sem aceite de producao.",
+          "project_url": "https://vercel.com/sindicoadvanced/condpulse",
+          "deployment_id": "dpl_7NBrikhozHriUpTWymxr7KmwgJmA",
+          "observed_alias": "https://project-rhvdq.vercel.app"
+        }
+      ]
     },
     {
       "id": "CP-005",
@@ -105,6 +123,21 @@
             "npm run test:e2e"
           ],
           "scope": "Componentes e tokens da fatia residencial, contraste, teclado e alvos de50px verificados em desktop e viewport390px; demais módulos e ensaio assistivo completo pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/Chromium contra imagem web; APIs sinteticas",
+          "commands": [
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "result": "CI_PASSED_PRODUCT_ACCEPTANCE_PENDING",
+          "scope": "40 Vitest, typecheck/build e12 jornadas Chromium passaram. Painel MOR-01 parcial com contexto verificado, proximas reservas proprias em30dias, estado antigo, navegacao desktop/movel e rejeicao crossunit. O bloqueio de rede do Chromium local foi superado pela execucao no CI, sem ser atribuido ao produto. APIs do navegador sao sinteticas; sem aceite integral dos tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142",
+          "working_directory": "apps/web"
         }
       ]
     },
@@ -160,6 +193,21 @@
             "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
           ],
           "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/Java25/PostgreSQL17.11 descartavel/Compose5.2.0/Chromium",
+          "commands": [
+            "node --test tests/foundation.test.mjs tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs",
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "node tests/integration/https-bff-smoke.mjs"
+          ],
+          "result": "CI_PASSED_MANAGED_INTEGRATION_PENDING",
+          "scope": "Tres jobs foundation/web/release-config passaram no head indicado, incluindo novas migrations V004/V005, Java/JDBC,12 jornadas Chromium,40 Vitest, HTTPS e imagens API/web/baseline/onboarding/Vercel.21 verificacoes Node tambem passaram no comando local documentado. Nenhum desses ensaios comprova Supabase Auth/TLS gerenciado ou aceite integral dos tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
         }
       ]
     },
@@ -167,8 +215,23 @@
       "id": "CP-010",
       "delivery": "Preparar cadastros e autorização legal. Modelo de unidades, responsáveis, aviso de privacidade e fluxo de alternativa não biométrica.",
       "acceptance": "Condomínio valida responsáveis, finalidade e procedimento antes de importar dados reais.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/CLI isolado/PostgreSQL17.11 descartavel/Auth protocolado",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "bash tests/database/onboarding-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
+          "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        }
+      ]
     },
     {
       "id": "CP-011",
@@ -204,6 +267,20 @@
             "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
           ],
           "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/Java25/PostgreSQL17.11 descartavel/HTTPS local/Auth sandbox",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "node tests/integration/https-bff-smoke.mjs"
+          ],
+          "result": "CI_PASSED_MANAGED_AUTH_PENDING",
+          "scope": "Limites compartilhados de login/refresh com V004/RLS e HMAC sem identificadores brutos passaram em Java/JDBC e no percurso HTTPS.429 inclui Retry-After e503 do limitador ocorre antes do Auth/lease, preservando refresh; logout permanece independente. Web respeita prazo monotônico, sem retry cego. Supabase gerenciado, chave no cofre, operacao real e aceite integral permanecem pendentes.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
         }
       ]
     },
@@ -225,8 +302,23 @@
       "id": "CP-014",
       "delivery": "Vínculos e capacidades. Morador, titular, operador, gestor, suporte temporário; vigência por unidade.",
       "acceptance": "Conhecer número da unidade não permite entrar nela; revogação bloqueia novas operações.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/CLI isolado/PostgreSQL17.11 descartavel/Auth protocolado",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "bash tests/database/onboarding-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
+          "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        }
+      ]
     },
     {
       "id": "CP-015",
@@ -251,6 +343,21 @@
             "npm run test:e2e"
           ],
           "scope": "Cache por conta/tenant/unidade; E2E de resposta atrasada, troca e negação de contexto, logout e preservação do rascunho após revalidação válida. Mobile nativo e homologação integrada pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/Chromium contra imagem web; APIs sinteticas",
+          "commands": [
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "result": "CI_PASSED_PRODUCT_ACCEPTANCE_PENDING",
+          "scope": "40 Vitest, typecheck/build e12 jornadas Chromium passaram. Painel MOR-01 parcial com contexto verificado, proximas reservas proprias em30dias, estado antigo, navegacao desktop/movel e rejeicao crossunit. O bloqueio de rede do Chromium local foi superado pela execucao no CI, sem ser atribuido ao produto. APIs do navegador sao sinteticas; sem aceite integral dos tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142",
+          "working_directory": "apps/web"
         }
       ]
     },
@@ -272,8 +379,23 @@
       "id": "CP-018",
       "delivery": "Auditoria mínima de ações. Ator, escopo, ação, objeto, motivo e correlação; segredos/fotos fora dos logs.",
       "acceptance": "Mudanças sensíveis têm trilha; role comum não edita nem apaga auditoria.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/CLI isolado/PostgreSQL17.11 descartavel/Auth protocolado",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "bash tests/database/onboarding-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
+          "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        }
+      ]
     },
     {
       "id": "CP-019",
@@ -286,8 +408,23 @@
       "id": "CP-020",
       "delivery": "Onboarding e recuperação. Convite validado, primeiro acesso, tutorial curto, recuperação e troca de dispositivo.",
       "acceptance": "Usuário convidado conclui ativação sem intervenção de banco; convite expirado não cria vínculo.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/CLI isolado/PostgreSQL17.11 descartavel/Auth protocolado",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "bash tests/database/onboarding-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
+          "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        }
+      ]
     },
     {
       "id": "CP-021",
@@ -312,6 +449,20 @@
             "npm run test:e2e"
           ],
           "scope": "Web mostra catálogo, regras, versão e política; revalidação negada remove dados/formulário. Cadastro administrativo e regras avançadas pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/CLI isolado/PostgreSQL17.11 descartavel/Auth protocolado",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "bash tests/database/onboarding-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
+          "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
         }
       ]
     },
@@ -584,6 +735,21 @@
             "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
           ],
           "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/Java25/PostgreSQL17.11 descartavel/Compose5.2.0/Chromium",
+          "commands": [
+            "node --test tests/foundation.test.mjs tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs",
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "node tests/integration/https-bff-smoke.mjs"
+          ],
+          "result": "CI_PASSED_MANAGED_INTEGRATION_PENDING",
+          "scope": "Tres jobs foundation/web/release-config passaram no head indicado, incluindo novas migrations V004/V005, Java/JDBC,12 jornadas Chromium,40 Vitest, HTTPS e imagens API/web/baseline/onboarding/Vercel.21 verificacoes Node tambem passaram no comando local documentado. Nenhum desses ensaios comprova Supabase Auth/TLS gerenciado ou aceite integral dos tickets.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
         }
       ]
     },
@@ -619,8 +785,23 @@
       "id": "CP-056",
       "delivery": "Revisão de ameaças e segredos. Isolamento, BOLA, CSRF, upload, callbacks, logs e cofre.",
       "acceptance": "Nenhum achado crítico/alto aberto; nenhum segredo detectado no repositório.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "GitHub Actions/Java25/PostgreSQL17.11 descartavel/HTTPS local/Auth sandbox",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test",
+            "node tests/integration/https-bff-smoke.mjs"
+          ],
+          "result": "CI_PASSED_MANAGED_AUTH_PENDING",
+          "scope": "Limites compartilhados de login/refresh com V004/RLS e HMAC sem identificadores brutos passaram em Java/JDBC e no percurso HTTPS.429 inclui Retry-After e503 do limitador ocorre antes do Auth/lease, preservando refresh; logout permanece independente. Web respeita prazo monotônico, sem retry cego. Supabase gerenciado, chave no cofre, operacao real e aceite integral permanecem pendentes.",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        }
+      ]
     },
     {
       "id": "CP-057",
@@ -712,6 +893,23 @@
             "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
           ],
           "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
+        },
+        {
+          "batch": "operations-onboarding-20261027",
+          "commit": "9e5b5fb638c261b6d6f6f26c936f85a6e48d1160",
+          "branch": "feat/operations-onboarding",
+          "environment": "Vercel projeto exclusivo/deployment Ready observado e configuracao validada no CI",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142",
+          "commands": [
+            "node --test tests/foundation.test.mjs tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs",
+            "docker build -f Dockerfile.vercel -t condpulse-vercel:ci .",
+            "bash tests/database/vercel-image-smoke.sh"
+          ],
+          "result": "CI_PASSED_DEPLOYMENT_READY_MANAGED_RUNTIME_PENDING",
+          "scope": "Projeto condpulse prj_IeUa4Zjg1IwaPqJQwv525H14I837 possui Git conectado e deployment Ready observado no painel, source9e5b5fb, com web/API construidas. Gatilho da publicacao nao atribuido a esta tarefa. Services/Container Runtime beta e launcher passaram no CI conforme ADR-0005. Ready nao comprova JDBC/Auth ou rotas de negocio. Sem baseline/V003-V005 remotos, credenciais/CA/cofre e homologacao. Nenhum upgrade, dominio/VPS ou reutilizacao de segredos Advanced; sem aceite de producao.",
+          "project_url": "https://vercel.com/sindicoadvanced/condpulse",
+          "deployment_id": "dpl_7NBrikhozHriUpTWymxr7KmwgJmA",
+          "observed_alias": "https://project-rhvdq.vercel.app"
         }
       ]
     },
