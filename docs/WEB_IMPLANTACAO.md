@@ -41,6 +41,9 @@ não possui modo demo nem fallback de sucesso quando a API está indisponível.
 
 ## Publicação na mesma origem
 
+O pacote operacional está em docs/DEPLOY_COOLIFY.md e infra/compose.app.yaml;
+o job de migração fica em outro arquivo, sem credenciais DDL na API.
+
 1. Provisionar o ambiente CondPulse isolado, host/domínio HTTPS e cofre antes de publicar.
 2. Atestar o bootstrap do banco, executar baseline002 oficial e migrarV003 pelo Flyway,
    usando identidade DDL separada. Provisionar login runtime apenas no grupo cp_api.

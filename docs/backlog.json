@@ -19,6 +19,17 @@
           "environment": "GitHub Actions/PostgreSQL descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
           "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "6300ad78bb3ff179ccee72f53c41c19f400f8a8b",
+          "environment": "GitHub Actions/Ubuntu/PostgreSQL17.11 descartavel sem TLS",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40609574553",
+          "commands": [
+            "docker build -f infra/Dockerfile.api -t condpulse-api:ci .",
+            "bash tests/database/image-smoke.sh (container descartavel do job)",
+            "bash tests/web/proxy-smoke.sh"
+          ],
+          "scope": "Bases API por digest e imagem Java com migrador finito/probe/runtime readonly passaram; Expo, SBOM e release completa pendentes. Nao constitui aceite integral do ticket."
         }
       ]
     },
@@ -127,6 +138,17 @@
             "npm run test:e2e"
           ],
           "scope": "Job web sem segredos/deploy: npm ci,29 Vitest, build estrito, Docker readonly/CSP e7 E2E contra a imagem. Scanner/SBOM e promoção de release pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "6300ad78bb3ff179ccee72f53c41c19f400f8a8b",
+          "environment": "GitHub Actions/Ubuntu/PostgreSQL17.11 descartavel sem TLS",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40609574553",
+          "commands": [
+            "docker build -f infra/Dockerfile.api -t condpulse-api:ci .",
+            "bash tests/database/image-smoke.sh (container descartavel do job)",
+            "bash tests/web/proxy-smoke.sh"
+          ],
+          "scope": "Jobs foundation e web passaram com smoke da imagem API e troca real do IP do proxy. O job de configuracao no mesmo head falhou por normalizacao de Compose antigo; a correcao fixa Compose5.2.0 e sua evidencia final fica na PR5. Scanner/SBOM e promocao pendentes. Nao constitui aceite integral do ticket."
         }
       ]
     },
@@ -634,8 +656,20 @@
       "id": "CP-066",
       "delivery": "Publicar release por artefato. Promover digest homologado, migrations compatíveis e smoke em produção.",
       "acceptance": "Versão rastreável, monitoramento ativo e rollback de aplicação demonstrado.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "6300ad78bb3ff179ccee72f53c41c19f400f8a8b",
+          "environment": "GitHub Actions/Ubuntu/PostgreSQL17.11 descartavel sem TLS",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40609574553",
+          "commands": [
+            "docker build -f infra/Dockerfile.api -t condpulse-api:ci .",
+            "bash tests/database/image-smoke.sh (container descartavel do job)",
+            "bash tests/web/proxy-smoke.sh"
+          ],
+          "scope": "Somente pacote e ensaio de imagem em ambiente descartavel; nao houve push ao registro, migration remota ou release promovida. Nao constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-067",

@@ -1,0 +1,41 @@
+# Job separado: nao importar este arquivo na stack normal do Coolify.
+services:
+  migrate:
+    image: ${CP_API_IMAGE:?Informe o mesmo digest API aprovado para esta release}
+    user: "10001:10001"
+    init: true
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+    stop_grace_period: 35s
+    environment:
+      SPRING_PROFILES_ACTIVE: migrate
+      DATABASE_URL: ${CP_MIGRATION_DATABASE_URL:?Informe a URL JDBC DDL com TLS verify-full}
+      DATABASE_USER: ${CP_MIGRATION_DATABASE_USER:?Informe a identidade DDL revisada}
+      DATABASE_PASSWORD: ${CP_MIGRATION_DATABASE_PASSWORD:?Obtenha a senha DDL no cofre}
+      DB_POOL_SIZE: "2"
+    # O processo conclui ou falha; readiness HTTP nao se aplica a este job.
+    healthcheck:
+      disable: true
+    volumes:
+      - type: bind
+        source: ${CP_DB_CA_FILE:?Informe o caminho absoluto da CA PostgreSQL validada}
+        target: /run/secrets/db-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+networks:
+  backend:
+    driver: bridge

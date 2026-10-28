@@ -1,6 +1,7 @@
 # Segredos
 .env
 .env.*
+*.env
 !.env.example
 *.pem
 *.p12
