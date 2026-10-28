@@ -36,6 +36,10 @@ export interface ApiState {
   cancelKeys: string[];
   loginRequests: number;
   logoutRequests: number;
+  refreshRequests: number;
+  refreshRequired: boolean;
+  rateRefresh: boolean;
+  loginRateAttempts: number;
   denyAmenitiesA: boolean;
   amenitiesARequests: number;
   reservations: FixtureReservation[];
@@ -48,6 +52,8 @@ interface FixtureOptions {
   loseFirstCreationResponse?: boolean;
   cancelStatus?: number;
   reservations?: FixtureReservation[];
+  loginRateAttempts?: number;
+  retryAfter?: string;
 }
 
 const identity = {
@@ -85,7 +91,8 @@ async function problem(route: Route, status: number, code: string, detail: strin
 export async function installSyntheticApi(page: Page, options: FixtureOptions = {}): Promise<ApiState> {
   const state: ApiState = {
     authenticated: false, csrfVersion: 0, createKeys: [], cancelKeys: [],
-    loginRequests: 0, logoutRequests: 0, denyAmenitiesA: false, amenitiesARequests: 0,
+    loginRequests: 0, logoutRequests: 0, refreshRequests: 0, refreshRequired: false, rateRefresh: false,
+    loginRateAttempts: options.loginRateAttempts ?? 0, denyAmenitiesA: false, amenitiesARequests: 0,
     reservations: options.reservations ?? [],
   };
   const csrf = () => `SYNTHETIC-TEST-CSRF-${state.csrfVersion}`;
@@ -103,6 +110,11 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
     }
     if (path === '/auth/login') {
       state.loginRequests += 1;
+      if (state.loginRateAttempts > 0) {
+        state.loginRateAttempts -= 1;
+        await json(route, 429, { code: 'AUTH_RATE_LIMITED' }, { 'Retry-After': options.retryAfter ?? '2' });
+        return;
+      }
       state.authenticated = true;
       state.csrfVersion += 1;
       await json(route, 200, { accountId: ACCOUNT, expiresAt: new Date(Date.now() + 28_800_000).toISOString() });
@@ -116,6 +128,12 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       return;
     }
     if (path === '/auth/refresh' && state.authenticated) {
+      state.refreshRequests += 1;
+      if (state.rateRefresh) {
+        await json(route, 429, { code: 'AUTH_RATE_LIMITED' }, { 'Retry-After': options.retryAfter ?? '60' });
+        return;
+      }
+      state.refreshRequired = false;
       state.csrfVersion += 1;
       await json(route, 200, { accountId: ACCOUNT, expiresAt: new Date(Date.now() + 28_800_000).toISOString() });
       return;
@@ -129,6 +147,10 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
     const path = url.pathname;
     if (!state.authenticated) {
       await problem(route, 401, 'AUTHENTICATION_REQUIRED', 'Entre para continuar.');
+      return;
+    }
+    if (state.refreshRequired) {
+      await problem(route, 401, 'SESSION_REFRESH_REQUIRED', 'A sessão precisa ser renovada.');
       return;
     }
     if (path === '/v1/me') {
@@ -215,11 +237,14 @@ export async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/contextos/);
 }
 
-export async function chooseContext(page: Page, tenant: 'A' | 'B' = 'A') {
+export async function chooseContext(page: Page, tenant: 'A' | 'B' = 'A', destination: 'reservas' | 'inicio' = 'reservas') {
   await page.getByLabel('Condomínio', { exact: true }).selectOption(tenant === 'A' ? TENANT_A : TENANT_B);
   const unit = tenant === 'A' ? UNIT_A : UNIT_B;
   await expect(page.getByLabel('Unidade', { exact: true }).getByRole('option', { name: new RegExp(tenant === 'A' ? '101' : '202') })).toBeAttached();
   await page.getByLabel('Unidade', { exact: true }).selectOption(unit);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sua unidade, em dia.', exact: true })).toBeVisible();
+  if (destination === 'inicio') return;
+  await page.getByRole('link', { name: 'Abrir reservas', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reservas da unidade', exact: true })).toBeVisible();
 }

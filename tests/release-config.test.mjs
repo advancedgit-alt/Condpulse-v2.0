@@ -42,6 +42,7 @@ Object.assign(homologation.services.api.environment, {
   CP_BFF_ENABLED: 'true', CP_RESERVATIONS_ENABLED: 'true',
   CP_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_SYNTHETIC_TEST_ONLY_1234567890',
   CP_BFF_ENCRYPTION_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)).toString('base64'),
+  CP_BFF_RATE_LIMIT_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => 255 - i)).toString('base64'),
   CP_BFF_SESSION_HOURS: '8',
 });
 const migrate = {
@@ -58,6 +59,20 @@ const baseline = {
       ...db, DATABASE_USER: 'postgres',
       DATABASE_URL: db.DATABASE_URL.replace('abcdefghijklmnopqrst', baselineProject),
       CP_BASELINE_PROJECT_REF: baselineProject, CP_BASELINE_ACK: '',
+    },
+  } },
+};
+const onboarding = {
+  name: 'condpulse-onboarding', networks: { backend: { name: 'condpulse-onboarding_backend', driver: 'bridge' } },
+  services: { onboarding: {
+    ...hardened, image: `ghcr.io/condpulse/onboarding@sha256:${'d'.repeat(64)}`,
+    command: ['inspect', '/run/secrets/onboarding.json'], restart: 'no', healthcheck: { disable: true },
+    volumes: [ca, { type: 'bind', source: '/run/condpulse/approved-onboarding.json', target: '/run/secrets/onboarding.json', read_only: true, bind: { create_host_path: false } }],
+    environment: {
+      ...db, DATABASE_USER: 'cp_onboarding_ci',
+      DATABASE_URL: db.DATABASE_URL.replace('abcdefghijklmnopqrst', baselineProject),
+      CP_ONBOARDING_PROJECT_REF: baselineProject, CP_ONBOARDING_ACK: '',
+      CP_ONBOARDING_AUTH_SECRET_KEY: 'sb_secret_SYNTHETIC_OPERATIONAL_TEST_ONLY_1234567890',
     },
   } },
 };
@@ -170,6 +185,8 @@ test('homologacao explicita exige namespace, redes e todas as chaves sem mudar a
     rejected(c => { c.services.api.environment.CP_BFF_ENCRYPTION_KEY = key; }, 'ENCRYPTION_KEY_REQUIRED', homologation, 'homologation');
   }
   rejected(c => { delete c.services.api.environment.CP_BFF_SESSION_HOURS; }, 'SESSION_HOURS_EXACT', homologation, 'homologation');
+  rejected(c => { delete c.services.api.environment.CP_BFF_RATE_LIMIT_KEY; }, 'RATE_LIMIT_KEY_REQUIRED', homologation, 'homologation');
+  rejected(c => { c.services.api.environment.CP_BFF_RATE_LIMIT_KEY = c.services.api.environment.CP_BFF_ENCRYPTION_KEY; }, 'RATE_LIMIT_KEY_REQUIRED', homologation, 'homologation');
   rejected(c => { c.services.api.environment.DATABASE_USER = 'postgres'; }, 'DATABASE_ROLE_SEPARATION', homologation, 'homologation');
   rejected(c => { c.services.api.environment.CP_JWT_ISSUER = 'https://bbbbbbbbbbbbbbbbbbbb.supabase.co/auth/v1'; }, 'SUPABASE_PROJECT_MISMATCH', homologation, 'homologation');
   rejected(c => { c.services.web.environment = { CP_BFF_ENCRYPTION_KEY: homologation.services.api.environment.CP_BFF_ENCRYPTION_KEY }; }, 'WEB_NO_CREDENTIALS_OR_MOUNTS', homologation, 'homologation');
@@ -203,6 +220,50 @@ test('baseline recusa alvo divergente e ACK de outro projeto ou versao', () => {
   rejected(c => { c.services.baseline.environment.DATABASE_URL = c.services.baseline.environment.DATABASE_URL.replace(':5432', ':6543'); }, 'DATABASE_TLS_CONFIGURATION', baseline, 'baseline');
   for (const ack of [undefined, 'SET_IN_VAULT', `${baselineProject}:003:${'a'.repeat(64)}`, `bbbbbbbbbbbbbbbbbbbb:002:${'a'.repeat(64)}`, `${baselineProject}:002:${'A'.repeat(64)}`, `${baselineProject}:002:short`]) {
     rejected(c => { c.services.baseline.environment.CP_BASELINE_ACK = ack; }, 'BASELINE_ACK_FORMAT', baseline, 'baseline');
+  }
+});
+
+test('onboarding isolado inspeciona com papel proprio e dois arquivos somente leitura', () => {
+  assert.deepEqual(validateRelease(onboarding, 'onboarding'), []);
+  const acknowledged = clone(onboarding);
+  acknowledged.services.onboarding.environment.CP_ONBOARDING_ACK = `${baselineProject}:${'a'.repeat(64)}`;
+  assert.deepEqual(validateRelease(acknowledged, 'onboarding'), []);
+  const pooled = clone(onboarding);
+  pooled.services.onboarding.environment.DATABASE_URL = db.DATABASE_URL.replace('db.abcdefghijklmnopqrst.supabase.co', 'aws-0-sa-east-1.pooler.supabase.com');
+  pooled.services.onboarding.environment.DATABASE_USER = `cp_onboarding_ci.${baselineProject}`;
+  assert.deepEqual(validateRelease(pooled, 'onboarding'), []);
+  for (const command of [null, [], ['apply', '/run/secrets/onboarding.json'], ['inspect'], ['inspect', '/tmp/input.json']]) {
+    rejected(c => { c.services.onboarding.command = command; }, 'SERVICE_SETTING_UNEXPECTED', onboarding, 'onboarding');
+  }
+  for (const name of ['SPRING_PROFILES_ACTIVE', 'DB_POOL_SIZE', 'PORT', 'CP_BFF_ENCRYPTION_KEY', 'CP_BFF_RATE_LIMIT_KEY']) {
+    rejected(c => { c.services.onboarding.environment[name] = 'SYNTHETIC_FORBIDDEN'; }, 'ENVIRONMENT_UNEXPECTED', onboarding, 'onboarding');
+  }
+  rejected(c => { c.services.onboarding.expose = ['8080']; }, 'ONBOARDING_NO_HTTP', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.ports = ['8080:8080']; }, 'SERVICE_SETTING_UNEXPECTED', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.depends_on = { api: { condition: 'service_healthy' } }; }, 'ONBOARDING_SEPARATE_JOB', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.networks.proxy = null; }, 'SERVICE_NETWORK_ISOLATION', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.volumes[1].read_only = false; }, 'ONBOARDING_MANIFEST_MOUNT_REQUIRED', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.volumes[1].bind.create_host_path = true; }, 'ONBOARDING_MANIFEST_MOUNT_REQUIRED', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.volumes[1].source = c.services.onboarding.volumes[0].source; }, 'ONBOARDING_MANIFEST_MOUNT_REQUIRED', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.volumes.push({ type: 'bind', source: '/var/run/docker.sock', target: '/var/run/docker.sock' }); }, 'ONBOARDING_MANIFEST_MOUNT_REQUIRED', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.volumes[0].read_only = false; }, 'CA_READ_ONLY_MOUNT_REQUIRED', onboarding, 'onboarding');
+});
+
+test('onboarding recusa outro projeto, identidade, chave administrativa ou ACK e nao vaza para runtime', () => {
+  for (const user of ['postgres', 'cp_api', 'cp_worker', 'cp_onboarding', 'cp_runtime_ci', 'cp_migrator_ci', `cp_onboarding_ci.${'b'.repeat(20)}`]) {
+    rejected(c => { c.services.onboarding.environment.DATABASE_USER = user; }, 'DATABASE_ROLE_SEPARATION', onboarding, 'onboarding');
+  }
+  rejected(c => { c.services.onboarding.environment.CP_ONBOARDING_PROJECT_REF = 'b'.repeat(20); }, 'ONBOARDING_PROJECT_EXACT', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.environment.DATABASE_URL = db.DATABASE_URL; }, 'ONBOARDING_PROJECT_EXACT', onboarding, 'onboarding');
+  rejected(c => { c.services.onboarding.environment.DATABASE_URL = onboarding.services.onboarding.environment.DATABASE_URL.replace('/postgres?', '/other?'); }, 'ONBOARDING_PROJECT_EXACT', onboarding, 'onboarding');
+  for (const secret of ['', 'SET_IN_VAULT', 'sb_publishable_SYNTHETIC_TEST_ONLY_1234567890', 'sb_secret_short', 'eyJhbGciOiJIUzI1NiJ9.legacy.signature']) {
+    rejected(c => { c.services.onboarding.environment.CP_ONBOARDING_AUTH_SECRET_KEY = secret; }, 'ONBOARDING_AUTH_SECRET_REQUIRED', onboarding, 'onboarding');
+  }
+  for (const ack of [undefined, 'SET_IN_VAULT', `${'b'.repeat(20)}:${'a'.repeat(64)}`, `${baselineProject}:002:${'a'.repeat(64)}`, `${baselineProject}:${'A'.repeat(64)}`]) {
+    rejected(c => { c.services.onboarding.environment.CP_ONBOARDING_ACK = ack; }, 'ONBOARDING_ACK_FORMAT', onboarding, 'onboarding');
+  }
+  for (const [base, mode, service] of [[app, 'app', 'api'], [homologation, 'homologation', 'api'], [migrate, 'migrate', 'migrate'], [baseline, 'baseline', 'baseline']]) {
+    rejected(c => { c.services[service].environment.CP_ONBOARDING_AUTH_SECRET_KEY = onboarding.services.onboarding.environment.CP_ONBOARDING_AUTH_SECRET_KEY; }, 'ENVIRONMENT_UNEXPECTED', base, mode);
   }
 });
 
@@ -243,4 +304,13 @@ test('CLI nao devolve segredos em JSON invalido, chaves hostis ou valores invali
   assert.equal(hmlRun.status, 1);
   assert.doesNotMatch(hmlRun.stdout + hmlRun.stderr, new RegExp(secret));
   assert.match(hmlRun.stderr, /ENCRYPTION_KEY_REQUIRED/);
+  const onboardingValid = spawnSync(process.execPath, [script, '--onboarding'], { input: JSON.stringify(onboarding), encoding: 'utf8' });
+  assert.equal(onboardingValid.status, 0); assert.equal(onboardingValid.stdout, 'RELEASE_VALID 0\n'); assert.equal(onboardingValid.stderr, '');
+  const onboardingInvalid = clone(onboarding);
+  onboardingInvalid.services.onboarding.environment.CP_ONBOARDING_AUTH_SECRET_KEY = secret;
+  onboardingInvalid.services.onboarding.environment.CP_ONBOARDING_ACK = secret;
+  const onboardingRun = spawnSync(process.execPath, [script, '--onboarding'], { input: JSON.stringify(onboardingInvalid), encoding: 'utf8' });
+  assert.equal(onboardingRun.status, 1);
+  assert.doesNotMatch(onboardingRun.stdout + onboardingRun.stderr, new RegExp(secret));
+  assert.match(onboardingRun.stderr, /ONBOARDING_AUTH_SECRET_REQUIRED/);
 });

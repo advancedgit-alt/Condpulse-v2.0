@@ -1,0 +1,48 @@
+# Job manual isolado: inspect por padrao. Nunca incluir na stack web/API.
+services:
+  onboarding:
+    image: ${CP_ONBOARDING_IMAGE:?Informe o digest aprovado do target onboarding}
+    command: [inspect, /run/secrets/onboarding.json]
+    user: "10001:10001"
+    init: true
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+    stop_grace_period: 35s
+    environment:
+      DATABASE_URL: ${CP_ONBOARDING_DATABASE_URL:?Informe JDBC do operador com TLS verify-full}
+      DATABASE_USER: ${CP_ONBOARDING_DATABASE_USER:?Informe login exclusivo cp_onboarding_}
+      DATABASE_PASSWORD: ${CP_ONBOARDING_DATABASE_PASSWORD:?Obtenha senha operacional no cofre}
+      CP_ONBOARDING_AUTH_SECRET_KEY: ${CP_ONBOARDING_AUTH_SECRET_KEY:?Obtenha chave Auth Admin exclusiva no cofre}
+      CP_ONBOARDING_PROJECT_REF: rpnrqfrfwywglvyykgrg
+      CP_ONBOARDING_ACK: ${CP_ONBOARDING_ACK:-}
+    healthcheck:
+      disable: true
+    volumes:
+      - type: bind
+        source: ${CP_DB_CA_FILE:?Informe CA PostgreSQL validada}
+        target: /run/secrets/db-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CP_ONBOARDING_MANIFEST_FILE:?Informe manifesto privado aprovado}
+        target: /run/secrets/onboarding.json
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+networks:
+  backend:
+    driver: bridge

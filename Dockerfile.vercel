@@ -1,0 +1,18 @@
+# Services/Container Runtime beta. Build context: repository root, not apps/backend.
+# Same reviewed bases as infra/Dockerfile.api; runtime never executes migrations.
+FROM maven:3.9.11-eclipse-temurin-25@sha256:407c4423cec0cf2981055bc2c6c0dc211d9605b6669279b95997f2d1c7e91e2c AS build
+WORKDIR /work
+COPY apps/backend apps/backend
+COPY db/migrations db/migrations
+COPY infra/supabase/bootstrap/foundation-manifest.json infra/supabase/bootstrap/foundation-manifest.json
+RUN mvn -B -ntp -f apps/backend/pom.xml -DskipTests package
+
+FROM eclipse-temurin:25-jre-noble@sha256:ce8543ddd3070ccbeaac2106a74c9387ddeb8d47a1c43348345715c1ef245c7f
+WORKDIR /app
+COPY --from=build --chown=10001:10001 /work/apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar /app/app.jar
+COPY --chown=10001:10001 infra/vercel/start-api.sh /app/start-api.sh
+USER 10001:10001
+# Vercel's container port is overridden by PORT=8080 in project settings.
+ENV PORT=8080 DB_POOL_SIZE=2 CP_BFF_ENABLED=false CP_RESERVATIONS_ENABLED=false
+EXPOSE 8080
+ENTRYPOINT ["/bin/sh", "/app/start-api.sh"]

@@ -47,7 +47,7 @@ export function ContextPage() {
     setSwitching(true);
     await queries.cancelQueries({ queryKey: ['private', identity.accountId] });
     queries.removeQueries({ queryKey: ['private', identity.accountId] });
-    navigate(`/morador/${tenantId}/${unitId}/reservas`);
+    navigate(`/morador/${tenantId}/${unitId}/inicio`);
   }
   return <div className="context-page"><div className="page-intro"><span className="eyebrow">SEU ACESSO</span><h1>Escolha seu espaço.</h1><p>Você verá apenas os condomínios e as unidades vinculados ao seu cadastro.</p></div>
     {tenants.length === 0 ? <div className="panel"><Empty title="Nenhum vínculo disponível">A gestão precisa validar seu vínculo antes de você acessar a unidade. Se seu cadastro acabou de ser aprovado, atualize o acesso.</Empty></div>

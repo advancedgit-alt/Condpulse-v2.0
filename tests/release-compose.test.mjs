@@ -9,7 +9,7 @@ import { validateRelease } from '../infra/validate-release.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão remota', () => {
+test('cinco manifestos Compose separam aplicacao, DDL e operacao sem daemon ou conexao remota', () => {
   const version = execFileSync('docker', ['compose', 'version', '--short'], {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   }).trim().replace(/^v/, '');
@@ -18,8 +18,10 @@ test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão
   try {
     const emptyEnv = join(temporary, 'empty.env');
     const ca = join(temporary, 'db-ca.crt');
+    const manifest = join(temporary, 'onboarding.json');
     writeFileSync(emptyEnv, '');
     writeFileSync(ca, 'SYNTHETIC CA FILE FOR CONFIG PARSING ONLY\n');
+    writeFileSync(manifest, '{}\n');
     // Não há conexão, pull ou credencial real neste teste de renderização.
     const jdbc = 'jdbc:postgresql://db.aaaaaaaaaaaaaaaaaaaa.supabase.co:5432/postgres'
       + '?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt';
@@ -29,6 +31,13 @@ test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão
       CP_WEB_IMAGE: 'ghcr.io/condpulse/web@sha256:' + 'b'.repeat(64),
       CP_BASELINE_IMAGE: 'ghcr.io/condpulse/baseline@sha256:' + 'c'.repeat(64),
       CP_BASELINE_ACK: '',
+      CP_ONBOARDING_IMAGE: 'ghcr.io/condpulse/onboarding@sha256:' + 'd'.repeat(64),
+      CP_ONBOARDING_DATABASE_URL: jdbc.replace('aaaaaaaaaaaaaaaaaaaa', 'rpnrqfrfwywglvyykgrg'),
+      CP_ONBOARDING_DATABASE_USER: 'cp_onboarding_ci',
+      CP_ONBOARDING_DATABASE_PASSWORD: 'OPERATOR_SENTINEL_CONFIG_TEST_ONLY',
+      CP_ONBOARDING_AUTH_SECRET_KEY: 'sb_secret_SYNTHETIC_OPERATIONAL_TEST_ONLY_1234567890',
+      CP_ONBOARDING_MANIFEST_FILE: manifest,
+      CP_ONBOARDING_ACK: '',
       CP_API_DATABASE_URL: jdbc,
       CP_API_DATABASE_USER: 'cp_runtime_ci',
       CP_API_DATABASE_PASSWORD: 'ConfigTestRuntime_42!',
@@ -41,10 +50,11 @@ test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão
       CP_PROXY_NETWORK: 'condpulse_ci_proxy',
       CP_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_SYNTHETIC_TEST_ONLY_1234567890',
       CP_BFF_ENCRYPTION_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)).toString('base64'),
+      CP_BFF_RATE_LIMIT_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => 255 - i)).toString('base64'),
     };
     const render = (file, environment = env, project) => {
       const files = Array.isArray(file) ? file : [file];
-      const name = project ?? (files[0].includes('.app.') ? 'condpulse-app' : files[0].includes('.baseline.') ? 'condpulse-baseline' : 'condpulse-migrate');
+      const name = project ?? (files[0].includes('.app.') ? 'condpulse-app' : files[0].includes('.baseline.') ? 'condpulse-baseline' : files[0].includes('.onboarding.') ? 'condpulse-onboarding' : 'condpulse-migrate');
       return JSON.parse(execFileSync('docker', [
         'compose', '--project-name', name, '--env-file', emptyEnv,
         ...files.flatMap(path => ['-f', path]), 'config', '--format', 'json',
@@ -83,7 +93,25 @@ test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão
     assert.equal(app.services.api.environment.CP_BFF_ENABLED, 'false');
     assert.equal(app.services.api.environment.CP_BFF_ENCRYPTION_KEY, undefined);
     assert.throws(() => render(hmlFiles, { ...hmlEnv, CP_BFF_ENCRYPTION_KEY: '' }, 'condpulse-hml-ci'));
+    assert.throws(() => render(hmlFiles, { ...hmlEnv, CP_BFF_RATE_LIMIT_KEY: '' }, 'condpulse-hml-ci'));
     assert.throws(() => render(hmlFiles, { ...hmlEnv, CP_SUPABASE_PUBLISHABLE_KEY: '' }, 'condpulse-hml-ci'));
+    const onboarding = render('infra/compose.onboarding.yaml');
+    assert.deepEqual(validateRelease(onboarding, 'onboarding'), []);
+    assert.deepEqual(Object.keys(onboarding.services), ['onboarding']);
+    assert.deepEqual(onboarding.services.onboarding.command, ['inspect', '/run/secrets/onboarding.json']);
+    assert.equal(onboarding.services.onboarding.environment.SPRING_PROFILES_ACTIVE, undefined);
+    assert.equal(onboarding.services.onboarding.environment.DB_POOL_SIZE, undefined);
+    assert.equal(onboarding.services.onboarding.environment.CP_ONBOARDING_AUTH_SECRET_KEY, env.CP_ONBOARDING_AUTH_SECRET_KEY);
+    assert.equal(onboarding.services.onboarding.volumes.length, 2);
+    for (const config of [app, migration, baseline, hml]) {
+      assert.equal(JSON.stringify(config).includes(env.CP_ONBOARDING_AUTH_SECRET_KEY), false);
+      assert.equal(JSON.stringify(config).includes('OPERATOR_SENTINEL_CONFIG_TEST_ONLY'), false);
+    }
+    for (const secret of ['ConfigTestRuntime_42!', 'DDL_SENTINEL_CONFIG_TEST_ONLY', env.CP_BFF_ENCRYPTION_KEY, env.CP_BFF_RATE_LIMIT_KEY]) {
+      assert.equal(JSON.stringify(onboarding).includes(secret), false);
+    }
+    assert.throws(() => render('infra/compose.onboarding.yaml', { ...env, CP_ONBOARDING_AUTH_SECRET_KEY: '' }));
+    assert.throws(() => render('infra/compose.onboarding.yaml', { ...env, CP_ONBOARDING_MANIFEST_FILE: '' }));
   } finally {
     assert.ok(resolve(temporary).startsWith(resolve(tmpdir()) + sep));
     rmSync(temporary, { recursive: true, force: true });

@@ -28,6 +28,13 @@ public class BffConfiguration {
  }
  @Bean TokenCipher bffTokenCipher(@Value("${condpulse.bff.encryption-key}") String key) { return new TokenCipher(key); }
  @Bean Clock bffClock() { return Clock.systemUTC(); }
+ @Bean AuthRateStore bffAuthRateStore(JdbcTemplate jdbc,PlatformTransactionManager manager) {
+  return new AuthRateStore(jdbc,manager);
+ }
+ @Bean AuthRateLimiter bffAuthRateLimiter(@Value("${condpulse.bff.rate-limit-key}") String key,
+    @Value("${condpulse.bff.encryption-key}") String cipherKey,AuthRateStore store) {
+  return new AuthRateLimiter(key,cipherKey,store);
+ }
  @Bean SupabaseAuthClient bffAuthClient(BffSettings settings) {
   var http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
    .followRedirects(HttpClient.Redirect.NEVER).build();

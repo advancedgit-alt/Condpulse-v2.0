@@ -209,6 +209,7 @@ async function startApi(issuer, origin, port) {
       CP_JWT_ISSUER: issuer, CP_JWT_JWK_SET_URI: `${issuer}/.well-known/jwks.json`,
       CP_BFF_ENABLED: 'true', CP_RESERVATIONS_ENABLED: 'true', CP_BFF_ORIGIN: origin,
       CP_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic_ci_only', CP_BFF_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+      CP_BFF_RATE_LIMIT_KEY: randomBytes(32).toString('base64'),
       CP_BFF_SESSION_HOURS: '1' },
   });
   // Drain logs without printing provider/cookie/token material or persisting an artifact.
@@ -329,6 +330,22 @@ async function exercise(origin, tls) {
   ensure((await replayClient.call('/v1/me')).status === 401, 'LOGGED_OUT_COOKIE_REPLAY_ALLOWED');
   ensure(!client.cookies.has('__Host-cp_session') && !client.cookies.has('__Host-cp_csrf'), 'LOGOUT_COOKIES_NOT_CLEARED');
   ensure(passwordCalls === 1 && jwksCalls >= 1, 'AUTH_SANDBOX_PROTOCOL_NOT_EXERCISED');
+  // A mesma cadeia real aplica o limite antes do provedor e mantem logout livre.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    csrf = await client.csrf();
+    const invalid = await client.call('/auth/login', { method: 'POST',
+      body: { ...loginBody, password: 'synthetic_wrong_password_only' }, csrf });
+    ensure(invalid.status === 401, 'INVALID_LOGIN_CONTRACT_FAILED');
+  }
+  ensure(passwordCalls === 5, 'LOGIN_ATTEMPTS_NOT_COUNTED');
+  csrf = await client.csrf();
+  const limited = await client.call('/auth/login', { method: 'POST', body: loginBody, csrf });
+  ensure(limited.status === 429 && limited.body?.code === 'AUTH_RATE_LIMITED', 'REAL_LOGIN_RATE_LIMIT_FAILED');
+  const retryAfter = Number(limited.headers['retry-after']);
+  ensure(Number.isInteger(retryAfter) && retryAfter >= 1 && retryAfter <= 900, 'RATE_LIMIT_RETRY_AFTER_INVALID');
+  ensure(passwordCalls === 5, 'RATE_LIMIT_CONTACTED_PROVIDER');
+  csrf = await client.csrf();
+  ensure((await client.call('/auth/logout', { method: 'POST', csrf })).status === 204, 'RATE_LIMIT_BLOCKED_LOGOUT');
 }
 
 async function stop() {
