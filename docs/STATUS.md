@@ -8,6 +8,7 @@
 - Replay40731398800 passou com validated=true, target005 e migrationsExecuted=0. JAR e CA mantiveram os mesmos SHA256 nas quatro operacoes; registro sanitizado: evidence/database-operations-20261028.json.
 - Leitura remota confirmou BASELINE002 e SQL003/004/005 bem-sucedidas; checksums109362481/-481413482/1796503302. As16 tabelas da aplicacao (excluindo o historico Flyway) mantem ENABLE/FORCE RLS e ownership postgres. cp_api, cp_worker e cp_onboarding sao grupos NOLOGIN, sem SUPERUSER/BYPASSRLS. Nenhum login runtime/onboarding foi provisionado nesta etapa.
 - O bloqueio seguinte e o transporte seguro das credenciais runtime para o projeto Vercel. A API permanece sem configuracao de banco; BFF e reservas continuam desligados. Baseline/migrations nao cadastram condominio, unidades, usuarios ou vinculos, nem homologam Auth real.
+- CP-009/CP-066: PR#11 prepara o executor manual runtime/Vercel, sem executar provisionamento remoto. Revisao independente aprovada; CI40733729757 passou nos tres jobs no headab685d8eb41bea7826c0e26425cb5b5b63307b88. Os10 testes runtime passaram sem skips, incluindo compilacao Java, protocolo HTTP sintetico e PostgreSQL17.11 descartavel com autenticacao SCRAM, RLS, replay e recuperacao parcial. Local7 passaram e3 nao foram executados por falta de JDK/JAR/PostgreSQL. Procedimento: CONFIGURACAO_RUNTIME.md. CP_VERCEL_TOKEN e a aprovacao da operacao concreta ainda dependem do responsavel; nenhum PAT/login runtime/segredo Vercel foi criado por este pacote.
 
 ## Registro anterior da implantacao Vercel - 28/10/2026
 
