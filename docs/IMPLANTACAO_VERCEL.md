@@ -1,6 +1,6 @@
 # Homologacao CondPulse na Vercel
 
-Data: 27/10/2026, America/Sao_Paulo. Decisao: ADR-0005.
+Atualizado: 28/10/2026, America/Sao_Paulo. Decisao: ADR-0005.
 Projeto: https://vercel.com/sindicoadvanced/condpulse
 
 ## Configuracao revisavel
@@ -20,6 +20,14 @@ privilegiada e divergencia de issuer/JWKS, antes de iniciar Spring. A CA publica
 preparada em /tmp; somente JDBC verify-full e permitido.
 
 ## Estado observado
+
+Conferencia de28/10: deployment atual dpl_45ufsie9cUqg4GHb3UZyt4418eWS,
+commit401605522fa2f2a470bb480a406c598f7f508042, Ready. CI40620673228 passou
+nos tres jobs no merge. API ainda retorna500: o launcher aborta com
+VERCEL_API_RUNTIME_IDENTITY_REQUIRED antes de Spring. Nao ha usuario runtime,
+credenciais JDBC ou CA configurados. O banco continua sem baseline Flyway/V003-V005.
+Evidencia: evidence/vercel-readiness-20261028.json. Os dados abaixo preservam a
+primeira observacao; nao equivalem a aceite funcional.
 
 Primeiro deployment Ready: dpl_7NBrikhozHriUpTWymxr7KmwgJmA, commit9e5b5fb638c261b6d6f6f26c936f85a6e48d1160.
 Logs confirmam web e container API; imagem publicada:

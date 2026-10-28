@@ -31,6 +31,7 @@ public final class VercelRuntimePreflight {
         require("api".equals(env.getOrDefault("SPRING_PROFILES_ACTIVE", "api")), "VERCEL_API_PROFILE_EXACT");
         for (String key : env.keySet()) {
             require(!key.startsWith("CP_MIGRATION_") && !key.startsWith("CP_ONBOARDING_"), "VERCEL_API_PRIVILEGED_ENV_FORBIDDEN");
+            require(!key.startsWith("SERVER_") && !key.startsWith("MANAGEMENT_"), "VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN");
         }
         for (String key : new String[] {"SUPABASE_SERVICE_ROLE_KEY", "CP_SUPABASE_SECRET_KEY", "SUPABASE_SECRET_KEY"}) {
             require(value(env, key).isEmpty(), "VERCEL_API_PRIVILEGED_ENV_FORBIDDEN");
@@ -48,9 +49,9 @@ public final class VercelRuntimePreflight {
             byte[] rate = canonicalKey(value(env, "CP_BFF_RATE_LIMIT_KEY"), "VERCEL_API_RATE_KEY_INVALID");
             require(!Arrays.equals(cipher, rate), "VERCEL_API_KEYS_MUST_DIFFER");
         }
-        int pool = integer(env.getOrDefault("DB_POOL_SIZE", "2"), "VERCEL_API_POOL_LIMIT");
+        int pool = integer(value(env, "DB_POOL_SIZE"), "VERCEL_API_POOL_LIMIT");
         require(pool >= 1 && pool <= 2, "VERCEL_API_POOL_LIMIT");
-        require("8080".equals(env.getOrDefault("PORT", "8080")), "VERCEL_API_PORT_EXACT");
+        require("8080".equals(value(env, "PORT")), "VERCEL_API_PORT_EXACT");
     }
 
     private static void validateDatabase(String jdbc, String user) {

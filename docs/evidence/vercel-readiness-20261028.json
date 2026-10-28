@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-28",
+  "timezone": "America/Sao_Paulo",
+  "project": "CondPulse",
+  "status": "BLOCKED_RUNTIME_CONFIGURATION",
+  "deployed_commit": "401605522fa2f2a470bb480a406c598f7f508042",
+  "deployment": "dpl_45ufsie9cUqg4GHb3UZyt4418eWS",
+  "deployment_ready": true,
+  "application_functional": false,
+  "previous_code_ci": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40620673228",
+  "api_probe": {
+    "method": "GET",
+    "path": "/v1/me",
+    "status": 500,
+    "platform_error": "FUNCTION_INVOCATION_FAILED",
+    "runtime_log": "VERCEL_API_RUNTIME_IDENTITY_REQUIRED",
+    "runtime_log_local_time": "00:05:36",
+    "spring_started": false
+  },
+  "missing_runtime_configuration": ["DATABASE_URL", "DATABASE_USER", "DATABASE_PASSWORD", "CP_VERCEL_DB_CA_BASE64"],
+  "missing_bff_configuration": ["CP_SUPABASE_PUBLISHABLE_KEY", "CP_BFF_ENCRYPTION_KEY", "CP_BFF_RATE_LIMIT_KEY"],
+  "supabase_read_only": {
+    "project_ref": "rpnrqfrfwywglvyykgrg",
+    "application_tables": 13,
+    "flyway_history_present": false,
+    "web_sessions_present": false,
+    "auth_rate_limits_present": false,
+    "onboarding_runs_present": false,
+    "application_roles": [
+      {"name":"cp_api","login":false,"superuser":false,"bypassrls":false},
+      {"name":"cp_worker","login":false,"superuser":false,"bypassrls":false}
+    ],
+    "runtime_login_present": false
+  },
+  "new_fixes": {
+    "effective_pool_and_port_exported_before_guard": true,
+    "server_management_overrides_rejected": true,
+    "login_requires_anonymous_identity_and_valid_csrf_contract": true,
+    "csrf_probe_token_retained": false,
+    "local_vitest_passed": 51,
+    "local_typecheck_build": "PASSED",
+    "browser_journeys_prepared": 21,
+    "browser_local_execution": "BLOCKED_BEFORE_ASSERTIONS_BY_NETWORK_POLICY",
+    "ci_for_fixes": "PENDING",
+    "independent_review": "APPROVED_CONDITIONAL_ON_CI"
+  },
+  "remote_mutations_in_this_verification": false,
+  "secrets_read_or_imported": false,
+  "baseline_or_migrations_applied_remotely": false,
+  "managed_auth_journey_verified": false
+}

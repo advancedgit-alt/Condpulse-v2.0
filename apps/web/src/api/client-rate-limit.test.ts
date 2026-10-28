@@ -51,6 +51,7 @@ describe('limitação BFF sem repetição automática', () => {
     const client = new CondPulseApi({ fetch: fetcher }); client.onSessionExpired(expired);
     await expect(client.refresh()).rejects.toMatchObject({ status: 503, code: 'AUTH_PROVIDER_UNAVAILABLE' });
     expect(expired).toHaveBeenCalledTimes(1);
+    expect(expired).toHaveBeenCalledWith(expect.objectContaining({ status: 503, code: 'AUTH_PROVIDER_UNAVAILABLE' }));
   });
   it('resposta antiga não impõe espera a uma sessão nova', async () => {
     let finish!: (value: Response) => void;

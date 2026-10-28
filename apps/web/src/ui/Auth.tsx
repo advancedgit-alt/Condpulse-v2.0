@@ -19,20 +19,33 @@ const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queries = useQueryClient();
-  const [mode, setMode] = useState<'ready' | 'anonymous' | 'logoutPending' | 'logoutUnconfirmed'>('ready');
-  const [logoutError, setLogoutError] = useState<unknown>(null);
+  const [mode, setMode] = useState<'ready' | 'anonymous' | 'loginPending' | 'blocked' | 'unavailable' | 'logoutPending' | 'logoutUnconfirmed'>('ready');
+  const [modeError, setModeError] = useState<unknown>(null);
   const authEpoch = useRef(0);
   const identity = useQuery({ queryKey: ['identity'], queryFn: ({ signal }) => api.currentIdentity(signal), enabled: mode === 'ready' });
-  useEffect(() => api.onSessionExpired(() => {
+  useEffect(() => api.onSessionExpired(failure => {
     authEpoch.current += 1;
-    setMode('anonymous');
+    setModeError(failure);
+    setMode(failure instanceof ApiError && failure.status === 401 ? 'anonymous'
+      : failure instanceof ApiError && failure.code === 'ACCOUNT_INACTIVE' ? 'blocked' : 'unavailable');
     void queries.cancelQueries(); queries.clear();
   }), [queries]);
-  const error = logoutError ?? identity.error;
-  const status: AuthStatus = mode !== 'ready' ? mode : identity.isPending ? 'loading' : identity.isError
-    ? identity.error instanceof ApiError && identity.error.status === 401 ? 'anonymous'
-      : identity.error instanceof ApiError && identity.error.status === 403 ? 'blocked' : 'unavailable'
-    : 'authenticated';
+  const needsLogin = mode === 'anonymous' || mode === 'ready' && !identity.isFetching
+    && identity.error instanceof ApiError && identity.error.status === 401;
+  const loginAvailability = useQuery({
+    queryKey: ['login-availability', authEpoch.current],
+    queryFn: async ({ signal }) => { await api.verifyLoginAvailable(signal); return true; },
+    enabled: needsLogin,
+    refetchOnWindowFocus: false,
+  });
+  const error = (needsLogin ? loginAvailability.error : modeError) ?? identity.error;
+  const status: AuthStatus = mode === 'loginPending' ? 'loading'
+    : mode === 'logoutPending' || mode === 'logoutUnconfirmed' || mode === 'blocked' || mode === 'unavailable' ? mode
+    : needsLogin ? loginAvailability.isPending || loginAvailability.isFetching ? 'loading'
+      : loginAvailability.isError ? 'unavailable' : 'anonymous'
+    : identity.isPending ? 'loading' : identity.isError
+      ? identity.error instanceof ApiError && identity.error.status === 403 ? 'blocked' : 'unavailable'
+      : 'authenticated';
   useEffect(() => {
     if (status === 'blocked' || status === 'unavailable') {
       void queries.cancelQueries({ queryKey: ['private'] });
@@ -41,25 +54,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queries, status]);
 
   async function login(email: string, password: string) {
+    if (status !== 'anonymous') throw new ApiError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'O serviço de acesso está temporariamente indisponível.');
     const epoch = ++authEpoch.current;
-    setMode('anonymous');
-    await queries.cancelQueries(); queries.clear(); api.clearSession();
-    await api.login({ email, password });
-    if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
-    const account = await api.currentIdentity();
-    if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
-    queries.setQueryData(['identity'], account);
-    setLogoutError(null); setMode('ready');
+    setMode('loginPending'); setModeError(null);
+    let accepted = false;
+    try {
+      await queries.cancelQueries(); queries.clear(); api.clearSession();
+      await api.login({ email, password }); accepted = true;
+      if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
+      const account = await api.currentIdentity();
+      if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
+      queries.setQueryData(['identity'], account);
+      setModeError(null); setMode('ready');
+    } catch (failure) {
+      if (epoch === authEpoch.current) {
+        setModeError(failure);
+        setMode(failure instanceof ApiError && (failure.code === 'ACCOUNT_INACTIVE' || accepted && failure.status === 403) ? 'blocked'
+          : !accepted && failure instanceof ApiError && [400, 401, 429].includes(failure.status) ? 'anonymous' : 'unavailable');
+      }
+      throw failure;
+    }
   }
   async function logout() {
     const epoch = ++authEpoch.current;
-    setMode('logoutPending'); setLogoutError(null);
+    setMode('logoutPending'); setModeError(null);
     await queries.cancelQueries(); queries.clear(); api.clearSession();
-    try { await api.logout(); if (epoch === authEpoch.current) setMode('anonymous'); }
-    catch (failure) { if (epoch === authEpoch.current) { setLogoutError(failure); setMode('logoutUnconfirmed'); } }
+    try { await api.logout(); if (epoch === authEpoch.current) setMode('ready'); }
+    catch (failure) { if (epoch === authEpoch.current) { setModeError(failure); setMode('logoutUnconfirmed'); } }
   }
   function recheck() {
-    setLogoutError(null); setMode('ready');
+    authEpoch.current += 1;
+    setModeError(null); setMode('ready');
     void queries.invalidateQueries({ queryKey: ['identity'] });
   }
   return <AuthContext.Provider value={{ identity: status === 'authenticated' ? identity.data ?? null : null, status, error, login, logout, recheck }}>{children}</AuthContext.Provider>;
@@ -118,7 +143,7 @@ export function LoginPage() {
       <p className="story-bottom">CondPulse · Vida em comunidade</p>
     </section>
     <section className="login-form-side"><div className="mobile-brand"><Brand /></div><div className="login-form-wrap"><span className="eyebrow">BEM-VINDO AO CONDPULSE</span><h2>Entre para continuar.</h2><p className="muted">Use o e-mail e a senha do seu cadastro.</p>
-      {unavailable ? <Notice tone="warning"><p>Não foi possível verificar a conexão com o sistema. O acesso será liberado quando a sessão puder ser conferida.</p><button className="button button-secondary" disabled={remaining > 0} onClick={() => { if (remaining === 0) auth.recheck(); }}>Verificar conexão</button><button className="text-button" onClick={() => void auth.logout()}>Sair</button></Notice> : null}
+      {unavailable ? <Notice tone="warning"><p>Serviço de acesso indisponível. Não foi possível verificar a conexão com o sistema.</p><button className="button button-secondary" disabled={remaining > 0} onClick={() => { if (remaining === 0) auth.recheck(); }}>Verificar conexão</button><button className="text-button" onClick={() => void auth.logout()}>Sair</button></Notice> : null}
       <form onSubmit={event => void submit(event)} className="stack-form">
         <label htmlFor="email">E-mail</label><input id="email" name="email" type="email" autoComplete="username" required maxLength={254} value={email} onChange={event => setEmail(event.target.value)} disabled={pending || unavailable} />
         <label htmlFor="password">Senha</label><input id="password" name="password" type="password" autoComplete="current-password" required maxLength={1024} value={password} onChange={event => setPassword(event.target.value)} disabled={pending || unavailable} />

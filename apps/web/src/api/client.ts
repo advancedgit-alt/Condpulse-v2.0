@@ -176,6 +176,12 @@ interface RequestOptions {
 interface Reply { response: Response; value: unknown; }
 interface Csrf { headerName: 'X-CSRF-Token'; token: string; }
 
+function csrfResponse(value: unknown): Csrf {
+  if (!record(value) || value.headerName !== 'X-CSRF-Token' || !isString(value.token)
+      || !/^[\x21-\x7e]{1,512}$/.test(value.token)) throw invalidResponse();
+  return { headerName: 'X-CSRF-Token', token: value.token };
+}
+
 /** Cliente BFF da própria origem. Nenhuma credencial do provedor fica no navegador. */
 export class CondPulseApi {
   private readonly fetcher: typeof globalThis.fetch;
@@ -185,14 +191,14 @@ export class CondPulseApi {
   private authTail: Promise<void> = Promise.resolve();
   private refreshFlight: { generation: number; promise: Promise<Session> } | undefined;
   private csrfFlight: { generation: number; promise: Promise<Csrf> } | undefined;
-  private readonly expiredListeners = new Set<() => void>();
+  private readonly expiredListeners = new Set<(failure: unknown) => void>();
 
   constructor(options: { fetch?: typeof globalThis.fetch; now?: () => number } = {}) {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? (() => globalThis.performance.now());
   }
 
-  onSessionExpired(listener: () => void): () => void {
+  onSessionExpired(listener: (failure: unknown) => void): () => void {
     this.expiredListeners.add(listener);
     return () => { this.expiredListeners.delete(listener); };
   }
@@ -204,11 +210,11 @@ export class CondPulseApi {
     // A espera de login não guarda identidade e continua válida ao limpar a sessão.
   }
 
-  private expire(generation: number): void {
+  private expire(generation: number, failure: unknown): void {
     if (generation !== this.generation) return;
     this.clearSession();
     for (const listener of this.expiredListeners) {
-      try { listener(); } catch { /* Um consumidor não pode impedir a limpeza dos demais. */ }
+      try { listener(failure); } catch { /* Um consumidor não pode impedir a limpeza dos demais. */ }
     }
   }
 
@@ -225,11 +231,7 @@ export class CondPulseApi {
 
   private async csrf(generation: number, signal?: AbortSignal): Promise<Csrf> {
     if (!this.csrfFlight || this.csrfFlight.generation !== generation) {
-      const promise = this.send('/auth/csrf', {}, generation, false).then(({ value }) => {
-        if (!record(value) || value.headerName !== 'X-CSRF-Token' || !isString(value.token)
-            || !/^[\x21-\x7e]{1,512}$/.test(value.token)) throw invalidResponse();
-        return { headerName: 'X-CSRF-Token' as const, token: value.token };
-      });
+      const promise = this.send('/auth/csrf', {}, generation, false).then(({ value }) => csrfResponse(value));
       this.csrfFlight = { generation, promise };
       void promise.then(() => { if (this.csrfFlight?.promise === promise) this.csrfFlight = undefined; },
         () => { if (this.csrfFlight?.promise === promise) this.csrfFlight = undefined; });
@@ -315,7 +317,7 @@ export class CondPulseApi {
         return await this.send(path, options, generation);
       }
     } catch (error: unknown) {
-      if (error instanceof ApiError && (error.status === 401 || error.code === 'ACCOUNT_INACTIVE')) this.expire(generation);
+      if (error instanceof ApiError && (error.status === 401 || error.code === 'ACCOUNT_INACTIVE')) this.expire(generation, error);
       throw error;
     }
   }
@@ -344,7 +346,7 @@ export class CondPulseApi {
             || error.status === 429
             || error.status === 503 && error.code === 'AUTH_RATE_LIMIT_UNAVAILABLE');
           if (!preserved)
-            this.expire(generation);
+            this.expire(generation, error);
           throw error;
         }
       });
@@ -364,6 +366,16 @@ export class CondPulseApi {
 
   async currentIdentity(signal?: AbortSignal): Promise<CurrentIdentity> {
     return identity((await this.request('/v1/me', signal ? { signal } : {})).value);
+  }
+
+  /** Confere o contrato do BFF sem guardar nem compartilhar o token com mutações. */
+  async verifyLoginAvailable(signal?: AbortSignal): Promise<void> {
+    const generation = this.generation;
+    await abortable(this.authTail, signal);
+    this.ensureCurrent(generation, signal);
+    const { value } = await this.send('/auth/csrf', signal ? { signal } : {}, generation, false);
+    this.ensureCurrent(generation, signal);
+    csrfResponse(value);
   }
   async units(tenantId: string, signal?: AbortSignal): Promise<Unit[]> {
     return list((await this.request(`/v1/tenants/${identifier(tenantId)}/units`, signal ? { signal } : {})).value, unit);

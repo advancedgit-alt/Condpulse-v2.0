@@ -1,4 +1,14 @@
-# Estado verificável - 27/10/2026
+# Estado verificável - 28/10/2026
+
+## Conferencia da implantacao Vercel - 28/10/2026
+
+- PR#8 integrada em401605522fa2f2a470bb480a406c598f7f508042. CI40620673228 passou nos tres jobs no proprio merge; CI40620361516 tambem passou no head revisado de5c66f. O deployment atual dpl_45ufsie9cUqg4GHb3UZyt4418eWS esta Ready com source4016055. As referencias antigas abaixo documentam cada etapa, nao substituem esta conferencia.
+- A publicacao ainda NAO esta funcional: GET /v1/me retorna500 FUNCTION_INVOCATION_FAILED. Log atual do painel em28/10 as00:05 registra VERCEL_API_RUNTIME_IDENTITY_REQUIRED antes de iniciar Spring. O build concluido nao provisionou a identidade do banco.
+- Vercel possui somente as sete configs iniciais em Production. Ausentes DATABASE_URL, DATABASE_USER, DATABASE_PASSWORD, CP_VERCEL_DB_CA_BASE64 e as tres chaves/configs BFF para habilitacao posterior. Nao preencher com marcadores ou identidade administrativa na API.
+- SELECT remoto confirmou13 tabelas, nenhuma platform.flyway_schema_history, web_sessions, auth_rate_limits ou onboarding_runs; existem somente cp_api e cp_worker NOLOGIN, sem SUPERUSER/BYPASSRLS. Nao houve escrita remota nesta verificacao. A senha postgres nao e recuperavel pelo painel; nenhum cofre ou executor CondPulse foi informado/identificado. Nao resetar senha nem importar segredo Advanced.
+- Correcao em revisao: launcher exporta o pool/porta efetivos e bloqueia overrides SERVER_/MANAGEMENT_; preflight exige esses valores explicitamente. Teste da imagem remove defaults OCI e comprova que os defaults exportados chegaram ao Java antes da validacao de CA, sem iniciar Spring/rede.
+- Correcao web em revisao: /v1/me401 somente oferece formulario depois de /auth/csrf valido; indisponibilidade, BFF desligado, renovacao falha ou resposta incerta mantem acesso indisponivel. Probe descarta o token e mutacoes continuam buscando CSRF novo. Nao comprova JDBC/Auth real. Local:51 Vitest, tipos e build passaram;21 jornadas de navegador dependem do CI. Revisao independente aprovada condicionada a esse run.
+- Evidencia atual: docs/evidence/vercel-readiness-20261028.json. Bloqueio operacional: acesso JDBC de migracao em cofre/executor proprio, CA validada, baseline oficial002 e V003-V005; depois login runtime exclusivo e configuracao BFF, cadastro aprovado e ensaio de Auth real. A conexao automatica Vercel continua sem acesso ao projeto(403); logs/configs foram conferidos no painel autorizado.
 
 ## Código revisado e validado
 
