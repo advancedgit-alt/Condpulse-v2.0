@@ -87,7 +87,7 @@ test('nova verificação aguarda identidade atual e não usa um 401 anterior par
   try {
     await page.getByRole('button', { name: 'Verificar conexão', exact: true }).click();
     await requested;
-    await expect(page.getByRole('status').filter({ hasText: 'Verificando sua sessão.' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Verificando sua sessão' })).toBeVisible();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     expect(csrfRequests).toBe(initialProbes);
     await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toHaveCount(0);
@@ -113,9 +113,10 @@ test('login aceito aguarda identidade sem um probe concorrente nem falso aviso d
   try {
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
     await requested;
-    await expect(page.getByRole('status').filter({ hasText: 'Verificando sua sessão.' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Verificando sua sessão' })).toBeVisible();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     expect(csrfRequests).toBe(2);
+    await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toHaveCount(0);
     await expect(page.getByText(/Serviço de acesso indisponível/)).toHaveCount(0);
   } finally { release(); }
   await expect(page).toHaveURL(/\/contextos/);
