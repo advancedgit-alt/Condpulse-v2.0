@@ -367,6 +367,20 @@
           "scope": "40 Vitest, typecheck/build e12 jornadas Chromium passaram. Painel MOR-01 parcial com contexto verificado, proximas reservas proprias em30dias, estado antigo, navegacao desktop/movel e rejeicao crossunit. O bloqueio de rede do Chromium local foi superado pela execucao no CI, sem ser atribuido ao produto. APIs do navegador sao sinteticas; sem aceite integral dos tickets.",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142",
           "working_directory": "apps/web"
+        },
+        {
+          "commit": "570966435ff67ec5f12882b2cdec7b406dccfa8b",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel, web endurecida e Chromium com API sintetica",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40734918664",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Disponibilidade anonima por area/contexto, limites e isolamento, microsegundos, limpeza, consulta antiga, conflito sem retry POST e troca/revogacao.16 novos testes Java e6 jornadas incluidos nos144 unitarios/HTTP,44 JDBC runtime,8 JDBC baseline,70 Vitest e27 Chromium aprovados. Nao constitui aceite integral dos tickets, Auth real ou ativacao remota.",
+          "webWorkingDirectory": "apps/web"
         }
       ]
     },
@@ -410,8 +424,23 @@
       "id": "CP-019",
       "delivery": "Testar isolamento de identidade. Matriz de papéis e tenants incluindo inválido, suspenso, expirado e suporte.",
       "acceptance": "Todos os testes negativos passam nas rotas, arquivos e stream.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "570966435ff67ec5f12882b2cdec7b406dccfa8b",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel, web endurecida e Chromium com API sintetica",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40734918664",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Disponibilidade anonima por area/contexto, limites e isolamento, microsegundos, limpeza, consulta antiga, conflito sem retry POST e troca/revogacao.16 novos testes Java e6 jornadas incluidos nos144 unitarios/HTTP,44 JDBC runtime,8 JDBC baseline,70 Vitest e27 Chromium aprovados. Nao constitui aceite integral dos tickets, Auth real ou ativacao remota.",
+          "webWorkingDirectory": "apps/web"
+        }
+      ]
     },
     {
       "id": "CP-020",
@@ -498,6 +527,20 @@
             "npm run test:e2e"
           ],
           "scope": "Web cria somente após resposta válida e mantém chave/corpo em resultado desconhecido; E2E de retry explícito e fuso do condomínio. APIs sintéticas no runner; jornada com banco/Auth gerenciados pendente. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "570966435ff67ec5f12882b2cdec7b406dccfa8b",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel, web endurecida e Chromium com API sintetica",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40734918664",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Disponibilidade anonima por area/contexto, limites e isolamento, microsegundos, limpeza, consulta antiga, conflito sem retry POST e troca/revogacao.16 novos testes Java e6 jornadas incluidos nos144 unitarios/HTTP,44 JDBC runtime,8 JDBC baseline,70 Vitest e27 Chromium aprovados. Nao constitui aceite integral dos tickets, Auth real ou ativacao remota.",
+          "webWorkingDirectory": "apps/web"
         }
       ]
     },
