@@ -274,6 +274,9 @@ async function exercise(origin, tls) {
   ensure((await client.call('/auth/login', { method: 'POST', body: loginBody, csrf, origin: 'https://hostile.invalid' })).status === 403, 'HOSTILE_ORIGIN_ALLOWED');
   ensure((await client.call('/auth/login', { method: 'POST', body: loginBody })).status === 403, 'MISSING_CSRF_ALLOWED');
   ensure(passwordCalls === 0, 'DENIED_LOGIN_CONTACTED_PROVIDER');
+  // Match the web client: CSRF is ephemeral and accompanies the current cookie.
+  // Fetch it for each valid mutation rather than carrying a token across responses.
+  csrf = await client.csrf();
   const login = await client.call('/auth/login', { method: 'POST', body: loginBody, csrf });
   ensure(login.status === 200 && login.body?.accountId === account, 'REAL_LOGIN_FAILED');
   ensure(Object.keys(login.body).sort().join(',') === 'accountId,expiresAt', 'LOGIN_EXPOSED_PROVIDER_TOKENS');
@@ -292,18 +295,22 @@ async function exercise(origin, tls) {
   const booking = { unitId: unit, amenityId: amenity, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 3600000).toISOString(), acceptedPolicyVersion: 1 };
   const bookingKey = `https-ci-booking:${randomUUID()}`;
   ensure((await client.call(`${base}/reservations`, { method: 'POST', body: booking, headers: { 'Idempotency-Key': bookingKey } })).status === 403, 'RESERVATION_WITHOUT_CSRF_ALLOWED');
+  csrf = await client.csrf();
   const create = await client.call(`${base}/reservations`, { method: 'POST', body: booking, csrf, headers: { 'Idempotency-Key': bookingKey } });
   ensure(create.status === 201 && create.body?.status === 'CONFIRMED', 'REAL_RESERVATION_FAILED');
+  csrf = await client.csrf();
   const replay = await client.call(`${base}/reservations`, { method: 'POST', body: booking, csrf, headers: { 'Idempotency-Key': bookingKey } });
   ensure(replay.status === 201, `RESERVATION_REPLAY_${responseDiagnostic(replay)}`);
   ensure(typeof replay.body?.reservationId === 'string', 'RESERVATION_REPLAY_BODY_ID_MISSING');
   ensure(replay.body.reservationId === create.body.reservationId, 'RESERVATION_REPLAY_BODY_ID_MISMATCH');
   ensure(Object.hasOwn(replay.headers, 'idempotency-replayed'), 'RESERVATION_REPLAY_HEADER_MISSING');
   ensure(replay.headers['idempotency-replayed'] === 'true', 'RESERVATION_REPLAY_HEADER_MISMATCH');
+  csrf = await client.csrf();
   const cancel = await client.call(`${base}/reservations/${create.body.reservationId}/cancel`, { method: 'POST', body: { unitId: unit, expectedVersion: create.body.version }, csrf, headers: { 'Idempotency-Key': `https-ci-cancel:${randomUUID()}` } });
   ensure(cancel.status === 200 && cancel.body?.status === 'CANCELLED', 'REAL_CANCELLATION_FAILED');
   ensure(sql(`select (select count(*) from cp.reservations where tenant_id='${tenant}' and status='CANCELLED') || ':' || (select count(*) from cp.audit_log where tenant_id='${tenant}') || ':' || (select count(*) from cp.outbox where tenant_id='${tenant}')`) === '1:2:2', 'RESERVATION_COMMIT_COUNTS_WRONG');
   const beforeRefresh = sql(`select encrypted_refresh_token from platform.web_sessions where token_hash='${hash}'`);
+  csrf = await client.csrf();
   const refresh = await client.call('/auth/refresh', { method: 'POST', csrf });
   ensure(refresh.status === 200 && refreshCalls === 1, 'REAL_REFRESH_FAILED');
   ensure(sql(`select version || ':' || (refresh_lease_id is null)::text from platform.web_sessions where token_hash='${hash}'`) === '1:true', 'REFRESH_COMMIT_MISSING');
