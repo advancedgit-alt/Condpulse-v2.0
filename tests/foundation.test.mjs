@@ -16,7 +16,7 @@ test('rastreabilidade preserva 68 tickets e 60 cenarios sem marcar aceite fictic
 test('contrato publica somente a superficie implementada da fundacao',()=>{
  const spec=json('contracts/openapi.json');
  assert.equal(spec.openapi,'3.1.0');
- assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout','/v1/tenants/{tenantId}/units','/v1/tenants/{tenantId}/amenities','/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel']);
+ assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout','/v1/tenants/{tenantId}/units','/v1/tenants/{tenantId}/amenities','/v1/tenants/{tenantId}/amenities/{amenityId}/availability','/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel']);
  for(const op of ['login','refresh','logout']) {const route=spec.paths['/auth/'+op].post; assert.equal(route['x-feature-flag'],'CP_BFF_ENABLED'); assert.ok(route.parameters.some(p=>p.name==='X-CSRF-Token' && p.required));}
  for(const path of ['/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel']) {
   const route=spec.paths[path].post;
@@ -25,6 +25,14 @@ test('contrato publica somente a superficie implementada da fundacao',()=>{
   assert.ok(route.parameters.some(p=>p.name==='X-CSRF-Token' && p.required));
  }
  assert.ok(spec.paths['/v1/me'].get.security[0].bearerAuth);
+ const availability=spec.paths['/v1/tenants/{tenantId}/amenities/{amenityId}/availability'].get;
+ assert.equal(availability['x-feature-flag'],'CP_RESERVATIONS_ENABLED');
+ assert.deepEqual(availability.parameters.filter(p=>p.required).map(p=>p.name),['tenantId','amenityId','unitId','from','until']);
+ assert.equal(availability.responses['200'].headers['Cache-Control'].schema.const,'no-store');
+ assert.deepEqual(Object.keys(spec.components.schemas.BlockedInterval.properties),['occupiedFrom','occupiedUntil']);
+ assert.equal(spec.components.schemas.BlockedInterval.additionalProperties,false);
+ assert.equal(spec.components.schemas.AmenityAvailability.properties.blockedIntervals.maxItems,1000);
+ assert.equal(spec.components.schemas.AmenityAvailability.additionalProperties,false);
  const refs=JSON.stringify(spec).matchAll(/"\$ref":"#\/components\/schemas\/([^"]+)"/g);
  for(const [,name] of refs) assert.ok(spec.components.schemas[name],name);
 });

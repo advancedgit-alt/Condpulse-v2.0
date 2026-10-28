@@ -39,6 +39,21 @@ public class ReservationService {
    return store.ownReservations(tenant,unit,from,until);
   });
  }
+ public ReservationModels.Availability availability(UUID actor,UUID tenant,UUID unit,UUID amenityId,
+     Instant from,Instant until) {
+  requireRange(from,until);
+  // PostgreSQL representa microssegundos. Rejeitar precisao maior evita arredondar a janela silenciosamente.
+  if(from.getNano()%1000!=0 || until.getNano()%1000!=0)
+   throw new BusinessProblem("RESERVATION_RANGE_INVALID",400,"Use instantes com precisao maxima de microssegundos.");
+  return execute(actor,tenant,context->{
+   context.requireBookableUnit(unit);
+   var amenity=store.amenity(tenant,amenityId);
+   requireAvailable(amenity);
+   Instant observedAt=store.currentTime();
+   return new ReservationModels.Availability(tenant,unit,amenityId,context.timeZone().getId(),from,until,
+    observedAt,store.blockedIntervals(tenant,amenityId,from,until));
+  });
+ }
  public ReservationModels.Mutation create(UUID actor,UUID tenant,String key,ReservationModels.Create request) {
   ReservationRequestHash.requireKey(key);
   String hash=ReservationRequestHash.create(request);
@@ -50,10 +65,7 @@ public class ReservationService {
    if(!previous.fresh()) return new ReservationModels.Mutation(previous.reservation(),true,previous.responseStatus());
    store.lockUnit(tenant,request.unitId());
    var amenity=store.amenity(tenant,request.amenityId());
-   if(amenity.policy()==null)
-    throw new BusinessProblem("AMENITY_POLICY_NOT_CONFIGURED",503,"As regras desta área precisam ser configuradas antes da reserva.");
-   if(amenity.approvalRequired())
-    throw new BusinessProblem("AMENITY_APPROVAL_UNAVAILABLE",503,"Esta área exige aprovação e ainda não está disponível neste fluxo.");
+   requireAvailable(amenity);
    if(request.acceptedPolicyVersion()!=amenity.policyVersion())
     throw new BusinessProblem("AMENITY_POLICY_CHANGED",409,"As regras da área mudaram. Revise-as antes de tentar novamente.");
    Instant now=store.currentTime();
@@ -101,6 +113,12 @@ public class ReservationService {
   catch(IllegalArgumentException | DateTimeException invalid) {
    throw new BusinessProblem("RESERVATION_WINDOW_INVALID",400,"O período não atende às regras da área.");
   }
+ }
+ private static void requireAvailable(ReservationStore.AmenityData amenity) {
+  if(amenity.policy()==null)
+   throw new BusinessProblem("AMENITY_POLICY_NOT_CONFIGURED",503,"As regras desta área precisam ser configuradas antes da reserva.");
+  if(amenity.approvalRequired())
+   throw new BusinessProblem("AMENITY_APPROVAL_UNAVAILABLE",503,"Esta área exige aprovação e ainda não está disponível neste fluxo.");
  }
  private static void requireReadable(TenantContext context,UUID unit) {
   if(unit==null || context.memberships().stream().noneMatch(m->unit.equals(m.unitId()) && (m.canCreateReservation() || m.canCancelReservation())))

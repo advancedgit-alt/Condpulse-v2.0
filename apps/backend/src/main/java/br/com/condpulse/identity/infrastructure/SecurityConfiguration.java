@@ -56,7 +56,8 @@ public class SecurityConfiguration {
    .authorizeHttpRequests(a->a
     .requestMatchers("/actuator/health","/actuator/health/liveness","/actuator/health/readiness").permitAll()
     .requestMatchers("/v1/me").authenticated()
-    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units","/v1/tenants/*/amenities","/v1/tenants/*/reservations").authenticated()
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units","/v1/tenants/*/amenities",
+      "/v1/tenants/*/amenities/*/availability","/v1/tenants/*/reservations").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/reservations","/v1/tenants/*/reservations/*/cancel").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout").permitAll()

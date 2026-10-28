@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import jakarta.servlet.Filter;
@@ -37,6 +38,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import tools.jackson.databind.json.JsonMapper;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -141,6 +143,64 @@ class ReservationSecurityIntegrationTest {
   verify(reservations).create(ACCOUNT,TENANT,KEY,CREATE);
   verifyNoMoreInteractions(reservations); verifyNoInteractions(units);
  }
+
+ @SuppressWarnings("unchecked")
+ @Test void availabilityAuthenticatesAndReturnsNoStoreAnonymousContextBoundContract() throws Exception {
+  String raw=authenticatedSession();
+  var blocked=new ReservationModels.BlockedInterval(START,END.plusSeconds(900));
+  when(reservations.availability(ACCOUNT,TENANT,UNIT,AMENITY,START,END.plusSeconds(3600)))
+   .thenReturn(new ReservationModels.Availability(TENANT,UNIT,AMENITY,"America/Sao_Paulo",START,
+    END.plusSeconds(3600),NOW,List.of(blocked)));
+  String route=availabilityRoute();
+  var response=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))
+   .param("unitId",UNIT.toString()).param("from",START.toString()).param("until",END.plusSeconds(3600).toString()))
+   .andReturn().getResponse();
+  assertEquals(200,response.getStatus()); assertEquals("no-store",response.getHeader("Cache-Control"));
+  Map<String,Object> body=JsonMapper.builder().build().readValue(response.getContentAsString(),Map.class);
+  assertEquals(Set.of("tenantId","unitId","amenityId","timeZone","from","until","observedAt","blockedIntervals"),body.keySet());
+  assertEquals(TENANT.toString(),body.get("tenantId")); assertEquals(UNIT.toString(),body.get("unitId"));
+  assertEquals(AMENITY.toString(),body.get("amenityId"));
+  var intervals=(List<Map<String,Object>>)body.get("blockedIntervals"); assertEquals(1,intervals.size());
+  assertEquals(Set.of("occupiedFrom","occupiedUntil"),intervals.getFirst().keySet());
+  assertFalse(response.getContentAsString().contains(raw));
+  assertFalse(response.getContentAsString().contains(ACCOUNT.toString()));
+  assertFalse(response.getContentAsString().contains(RESERVATION.toString()));
+  verify(reservations).availability(ACCOUNT,TENANT,UNIT,AMENITY,START,END.plusSeconds(3600));
+  verifyNoMoreInteractions(reservations); verifyNoInteractions(units);
+ }
+ @Test void availabilityWithoutIdentityCannotReachBusinessService() throws Exception {
+  String route=availabilityRoute();
+  var response=mvc.perform(get(route).servletPath(route).secure(true).param("unitId",UNIT.toString())
+   .param("from",START.toString()).param("until",END.toString())).andReturn().getResponse();
+  assertEquals(401,response.getStatus());
+  verifyNoInteractions(reservations,units,sessions);
+ }
+ @Test void availabilityPermissionDoesNotOpenNeighboringGetRoutesOrMutationMethods() throws Exception {
+  String raw=authenticatedSession(),route=availabilityRoute()+"/details";
+  var adjacent=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw)))
+   .andReturn().getResponse();
+  assertEquals(403,adjacent.getStatus());
+  var csrf=csrf(); route=availabilityRoute();
+  var mutation=mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),csrf.cookie()).header("X-CSRF-Token",csrf.token()))
+   .andReturn().getResponse();
+  assertEquals(403,mutation.getStatus()); verifyNoInteractions(reservations,units);
+ }
+ @Test void availabilityRequiresTheUnitAndPreservesNeutralResourceDenial() throws Exception {
+  String raw=authenticatedSession(),route=availabilityRoute();
+  var invalid=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))
+   .param("from",START.toString()).param("until",END.toString())).andReturn().getResponse();
+  assertEquals(400,invalid.getStatus()); verifyNoInteractions(reservations);
+  when(reservations.availability(ACCOUNT,TENANT,UNIT,AMENITY,START,END))
+   .thenThrow(new BusinessProblem("RESERVATION_RESOURCE_UNAVAILABLE",404,"Recurso nao disponivel para esta operacao."));
+  var denied=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))
+   .param("unitId",UNIT.toString()).param("from",START.toString()).param("until",END.toString()))
+   .andReturn().getResponse();
+  assertEquals(404,denied.getStatus()); assertTrue(denied.getContentAsString().contains("RESERVATION_RESOURCE_UNAVAILABLE"));
+  assertFalse(denied.getContentAsString().contains("SQL"));
+  verify(reservations).availability(ACCOUNT,TENANT,UNIT,AMENITY,START,END);
+ }
+ private String availabilityRoute() { return "/v1/tenants/"+TENANT+"/amenities/"+AMENITY+"/availability"; }
 
  private Csrf csrf() throws Exception {
   var response=mvc.perform(get("/auth/csrf").servletPath("/auth/csrf").secure(true))

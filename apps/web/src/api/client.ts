@@ -1,8 +1,9 @@
 import type {
-  Amenity, CancelReservation, CreateReservation, CurrentIdentity, Membership,
+  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, Membership,
   MutationResult, Reservation, ReservationPage, ReservationPolicy, Session, Unit,
 } from './types';
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
+import { instantMicros } from './instant';
 
 const messages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: 'Entre novamente para continuar.',
@@ -32,6 +33,7 @@ const messages: Record<string, string> = {
   RESERVATION_RULE_SNAPSHOT_INVALID: 'As regras aceitas desta reserva precisam ser conferidas pela gestão.',
   RESERVATION_WINDOW_INVALID: 'O período informado não atende às regras da área.',
   RESERVATION_RANGE_INVALID: 'Informe um período de consulta de até 31 dias.',
+  AMENITY_AVAILABILITY_UNAVAILABLE: 'Não foi possível consultar a ocupação da área agora. Atualize a disponibilidade antes de confirmar.',
   IDEMPOTENCY_KEY_REUSED: 'Esta solicitação já foi enviada com outros dados. Confira a agenda antes de iniciar outra.',
   IDEMPOTENCY_KEY_EXPIRED: 'O prazo para repetir esta solicitação terminou. Confira a agenda antes de iniciar outra.',
   REQUEST_IN_PROGRESS: 'A operação ainda está em processamento. Aguarde e confira a agenda.',
@@ -135,6 +137,35 @@ function reservation(value: unknown, uncertain = false): Reservation {
   return { reservationId: value.reservationId, unitId: value.unitId, amenityId: value.amenityId, status: value.status,
     startsAt: value.startsAt, endsAt: value.endsAt, occupiedFrom: value.occupiedFrom, occupiedUntil: value.occupiedUntil,
     acceptedPolicyVersion: value.acceptedPolicyVersion, feeCents: value.feeCents, version: value.version };
+}
+
+function availability(value: unknown, expected: {
+  tenantId: string; unitId: string; amenityId: string; timeZone: string; from: string; until: string;
+}): AmenityAvailability {
+  const fields = ['tenantId', 'unitId', 'amenityId', 'timeZone', 'from', 'until', 'observedAt', 'blockedIntervals'];
+  if (!record(value) || Object.keys(value).some(field => !fields.includes(field))
+      || !isUUID(value.tenantId) || value.tenantId.toLowerCase() !== expected.tenantId.toLowerCase()
+      || !isUUID(value.unitId) || value.unitId.toLowerCase() !== expected.unitId.toLowerCase()
+      || !isUUID(value.amenityId) || value.amenityId.toLowerCase() !== expected.amenityId.toLowerCase()
+      || value.timeZone !== expected.timeZone || !isDate(value.from) || !isDate(value.until)
+      || instantMicros(value.from) !== instantMicros(expected.from) || instantMicros(value.until) !== instantMicros(expected.until)
+      || !isDate(value.observedAt) || !Array.isArray(value.blockedIntervals) || value.blockedIntervals.length > 1000)
+    throw invalidResponse();
+  const from = instantMicros(value.from); const until = instantMicros(value.until);
+  if (from === null || until === null || !(from < until) || until - from > 31n * 86_400_000_000n
+      || instantMicros(value.observedAt) === null) throw invalidResponse();
+  let previousUntil: bigint | null = null;
+  const blockedIntervals = value.blockedIntervals.map(item => {
+    if (!record(item) || Object.keys(item).some(field => !['occupiedFrom', 'occupiedUntil'].includes(field))
+        || !isDate(item.occupiedFrom) || !isDate(item.occupiedUntil)) throw invalidResponse();
+    const start = instantMicros(item.occupiedFrom); const end = instantMicros(item.occupiedUntil);
+    if (start === null || end === null || !(start < end) || start < from || end > until
+        || (previousUntil !== null && start <= previousUntil)) throw invalidResponse();
+    previousUntil = end;
+    return { occupiedFrom: item.occupiedFrom, occupiedUntil: item.occupiedUntil };
+  });
+  return { tenantId: value.tenantId, unitId: value.unitId, amenityId: value.amenityId,
+    timeZone: expected.timeZone, from: value.from, until: value.until, observedAt: value.observedAt, blockedIntervals };
 }
 
 function list<T>(value: unknown, decode: (item: unknown) => T): T[] {
@@ -382,6 +413,13 @@ export class CondPulseApi {
   }
   async amenities(tenantId: string, signal?: AbortSignal): Promise<Amenity[]> {
     return list((await this.request(`/v1/tenants/${identifier(tenantId)}/amenities`, signal ? { signal } : {})).value, amenity);
+  }
+  async amenityAvailability(tenantId: string, unitId: string, amenityId: string,
+    range: { from: string; until: string }, timeZone: string, signal?: AbortSignal): Promise<AmenityAvailability> {
+    const query = new URLSearchParams({ unitId: identifier(unitId), from: range.from, until: range.until });
+    const { value } = await this.request(`/v1/tenants/${identifier(tenantId)}/amenities/${identifier(amenityId)}/availability?${query}`,
+      signal ? { signal } : {});
+    return availability(value, { tenantId, unitId, amenityId, timeZone, ...range });
   }
   async reservations(tenantId: string, unitId: string, range: { from: string; until: string }, signal?: AbortSignal): Promise<ReservationPage> {
     const query = new URLSearchParams({ unitId: identifier(unitId), from: range.from, until: range.until });

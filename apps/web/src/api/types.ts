@@ -83,6 +83,22 @@ export interface ReservationPage {
   truncated: boolean;
 }
 
+export interface AvailabilityInterval {
+  occupiedFrom: ISODateTime;
+  occupiedUntil: ISODateTime;
+}
+
+export interface AmenityAvailability {
+  tenantId: UUID;
+  unitId: UUID;
+  amenityId: UUID;
+  timeZone: string;
+  from: ISODateTime;
+  until: ISODateTime;
+  observedAt: ISODateTime;
+  blockedIntervals: AvailabilityInterval[];
+}
+
 export interface MutationResult<T> {
   data: T;
   replayed: boolean;

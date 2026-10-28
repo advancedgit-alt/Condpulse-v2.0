@@ -1,5 +1,6 @@
 package br.com.condpulse.database;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -178,6 +179,117 @@ class ReservationServiceJdbcTest {
   } finally {
    db.adminUpdate("delete from cp.memberships where id=? and tenant_id=? and account_id=?",membership,db.tenantA,db.accountC);
   }
+ }
+
+ @Test void availabilityIncludesAnotherUnitsOccupancyAndBufferWithoutExposingTheirReservation() throws Exception {
+  var theirs=service.create(db.accountC,db.tenantA,key(),request(db.otherUnitA,amenityA));
+  assertTrue(service.reservations(db.accountA,db.tenantA,db.unitA,start,end).reservations().isEmpty());
+  var calendar=service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start.minusSeconds(60),end.plusSeconds(3600));
+  assertEquals(db.tenantA,calendar.tenantId()); assertEquals(db.unitA,calendar.unitId());
+  assertEquals(amenityA,calendar.amenityId()); assertEquals("America/Sao_Paulo",calendar.timeZone());
+  assertNotNull(calendar.observedAt());
+  assertEquals(List.of(new ReservationModels.BlockedInterval(start,end.plusSeconds(900))),calendar.blockedIntervals());
+  assertEquals(end.plusSeconds(900),theirs.reservation().occupiedUntil());
+  assertCommittedCounts(1,1,1,1);
+ }
+ @Test void availabilityClipsAndMergesAdjacentBookingsAndMaintenanceBlocks() throws Exception {
+  occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","CONFIRMED",start.minusSeconds(3600),start,
+   start.minusSeconds(3600),start,null);
+  occupied(db.tenantA,amenityA,null,db.accountA,"BLOCK","CONFIRMED",start,start.plusSeconds(3600),
+   start,start.plusSeconds(4500),null);
+  occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","CONFIRMED",start.plusSeconds(4500),start.plusSeconds(7200),
+   start.plusSeconds(4500),start.plusSeconds(8100),null);
+  var from=start.minusSeconds(1800); var until=start.plusSeconds(7500);
+  var result=service.availability(db.accountA,db.tenantA,db.unitA,amenityA,from,until);
+  assertEquals(List.of(new ReservationModels.BlockedInterval(from,until)),result.blockedIntervals());
+  assertCommittedCounts(3,0,0,0);
+ }
+ @Test void heldAndPendingIntervalsStayBlockedUntilTheirActualStateTransitionsEvenAfterExpiry() throws Exception {
+  Instant expired=Instant.now().minusSeconds(86400);
+  UUID held=occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","HELD",start,end,start,end,expired);
+  UUID pending=occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","PENDING_APPROVAL",end,end.plusSeconds(3600),
+   end,end.plusSeconds(3600),expired);
+  for(String status:List.of("CANCELLED","EXPIRED","REJECTED"))
+   occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING",status,start.minusSeconds(3600),end.plusSeconds(7200),
+    start.minusSeconds(3600),end.plusSeconds(7200),null);
+  assertEquals(List.of(new ReservationModels.BlockedInterval(start,end.plusSeconds(3600))),
+   service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start.minusSeconds(3600),end.plusSeconds(7200)).blockedIntervals());
+  db.adminUpdate("update cp.reservations set status='EXPIRED' where tenant_id=? and id in (?,?)",db.tenantA,held,pending);
+  assertTrue(service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start.minusSeconds(3600),end.plusSeconds(7200))
+   .blockedIntervals().isEmpty());
+  assertCommittedCounts(5,0,0,0);
+ }
+ @Test void availabilityDoesNotLeakAcrossTenantForeignUnitOrInactiveArea() throws Exception {
+  create(key());
+  assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantB,db.unitB,amenityA,start,end)).code());
+  assertEquals("UNIT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantA,db.otherUnitA,amenityA,start,end)).code());
+  assertEquals("RESERVATION_RESOURCE_UNAVAILABLE",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountB,db.tenantB,db.unitB,amenityA,start,end)).code());
+  db.adminUpdate("update cp.amenities set active=false where tenant_id=? and id=?",db.tenantA,amenityA);
+  assertEquals("RESERVATION_RESOURCE_UNAVAILABLE",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end)).code());
+  assertCommittedCounts(1,1,1,1);
+ }
+ @Test void availabilityRevalidatesAccountMembershipAndUnitOnEveryRequest() throws Exception {
+  assertTrue(service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end).blockedIntervals().isEmpty());
+  db.adminUpdate("update cp.memberships set status='REVOKED' where tenant_id=? and account_id=?",db.tenantA,db.accountA);
+  assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end)).code());
+  db.restoreActiveFixtures();
+  db.adminUpdate("update cp.units set status='INACTIVE' where tenant_id=? and id=?",db.tenantA,db.unitA);
+  assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end)).code());
+  db.restoreActiveFixtures();
+  db.adminUpdate("update platform.accounts set status='SUSPENDED' where id=?",db.accountA);
+  assertEquals("ACCOUNT_INACTIVE",assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end)).code());
+  assertCommittedCounts(0,0,0,0);
+ }
+ @Test void apparentlyFreeReadDoesNotReserveAndGistRemainsTheFinalAuthority() throws Exception {
+  assertTrue(service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end).blockedIntervals().isEmpty());
+  var winner=service.create(db.accountC,db.tenantA,key(),request(db.otherUnitA,amenityA)).reservation();
+  var conflict=assertThrows(BusinessProblem.class,()->create(key()));
+  assertEquals("RESERVATION_CONFLICT",conflict.code());
+  assertEquals(List.of(new ReservationModels.BlockedInterval(start,end)),
+   service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end).blockedIntervals());
+  service.cancel(db.accountC,db.tenantA,winner.reservationId(),key(),new ReservationModels.Cancel(db.otherUnitA,winner.version()));
+  assertTrue(service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end).blockedIntervals().isEmpty());
+  assertCommittedCounts(1,2,2,2);
+ }
+ @Test void intervalsTouchingTheQueriesEndpointsDoNotBlockTheOpenGap() throws Exception {
+  occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","CONFIRMED",start.minusSeconds(3600),start,
+   start.minusSeconds(3600),start,null);
+  occupied(db.tenantA,amenityA,null,db.accountA,"BLOCK","CONFIRMED",end,end.plusSeconds(3600),end,end.plusSeconds(3600),null);
+  assertTrue(service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,end).blockedIntervals().isEmpty());
+  assertCommittedCounts(2,0,0,0);
+ }
+ @Test void availabilityReturnsAtMostOneThousandIntervalsAndFailsClosedInsteadOfTruncating() throws Exception {
+  db.adminUpdate("""
+   insert into cp.reservations(tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot)
+   select ?,?,?,?,'BOOKING','CONFIRMED',base+g*interval '2 seconds',base+g*interval '2 seconds'+interval '1 second',
+    base+g*interval '2 seconds',base+g*interval '2 seconds'+interval '1 second','{}'::jsonb
+   from (select ?::timestamptz as base) b cross join generate_series(0,999) g
+   """,db.tenantA,amenityA,db.otherUnitA,db.accountC,Timestamp.from(start));
+  Instant until=start.plusSeconds(2002);
+  assertEquals(1000,service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,until).blockedIntervals().size());
+  occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","CONFIRMED",start.plusSeconds(2000),start.plusSeconds(2001),
+   start.plusSeconds(2000),start.plusSeconds(2001),null);
+  var unavailable=assertThrows(BusinessProblem.class,
+   ()->service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start,until));
+  assertEquals(503,unavailable.status()); assertEquals("AMENITY_AVAILABILITY_UNAVAILABLE",unavailable.code());
+  assertCommittedCounts(1001,0,0,0);
+ }
+ private UUID occupied(UUID tenant,UUID area,UUID unit,UUID actor,String kind,String status,Instant starts,Instant ends,
+     Instant occupiedFrom,Instant occupiedUntil,Instant expiresAt) throws Exception {
+  UUID id=UUID.randomUUID();
+  db.adminUpdate("""
+   insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,expires_at,rule_snapshot)
+   values(?,?,?,?,?,?,?,?,?,?,?,?,'{}'::jsonb)
+   """,id,tenant,area,unit,actor,kind,status,Timestamp.from(starts),Timestamp.from(ends),Timestamp.from(occupiedFrom),
+   Timestamp.from(occupiedUntil),expiresAt==null?null:Timestamp.from(expiresAt));
+  return id;
  }
 
  private record Outcome(ReservationModels.Mutation mutation,BusinessProblem problem) {

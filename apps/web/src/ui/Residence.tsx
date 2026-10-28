@@ -7,6 +7,8 @@ import { useAuth } from './Auth';
 import { scopeKey, useOperations, type Scope } from './Operations';
 import { Empty, ErrorState, Icon, Loading, Notice } from './primitives';
 import { addDays, dateInZone, formatWhen, money, queryRange, toInstant } from './dateTime';
+import { AvailabilityPanel, useAmenityAvailability } from './Availability';
+import { selectionAvailability } from './availabilityWindow';
 
 const roleNames: Record<string, string> = { RESIDENT: 'Morador', RESPONSIBLE: 'Responsável', DEPENDENT: 'Dependente', OWNER: 'Proprietário', CONCIERGE: 'Portaria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
 
@@ -143,22 +145,70 @@ function BookingForm({ area, scope, timeZone, validating, onClose }: { area: Ame
   const operations = useOperations();
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [availabilityDate, setAvailabilityDate] = useState(() => dateInZone(timeZone));
   const [accepted, setAccepted] = useState(false);
   const [validation, setValidation] = useState('');
   const panel = useRef<HTMLElement>(null);
   useEffect(() => { panel.current?.focus(); }, []);
   const policy = area.policy!;
   const weekDays = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
-  async function submit(event: FormEvent) {
-    event.preventDefault(); if (operations.locked || validating || !accepted) return;
-    setValidation('');
+  const availability = useAmenityAvailability(scope, area, timeZone, availabilityDate, validating);
+  const proposal = useMemo(() => {
+    if (!start || !end) return { value: null, error: '' };
     try {
       const startsAt = toInstant(start, timeZone); const endsAt = toInstant(end, timeZone);
       if (new Date(startsAt) >= new Date(endsAt)) throw new Error('O fim deve ser posterior ao início.');
-      await operations.create(scope, { unitId: scope.unitId, amenityId: area.amenityId, startsAt, endsAt, acceptedPolicyVersion: area.policyVersion });
+      return { value: { startsAt, endsAt }, error: '' };
+    } catch (error) { return { value: null, error: error instanceof Error ? error.message : 'Confira o período informado.' }; }
+  }, [start, end, timeZone]);
+  const selection = availability.query.data && proposal.value
+    ? selectionAvailability(availability.query.data, proposal.value.startsAt, proposal.value.endsAt, area.bufferMinutes)
+    : 'incomplete';
+  const canConfirm = availability.current && selection === 'unblocked' && proposal.value !== null;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (operations.locked || validating || !accepted || !canConfirm || !proposal.value) return;
+    setValidation('');
+    try {
+      await operations.create(scope, { unitId: scope.unitId, amenityId: area.amenityId,
+        ...proposal.value, acceptedPolicyVersion: area.policyVersion });
     } catch (error) { setValidation(error instanceof Error ? error.message : 'Confira o período informado.'); }
   }
-  return <section ref={panel} tabIndex={-1} className="panel booking-panel" aria-labelledby="booking-title"><div className="section-heading"><div><span className="section-index">NOVA RESERVA</span><h3 id="booking-title">{area.name}</h3></div><button className="text-button" onClick={onClose} disabled={operations.locked}>Fechar</button></div><div className="policy-summary"><strong>Condições da versão {area.policyVersion}</strong><dl><div><dt>Horários</dt><dd>{policy.opensAt} às {policy.closesAt} · {policy.weekDays.map(day => weekDays[day - 1]).join(', ')}</dd></div><div><dt>Antecedência</dt><dd>Mínimo {policy.minimumLeadMinutes} min · até {policy.maximumAdvanceDays} dias</dd></div><div><dt>Duração e limpeza</dt><dd>Até {policy.maximumDurationMinutes} min de uso + {area.bufferMinutes} min de limpeza</dd></div><div><dt>Limite para solicitar</dt><dd>Menos de {policy.maximumActivePerUnit} reservas ativas da unidade em todas as áreas</dd></div><div><dt>Cancelamento</dt><dd>Pelo autor, até {policy.cancellationLeadMinutes} min antes do início</dd></div><div><dt>Taxa informativa</dt><dd>{money(area.feeCents)} · pagamento não é realizado por esta tela</dd></div></dl></div><form onSubmit={event => void submit(event)}><fieldset disabled={operations.locked || validating} className="booking-fields"><legend className="sr-only">Período e aceite da reserva</legend>{validating ? <Notice>Conferindo acesso e regras. Os dados preenchidos são preservados se as condições continuarem iguais.</Notice> : null}<p className="field-help">Informe os horários de {timeZone}. O fuso do seu dispositivo não será usado.</p><div className="two-fields"><div><label htmlFor="booking-start">Início</label><input id="booking-start" type="datetime-local" step="60" min={`${dateInZone(timeZone)}T00:00`} max={`${addDays(dateInZone(timeZone), policy.maximumAdvanceDays)}T23:59`} required value={start} onChange={event => setStart(event.target.value)} /></div><div><label htmlFor="booking-end">Fim</label><input id="booking-end" type="datetime-local" step="60" required value={end} onChange={event => setEnd(event.target.value)} /></div></div><label className="checkbox-label"><input type="checkbox" required checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>Li e aceito as regras da versão {area.policyVersion}.</span></label>{validation ? <Notice tone="error">{validation}</Notice> : null}<button className="button" type="submit" disabled={!accepted || operations.locked || validating}>Confirmar reserva<Icon name="check" /></button></fieldset></form></section>;
+  function changeStart(next: string) {
+    setStart(next);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(next)) setAvailabilityDate(next.slice(0, 10));
+  }
+  return <section ref={panel} tabIndex={-1} className="panel booking-panel" aria-labelledby="booking-title">
+    <div className="section-heading"><div><span className="section-index">NOVA RESERVA</span><h3 id="booking-title">{area.name}</h3></div>
+      <button className="text-button" onClick={onClose} disabled={operations.locked}>Fechar</button></div>
+    <div className="policy-summary"><strong>Condições da versão {area.policyVersion}</strong><dl>
+      <div><dt>Horários</dt><dd>{policy.opensAt} às {policy.closesAt} · {policy.weekDays.map(day => weekDays[day - 1]).join(', ')}</dd></div>
+      <div><dt>Antecedência</dt><dd>Mínimo {policy.minimumLeadMinutes} min · até {policy.maximumAdvanceDays} dias</dd></div>
+      <div><dt>Duração e limpeza</dt><dd>Até {policy.maximumDurationMinutes} min de uso + {area.bufferMinutes} min de limpeza</dd></div>
+      <div><dt>Limite para solicitar</dt><dd>Menos de {policy.maximumActivePerUnit} reservas ativas da unidade em todas as áreas</dd></div>
+      <div><dt>Cancelamento</dt><dd>Pelo autor, até {policy.cancellationLeadMinutes} min antes do início</dd></div>
+      <div><dt>Taxa informativa</dt><dd>{money(area.feeCents)} · pagamento não é realizado por esta tela</dd></div>
+    </dl></div>
+    <AvailabilityPanel availability={availability} area={area} timeZone={timeZone} date={availabilityDate}
+      onDateChange={setAvailabilityDate} disabled={operations.locked || validating} />
+    <form onSubmit={event => void submit(event)}><fieldset disabled={operations.locked || validating} className="booking-fields">
+      <legend className="sr-only">Período e aceite da reserva</legend>
+      {validating ? <Notice>Conferindo acesso e regras. Os dados preenchidos são preservados se as condições continuarem iguais.</Notice> : null}
+      <p className="field-help">Informe os horários de {timeZone}. O fuso do seu dispositivo não será usado.</p>
+      <div className="two-fields"><div><label htmlFor="booking-start">Início</label>
+        <input id="booking-start" type="datetime-local" step="60" min={`${dateInZone(timeZone)}T00:00`}
+          max={`${addDays(dateInZone(timeZone), policy.maximumAdvanceDays)}T23:59`} required value={start} onChange={event => changeStart(event.target.value)} /></div>
+        <div><label htmlFor="booking-end">Fim</label><input id="booking-end" type="datetime-local" step="60" required value={end} onChange={event => setEnd(event.target.value)} /></div></div>
+      {proposal.error ? <Notice tone="error">{proposal.error}</Notice> : null}
+      {availability.current && selection === 'blocked' ? <Notice tone="warning">O período informado encontra um intervalo bloqueado, incluindo a limpeza. Escolha outro horário.</Notice> : null}
+      {availability.current && selection === 'outside' ? <Notice tone="warning">O uso e a limpeza precisam estar dentro do dia consultado. Confira o dia, os horários e as regras.</Notice> : null}
+      {canConfirm ? <p className="availability-selection">O período informado não coincide com os intervalos desta consulta. A confirmação depende da verificação final do servidor.</p> : null}
+      <label className="checkbox-label"><input type="checkbox" required checked={accepted} onChange={event => setAccepted(event.target.checked)} />
+        <span>Li e aceito as regras da versão {area.policyVersion}.</span></label>
+      {validation ? <Notice tone="error">{validation}</Notice> : null}
+      <button className="button" type="submit" disabled={!accepted || operations.locked || validating || !canConfirm}>Confirmar reserva<Icon name="check" /></button>
+    </fieldset></form>
+  </section>;
 }
 
 function ReservationCard({ reservation, area, scope, timeZone, confirming, validating, onAskCancel, onDismiss }: { reservation: Reservation; area: Amenity | undefined; scope: Scope; timeZone: string; confirming: boolean; validating: boolean; onAskCancel(): void; onDismiss(): void }) {
