@@ -44,6 +44,8 @@ jobs:
         run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
       - name: Compile and unit tests
         run: mvn -B -ntp -f apps/backend/pom.xml verify
+      - name: Manual database executor guards without managed credentials
+        run: node --test tests/database-operations.test.mjs
       - name: Migrate with Flyway and validate replay
         env:
           SPRING_PROFILES_ACTIVE: migrate
