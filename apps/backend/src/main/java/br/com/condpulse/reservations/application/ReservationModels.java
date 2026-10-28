@@ -15,6 +15,12 @@ public final class ReservationModels {
  public record Page(List<View> reservations,boolean truncated) {
   public Page { reservations=List.copyOf(reservations); }
  }
+ /** Uniao anonima de ocupacoes reais, incluindo limpeza; nao garante vaga para uma nova reserva. */
+ public record BlockedInterval(Instant occupiedFrom,Instant occupiedUntil) {}
+ public record Availability(UUID tenantId,UUID unitId,UUID amenityId,String timeZone,
+     Instant from,Instant until,Instant observedAt,List<BlockedInterval> blockedIntervals) {
+  public Availability { blockedIntervals=List.copyOf(blockedIntervals); }
+ }
  public record Policy(int schemaVersion,List<Integer> weekDays,String opensAt,String closesAt,
      int minimumLeadMinutes,int maximumAdvanceDays,int maximumDurationMinutes,
      int maximumActivePerUnit,int cancellationLeadMinutes) {

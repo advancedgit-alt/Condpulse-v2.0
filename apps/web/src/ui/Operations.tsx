@@ -65,6 +65,10 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
       if (error instanceof ApiError && error.code === 'AMENITY_POLICY_CHANGED') {
         await queries.invalidateQueries({ queryKey: scopeKey(intent) });
       }
+      if (error instanceof ApiError && error.code === 'RESERVATION_CONFLICT') {
+        // Consulta a ocupação atual; não repete o comando nem cria uma intenção nova.
+        await queries.invalidateQueries({ queryKey: [...scopeKey(intent), 'availability'] });
+      }
       return false;
     } finally { network.current = false; }
   }

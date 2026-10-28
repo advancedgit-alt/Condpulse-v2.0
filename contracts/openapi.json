@@ -434,6 +434,105 @@
         }
       }
     },
+    "/v1/tenants/{tenantId}/amenities/{amenityId}/availability": {
+      "get": {
+        "operationId": "amenityAvailability",
+        "description": "Consulta anonima de intervalos ocupados por area, incluindo limpeza, BOOKING/BLOCK e holds ainda bloqueantes na exclusao GiST. Intervalos sao unidos e recortados para [from,until). Nao garante vaga: criacao revalida regras e a exclusao GiST decide a disputa. Requer capacidade de criar reserva na unidade informada. Mais de1000 ocupacoes na janela resulta503, nunca resposta parcial.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "amenityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Janela obrigatoria de ate31dias, limites crescentes e precisao maxima de microssegundos."
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Janela obrigatoria de ate31dias, limites crescentes e precisao maxima de microssegundos."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot de ocupacao anonima para o contexto autorizado; nao garante disponibilidade futura.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AmenityAvailability"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Periodo ou parametros invalidos"
+          },
+          "401": {
+            "description": "Autenticacao necessaria"
+          },
+          "403": {
+            "description": "Conta inativa"
+          },
+          "404": {
+            "description": "Contexto, unidade ou area nao disponivel ao ator"
+          },
+          "503": {
+            "description": "Regras, dependencia ou volume da consulta indisponivel; nenhum resultado parcial"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/reservations": {
       "get": {
         "operationId": "ownUnitReservations",
@@ -1110,6 +1209,76 @@
             "type": "boolean"
           }
         }
+      },
+      "BlockedInterval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occupiedFrom",
+          "occupiedUntil"
+        ],
+        "properties": {
+          "occupiedFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedUntil": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Intervalo ocupado [occupiedFrom,occupiedUntil), incluindo limpeza, sem identificadores ou status individuais."
+      },
+      "AmenityAvailability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "unitId",
+          "amenityId",
+          "timeZone",
+          "from",
+          "until",
+          "observedAt",
+          "blockedIntervals"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "blockedIntervals": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/BlockedInterval"
+            }
+          }
+        },
+        "description": "Contexto proprio, periodo consultado, horario do servidor e uniao ordenada de ocupacoes; uma lista vazia nao garante criacao da reserva."
       }
     }
   }

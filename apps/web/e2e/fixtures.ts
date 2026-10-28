@@ -42,6 +42,11 @@ export interface ApiState {
   loginRateAttempts: number;
   denyAmenitiesA: boolean;
   amenitiesARequests: number;
+  availabilityRequests: { tenantId: string; unitId: string | null; from: string; until: string }[];
+  availabilityFailure: number;
+  denyAvailabilityA: boolean;
+  createConflictAttempts: number;
+  blockedIntervals: { occupiedFrom: string; occupiedUntil: string }[];
   reservations: FixtureReservation[];
 }
 
@@ -54,6 +59,12 @@ interface FixtureOptions {
   reservations?: FixtureReservation[];
   loginRateAttempts?: number;
   retryAfter?: string;
+  blockedIntervals?: { occupiedFrom: string; occupiedUntil: string }[];
+  availabilityFailure?: number;
+  createConflictAttempts?: number;
+  delayAvailabilityA?: Promise<void>;
+  onAvailabilityARequested?: () => void;
+  onAvailabilityASettled?: () => void;
 }
 
 const identity = {
@@ -93,6 +104,8 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
     authenticated: false, csrfVersion: 0, createKeys: [], cancelKeys: [],
     loginRequests: 0, logoutRequests: 0, refreshRequests: 0, refreshRequired: false, rateRefresh: false,
     loginRateAttempts: options.loginRateAttempts ?? 0, denyAmenitiesA: false, amenitiesARequests: 0,
+    availabilityRequests: [], availabilityFailure: options.availabilityFailure ?? 0, denyAvailabilityA: false,
+    createConflictAttempts: options.createConflictAttempts ?? 0, blockedIntervals: options.blockedIntervals ?? [],
     reservations: options.reservations ?? [],
   };
   const csrf = () => `SYNTHETIC-TEST-CSRF-${state.csrfVersion}`;
@@ -192,6 +205,40 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       await json(route, 200, { reservations: state.reservations.filter((item) => item.unitId === url.searchParams.get('unitId')), truncated: false });
       return;
     }
+    if (request.method() === 'GET' && path.endsWith('/availability')) {
+      const from = url.searchParams.get('from') ?? ''; const until = url.searchParams.get('until') ?? '';
+      state.availabilityRequests.push({ tenantId: tenant, unitId: url.searchParams.get('unitId'), from, until });
+      if (tenant === TENANT_A) options.onAvailabilityARequested?.();
+      if (tenant === TENANT_A && options.delayAvailabilityA) await options.delayAvailabilityA;
+      try {
+        if (tenant === TENANT_A && state.denyAvailabilityA) {
+          await problem(route, 404, 'RESERVATION_RESOURCE_UNAVAILABLE', 'Contexto sintético revogado.');
+          return;
+        }
+        if (state.availabilityFailure) {
+          await problem(route, state.availabilityFailure, 'AMENITY_AVAILABILITY_UNAVAILABLE', 'PRIVATE-AVAILABILITY-DETAIL');
+          return;
+        }
+        const selectedAmenity = path.split('/').at(-2);
+        const raw = [...(tenant === TENANT_A ? state.blockedIntervals : []), ...state.reservations.filter(item => item.amenityId === selectedAmenity
+          && ['CONFIRMED', 'HELD', 'PENDING_APPROVAL'].includes(item.status)).map(item => ({
+          occupiedFrom: item.occupiedFrom, occupiedUntil: item.occupiedUntil,
+        }))].map(item => ({ occupiedFrom: new Date(Math.max(Date.parse(from), Date.parse(item.occupiedFrom))).toISOString(),
+          occupiedUntil: new Date(Math.min(Date.parse(until), Date.parse(item.occupiedUntil))).toISOString() }))
+          .filter(item => item.occupiedFrom < item.occupiedUntil).sort((a, b) => a.occupiedFrom.localeCompare(b.occupiedFrom));
+        const blockedIntervals: { occupiedFrom: string; occupiedUntil: string }[] = [];
+        for (const item of raw) {
+          const previous = blockedIntervals.at(-1);
+          if (previous && item.occupiedFrom <= previous.occupiedUntil) {
+            if (item.occupiedUntil > previous.occupiedUntil) previous.occupiedUntil = item.occupiedUntil;
+          } else blockedIntervals.push({ ...item });
+        }
+        await json(route, 200, { tenantId: tenant, unitId: url.searchParams.get('unitId'), amenityId: selectedAmenity,
+          timeZone: 'America/Sao_Paulo', from, until, observedAt: new Date().toISOString(), blockedIntervals });
+      } catch { /* Consulta cancelada quando o usuário trocou de contexto. */ }
+      finally { if (tenant === TENANT_A) options.onAvailabilityASettled?.(); }
+      return;
+    }
     if (request.method() === 'POST' && request.headers()['x-csrf-token'] !== csrf()) {
       await problem(route, 403, 'ACTION_FORBIDDEN', 'A confirmação de segurança precisa ser renovada.');
       return;
@@ -200,7 +247,14 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       const key = request.headers()['idempotency-key'] ?? '';
       state.createKeys.push(key);
       const body = request.postDataJSON() as { unitId: string; amenityId: string; startsAt: string; endsAt: string; acceptedPolicyVersion: number };
-      const replayed = state.createKeys.length > 1;
+      if (state.createConflictAttempts > 0) {
+        state.createConflictAttempts -= 1;
+        state.blockedIntervals.push({ occupiedFrom: body.startsAt,
+          occupiedUntil: new Date(Date.parse(body.endsAt) + 15 * 60_000).toISOString() });
+        await problem(route, 409, 'RESERVATION_CONFLICT', 'Conflito sintético concorrente.');
+        return;
+      }
+      const replayed = state.createKeys.slice(0, -1).includes(key);
       if (!replayed) {
         state.reservations.push({ ...reservationFixture(), ...body, occupiedFrom: body.startsAt,
           occupiedUntil: new Date(Date.parse(body.endsAt) + 15 * 60_000).toISOString() });

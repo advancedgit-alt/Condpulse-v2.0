@@ -33,6 +33,12 @@ public class ReservationController {
      @RequestParam UUID unitId,@RequestParam Instant from,@RequestParam Instant until) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.reservations(account(jwt),tenantId,unitId,from,until));
  }
+ @GetMapping("/v1/tenants/{tenantId}/amenities/{amenityId}/availability")
+ public ResponseEntity<ReservationModels.Availability> availability(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID amenityId,@RequestParam UUID unitId,@RequestParam Instant from,@RequestParam Instant until) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+   .body(service.availability(account(jwt),tenantId,unitId,amenityId,from,until));
+ }
  @PostMapping("/v1/tenants/{tenantId}/reservations")
  public ResponseEntity<ReservationModels.View> create(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
      @RequestHeader("Idempotency-Key") String key,@RequestBody ReservationModels.Create request) {

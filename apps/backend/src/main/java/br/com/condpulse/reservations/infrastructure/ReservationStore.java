@@ -6,6 +6,7 @@ import java.sql.Timestamp;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
@@ -106,6 +107,32 @@ public class ReservationStore {
    order by starts_at,id limit 101
    """,(r,n)->view(r),tenant,unit,Timestamp.from(until),Timestamp.from(from));
   return new ReservationModels.Page(rows.stream().limit(100).toList(),rows.size()>100);
+ }
+
+ /** Mesma ocupacao da exclusao GiST, inclusive BLOCK e holds vencidos ainda nao transicionados. */
+ public List<ReservationModels.BlockedInterval> blockedIntervals(UUID tenant,UUID amenity,Instant from,Instant until) {
+  var rows=jdbc.query("""
+   select greatest(occupied_from,?) as occupied_from,least(occupied_until,?) as occupied_until
+   from cp.reservations where tenant_id=? and amenity_id=?
+    and status in ('HELD','PENDING_APPROVAL','CONFIRMED')
+    and tstzrange(occupied_from,occupied_until,'[)') && tstzrange(?::timestamptz,?::timestamptz,'[)')
+   order by occupied_from,occupied_until limit 1001
+   """,(r,n)->new ReservationModels.BlockedInterval(r.getTimestamp("occupied_from").toInstant(),
+    r.getTimestamp("occupied_until").toInstant()),Timestamp.from(from),Timestamp.from(until),tenant,amenity,
+    Timestamp.from(from),Timestamp.from(until));
+  // Nunca devolver disponibilidade parcial: uma pagina incompleta poderia sugerir horario livre.
+  if(rows.size()>1000)
+   throw new BusinessProblem("AMENITY_AVAILABILITY_UNAVAILABLE",503,"Reduza o periodo para consultar a ocupacao desta area.");
+  var merged=new ArrayList<ReservationModels.BlockedInterval>();
+  for(var next:rows) {
+   if(merged.isEmpty() || merged.getLast().occupiedUntil().isBefore(next.occupiedFrom())) merged.add(next);
+   else {
+    var previous=merged.removeLast();
+    merged.add(new ReservationModels.BlockedInterval(previous.occupiedFrom(),
+     previous.occupiedUntil().isAfter(next.occupiedUntil())?previous.occupiedUntil():next.occupiedUntil()));
+   }
+  }
+  return List.copyOf(merged);
  }
 
  public IdempotentReply begin(UUID tenant,UUID actor,String route,String key,String hash) {

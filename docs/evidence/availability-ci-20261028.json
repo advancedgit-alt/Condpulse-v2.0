@@ -1,0 +1,35 @@
+{
+  "project": "CondPulse",
+  "tickets": ["CP-015", "CP-019", "CP-022"],
+  "sourceCommit": "570966435ff67ec5f12882b2cdec7b406dccfa8b",
+  "sourceTree": "b395d9bfe2893904a6792b963b562e6e35008f88",
+  "ciRun": 40734918664,
+  "ciUrl": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40734918664",
+  "jobs": { "foundation": "success", "web": "success", "release-config": "success" },
+  "tests": {
+    "unitAndHttpJava": 144,
+    "runtimeJdbc": 44,
+    "baselineJdbc": 8,
+    "jdbcSkippedInOwnStages": 0,
+    "databaseExecutorGuards": 9,
+    "runtimeExecutorGuards": 10,
+    "vitest": 70,
+    "chromium": 27,
+    "newAvailabilityJava": 16,
+    "newAvailabilityChromium": 6
+  },
+  "scope": [
+    "Authenticated GET /v1/tenants/{tenantId}/amenities/{amenityId}/availability with unitId/from/until.",
+    "Own active context and booking capability revalidated in the same transaction/connection.",
+    "Anonymous union of clipped GiST-blocking intervals, including cleanup, BLOCK and holds until real state transition.",
+    "No reservation, actor or other unit identifiers; 31-day/microsecond bounds and 503 rather than partial occupancy above 1000 rows.",
+    "Client validates context/range/time zone and microseconds, isolates query keys, cancels on context change, expires after 30 seconds and refreshes GET after conflict without replaying POST.",
+    "No migrations, grants or RLS changes."
+  ],
+  "local": { "vitest": 70, "typesAndBuild": "passed", "foundationNode": 4, "chromium": "not executed: browser binary absent" },
+  "limitations": [
+    "Browser journeys use synthetic API fixtures in the CI runner; isolated HTTPS BFF integration additionally exercises real Java/PostgreSQL with synthetic local Auth.",
+    "No real Supabase Auth journey, runtime/Vercel credential provisioning, onboarding, capacity or full PRD acceptance is established.",
+    "BFF and reservations remain disabled in the published environment pending the operational gates."
+  ]
+}

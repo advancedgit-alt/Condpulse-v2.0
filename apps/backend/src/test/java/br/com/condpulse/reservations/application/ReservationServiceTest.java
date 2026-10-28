@@ -172,4 +172,45 @@ class ReservationServiceTest {
    ()->service.reservations(actor,tenant,unit,Instant.MIN,Instant.MIN.plusSeconds(3600))).code());
   verifyNoInteractions(transactions,store);
  }
+ @Test void availabilityUsesVerifiedContextAndReturnsOnlyAnonymousOccupiedIntervals() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(false,policy));
+  var blocked=List.of(new ReservationModels.BlockedInterval(start,end.plusSeconds(600)));
+  when(store.blockedIntervals(tenant,area,start,end.plusSeconds(3600))).thenReturn(blocked);
+  var result=service.availability(actor,tenant,unit,area,start,end.plusSeconds(3600));
+  assertEquals(tenant,result.tenantId()); assertEquals(unit,result.unitId()); assertEquals(area,result.amenityId());
+  assertEquals("America/Sao_Paulo",result.timeZone()); assertEquals(now,result.observedAt());
+  assertEquals(start,result.from()); assertEquals(end.plusSeconds(3600),result.until());
+  assertEquals(blocked,result.blockedIntervals());
+  var order=inOrder(store); order.verify(store).amenity(tenant,area); order.verify(store).currentTime();
+  order.verify(store).blockedIntervals(tenant,area,start,end.plusSeconds(3600));
+  verifyNoMoreInteractions(store);
+ }
+ @Test void cancellationOnlyDependentCannotQueryAvailabilityForCreation() {
+  context=new TenantContext(actor,tenant,ZoneId.of("America/Sao_Paulo"),List.of(
+   new TenantContext.Membership(UUID.randomUUID(),unit,"DEPENDENT",false,true)));
+  var denied=assertThrows(BusinessProblem.class,()->service.availability(actor,tenant,unit,area,start,end));
+  assertEquals("UNIT_ACCESS_DENIED",denied.code()); assertEquals(404,denied.status());
+  verifyNoInteractions(store);
+ }
+ @Test void unavailableAmenityRulesPreventAnApparentlyFreeCalendar() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(false,null));
+  assertEquals("AMENITY_POLICY_NOT_CONFIGURED",assertThrows(BusinessProblem.class,
+   ()->service.availability(actor,tenant,unit,area,start,end)).code());
+  when(store.amenity(tenant,area)).thenReturn(amenity(true,policy));
+  assertEquals("AMENITY_APPROVAL_UNAVAILABLE",assertThrows(BusinessProblem.class,
+   ()->service.availability(actor,tenant,unit,area,start,end)).code());
+  verify(store,never()).blockedIntervals(any(),any(),any(),any());
+  verify(store,never()).currentTime();
+ }
+ @Test void availabilityRejectsUnboundedReversedExtremeAndSubMicrosecondRangesBeforeJdbc() {
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.availability(actor,tenant,unit,area,start,start.plusSeconds(31*86400L+1))).code());
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.availability(actor,tenant,unit,area,end,start)).code());
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.availability(actor,tenant,unit,area,Instant.MIN,start)).code());
+  assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,
+   ()->service.availability(actor,tenant,unit,area,start.plusNanos(1),end)).code());
+  verifyNoInteractions(transactions,store);
+ }
 }
