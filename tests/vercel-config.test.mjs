@@ -16,6 +16,7 @@ test('Vercel Services preserva origem unica e caminhos do BFF/API antes do fallb
   assert.deepEqual(config.rewrites, [
     { source: '/auth/:path*', destination: { service: 'api' } },
     { source: '/v1/:path*', destination: { service: 'api' } },
+    { source: '/actuator/health/readiness', destination: { service: 'api' } },
     { source: '/(.*)', destination: { service: 'web' } },
   ]);
   assert.equal(config.services.api.root, '.');
@@ -31,6 +32,24 @@ test('Vercel Services preserva origem unica e caminhos do BFF/API antes do fallb
     assert.equal(Object.hasOwn(config, forbidden), false);
   }
   assert.equal(Object.hasOwn(config.services.api, 'command'), false);
+});
+
+test('somente o caminho exato de readiness deixa o fallback web para consultar a API', () => {
+  const actuator = config.rewrites.filter(({ source }) => source.startsWith('/actuator'));
+  assert.deepEqual(actuator, [{ source: '/actuator/health/readiness', destination: { service: 'api' } }]);
+  const readiness = config.rewrites.indexOf(actuator[0]);
+  const fallback = config.rewrites.findIndex(({ source }) => source === '/(.*)');
+  assert.ok(readiness >= 0 && readiness < fallback);
+  for (const path of ['/actuator', '/actuator/health', '/actuator/health/liveness',
+    '/actuator/health/readiness/details', '/actuator/env', '/actuator/metrics']) {
+    assert.equal(actuator.some(({ source }) => source === path), false);
+    assert.equal(config.rewrites.find(({ source }) => source === path)?.destination.service, undefined);
+  }
+  const backend = read('apps/backend/src/main/resources/application.yaml');
+  assert.match(backend, /exposure:\s+include: health\s/);
+  assert.match(backend, /show-details: never/);
+  assert.match(backend, /readiness:\s+include: readinessState,db/);
+  assert.doesNotMatch(backend, /show-components: always|show-details: always|include: ['"]?\*/);
 });
 
 test('Vercel conserva CSP/no-store e nao grava credenciais ou origem de outro sistema no manifesto', () => {
