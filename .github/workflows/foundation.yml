@@ -96,8 +96,6 @@ jobs:
   release-config:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      DOCKER_CONFIG: ${{ runner.temp }}/condpulse-docker-config
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -106,6 +104,8 @@ jobs:
         with:
           node-version: "24.18.0"
       - name: Install checksum-verified Compose 5.2.0
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/condpulse-docker-config
         run: |
           mkdir -p "$DOCKER_CONFIG/cli-plugins"
           plugin="$DOCKER_CONFIG/cli-plugins/docker-compose"
@@ -114,6 +114,8 @@ jobs:
           chmod +x "$plugin"
           docker compose version --short
       - name: Validate release boundaries and actual Compose rendering
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/condpulse-docker-config
         run: node --test tests/release-config.test.mjs tests/release-compose.test.mjs
   web:
     runs-on: ubuntu-latest
