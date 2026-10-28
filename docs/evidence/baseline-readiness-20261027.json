@@ -1,0 +1,138 @@
+{
+  "projectRef": "rpnrqfrfwywglvyykgrg",
+  "region": "sa-east-1",
+  "checkedAtUtc": "2026-10-28T01:01:08.845Z",
+  "sourceCommit": "b933891c784de8cc88c5886768bd52b7b6134c30",
+  "currentReleaseCommit": "8cd977aad7975f1eacf4f9788fa07fe201b629d0",
+  "method": "Supabase MCP; SELECT somente em catalogos e historico nativo. Sem dados de negocio.",
+  "catalog": {
+    "columns": {
+      "expected": 124,
+      "observed": 124,
+      "matches": true
+    },
+    "constraints": {
+      "expected": 101,
+      "observed": 101,
+      "matches": true
+    },
+    "acl": {
+      "expected": 13,
+      "observed": 13,
+      "matches": true
+    },
+    "history": {
+      "expected": 2,
+      "observed": 2,
+      "matches": true
+    },
+    "indexes": {
+      "expected": 37,
+      "observed": 37,
+      "matches": true
+    },
+    "policies": {
+      "expected": 14,
+      "observed": 14,
+      "matches": true
+    }
+  },
+  "extras": {
+    "server": {
+      "matches": true
+    },
+    "tables": {
+      "matches": true,
+      "expected": 13,
+      "observed": 13
+    },
+    "schemas": {
+      "matches": true,
+      "expected": 2,
+      "observed": 2
+    },
+    "schemaGrants": {
+      "matches": true,
+      "expected": 8,
+      "observed": 8
+    },
+    "functions": {
+      "matches": true,
+      "expected": 2,
+      "observed": 2
+    },
+    "functionGrants": {
+      "matches": true,
+      "expected": 6,
+      "observed": 6
+    },
+    "columnGrants": {
+      "matches": true,
+      "expected": 2,
+      "observed": 2
+    },
+    "roles": {
+      "matches": true,
+      "expected": 2,
+      "observed": 2
+    },
+    "flywayHistory": {
+      "matches": true
+    },
+    "roleMemberships": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "unexpectedRelations": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "unexpectedTypes": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "triggerViolations": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "columnFlags": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "invalidConstraints": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "invalidIndexes": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "inheritance": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    },
+    "defaultPrivileges": {
+      "matches": true,
+      "expected": 0,
+      "observed": 0
+    }
+  },
+  "securityAdvisorLints": [],
+  "flywayHistoryExists": false,
+  "remoteBaselineExecuted": false,
+  "remoteV003Executed": false,
+  "applicationDeployed": false,
+  "limitations": [
+    "Nao comprova TLS/JDBC remoto, Auth real, backup/restore ou disponibilidade.",
+    "Nenhuma credencial DDL/runtime foi provisionada; nenhum baseline/migrate remoto foi executado.",
+    "Janela exclusiva sem DDL externo ainda deve ser confirmada no momento da operacao."
+  ]
+}

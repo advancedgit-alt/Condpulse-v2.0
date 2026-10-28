@@ -93,6 +93,16 @@ jobs:
         run: |
           docker build -f infra/Dockerfile.api -t condpulse-api:ci .
           bash tests/database/image-smoke.sh '${{ job.services.postgres.id }}'
+      - name: Legacy bootstrap attestation and official baseline
+        env:
+          CP_JDBC_TEST_OK: DISPOSABLE
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE condpulse_bootstrap_ci'
+          mvn -B -ntp -f apps/backend/pom.xml -Dtest=BootstrapBaselineJdbcTest test
+      - name: Isolated baseline image defaults to inspection and redacts errors
+        run: |
+          docker build -f infra/Dockerfile.api --target baseline -t condpulse-baseline:ci .
+          bash tests/database/baseline-image-smoke.sh
   release-config:
     runs-on: ubuntu-latest
     timeout-minutes: 5

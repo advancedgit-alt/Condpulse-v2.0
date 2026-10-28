@@ -8,6 +8,8 @@ const WEB_HEALTH = ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:80
 const SERVICE_KEYS = new Set(['image', 'user', 'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'mem_limit', 'cpus', 'pids_limit', 'logging', 'restart', 'stop_grace_period', 'environment', 'volumes', 'networks', 'expose', 'healthcheck', 'depends_on', 'init', 'command', 'entrypoint']);
 const API_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'PORT', 'CP_JWT_ISSUER', 'CP_JWT_JWK_SET_URI', 'CP_BFF_ORIGIN', 'CP_BFF_ENABLED', 'CP_RESERVATIONS_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const MIGRATE_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'JAVA_TOOL_OPTIONS', 'TZ']);
+const BASELINE_PROJECT = 'rpnrqfrfwywglvyykgrg';
+const BASELINE_ENV = new Set(['DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'CP_BASELINE_PROJECT_REF', 'CP_BASELINE_ACK']);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = value => record(value) ? Object.keys(value) : [];
 const sameKeys = (value, expected) => record(value) && keys(value).sort().join('|') === [...expected].sort().join('|');
@@ -79,11 +81,11 @@ export function validateRelease(config, mode) {
     const id = `${code}:${path}`;
     if (!seen.has(id)) { seen.add(id); errors.push({ code, path }); }
   };
-  if (!['app', 'migrate'].includes(mode)) return [{ code: 'MODE_INVALID', path: '$' }];
+  if (!['app', 'migrate', 'baseline'].includes(mode)) return [{ code: 'MODE_INVALID', path: '$' }];
   if (!record(config)) return [{ code: 'CONFIG_OBJECT_REQUIRED', path: '$' }];
   if (!/^condpulse[-_][a-zA-Z0-9_.-]+$/.test(text(config.name))) fail('DEDICATED_PROJECT_NAME_REQUIRED', '$.name');
   if (!noKeysOutside(config, new Set(['name', 'services', 'networks']))) fail('TOP_LEVEL_UNEXPECTED', '$');
-  const serviceNames = mode === 'app' ? ['api', 'web'] : ['migrate'];
+  const serviceNames = mode === 'app' ? ['api', 'web'] : [mode];
   if (!sameKeys(config.services, serviceNames)) fail('SERVICES_EXACT', '$.services');
   const networkNames = mode === 'app' ? ['backend', 'proxy'] : ['backend'];
   if (!sameKeys(config.networks, networkNames)) fail('NETWORKS_EXACT', '$.networks');
@@ -105,8 +107,10 @@ export function validateRelease(config, mode) {
     const service = config.services?.[name];
     if (!record(service)) { fail('SERVICE_OBJECT_REQUIRED', path); continue; }
     if (!noKeysOutside(service, SERVICE_KEYS)) fail('SERVICE_SETTING_UNEXPECTED', path);
-    // Compose5 normaliza estes campos ausentes para null. Nenhum override e aceito.
-    if (service.command != null || service.entrypoint != null) fail('SERVICE_SETTING_UNEXPECTED', path);
+    // O baseline separado inicia somente em inspect; a operacao de escrita e manual.
+    // Compose5 normaliza os campos ausentes para null. Nenhum entrypoint e substituido.
+    if (service.entrypoint != null || (name === 'baseline'
+      ? !equalArray(service.command, ['inspect']) : service.command != null)) fail('SERVICE_SETTING_UNEXPECTED', path);
     const image = text(service.image);
     if (!/^[a-z0-9][a-z0-9.-]*(?::\d{1,5})?\/(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*[a-z0-9]+(?:[._-][a-z0-9]+)*@sha256:[a-f0-9]{64}$/.test(image)
         || /@sha256:0{64}$/.test(image)) fail('IMAGE_DIGEST_REQUIRED', `${path}.image`);
@@ -132,10 +136,11 @@ export function validateRelease(config, mode) {
     if (!record(logging) || !sameKeys(logging, ['driver', 'options']) || logging.driver !== 'json-file'
         || !sameKeys(logging.options, ['max-size', 'max-file']) || !(bytes(logging.options['max-size']) <= 10 * 1024 ** 2)
         || !(Number.isSafeInteger(Number(logging.options['max-file'])) && Number(logging.options['max-file']) >= 1 && Number(logging.options['max-file']) <= 3)) fail('ROTATED_LOGS_REQUIRED', `${path}.logging`);
-    if (service.restart !== (name === 'migrate' ? 'no' : 'unless-stopped')) fail('RESTART_POLICY_REQUIRED', `${path}.restart`);
-    if (name === 'migrate') {
-      if (!absentOrEmpty(service.expose) || !sameKeys(service.healthcheck, ['disable']) || service.healthcheck.disable !== true) fail('MIGRATOR_NO_HTTP', path);
-      if (!absentOrEmpty(service.depends_on)) fail('MIGRATOR_SEPARATE_JOB', `${path}.depends_on`);
+    const job = name === 'migrate' || name === 'baseline';
+    if (service.restart !== (job ? 'no' : 'unless-stopped')) fail('RESTART_POLICY_REQUIRED', `${path}.restart`);
+    if (job) {
+      if (!absentOrEmpty(service.expose) || !sameKeys(service.healthcheck, ['disable']) || service.healthcheck.disable !== true) fail(name === 'baseline' ? 'BASELINE_NO_HTTP' : 'MIGRATOR_NO_HTTP', path);
+      if (!absentOrEmpty(service.depends_on)) fail(name === 'baseline' ? 'BASELINE_SEPARATE_JOB' : 'MIGRATOR_SEPARATE_JOB', `${path}.depends_on`);
     } else {
       if (!equalArray(service.expose?.map(String), ['8080'])) fail('INTERNAL_PORT_ONLY', `${path}.expose`);
       if (!equalArray(service.healthcheck?.test, name === 'api' ? API_HEALTH : WEB_HEALTH)
@@ -154,10 +159,12 @@ export function validateRelease(config, mode) {
       if (!absentOrEmpty(environment) || !absentOrEmpty(service.volumes)) fail('WEB_NO_CREDENTIALS_OR_MOUNTS', path);
       continue;
     }
-    if (!noKeysOutside(environment, name === 'api' ? API_ENV : MIGRATE_ENV)) fail('ENVIRONMENT_UNEXPECTED', `${path}.environment`);
+    if (!noKeysOutside(environment, name === 'api' ? API_ENV : name === 'baseline' ? BASELINE_ENV : MIGRATE_ENV)) fail('ENVIRONMENT_UNEXPECTED', `${path}.environment`);
     const env = record(environment) ? environment : {};
-    if (env.SPRING_PROFILES_ACTIVE !== (name === 'api' ? 'api' : 'migrate')) fail('PROFILE_EXACT', `${path}.environment.SPRING_PROFILES_ACTIVE`);
-    if (String(env.DB_POOL_SIZE) !== (name === 'api' ? '8' : '2')) fail('POOL_SIZE_EXACT', `${path}.environment.DB_POOL_SIZE`);
+    if (name !== 'baseline') {
+      if (env.SPRING_PROFILES_ACTIVE !== (name === 'api' ? 'api' : 'migrate')) fail('PROFILE_EXACT', `${path}.environment.SPRING_PROFILES_ACTIVE`);
+      if (String(env.DB_POOL_SIZE) !== (name === 'api' ? '8' : '2')) fail('POOL_SIZE_EXACT', `${path}.environment.DB_POOL_SIZE`);
+    }
     if (!databaseUrl(env.DATABASE_URL)) fail('DATABASE_TLS_CONFIGURATION', `${path}.environment.DATABASE_URL`);
     if (!secretConfigured(env.DATABASE_PASSWORD)) fail('DATABASE_PASSWORD_REQUIRED', `${path}.environment.DATABASE_PASSWORD`);
     const dbUser = text(env.DATABASE_USER);
@@ -165,6 +172,12 @@ export function validateRelease(config, mode) {
         : !(/^(?:postgres|cp_migrator_[a-z0-9_]+)(?:\.[a-z0-9]{20})?$/.test(dbUser))) fail('DATABASE_ROLE_SEPARATION', `${path}.environment.DATABASE_USER`);
     const dbProject = databaseProject(env.DATABASE_URL, dbUser);
     if (!dbProject) fail('SUPABASE_DATABASE_TARGET_REQUIRED', `${path}.environment.DATABASE_URL`);
+    if (name === 'baseline') {
+      if (env.CP_BASELINE_PROJECT_REF !== BASELINE_PROJECT || dbProject !== BASELINE_PROJECT
+          || new URL(env.DATABASE_URL.slice(5)).pathname !== '/postgres') fail('BASELINE_PROJECT_EXACT', `${path}.environment`);
+      if (typeof env.CP_BASELINE_ACK !== 'string' || (env.CP_BASELINE_ACK !== ''
+          && !new RegExp(`^${BASELINE_PROJECT}:002:[a-f0-9]{64}$`).test(env.CP_BASELINE_ACK))) fail('BASELINE_ACK_FORMAT', `${path}.environment.CP_BASELINE_ACK`);
+    }
     if (env.JAVA_TOOL_OPTIONS !== undefined && env.JAVA_TOOL_OPTIONS !== '-XX:MaxRAMPercentage=70') fail('JVM_OPTIONS_UNEXPECTED', `${path}.environment.JAVA_TOOL_OPTIONS`);
     if (env.TZ !== undefined && env.TZ !== 'America/Sao_Paulo') fail('TIMEZONE_UNEXPECTED', `${path}.environment.TZ`);
     const mounts = service.volumes;
@@ -187,7 +200,7 @@ export function validateRelease(config, mode) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length !== 1 || !['--app', '--migrate'].includes(args[0])) {
+  if (args.length !== 1 || !['--app', '--migrate', '--baseline'].includes(args[0])) {
     process.stderr.write('RELEASE_INVALID 1\nMODE_INVALID $\n'); process.exitCode = 1; return;
   }
   let input = '';

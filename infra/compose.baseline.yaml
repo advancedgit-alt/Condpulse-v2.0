@@ -1,0 +1,42 @@
+# Excecao unica ADR-0003; arquivo separado da aplicacao e do migrate normal.
+# O comando padrao SOMENTE inspeciona. Baseline exige operacao manual e ACK atual.
+services:
+  baseline:
+    image: ${CP_BASELINE_IMAGE:?Informe o digest aprovado do target baseline da mesma release}
+    command: [inspect]
+    user: "10001:10001"
+    init: true
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+    stop_grace_period: 35s
+    environment:
+      DATABASE_URL: ${CP_MIGRATION_DATABASE_URL:?Informe a URL JDBC DDL com TLS verify-full}
+      DATABASE_USER: ${CP_MIGRATION_DATABASE_USER:?Informe a identidade DDL revisada}
+      DATABASE_PASSWORD: ${CP_MIGRATION_DATABASE_PASSWORD:?Obtenha a senha DDL no cofre}
+      CP_BASELINE_PROJECT_REF: rpnrqfrfwywglvyykgrg
+      CP_BASELINE_ACK: ${CP_BASELINE_ACK:-}
+    healthcheck:
+      disable: true
+    volumes:
+      - type: bind
+        source: ${CP_DB_CA_FILE:?Informe o caminho absoluto da CA PostgreSQL validada}
+        target: /run/secrets/db-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+networks:
+  backend:
+    driver: bridge

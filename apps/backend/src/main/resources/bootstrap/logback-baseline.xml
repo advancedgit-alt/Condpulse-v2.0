@@ -1,0 +1,4 @@
+<configuration>
+  <!-- Executor separado: somente o resultado sanitizado do comando vai ao operador. -->
+  <root level="OFF"/>
+</configuration>

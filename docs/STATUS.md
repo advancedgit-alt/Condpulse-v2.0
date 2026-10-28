@@ -23,12 +23,21 @@
 
 ## Pacote de implantação
 
+- PR#5 integrada em8cd977a; CI40610106204 passou nos jobs foundation, web e release-config no head64220fc.
 - CP-002/CP-009/CP-066: pacote em implementação, sem release promovida. API usa bases Maven/JRE por digest, probe local e runtime sem root/readonly; web mantém bases fixadas.
 - Aplicação e migrador possuem manifestos separados, CA readonly, TLS verify-full, limites e logs com rotação. A API não recebe variáveis DDL e somente a web participa do proxy. BFF/reservas permanecem false.
 - Preflight valida configuração expandida sem ecoar valores: rejeita identidade/ambiente divergente, imagem mutável, exposição da API, TLS inadequado, privilégios adicionais e mistura de credenciais.
 - Gate: `node --test tests/release-config.test.mjs tests/release-compose.test.mjs` renderiza os dois Compose com valores sintéticos, sem daemon ou rede. CI também constrói/testa a imagem API e o proxy após troca do endereço da API; resultados por head registrados na PR de implantação.
 - Verificação local:13 testes Node passaram ao incluir também tests/foundation.test.mjs; renderização real com Compose5.2 e sintaxe dos dois scripts Bash conferidas. Docker local sem daemon: ensaios de containers ficam no CI, sem simular resultado local.
 - O smoke da imagem usa PostgreSQL descartável sem TLS; não substitui o ensaio TLS/pooler gerenciado ou Auth real. Nada foi publicado, aplicado ao banco remoto ou contratado nesta etapa. Procedimento: docs/DEPLOY_COOLIFY.md.
+
+## Transição do bootstrap
+
+- Nova conferência remota em27/10/2026, somente leitura: os6 inventários do manifesto coincidem (13 ACLs,124 colunas,2 migrations nativas,37 índices,14 policies,101 constraints). As18 verificações extras também coincidem;13 tabelas ENABLE/FORCE RLS, ator/ownerpostgres e nenhuma história Flyway. Advisor de segurança retornou lints=[].
+- Hashes dos comandos nativos foram reconferidos, sem reescrever histórico. Relatório resumido em docs/evidence/baseline-readiness-20261027.json, sem dados de negócio.
+- Executor Java puro em target baseline separado da API; inspect por padrão, configuração restrita ao projeto da ADR-0003, fontes/manifesto imutáveis, lock de sessão e ACK por fingerprint. A chamada de escrita é somente Flyway.baseline002; validate/migrate permanece uma operação separada.
+- Local:15 testes Node passaram, incluindo os3 Compose. Os testes Java/JDBC preparados e o launcher da imagem exigem execução no CI; não foram executados localmente por ausência de Java/Maven/daemon Docker. Resultados por commit ficam na PR desta etapa.
+- Atestado do catálogo não comprova TLS/JDBC remoto, Auth, backup ou disponibilidade. Janela exclusiva sem DDL externo, cofre/credenciais e executor remoto ainda pendentes. Nenhum baseline, V003, fixture ou credencial foi gravado no Supabase nesta etapa. Procedimento: docs/BASELINE_FLYWAY.md.
 
 ## Evidência automatizada
 

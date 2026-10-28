@@ -17,7 +17,8 @@
   <resources>
    <resource><directory>src/main/resources</directory></resource>
    <resource><directory>../../db/migrations</directory><targetPath>db/migration</targetPath></resource>
+   <resource><directory>../../infra/supabase/bootstrap</directory><targetPath>bootstrap</targetPath><includes><include>foundation-manifest.json</include></includes></resource>
   </resources>
-  <plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins>
+  <plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><mainClass>br.com.condpulse.CondPulseApplication</mainClass></configuration></plugin></plugins>
  </build>
 </project>

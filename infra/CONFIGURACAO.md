@@ -35,3 +35,7 @@ Os manifestos atuais mantem BFF/reservas desligados e exigem imagens por digest,
 TLS verify-full com CA readonly e identidades runtime/DDL distintas.
 Procedimento, limites e gates: docs/DEPLOY_COOLIFY.md. Nao aplicar compose.local.yaml
 em homologacao/producao nem importar credenciais do migrador na aplicacao.
+
+Bootstrap legado: compose.baseline.yaml/target baseline usam CLI separado, somente
+no projeto da ADR-0003. Padrao inspect, sem perfil Spring; baseline oficial002 exige
+atestado integro e ACK do fingerprint, e nunca executa migrate. Ver docs/BASELINE_FLYWAY.md.
