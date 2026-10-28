@@ -86,7 +86,7 @@ test('preflight Java rejeita banco/projeto, JWT, TLS e chaves incompatíveis ant
     const env = { ...minimalEnvironment(), DATABASE_URL: jdbc, DATABASE_USER: 'cp_runtime_vercel_ci',
       DATABASE_PASSWORD: 'SYNTHETIC_TEST_ONLY_password', CP_JWT_ISSUER: issuer,
       CP_JWT_JWK_SET_URI: `${issuer}/.well-known/jwks.json`, CP_BFF_ORIGIN: 'https://condpulse.vercel.app',
-      CP_BFF_ENABLED: 'true', CP_RESERVATIONS_ENABLED: 'false',
+      CP_BFF_ENABLED: 'true', CP_RESERVATIONS_ENABLED: 'false', DB_POOL_SIZE: '2', PORT: '8080',
       CP_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_SYNTHETIC_TEST_ONLY_1234567890',
       CP_BFF_ENCRYPTION_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)).toString('base64'),
       CP_BFF_RATE_LIMIT_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => i + 51)).toString('base64') };
@@ -120,6 +120,13 @@ test('preflight Java rejeita banco/projeto, JWT, TLS e chaves incompatíveis ant
       [{ CP_SUPABASE_SECRET_KEY: 'SENSITIVE_SENTINEL' }, 'VERCEL_API_PRIVILEGED_ENV_FORBIDDEN'],
       [{ CP_MIGRATION_DATABASE_PASSWORD: 'SENSITIVE_SENTINEL' }, 'VERCEL_API_PRIVILEGED_ENV_FORBIDDEN'],
       [{ DB_POOL_SIZE: '100' }, 'VERCEL_API_POOL_LIMIT'],
+      [{ DB_POOL_SIZE: undefined }, 'VERCEL_API_POOL_LIMIT'],
+      [{ DB_POOL_SIZE: '' }, 'VERCEL_API_POOL_LIMIT'],
+      [{ PORT: undefined }, 'VERCEL_API_PORT_EXACT'],
+      [{ PORT: '9090' }, 'VERCEL_API_PORT_EXACT'],
+      [{ SERVER_PORT: '9090' }, 'VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN'],
+      [{ SERVER_SERVLET_CONTEXT_PATH: '/changed' }, 'VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN'],
+      [{ MANAGEMENT_SERVER_PORT: '9091' }, 'VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN'],
     ]) {
       const result = execute(change);
       assert.equal(result.status, 1);

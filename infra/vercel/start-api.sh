@@ -9,7 +9,7 @@ for key in $(env | sed 's/=.*//'); do
   case "$key" in
     CP_MIGRATION_*|CP_ONBOARDING_*) fail VERCEL_API_PRIVILEGED_ENV_FORBIDDEN ;;
     SPRING_PROFILES_ACTIVE) ;;
-    SPRING_*|CONDPULSE_*) fail VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN ;;
+    SPRING_*|CONDPULSE_*|SERVER_*|MANAGEMENT_*) fail VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN ;;
   esac
 done
 [ -z "${JAVA_TOOL_OPTIONS:-}${JDK_JAVA_OPTIONS:-}${_JAVA_OPTIONS:-}${SPRING_APPLICATION_JSON:-}${SPRING_CONFIG_IMPORT:-}${SPRING_CONFIG_LOCATION:-}${SPRING_CONFIG_ADDITIONAL_LOCATION:-}" ] || fail VERCEL_API_CONFIGURATION_OVERRIDE_FORBIDDEN
@@ -18,6 +18,8 @@ case "${DATABASE_USER:-}" in cp_runtime_*) ;; *) fail VERCEL_API_RUNTIME_IDENTIT
 [ -n "${DATABASE_PASSWORD:-}" ] || fail VERCEL_API_DATABASE_PASSWORD_REQUIRED
 [ -n "${DATABASE_URL:-}" ] || fail VERCEL_API_DATABASE_TARGET_INVALID
 [ -n "${CP_VERCEL_DB_CA_BASE64:-}" ] || fail VERCEL_API_CA_REQUIRED
+# Export exactly what the guard and Spring will actually receive. Empty is invalid.
+export DB_POOL_SIZE="${DB_POOL_SIZE-2}" PORT="${PORT-8080}"
 java -Xmx16m -XX:+UseSerialGC -cp /app/preflight VercelRuntimePreflight
 
 # /tmp is ephemeral. Only the validated public CA is written here, never a secret.
