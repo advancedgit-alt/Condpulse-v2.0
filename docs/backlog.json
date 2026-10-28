@@ -81,8 +81,21 @@
       "id": "CP-007",
       "delivery": "Criar design system CondPulse. Tokens, botões, formulário, tabelas, modais, status, navegação e estados de erro.",
       "acceptance": "Contraste verificado, foco por teclado e toques de 48 px nas ações principais.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Componentes e tokens da fatia residencial, contraste, teclado e alvos de50px verificados em desktop e viewport390px; demais módulos e ensaio assistivo completo pendentes. Não constitui aceite integral do ticket."
+        }
+      ]
     },
     {
       "id": "CP-008",
@@ -102,6 +115,18 @@
           "environment": "GitHub Actions/PostgreSQL descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40583266112",
           "scope": "Fundação parcial; ver docs/STATUS.md. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Job web sem segredos/deploy: npm ci,29 Vitest, build estrito, Docker readonly/CSP e7 E2E contra a imagem. Scanner/SBOM e promoção de release pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
@@ -123,6 +148,18 @@
           "environment": "GitHub Actions/PostgreSQL17.11 descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
           "scope": "BFF revisado e store real no JDBC; Auth/HTTPS reais, rate limiting e habilitação pública pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Cliente web de BFF com CSRF em memória, uma renovação condicionada ao código explícito, sem tokens persistidos; testes de protocolo e logout. Auth real/HTTPS e limitação de tentativas pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
@@ -158,6 +195,18 @@
           "environment": "GitHub Actions/PostgreSQL17.11 descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
           "scope": "Contexto e catálogo de unidades no backend; frontend/cache e mobile pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Cache por conta/tenant/unidade; E2E de resposta atrasada, troca e negação de contexto, logout e preservação do rascunho após revalidação válida. Mobile nativo e homologação integrada pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
@@ -207,6 +256,18 @@
           "environment": "GitHub Actions/PostgreSQL17.11 descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
           "scope": "Catálogo e política1 explícita, versão e snapshot; cadastro administrativo e regras avançadas pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Web mostra catálogo, regras, versão e política; revalidação negada remove dados/formulário. Cadastro administrativo e regras avançadas pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
@@ -221,6 +282,18 @@
           "environment": "GitHub Actions/PostgreSQL17.11 descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
           "scope": "Criação idempotente, cota de admissão e disputa GiST no serviço real; jornada completa e habilitação pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Web cria somente após resposta válida e mantém chave/corpo em resultado desconhecido; E2E de retry explícito e fuso do condomínio. APIs sintéticas no runner; jornada com banco/Auth gerenciados pendente. Não constitui aceite integral do ticket."
         }
       ]
     },
@@ -235,6 +308,18 @@
           "environment": "GitHub Actions/PostgreSQL17.11 descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
           "scope": "Somente cancelamento pelo autor; aprovação/rejeição/expiração e convidados/revogação pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "2402a380e6487cf73924faee0a074a90a7225a4f",
+          "environment": "GitHub Actions/Chromium/imagem Nginx readonly; APIs sintéticas apenas no runner",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40606655792",
+          "commands": [
+            "npm ci --no-fund --no-audit",
+            "npm test",
+            "npm run build",
+            "npm run test:e2e"
+          ],
+          "scope": "Confirmação de cancelamento pelo autor e falha sem sucesso visual; E2E de404 específico. Aprovação/rejeição/expiração e convites dependentes permanecem pendentes. Não constitui aceite integral do ticket."
         }
       ]
     },
