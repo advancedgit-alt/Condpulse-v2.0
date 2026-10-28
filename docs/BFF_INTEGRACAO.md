@@ -1,6 +1,7 @@
 # CP-011 — integração da sessão web BFF
-Estado: código em revisão na PR#2; conferir evidência atualizada em docs/STATUS.md.
-Nenhum token real foi usado. O BFF permanece desligado por padrão e não simula login.
+Estado: código integrado na PR#2; portal residencial integrado na PR#4.
+Conferir evidência atualizada em docs/STATUS.md e ensaio HTTPS em docs/HOMOLOGACAO.md.
+O BFF permanece desligado na stack base; o complemento de homologação é explícito.
 
 ## Arquivos novos
 V003 cria platform.web_sessions. Cookie guarda segredo opaco de256bits; o banco só recebe SHA256.
@@ -65,9 +66,11 @@ Todas as respostas /auth são no-store. Nenhum localStorage, token em URL ou con
 - Java/PostgreSQL são executados no CI; ambiente local não possui Java/Maven. Conferir run/commit em STATUS.
 
 ## Gates ainda necessários
-- Teste HTTP integrado da cadeia Security configurada, banco e provedor sandbox em HTTPS.
+- Ensaio HTTP integrado da cadeia Security, banco e provedor sandbox em HTTPS implementado em
+  tests/integration/https-bff-smoke.mjs; resultado por commit em STATUS. Não substitui Auth real.
 - Store e pool real já exercitados no PostgreSQL descartável do CI; falta ensaio do pooler/TLS gerenciado no ambiente de destino. Ver tests/database/JDBC.md e STATUS.
 - Teste de refresh/logout concorrente com Auth real e interrupção de rede controlada.
 - Rate limiting de login/recuperação por mecanismo de produção e observabilidade sem credenciais.
-- MFA CP-013, onboarding/recuperação CP-020 e interface web são tickets separados, não implementados.
+- Portal web residencial integrado na PR#4; MFA CP-013, onboarding/recuperação CP-020 e demais telas
+  permanecem pendentes, com aceite por ticket separado.
 Não marcar CP-011 homologado ou ativar login público só porque o código compila.

@@ -7,6 +7,7 @@ const API_HEALTH = ['CMD', 'java', '-Xmx16m', '-XX:+UseSerialGC', '-cp', '/app/h
 const WEB_HEALTH = ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/healthz'];
 const SERVICE_KEYS = new Set(['image', 'user', 'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'mem_limit', 'cpus', 'pids_limit', 'logging', 'restart', 'stop_grace_period', 'environment', 'volumes', 'networks', 'expose', 'healthcheck', 'depends_on', 'init', 'command', 'entrypoint']);
 const API_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'PORT', 'CP_JWT_ISSUER', 'CP_JWT_JWK_SET_URI', 'CP_BFF_ORIGIN', 'CP_BFF_ENABLED', 'CP_RESERVATIONS_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
+const HOMOLOGATION_ENV = new Set([...API_ENV, 'CP_SUPABASE_PUBLISHABLE_KEY', 'CP_BFF_ENCRYPTION_KEY', 'CP_BFF_SESSION_HOURS']);
 const MIGRATE_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const BASELINE_PROJECT = 'rpnrqfrfwywglvyykgrg';
 const BASELINE_ENV = new Set(['DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'CP_BASELINE_PROJECT_REF', 'CP_BASELINE_ACK']);
@@ -73,6 +74,14 @@ function secretConfigured(value) {
     && !/^(?:SET_|REPLACE_|CHANGE_|PREENCHER|<)/i.test(value);
 }
 
+function encryptionKey(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) return false;
+  const decoded = Buffer.from(value, 'base64');
+  // Forma canonica AES256; rejeita marcadores e chaves degeneradas evidentes.
+  // Isto nao comprova entropia nem substitui geracao criptografica no cofre.
+  return decoded.length === 32 && decoded.toString('base64') === value && new Set(decoded).size >= 16;
+}
+
 /** Return only stable error codes and controlled paths; never input values. */
 export function validateRelease(config, mode) {
   const errors = [];
@@ -81,13 +90,16 @@ export function validateRelease(config, mode) {
     const id = `${code}:${path}`;
     if (!seen.has(id)) { seen.add(id); errors.push({ code, path }); }
   };
-  if (!['app', 'migrate', 'baseline'].includes(mode)) return [{ code: 'MODE_INVALID', path: '$' }];
+  if (!['app', 'homologation', 'migrate', 'baseline'].includes(mode)) return [{ code: 'MODE_INVALID', path: '$' }];
+  const application = mode === 'app' || mode === 'homologation';
+  const homologation = mode === 'homologation';
   if (!record(config)) return [{ code: 'CONFIG_OBJECT_REQUIRED', path: '$' }];
   if (!/^condpulse[-_][a-zA-Z0-9_.-]+$/.test(text(config.name))) fail('DEDICATED_PROJECT_NAME_REQUIRED', '$.name');
   if (!noKeysOutside(config, new Set(['name', 'services', 'networks']))) fail('TOP_LEVEL_UNEXPECTED', '$');
-  const serviceNames = mode === 'app' ? ['api', 'web'] : [mode];
+  if (homologation && !/^condpulse-hml[-_][a-zA-Z0-9_.-]+$/.test(text(config.name))) fail('HOMOLOGATION_PROJECT_NAME_REQUIRED', '$.name');
+  const serviceNames = application ? ['api', 'web'] : [mode];
   if (!sameKeys(config.services, serviceNames)) fail('SERVICES_EXACT', '$.services');
-  const networkNames = mode === 'app' ? ['backend', 'proxy'] : ['backend'];
+  const networkNames = application ? ['backend', 'proxy'] : ['backend'];
   if (!sameKeys(config.networks, networkNames)) fail('NETWORKS_EXACT', '$.networks');
   const backend = config.networks?.backend;
   if (!record(backend) || !noKeysOutside(backend, new Set(['name', 'driver', 'internal', 'external', 'ipam']))
@@ -96,11 +108,13 @@ export function validateRelease(config, mode) {
     fail('BACKEND_PRIVATE_BRIDGE_WITH_EGRESS', '$.networks.backend');
   }
   if (!/^condpulse[-_][a-zA-Z0-9_.-]+$/.test(text(backend?.name))) fail('DEDICATED_BACKEND_NETWORK_REQUIRED', '$.networks.backend');
-  if (mode === 'app') {
+  if (homologation && !/^condpulse-hml[-_][a-zA-Z0-9_.-]+$/.test(text(backend?.name))) fail('HOMOLOGATION_NETWORK_REQUIRED', '$.networks.backend');
+  if (application) {
     const proxy = config.networks?.proxy;
     if (!record(proxy) || !noKeysOutside(proxy, new Set(['name', 'external', 'ipam']))
         || (proxy.ipam !== undefined && !sameKeys(proxy.ipam, [])) || proxy.external !== true
         || !/^condpulse[-_][a-zA-Z0-9_.-]+$/.test(text(proxy.name))) fail('DEDICATED_PROXY_NETWORK_REQUIRED', '$.networks.proxy');
+    if (homologation && !/^condpulse-hml[-_][a-zA-Z0-9_.-]+$/.test(text(proxy?.name))) fail('HOMOLOGATION_NETWORK_REQUIRED', '$.networks.proxy');
   }
   for (const name of serviceNames) {
     const path = `$.services.${name}`; // name belongs to the fixed list above.
@@ -159,7 +173,7 @@ export function validateRelease(config, mode) {
       if (!absentOrEmpty(environment) || !absentOrEmpty(service.volumes)) fail('WEB_NO_CREDENTIALS_OR_MOUNTS', path);
       continue;
     }
-    if (!noKeysOutside(environment, name === 'api' ? API_ENV : name === 'baseline' ? BASELINE_ENV : MIGRATE_ENV)) fail('ENVIRONMENT_UNEXPECTED', `${path}.environment`);
+    if (!noKeysOutside(environment, name === 'api' ? (homologation ? HOMOLOGATION_ENV : API_ENV) : name === 'baseline' ? BASELINE_ENV : MIGRATE_ENV)) fail('ENVIRONMENT_UNEXPECTED', `${path}.environment`);
     const env = record(environment) ? environment : {};
     if (name !== 'baseline') {
       if (env.SPRING_PROFILES_ACTIVE !== (name === 'api' ? 'api' : 'migrate')) fail('PROFILE_EXACT', `${path}.environment.SPRING_PROFILES_ACTIVE`);
@@ -188,7 +202,12 @@ export function validateRelease(config, mode) {
         || !sameKeys(mount.bind, ['create_host_path']) || mount.bind.create_host_path !== false) fail('CA_READ_ONLY_MOUNT_REQUIRED', `${path}.volumes`);
     if (name === 'api') {
       if (String(env.PORT) !== '8080') fail('PORT_EXACT', `${path}.environment.PORT`);
-      if (String(env.CP_BFF_ENABLED) !== 'false' || String(env.CP_RESERVATIONS_ENABLED) !== 'false') fail('FEATURES_MUST_REMAIN_DISABLED', `${path}.environment`);
+      if (homologation) {
+        if (env.CP_BFF_ENABLED !== 'true' || env.CP_RESERVATIONS_ENABLED !== 'true') fail('HOMOLOGATION_FEATURES_EXACT', `${path}.environment`);
+        if (!/^sb_publishable_[A-Za-z0-9_-]{16,}$/.test(text(env.CP_SUPABASE_PUBLISHABLE_KEY))) fail('PUBLISHABLE_KEY_REQUIRED', `${path}.environment.CP_SUPABASE_PUBLISHABLE_KEY`);
+        if (!encryptionKey(env.CP_BFF_ENCRYPTION_KEY)) fail('ENCRYPTION_KEY_REQUIRED', `${path}.environment.CP_BFF_ENCRYPTION_KEY`);
+        if (env.CP_BFF_SESSION_HOURS !== '8') fail('SESSION_HOURS_EXACT', `${path}.environment.CP_BFF_SESSION_HOURS`);
+      } else if (String(env.CP_BFF_ENABLED) !== 'false' || String(env.CP_RESERVATIONS_ENABLED) !== 'false') fail('FEATURES_MUST_REMAIN_DISABLED', `${path}.environment`);
       if (!secureOrigin(env.CP_BFF_ORIGIN)) fail('BFF_HTTPS_ORIGIN_REQUIRED', `${path}.environment.CP_BFF_ORIGIN`);
       if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co\/auth\/v1$/.test(text(env.CP_JWT_ISSUER))
           || env.CP_JWT_JWK_SET_URI !== `${env.CP_JWT_ISSUER}/.well-known/jwks.json`) fail('SUPABASE_AUTH_ENDPOINTS_MATCH', `${path}.environment`);
@@ -200,7 +219,7 @@ export function validateRelease(config, mode) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length !== 1 || !['--app', '--migrate', '--baseline'].includes(args[0])) {
+  if (args.length !== 1 || !['--app', '--homologation', '--migrate', '--baseline'].includes(args[0])) {
     process.stderr.write('RELEASE_INVALID 1\nMODE_INVALID $\n'); process.exitCode = 1; return;
   }
   let input = '';

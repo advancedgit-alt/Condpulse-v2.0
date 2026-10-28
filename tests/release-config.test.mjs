@@ -34,6 +34,16 @@ const app = {
     },
   },
 };
+const homologation = clone(app);
+homologation.name = 'condpulse-hml-ci';
+homologation.networks.backend.name = 'condpulse-hml-ci_backend';
+homologation.networks.proxy.name = 'condpulse-hml-proxy';
+Object.assign(homologation.services.api.environment, {
+  CP_BFF_ENABLED: 'true', CP_RESERVATIONS_ENABLED: 'true',
+  CP_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_SYNTHETIC_TEST_ONLY_1234567890',
+  CP_BFF_ENCRYPTION_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)).toString('base64'),
+  CP_BFF_SESSION_HOURS: '8',
+});
 const migrate = {
   name: 'condpulse-migrate', networks: { backend: { name: 'condpulse-migrate_backend', driver: 'bridge' } },
   services: { migrate: { ...hardened, restart: 'no', environment: { ...db, DATABASE_USER: 'postgres', SPRING_PROFILES_ACTIVE: 'migrate', DB_POOL_SIZE: '2' }, healthcheck: { disable: true } } },
@@ -143,6 +153,28 @@ test('flags, identidade, origem e readiness nao podem ser liberadas por engano',
   rejected(c => { c.services.api.healthcheck.test = ['CMD', 'true']; }, 'HEALTHCHECK_REQUIRED');
 });
 
+test('homologacao explicita exige namespace, redes e todas as chaves sem mudar a stack publica', () => {
+  assert.deepEqual(validateRelease(homologation, 'homologation'), []);
+  assert.ok(validateRelease(homologation, 'app').some(e => e.code === 'FEATURES_MUST_REMAIN_DISABLED'));
+  assert.ok(validateRelease(app, 'homologation').some(e => e.code === 'HOMOLOGATION_FEATURES_EXACT'));
+  rejected(c => { c.name = 'condpulse-production'; }, 'HOMOLOGATION_PROJECT_NAME_REQUIRED', homologation, 'homologation');
+  rejected(c => { c.networks.proxy.name = 'condpulse-proxy'; }, 'HOMOLOGATION_NETWORK_REQUIRED', homologation, 'homologation');
+  rejected(c => { c.networks.backend.name = 'condpulse-app_backend'; }, 'HOMOLOGATION_NETWORK_REQUIRED', homologation, 'homologation');
+  for (const flag of ['CP_BFF_ENABLED', 'CP_RESERVATIONS_ENABLED']) {
+    rejected(c => { c.services.api.environment[flag] = 'false'; }, 'HOMOLOGATION_FEATURES_EXACT', homologation, 'homologation');
+  }
+  for (const key of ['', 'SET_IN_VAULT', 'sb_secret_SYNTHETIC_HIGH_PRIVILEGE', 'eyJhbGciOiJIUzI1NiJ9.legacy.signature']) {
+    rejected(c => { c.services.api.environment.CP_SUPABASE_PUBLISHABLE_KEY = key; }, 'PUBLISHABLE_KEY_REQUIRED', homologation, 'homologation');
+  }
+  for (const key of ['', 'SET_IN_VAULT', Buffer.alloc(32).toString('base64'), Buffer.alloc(24, 42).toString('base64'), 'A'.repeat(43) + '=']) {
+    rejected(c => { c.services.api.environment.CP_BFF_ENCRYPTION_KEY = key; }, 'ENCRYPTION_KEY_REQUIRED', homologation, 'homologation');
+  }
+  rejected(c => { delete c.services.api.environment.CP_BFF_SESSION_HOURS; }, 'SESSION_HOURS_EXACT', homologation, 'homologation');
+  rejected(c => { c.services.api.environment.DATABASE_USER = 'postgres'; }, 'DATABASE_ROLE_SEPARATION', homologation, 'homologation');
+  rejected(c => { c.services.api.environment.CP_JWT_ISSUER = 'https://bbbbbbbbbbbbbbbbbbbb.supabase.co/auth/v1'; }, 'SUPABASE_PROJECT_MISMATCH', homologation, 'homologation');
+  rejected(c => { c.services.web.environment = { CP_BFF_ENCRYPTION_KEY: homologation.services.api.environment.CP_BFF_ENCRYPTION_KEY }; }, 'WEB_NO_CREDENTIALS_OR_MOUNTS', homologation, 'homologation');
+});
+
 test('baseline separado inicia somente inspect no projeto da excecao ADR0003', () => {
   assert.deepEqual(validateRelease(baseline, 'baseline'), []);
   const acknowledged = clone(baseline);
@@ -202,4 +234,13 @@ test('CLI nao devolve segredos em JSON invalido, chaves hostis ou valores invali
   assert.equal(baselineInvalid.status, 1);
   assert.doesNotMatch(baselineInvalid.stdout + baselineInvalid.stderr, new RegExp(secret));
   assert.match(baselineInvalid.stderr, /BASELINE_ACK_FORMAT \$\.services\.baseline\.environment\.CP_BASELINE_ACK/);
+  const hmlValid = spawnSync(process.execPath, [script, '--homologation'], { input: JSON.stringify(homologation), encoding: 'utf8' });
+  assert.equal(hmlValid.status, 0); assert.equal(hmlValid.stdout, 'RELEASE_VALID 0\n'); assert.equal(hmlValid.stderr, '');
+  const hmlInvalid = clone(homologation);
+  hmlInvalid.services.api.environment.CP_SUPABASE_PUBLISHABLE_KEY = secret;
+  hmlInvalid.services.api.environment.CP_BFF_ENCRYPTION_KEY = secret;
+  const hmlRun = spawnSync(process.execPath, [script, '--homologation'], { input: JSON.stringify(hmlInvalid), encoding: 'utf8' });
+  assert.equal(hmlRun.status, 1);
+  assert.doesNotMatch(hmlRun.stdout + hmlRun.stderr, new RegExp(secret));
+  assert.match(hmlRun.stderr, /ENCRYPTION_KEY_REQUIRED/);
 });
