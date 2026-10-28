@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-27",
+  "project": "CondPulse",
+  "pull_request": "https://github.com/advancedgit-alt/Condpulse-v2.0/pull/7",
+  "commit": "5d76d15800a8a8378f78beca8b7f0a6809ca41d0",
+  "run": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40615865225",
+  "environment": "GitHub Actions/Ubuntu/Java25/PostgreSQL17.11 descartavel/HTTPS loopback",
+  "integrated_https_result": "PASSED",
+  "workflow_result": "PASSED",
+  "jobs": { "foundation": "success", "web": "success", "release-config": "success" },
+  "commands": [
+    "npm ci --no-fund --no-audit (apps/web)",
+    "npm run build (apps/web)",
+    "node tests/integration/https-bff-smoke.mjs",
+    "node --test tests/integration/https-bff-guard.test.mjs",
+    "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
+  ],
+  "real_components": [
+    "web bundle/assets",
+    "Spring HTTP and Security chain",
+    "JWT signature and claims validation via HTTPS JWKS",
+    "AES256-GCM session cipher",
+    "Hikari/JDBC runtime cp_ci_login member of cp_api",
+    "PostgreSQL17.11 migrations, RLS, transactions and constraints"
+  ],
+  "synthetic_components": [
+    "Auth protocol provider with one-use refresh tokens",
+    "Node HTTPS origin/proxy",
+    "ephemeral CA, TLS certificate, signing key and encryption key",
+    "accounts, tenant, membership, unit, amenity and reservation fixtures"
+  ],
+  "verified": [
+    "anonymous access rejected",
+    "login requires CSRF and exact Origin before Auth is called",
+    "opaque __Host cookie with Secure, HttpOnly, SameSite=Lax, Path=/ and no Domain",
+    "login exposes only accountId and expiresAt",
+    "session tokens encrypted in PostgreSQL",
+    "identity, own units and authorized amenities",
+    "same body and idempotency key replay returns201, same reservationId and replay headertrue",
+    "cancellation and reservation/audit/outbox counts1:2:2",
+    "refresh token rotated and durable lease/CAS completion",
+    "revoked membership returns404 TENANT_ACCESS_DENIED",
+    "logout deletes durable session, clears cookies and rejects old cookie replay",
+    "fixtures and temporary TLS material cleaned up"
+  ],
+  "local_verification": {
+    "node_tests_passed": 23,
+    "compose_version": "5.2.0",
+    "java_or_database_executed_locally": false
+  },
+  "limits": [
+    "no browser execution in the integrated HTTP runner",
+    "Node proxy does not replace Nginx image tests",
+    "no Supabase Auth or managed PostgreSQL TLS/pooler connection",
+    "no host, vault, domain, baseline, V003 or deployment provisioned remotely",
+    "no complete product-ticket acceptance or public-login approval"
+  ],
+  "remote_changes": false
+}

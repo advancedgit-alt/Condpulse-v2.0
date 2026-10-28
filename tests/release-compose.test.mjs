@@ -39,11 +39,17 @@ test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão
       CP_SUPABASE_URL: 'https://aaaaaaaaaaaaaaaaaaaa.supabase.co',
       CP_BFF_ORIGIN: 'https://condpulse.example.org',
       CP_PROXY_NETWORK: 'condpulse_ci_proxy',
+      CP_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_SYNTHETIC_TEST_ONLY_1234567890',
+      CP_BFF_ENCRYPTION_KEY: Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)).toString('base64'),
     };
-    const render = (file, environment = env) => JSON.parse(execFileSync('docker', [
-      'compose', '--project-name', file.includes('.app.') ? 'condpulse-app' : file.includes('.baseline.') ? 'condpulse-baseline' : 'condpulse-migrate',
-      '--env-file', emptyEnv, '-f', file, 'config', '--format', 'json',
-    ], { cwd: root, env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }));
+    const render = (file, environment = env, project) => {
+      const files = Array.isArray(file) ? file : [file];
+      const name = project ?? (files[0].includes('.app.') ? 'condpulse-app' : files[0].includes('.baseline.') ? 'condpulse-baseline' : 'condpulse-migrate');
+      return JSON.parse(execFileSync('docker', [
+        'compose', '--project-name', name, '--env-file', emptyEnv,
+        ...files.flatMap(path => ['-f', path]), 'config', '--format', 'json',
+      ], { cwd: root, env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }));
+    };
     const app = render('infra/compose.app.yaml');
     const migration = render('infra/compose.migrate.yaml');
     const baseline = render('infra/compose.baseline.yaml', {
@@ -62,6 +68,22 @@ test('Compose real separa runtime e DDL e passa preflight sem daemon ou conexão
     assert.notEqual(baseline.services.baseline.image, app.services.api.image);
     assert.equal(Object.keys(baseline.services).length, 1);
     assert.throws(() => render('infra/compose.app.yaml', { ...env, CP_API_IMAGE: '' }));
+    const hmlFiles = ['infra/compose.app.yaml', 'infra/compose.homologation.yaml'];
+    const hmlEnv = { ...env, CP_PROXY_NETWORK: 'condpulse-hml-ci-proxy' };
+    const hml = render(hmlFiles, hmlEnv, 'condpulse-hml-ci');
+    assert.deepEqual(validateRelease(hml, 'homologation'), []);
+    assert.ok(validateRelease(hml, 'app').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
+    assert.equal(hml.services.api.environment.CP_BFF_ENABLED, 'true');
+    assert.equal(hml.services.api.environment.CP_RESERVATIONS_ENABLED, 'true');
+    assert.equal(hml.services.api.environment.CP_BFF_ENCRYPTION_KEY, env.CP_BFF_ENCRYPTION_KEY);
+    assert.equal(hml.services.web.environment, undefined);
+    assert.equal(JSON.stringify(hml).includes('DDL_SENTINEL_CONFIG_TEST_ONLY'), false);
+    assert.equal(JSON.stringify(migration).includes(env.CP_BFF_ENCRYPTION_KEY), false);
+    assert.equal(JSON.stringify(baseline).includes(env.CP_BFF_ENCRYPTION_KEY), false);
+    assert.equal(app.services.api.environment.CP_BFF_ENABLED, 'false');
+    assert.equal(app.services.api.environment.CP_BFF_ENCRYPTION_KEY, undefined);
+    assert.throws(() => render(hmlFiles, { ...hmlEnv, CP_BFF_ENCRYPTION_KEY: '' }, 'condpulse-hml-ci'));
+    assert.throws(() => render(hmlFiles, { ...hmlEnv, CP_SUPABASE_PUBLISHABLE_KEY: '' }, 'condpulse-hml-ci'));
   } finally {
     assert.ok(resolve(temporary).startsWith(resolve(tmpdir()) + sep));
     rmSync(temporary, { recursive: true, force: true });

@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: "24.18.0"
       - name: Foundation and contract checks
-        run: node --test tests/foundation.test.mjs
+        run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs
       - name: Compile and unit tests
         run: mvn -B -ntp -f apps/backend/pom.xml verify
       - name: Migrate with Flyway and validate replay
@@ -89,6 +89,13 @@ jobs:
           CP_TEST_DB_USER: cp_ci_login
           CP_TEST_DB_PASSWORD: synthetic_ci_runtime_only
         run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest test
+      - name: Build real web assets for integrated HTTPS smoke
+        working-directory: apps/web
+        run: |
+          npm ci --no-fund --no-audit
+          npm run build
+      - name: HTTPS web and BFF with real API and disposable PostgreSQL
+        run: node tests/integration/https-bff-smoke.mjs
       - name: Build pinned API image and verify hardened runtime
         run: |
           docker build -f infra/Dockerfile.api -t condpulse-api:ci .

@@ -1,0 +1,10 @@
+# Uso explicito com compose.app.yaml em ambiente exclusivo de homologacao.
+# Nao incluir na stack publica: exige baseline/V003, cofre e ingresso restrito.
+services:
+  api:
+    environment:
+      CP_BFF_ENABLED: "true"
+      CP_RESERVATIONS_ENABLED: "true"
+      CP_SUPABASE_PUBLISHABLE_KEY: ${CP_SUPABASE_PUBLISHABLE_KEY:?Informe a chave publicavel do projeto de homologacao}
+      CP_BFF_ENCRYPTION_KEY: ${CP_BFF_ENCRYPTION_KEY:?Obtenha a chave AES256 Base64 no cofre de homologacao}
+      CP_BFF_SESSION_HOURS: "8"

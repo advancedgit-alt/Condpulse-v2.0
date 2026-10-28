@@ -33,11 +33,22 @@
 
 ## Transição do bootstrap
 
+- PR#6 integrada em26667a8. CI40613593316 no head ed613f3 passou nos três jobs foundation/web/release-config, incluindo baseline oficial em banco descartável, V003 separada e launcher Docker. Revisão independente final sem bloqueadores; equivalência dos143blobs locais/remotos conferida antes do merge. Esse resultado não executou baseline no Supabase.
 - Nova conferência remota em27/10/2026, somente leitura: os6 inventários do manifesto coincidem (13 ACLs,124 colunas,2 migrations nativas,37 índices,14 policies,101 constraints). As18 verificações extras também coincidem;13 tabelas ENABLE/FORCE RLS, ator/ownerpostgres e nenhuma história Flyway. Advisor de segurança retornou lints=[].
 - Hashes dos comandos nativos foram reconferidos, sem reescrever histórico. Relatório resumido em docs/evidence/baseline-readiness-20261027.json, sem dados de negócio.
 - Executor Java puro em target baseline separado da API; inspect por padrão, configuração restrita ao projeto da ADR-0003, fontes/manifesto imutáveis, lock de sessão e ACK por fingerprint. A chamada de escrita é somente Flyway.baseline002; validate/migrate permanece uma operação separada.
-- Local:15 testes Node passaram, incluindo os3 Compose. Os testes Java/JDBC preparados e o launcher da imagem exigem execução no CI; não foram executados localmente por ausência de Java/Maven/daemon Docker. Resultados por commit ficam na PR desta etapa.
+- Local:15 testes Node passaram, incluindo os3 Compose. Java/JDBC e launcher da imagem passaram no CI acima; não foram executados localmente por ausência de Java/Maven/daemon Docker.
 - Atestado do catálogo não comprova TLS/JDBC remoto, Auth, backup ou disponibilidade. Janela exclusiva sem DDL externo, cofre/credenciais e executor remoto ainda pendentes. Nenhum baseline, V003, fixture ou credencial foi gravado no Supabase nesta etapa. Procedimento: docs/BASELINE_FLYWAY.md.
+
+## Ensaio integrado de homologação
+
+- PR#7 / branch infra/https-homologation: complemento explícito compose.homologation.yaml, inventário próprio e preflight --homologation exigem chaves BFF, HTTPS e redes condpulse-hml. A stack base continua com flags false e rejeita as variáveis de ativação. Nenhum complemento foi aplicado a host ou projeto remoto.
+- Verificação local:23 testes Node passaram (4fundação,11release,1renderização dos4Compose e7guards do ensaio HTTPS). Compose5.2.0 real, sem daemon/rede. O preflight não atesta ingresso restrito, entropia/posse de chaves, privilégios do banco ou migrations remotas.
+- Runner tests/integration/https-bff-smoke.mjs usa JAR Spring, Security/JWT/JWKS/cifra, runtime JDBC e PostgreSQL reais, com Auth e origem HTTPS sintéticos somente no runner. Cobre sessão durável, contexto, reserva/replay/cancelamento, refresh/logout, CSRF/Origin e vínculo revogado. Ambiente dos subprocessos tem allowlist para impedir configuração externa de conexão.
+- Ensaio HTTPS/Java/PostgreSQL passou no CI40615865225 / head5d76d158: login/contexto, reserva/replay/cancelamento, refresh/logout, cookies, CSRF/Origin e revogação. A sessão cifrada, seu encerramento e contagens1:2:2 de reserva/auditoria/outbox foram conferidos no banco real. O runner busca CSRF por mutação, como a web, e exige404 TENANT_ACCESS_DENIED para vínculo revogado. Revisão independente final sem bloqueadores.
+- Os três jobs foundation/web/release-config passaram nesse commit:110 testes Java unitários/HTTP,24 JDBC runtime e8 JDBC baseline,29 Vitest,7 jornadas Chromium,23 verificações Node/Compose/guards e testes das imagens/proxy. Os32 JDBC ignorados no primeiro estágio foram executados nos dois estágios próprios, sem skips.
+- Não executado localmente por ausência de Java/Maven/banco. O teste serve assets reais, mas não executa navegador nem Nginx. Não substitui TLS/JDBC gerenciado ou Supabase Auth real. Procedimento e gates em docs/HOMOLOGACAO.md; evidência por commit em docs/evidence/https-homologation-ci-20261027.json.
+- Reconferência remota somente SELECT:13 tabelas, todas com ENABLE/FORCE RLS; platform.flyway_schema_history e platform.web_sessions ainda ausentes. Nenhum baseline/V003, fixture, credencial, contratação ou publicação nesta etapa.
 
 ## Evidência automatizada
 

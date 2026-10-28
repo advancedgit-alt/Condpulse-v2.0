@@ -12,6 +12,8 @@ CondPulse exclusivo em São Paulo. Nenhum recurso ou segredo da Advanced é util
 | infra/compose.migrate.yaml | Job manual separado da aplicação | Identidade DDL revisada |
 | infra/app.env.example | Inventário de variáveis da aplicação | Placeholders inertes |
 | infra/migrate.env.example | Inventário exclusivo do job | Placeholders inertes |
+| infra/compose.homologation.yaml | Complemento explícito para ensaio restrito | Mesmo runtime, sem DDL |
+| infra/homologation.env.example | Inventário de homologação e chaves BFF | Placeholders inertes |
 
 As duas imagens da aplicação são promovidas por referência `@sha256:`. O migrador usa
 o mesmo digest da API da release. Não se usa `latest`, tag como identidade de release,
@@ -148,8 +150,10 @@ Esses logs não substituem monitoramento nem backup e não devem conter credenci
 ## Gates de liberação e estado atual
 
 CP_BFF_ENABLED e CP_RESERVATIONS_ENABLED estão fixos em false no manifesto. Configurar
-variável externa com true não os habilita. Uma alteração revisada posterior deve fornecer
-chave de cifra/publicável pelo cofre e habilitar somente após testes reais de Auth,
+variável externa com true não os habilita. O complemento explícito de homologação em
+HOMOLOGACAO.md permite testar a stack em ambiente restrito e separado, com as chaves
+de cifra/publicável pelo cofre e preflight --homologation. Não incluir esse complemento
+na stack pública. A liberação pública requer revisão posterior e testes reais de Auth,
 CSRF/Origin, refresh/logout, expiração, falha de rede, limites de tentativas, revogação,
 reserva/cancelamento e navegação móvel. A stack atual é preparação operacional.
 
