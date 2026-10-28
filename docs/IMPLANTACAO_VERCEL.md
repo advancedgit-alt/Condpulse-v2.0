@@ -118,12 +118,14 @@ continuam pendentes de configuração, dados aprovados e homologação real.
 6. Ensaiar primeiro a API com flags false e conferir banco/identidade/readiness
    pelo caminho operacional real. Rede IPv6 direta ou IPv4 do pooler precisa ser
    comprovada no runtime Vercel; nao reduzir TLS para resolver conectividade.
-7. Concluir cadastro real revisado pelo CLI operacional e comprovar Auth real.
-   Habilitar BFF e reservas somente depois disso. Chaves AES e HMAC aleatorias,
-   Base64 canonico32bytes e distintas; origem HTTPS exata do alias estavel.
-8. Executar login, cookies Secure/HttpOnly/SameSite, Origin/CSRF, consulta de
-   contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado.
-   Testar429 com Retry-After e503 preservando estado quando aplicavel.
+7. Concluir o cadastro real revisado pelo CLI operacional no alvo de homologação,
+   com dados e principal aprovados. Configurar chaves AES e HMAC aleatórias,
+   Base64 canônico de32bytes e distintas, e a origem HTTPS exata desse alvo.
+   Habilitar BFF/reservas de forma controlada nesse alvo para o ensaio; a liberação
+   aos usuários depende dos gates e do isolamento entre homologação e produção.
+8. Ensaiar Supabase Auth real e login, cookies Secure/HttpOnly/SameSite,
+   Origin/CSRF, contexto, reserva/replay/cancelamento, refresh/logout e vínculo
+   revogado. Testar429 com Retry-After e503 preservando estado quando aplicável.
 9. Medir cold start, carga, escala/conexoes, SIGTERM e recuperacao antes de
    promover uso real. Homologacao/producao continuam exigindo isolamento proprio.
 
