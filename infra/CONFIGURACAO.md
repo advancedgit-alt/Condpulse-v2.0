@@ -27,3 +27,11 @@ Web: imagem infra/Dockerfile.web, mesma origem e reverse proxy privado para api:
 ver docs/WEB_IMPLANTACAO.md. Mobile permanece pendente.
 Coolify: host exclusivo CondPulse, regiao Sao Paulo, cofre, firewall, limites e checks.
 DNS/host/imagens por digest dependem de provisionamento e aceite.
+
+Pacote de release: compose.app.yaml e compose.migrate.yaml sao operacoes separadas;
+app.env.example e migrate.env.example documentam somente placeholders.
+Validar o JSON expandido por pipe com validate-release.mjs, sem salva-lo/imprimi-lo.
+Os manifestos atuais mantem BFF/reservas desligados e exigem imagens por digest,
+TLS verify-full com CA readonly e identidades runtime/DDL distintas.
+Procedimento, limites e gates: docs/DEPLOY_COOLIFY.md. Nao aplicar compose.local.yaml
+em homologacao/producao nem importar credenciais do migrador na aplicacao.

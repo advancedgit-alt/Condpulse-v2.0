@@ -9,6 +9,7 @@
 - Reservas usam política explícita, aceite de versão, snapshot, GiST, cota de admissão por unidade, idempotência e auditoria/outbox atômicos. Cancelamento exige autoria.
 - Catálogo de unidades é próprio e ativo; catálogo de áreas exige capacidade residencial. Contrato OpenAPI corresponde às rotas implementadas.
 - ADR-0004 delimita o subset e as jornadas ainda ausentes. Portal web residencial implementado na etapa PR#4; demais módulos e aplicativo Expo pendentes.
+- PR#4 integrada em c30db60: portal residencial. CI final40607550284 passou nos jobs web/foundation no head8a24bf6.
 
 ## Etapa web residencial
 
@@ -19,6 +20,15 @@
 - CI40606655792 / head2402a38 passou nos jobs web e foundation:29 Vitest, build/typecheck, imagem Docker readonly/CSP e7 jornadas Chromium contra Nginx em4180. Regressões de Java, JDBC, SQL e Flyway também passaram.
 - Dockerfile web com bases por digest, Nginx sem root, CSP e proxy privado. Evidências vinculadas aos tickets e à PR#4.
 - Estado real sem API responde com aviso de indisponibilidade e entrada bloqueada; não simula login ou reservas. Ver docs/WEB_IMPLANTACAO.md.
+
+## Pacote de implantação
+
+- CP-002/CP-009/CP-066: pacote em implementação, sem release promovida. API usa bases Maven/JRE por digest, probe local e runtime sem root/readonly; web mantém bases fixadas.
+- Aplicação e migrador possuem manifestos separados, CA readonly, TLS verify-full, limites e logs com rotação. A API não recebe variáveis DDL e somente a web participa do proxy. BFF/reservas permanecem false.
+- Preflight valida configuração expandida sem ecoar valores: rejeita identidade/ambiente divergente, imagem mutável, exposição da API, TLS inadequado, privilégios adicionais e mistura de credenciais.
+- Gate: `node --test tests/release-config.test.mjs tests/release-compose.test.mjs` renderiza os dois Compose com valores sintéticos, sem daemon ou rede. CI também constrói/testa a imagem API e o proxy após troca do endereço da API; resultados por head registrados na PR de implantação.
+- Verificação local:13 testes Node passaram ao incluir também tests/foundation.test.mjs; renderização real com Compose5.2 e sintaxe dos dois scripts Bash conferidas. Docker local sem daemon: ensaios de containers ficam no CI, sem simular resultado local.
+- O smoke da imagem usa PostgreSQL descartável sem TLS; não substitui o ensaio TLS/pooler gerenciado ou Auth real. Nada foi publicado, aplicado ao banco remoto ou contratado nesta etapa. Procedimento: docs/DEPLOY_COOLIFY.md.
 
 ## Evidência automatizada
 
