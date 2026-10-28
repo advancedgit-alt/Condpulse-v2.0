@@ -10,6 +10,45 @@ Vercel projeto `prj_IeUa4Zjg1IwaPqJQwv525H14I837`, time
 `team_6fzA029jxhDb1LpnrnphWGQ0`. Não recebe projeto, time, URL ou usuário
 administrativo selecionável por input. Nenhum recurso da Advanced participa.
 
+## Execução remota registrada — 28/10/2026
+
+O código revisado foi operado no source `2f1abf3547736c247fc082b2cc6ed76c18f2d38b`,
+com geração `2ca929e1-1f7e-4a3e-b9ab-1b9ab147ff82`. O
+[inspect40751736891](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40751736891)
+confirmou elegibilidade e estado `ABSENT`. Após revisão e autorização explícita,
+o [apply40757578769](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40757578769)
+concluiu em 28/10 às 16:50:12 (America/Sao_Paulo): `applied=true`, `state=READY`
+e código vazio. Os dois jobs e o cleanup terminaram com sucesso.
+
+O readback inicial confirmou `cp_runtime_2ca929e11f7e4a3eb9ab1b9ab147ff82` como LOGIN,
+somente membro de `cp_api`, sem privilégios elevados, limite 4 e validade
+`infinity`. A associação tem ADMIN=false, INHERIT=true e SET=false; as 16 tabelas
+da aplicação mantêm ENABLE/FORCE RLS. O executor confirmou dez Configs públicas
+e uma senha Secret somente em Production no projeto Vercel fixo. Nenhum valor
+secreto é registrado ou lido de volta neste documento.
+
+O limite inicial4 foi ajustado separadamente para16 pelo SQL operacional da
+ADR-0006, source `c486d5aa921b6d61df610601d127c3400bde6745`, blob
+`f736df28170c6988d0eebceb1dc1b4cf904a0247`, com CI40774877934 aprovado antes
+da execução. O SQL modifica somente CONNECTION LIMIT, preservando senha, marker, grants,
+TLS e RLS. O readback de 28/10 às 18:52:59 (America/Sao_Paulo) confirmou o limite 16,
+flags seguras, o marker READY original, associação única e 16 tabelas FORCE RLS;
+nenhum valor de senha foi consultado. Hikari permanece 2; a margem mínima 20 sob max_connections=60 é uma guarda de
+fotografia, sem reserva de slots ou promessa de capacidade.
+
+JAR, CA, fingerprints e proveniência ficam em
+[evidence/runtime-configuration-20261028.json](evidence/runtime-configuration-20261028.json).
+O responsável ativou SSL enforcement no projeto antes da inspeção aprovada.
+`verify-full` e a CA verificam o cliente até o pooler; o guard `pg_stat_ssl`
+confirmou criptografia do trecho backend. Isso não atesta a política de
+verificação de CA/hostname feita pelo próprio pooler.
+
+A PR#14 e o deployment posterior possuem SHA próprio, distinto do
+provisionamento. O smoke40777572663/source 5060fec7d4bcff0ae8df49801f1fecd55b7c0925 confirmou readiness 200/JSON/UP após uma consulta extra, preservando o503 inicial OUT_OF_SERVICE e a resposta 401 esperada de /v1/me. Essa prova de conexão após inicialização não demonstra recuperação da mesma instância, frota saudável ou capacidade. BFF/reservas permanecem desligados.
+Não houve onboarding, cadastro Auth, novas migrations ou aceite integral do PRD.
+Não repetir `apply` apenas para produzir uma prova de health; mudanças futuras
+de fonte e recuperação devem respeitar os marcadores e o procedimento abaixo.
+
 ## Cofre e autorização
 
 O workflow `.github/workflows/runtime-configuration.yml` utiliza o Environment
@@ -93,18 +132,18 @@ incorporar ou expor variáveis servidoras no bundle ou na imagem.
 Antes de iniciar o Java, o launcher distingue falhas locais com códigos fixos:
 `RUNTIME_OWNER_PASSWORD_INVALID`, `RUNTIME_VERCEL_TOKEN_INVALID`,
 `RUNTIME_JAVA_HOME_INVALID`, `RUNTIME_RUNNER_TEMP_INVALID` e
-`RUNTIME_PATH_INVALID`. Esses diagnósticos não mostram valores, comprimentos ou
-detalhes de exceção. Não alteram as regras de formato nem removem whitespace:
+`RUNTIME_PATH_INVALID`. Esses diagnósticos classificam validações locais, anteriores à API do provedor,
+e não mostram valores, comprimentos ou detalhes de exceção. Não alteram as regras de formato nem removem whitespace:
 um token com espaços ou quebra de linha continua recusado. Conferir ou substituir
 a entrada diretamente no cofre, sem colar o valor em chat, terminal ou logs.
 
-O inspect40741338619, sourceb73c4c18506be1b582e4889bc042e2ca5581efbf,
+No registro histórico, o inspect40741338619, sourceb73c4c18506be1b582e4889bc042e2ca5581efbf,
 geração2ca929e1-1f7e-4a3e-b9ab-1b9ab147ff82, passou nos gates, build,
 compilação e CA, mas parou no antigo `RUNTIME_LAUNCH_CONFIGURATION_INVALID`.
 Esse código agregado não identifica qual entrada falhou. O Java não foi iniciado;
-não houve conexão ou escrita do helper no banco ou na Vercel. Uma nova inspeção
-com os códigos específicos é necessária antes de atribuir a causa a uma credencial
-ou ao ambiente do runner.
+não houve conexão ou escrita do helper no banco ou na Vercel. Naquele momento, era necessária uma nova inspeção
+com os códigos específicos antes de atribuir a causa a uma credencial ou ao
+ambiente do runner. A operação posterior concluída está registrada acima.
 
 ## TLS, falha e limites
 

@@ -1,6 +1,19 @@
 # Estado verificável - 28/10/2026
 
-## Banco remoto atualizado - 28/10/2026
+## API JDBC verificada após inicialização — CP-009/CP-066
+
+- O responsável ativou SSL enforcement no projeto exclusivo `rpnrqfrfwywglvyykgrg`; o painel confirmou a opção ligada e o projeto `ACTIVE_HEALTHY`. O guard TLS foi preservado. O JDBC continua com CA e hostname verificados até o pooler; a checagem `pg_stat_ssl` confirmou TLS no trecho backend. A política de verificação de CA/hostname feita pelo próprio pooler não foi atestada.
+- [Inspect40751736891](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40751736891) passou no source `2f1abf3547736c247fc082b2cc6ed76c18f2d38b`, geração `2ca929e1-1f7e-4a3e-b9ab-1b9ab147ff82`: `eligible=true`, `state=ABSENT` e código vazio. Após autorização explícita e janela confirmada, [apply40757578769](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40757578769) concluiu em 28/10 às 16:50:12 (America/Sao_Paulo), com `applied=true`, `state=READY`, código vazio e cleanup concluído. Revisão independente dos logs aprovada.
+- O readback inicial de metadados confirmou o login `cp_runtime_2ca929e11f7e4a3eb9ab1b9ab147ff82`, associado somente a `cp_api`, sem SUPERUSER/BYPASSRLS/CREATEDB/CREATEROLE/REPLICATION, limite 4 e validade `infinity`. A associação tem ADMIN=false, INHERIT=true e SET=false. As 16 tabelas de aplicação continuam com ENABLE/FORCE RLS.
+- Uma operação administrativa separada, conforme [ADR-0006](adr/0006-runtime-connection-budget.md), ajustou CONNECTION LIMIT de 4 para 16 sem alterar senha, marker, grants, TLS ou RLS. O SQL versionado no source `c486d5aa921b6d61df610601d127c3400bde6745`/blob `f736df28170c6988d0eebceb1dc1b4cf904a0247` teve revisão e CI40774877934 verdes antes da execução. O readback de 28/10 às 18:52:59 (America/Sao_Paulo) confirmou16, flags seguras, associação única a cp_api e 16 tabelas FORCE RLS. Hikari permanece 2; max_connections=60 e margem mínima de 20 são guardas de uma fotografia, não reserva ou aceite de capacidade.
+- O executor conferiu dez Configs públicas e uma senha Secret somente em Production no projeto Vercel CondPulse. Nenhum valor de senha ou PAT integra este registro. As flags BFF/reservas permanecem `false`; a operação não executou onboarding, novas migrations ou cadastro Auth.
+- A PR#14 foi integrada somente após `READY`, em `fe0929dcc4a7e64175a0697728d53ec4c0e1fbe7`. CI40752349238 passou nos três jobs no head `6a8fa624a358c2704189c3af1b4820fdbb372812`. O deployment `dpl_CCKP5SJgdskJuQB3qBEiRBGVBHAZ` foi observado Ready/Production nesse source, com build de 45 s e alias `https://project-rhvdq.vercel.app`. O SHA do provisionamento e o SHA da aplicação são evidências distintas.
+- [Smoke40777572663](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40777572663) passou no source `5060fec7d4bcff0ae8df49801f1fecd55b7c0925`, associado ao deployment `SGBWbeE1Jb5citmnMRoKnkFQjdvw`, em 28/10 às 19:09:04 (America/Sao_Paulo). Preservou readiness inicial 503/JSON/OUT_OF_SERVICE e `/v1/me`401 com `AUTHENTICATION_REQUIRED`; uma única consulta extra de readiness retornou 200/JSON/UP. Todas as respostas observadas mantiveram no-store. A PR#17 foi validada pelo CI40776880447 no head `5550618f509eefd6478df2b8ecca6eac2eaabff8`, distinto do merge acima. A prova é pontual após inicialização; não demonstra recuperação da mesma instância, frota saudável, SLO de cold start ou capacidade.
+- A evidência sanitizada está em [runtime-configuration-20261028.json](evidence/runtime-configuration-20261028.json). Readiness e metadados não homologam login, Supabase Auth real, onboarding, isolamento por jornada, capacidade ou recuperação. CP-009/CP-066 continuam em implementação, sem aceite integral do PRD.
+
+Os registros abaixo preservam o estado observado em cada etapa anterior. Declarações antigas de credenciais ou migrations pendentes devem ser lidas no contexto daquela etapa; o estado atual é o registro acima.
+
+## Banco remoto atualizado - registro da etapa de migrations
 
 - Projeto exclusivo rpnrqfrfwywglvyykgrg, pooler de sessao Sao Paulo, commit revisado ace821b425cb953c0007e574009b0963ada0dddc (CI40629723997 verde). O responsavel cadastrou CP_DATABASE_OPERATIONS_PASSWORD no Environment restrito; nenhum valor foi lido ou copiado pelo agente.
 - Inspect40728907835 passou: JDBC/TLS verify-full e atestacao elegivel, sem escrita. Backup fisico registrado no painel em28/10/2026 07:48:47UTC e nenhuma operacao DDL concorrente na conferencia anterior; isso nao comprova restore nem atende por si so o RPO do PRD.
@@ -105,7 +118,7 @@
 - 4 verificações Node,25 verificações SQL, migrations/replay Flyway e smokeHTTP passaram no mesmo run.
 - Fixtures são sintéticas em banco descartável. Nenhum desses resultados constitui aceite integral de produto ou ensaio com Supabase Auth real.
 
-## Supabase remoto
+## Supabase remoto — registro anterior às operações de28/10
 
 - Projeto rpnrqfrfwywglvyykgrg em sa-east-1, PostgreSQL17.11.0.003.
 - V001/V002 aplicadas atomicamente na migration nativa20261027225434, conforme ADR-0003. V003 ainda não aplicada remotamente; baseline Flyway oficial ainda não executado.
@@ -119,8 +132,9 @@
 
 ## Próximos gates
 
-- Deployment Vercel Ready observado: validar efetivamente a alternativa Services/Container Runtime beta, fornecer runtime/CA/cofre e origem HTTPS estável e testar rotas, cookies, readiness, JDBC e Auth. A URL observada e o build concluído não comprovam jornada funcional. Coolify dedicado continua alternativa sem host exclusivo disponível. Domínio próprio não é exigido para o ensaio com URL gerada vercel.app.
-- Atestar bootstrap e executar baseline002 oficial via migrador JDBC; validate/migrate paraV003/V004/V005. Não fabricar flyway_schema_history nem usar baseline-on-migrate. As migrations novas ainda não foram aplicadas remotamente.
-- Ensaiar TLS/pooler gerenciado e Auth/refresh/logout reais, limitação compartilhada e expiração sob falha de rede. O JDBC descartável não substitui esse ensaio. Configurar cofre, SMTP e segundo ambiente isolado; comprovar backup/restore antes do lançamento.
-- Executar inspect/revisão/ACK/apply do onboarding com dados aprovados e principal exclusivo; não usar fixtures. Configuração posterior de áreas, aprovação/rejeição/expiração, convidados/revogação, fila/recorrência, gestão, demais telas web, aplicativo Expo, MFA, onboarding do usuário/recuperação, carga e integração física permanecem pendentes.
-- Os tickets evoluem como EM_IMPLEMENTACAO e os60 cenários de aceite de produto continuam não concluídos. Nenhuma alteração na Advanced.
+- Acompanhar o smoke público em cada push padrão, preservando snapshots503 e exigindo readiness 200/JSON/UP ao final da janela limitada. A leituraUP observada não substitui a investigação de indisponibilidade persistente. O build Ready isolado continua sem equivaler a uma jornada funcional. A URL gerada vercel.app permite o ensaio sem domínio próprio.
+- Configurar os segredos de ativação do BFF e concluir inspect/revisão/ACK/apply do onboarding com dados reais aprovados e principal exclusivo. Executar Supabase Auth real, login/CSRF/cookies, refresh/logout, contexto, reserva/replay/cancelamento e vínculo revogado antes de habilitar BFF/reservas.
+- Medir cold start, carga, escala e soma de conexões; testar SIGTERM, limitação compartilhada e falhas de rede. O GET pontual de saúde não atende às metas de p95/capacidade do PRD.
+- Configurar SMTP e segundo ambiente isolado, manter cofre/rotação próprios, contratar PITR somente após aceite de custo e comprovar backup/restore do banco e objetos. Worker contínuo e observabilidade operacional permanecem pendentes.
+- Configuração de áreas, aprovação/rejeição/expiração, convidados/revogação, fila/recorrência, gestão, demais telas web, aplicativo Expo, AAL2/TOTP, onboarding do usuário/recuperação e integração física permanecem pendentes.
+- Os tickets seguem como EM_IMPLEMENTACAO e os 60 cenários de aceite de produto continuam não concluídos. Nenhuma alteração na Advanced.
