@@ -21,7 +21,13 @@ preparada em /tmp; somente JDBC verify-full e permitido.
 
 ## Estado observado
 
-Conferencia de28/10: deployment atual dpl_45ufsie9cUqg4GHb3UZyt4418eWS,
+Atualizacao de28/10: banco remoto com baseline oficial002 e V003-V005 aplicadas e
+validadas no commit ace821b, runs40730350359/40730656930. As16 tabelas de aplicacao
+mantem ENABLE/FORCE RLS. Login runtime e transporte seguro de credenciais para a
+Vercel ainda pendentes; BFF/reservas permanecem false. O sucesso das migrations
+nao comprova conectividade do container Vercel, onboarding ou Auth real.
+
+Registro anterior de28/10: deployment daquela conferencia dpl_45ufsie9cUqg4GHb3UZyt4418eWS,
 commit401605522fa2f2a470bb480a406c598f7f508042, Ready. CI40620673228 passou
 nos tres jobs no merge. API ainda retorna500: o launcher aborta com
 VERCEL_API_RUNTIME_IDENTITY_REQUIRED antes de Spring. Nao ha usuario runtime,

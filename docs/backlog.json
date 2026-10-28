@@ -208,6 +208,15 @@
           "result": "CI_PASSED_MANAGED_INTEGRATION_PENDING",
           "scope": "Tres jobs foundation/web/release-config passaram no head indicado, incluindo novas migrations V004/V005, Java/JDBC,12 jornadas Chromium,40 Vitest, HTTPS e imagens API/web/baseline/onboarding/Vercel.21 verificacoes Node tambem passaram no comando local documentado. Nenhum desses ensaios comprova Supabase Auth/TLS gerenciado ou aceite integral dos tickets.",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        },
+        {
+          "commit": "ab685d8eb41bea7826c0e26425cb5b5b63307b88",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel e protocolo Vercel sintetico",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40733729757",
+          "commands": [
+            "node --test tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs"
+          ],
+          "scope": "10 testes do executor runtime passaram sem skips, incluindo compilacao exata, SCRAM, grants/RLS, replay e recuperacao parcial. Nao provisionou runtime/Vercel remoto nem completa o ticket; depende de token proprio e aprovacao concreta apos inspect."
         }
       ]
     },
@@ -910,6 +919,15 @@
           "project_url": "https://vercel.com/sindicoadvanced/condpulse",
           "deployment_id": "dpl_7NBrikhozHriUpTWymxr7KmwgJmA",
           "observed_alias": "https://project-rhvdq.vercel.app"
+        },
+        {
+          "commit": "ab685d8eb41bea7826c0e26425cb5b5b63307b88",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel e protocolo Vercel sintetico",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40733729757",
+          "commands": [
+            "node --test tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs"
+          ],
+          "scope": "10 testes do executor runtime passaram sem skips, incluindo compilacao exata, SCRAM, grants/RLS, replay e recuperacao parcial. Nao provisionou runtime/Vercel remoto nem completa o ticket; depende de token proprio e aprovacao concreta apos inspect."
         }
       ]
     },
