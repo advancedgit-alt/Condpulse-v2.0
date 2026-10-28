@@ -10,8 +10,11 @@ Isso trata os avisos observados; nao constitui uma auditoria completa do produto
 
 Migrations cp/platform continuam exclusivamente em db/migrations, executadas por Flyway.
 Nao aplicar esses arquivos com o conector SQL ou inventar flyway_schema_history.
-Nenhuma migration de negocio foi executada no projeto remoto nesta etapa.
+Essa etapa administrativa antecedeu o bootstrap atomico V001/V002, registrado em
+20261027225434 e atestado em foundation-manifest.json. O manifesto e historico aplicados
+permanecem imutaveis. A transicao por baseline oficial esta em docs/BASELINE_FLYWAY.md.
 
 Storage e Auth devem usar APIs/painel do provedor. storage.* e considerado read-only
 para operacoes SQL de dados, conforme https://supabase.com/docs/guides/storage/schema/design.
-A criacao de buckets/SMTP/redirect/MFA permanece pendente.
+Tres buckets privados e politicas iniciais de Auth foram configurados depois desta
+etapa; consultar docs/STATUS.md para evidencias e pendencias de SMTP/MFA/ambientes.

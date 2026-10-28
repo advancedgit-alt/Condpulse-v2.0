@@ -38,6 +38,19 @@ const migrate = {
   name: 'condpulse-migrate', networks: { backend: { name: 'condpulse-migrate_backend', driver: 'bridge' } },
   services: { migrate: { ...hardened, restart: 'no', environment: { ...db, DATABASE_USER: 'postgres', SPRING_PROFILES_ACTIVE: 'migrate', DB_POOL_SIZE: '2' }, healthcheck: { disable: true } } },
 };
+const baselineProject = 'rpnrqfrfwywglvyykgrg';
+const baseline = {
+  name: 'condpulse-baseline', networks: { backend: { name: 'condpulse-baseline_backend', driver: 'bridge' } },
+  services: { baseline: {
+    ...hardened, image: `ghcr.io/condpulse/baseline@sha256:${'c'.repeat(64)}`,
+    command: ['inspect'], restart: 'no', healthcheck: { disable: true },
+    environment: {
+      ...db, DATABASE_USER: 'postgres',
+      DATABASE_URL: db.DATABASE_URL.replace('abcdefghijklmnopqrst', baselineProject),
+      CP_BASELINE_PROJECT_REF: baselineProject, CP_BASELINE_ACK: '',
+    },
+  } },
+};
 
 test('app e migrador isolado aceitam somente a configuracao endurecida', () => {
   assert.deepEqual(validateRelease(app, 'app'), []);
@@ -130,6 +143,37 @@ test('flags, identidade, origem e readiness nao podem ser liberadas por engano',
   rejected(c => { c.services.api.healthcheck.test = ['CMD', 'true']; }, 'HEALTHCHECK_REQUIRED');
 });
 
+test('baseline separado inicia somente inspect no projeto da excecao ADR0003', () => {
+  assert.deepEqual(validateRelease(baseline, 'baseline'), []);
+  const acknowledged = clone(baseline);
+  acknowledged.services.baseline.environment.CP_BASELINE_ACK = `${baselineProject}:002:${'a'.repeat(64)}`;
+  assert.deepEqual(validateRelease(acknowledged, 'baseline'), []);
+  assert.deepEqual(acknowledged.services.baseline.command, ['inspect']);
+  const pooled = clone(baseline);
+  pooled.services.baseline.environment.DATABASE_URL = db.DATABASE_URL.replace('db.abcdefghijklmnopqrst.supabase.co', 'aws-1-sa-east-1.pooler.supabase.com');
+  pooled.services.baseline.environment.DATABASE_USER = `postgres.${baselineProject}`;
+  assert.deepEqual(validateRelease(pooled, 'baseline'), []);
+  for (const command of [null, [], ['baseline'], ['migrate'], ['inspect', 'baseline']]) {
+    rejected(c => { c.services.baseline.command = command; }, 'SERVICE_SETTING_UNEXPECTED', baseline, 'baseline');
+  }
+  rejected(c => { c.services.baseline.entrypoint = ['sh']; }, 'SERVICE_SETTING_UNEXPECTED', baseline, 'baseline');
+  rejected(c => { c.services.baseline.environment.SPRING_PROFILES_ACTIVE = 'migrate'; }, 'ENVIRONMENT_UNEXPECTED', baseline, 'baseline');
+  rejected(c => { c.services.baseline.environment.DB_POOL_SIZE = '2'; }, 'ENVIRONMENT_UNEXPECTED', baseline, 'baseline');
+  rejected(c => { c.services.baseline.expose = ['8080']; }, 'BASELINE_NO_HTTP', baseline, 'baseline');
+  rejected(c => { c.services.baseline.depends_on = { api: { condition: 'service_started' } }; }, 'BASELINE_SEPARATE_JOB', baseline, 'baseline');
+  rejected(c => { c.services.baseline.environment.DATABASE_USER = 'cp_runtime_app'; }, 'DATABASE_ROLE_SEPARATION', baseline, 'baseline');
+});
+
+test('baseline recusa alvo divergente e ACK de outro projeto ou versao', () => {
+  rejected(c => { c.services.baseline.environment.CP_BASELINE_PROJECT_REF = 'bbbbbbbbbbbbbbbbbbbb'; }, 'BASELINE_PROJECT_EXACT', baseline, 'baseline');
+  rejected(c => { c.services.baseline.environment.DATABASE_URL = db.DATABASE_URL; }, 'BASELINE_PROJECT_EXACT', baseline, 'baseline');
+  rejected(c => { c.services.baseline.environment.DATABASE_URL = c.services.baseline.environment.DATABASE_URL.replace('/postgres?', '/other_database?'); }, 'BASELINE_PROJECT_EXACT', baseline, 'baseline');
+  rejected(c => { c.services.baseline.environment.DATABASE_URL = c.services.baseline.environment.DATABASE_URL.replace(':5432', ':6543'); }, 'DATABASE_TLS_CONFIGURATION', baseline, 'baseline');
+  for (const ack of [undefined, 'SET_IN_VAULT', `${baselineProject}:003:${'a'.repeat(64)}`, `bbbbbbbbbbbbbbbbbbbb:002:${'a'.repeat(64)}`, `${baselineProject}:002:${'A'.repeat(64)}`, `${baselineProject}:002:short`]) {
+    rejected(c => { c.services.baseline.environment.CP_BASELINE_ACK = ack; }, 'BASELINE_ACK_FORMAT', baseline, 'baseline');
+  }
+});
+
 test('CLI nao devolve segredos em JSON invalido, chaves hostis ou valores invalidos', () => {
   const secret = 'SENTINEL_SECRET_never_echo_1234567890';
   const candidate = clone(app);
@@ -149,4 +193,13 @@ test('CLI nao devolve segredos em JSON invalido, chaves hostis ou valores invali
   }
   const valid = spawnSync(process.execPath, [script, '--migrate'], { input: JSON.stringify(migrate), encoding: 'utf8' });
   assert.equal(valid.status, 0); assert.equal(valid.stdout, 'RELEASE_VALID 0\n'); assert.equal(valid.stderr, '');
+  const baselineValid = spawnSync(process.execPath, [script, '--baseline'], { input: JSON.stringify(baseline), encoding: 'utf8' });
+  assert.equal(baselineValid.status, 0); assert.equal(baselineValid.stdout, 'RELEASE_VALID 0\n'); assert.equal(baselineValid.stderr, '');
+  const invalidBaseline = clone(baseline);
+  invalidBaseline.services.baseline.environment.DATABASE_PASSWORD = secret;
+  invalidBaseline.services.baseline.environment.CP_BASELINE_ACK = secret;
+  const baselineInvalid = spawnSync(process.execPath, [script, '--baseline'], { input: JSON.stringify(invalidBaseline), encoding: 'utf8' });
+  assert.equal(baselineInvalid.status, 1);
+  assert.doesNotMatch(baselineInvalid.stdout + baselineInvalid.stderr, new RegExp(secret));
+  assert.match(baselineInvalid.stderr, /BASELINE_ACK_FORMAT \$\.services\.baseline\.environment\.CP_BASELINE_ACK/);
 });

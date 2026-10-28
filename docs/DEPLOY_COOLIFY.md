@@ -95,7 +95,9 @@ nem acionado a cada reinício ou por merge automático.
 No projeto remoto atual, V001/V002 foram aplicadas pelo bootstrap atestado. Antes do
 primeiro job, conferir manifesto, histórico nativo, estrutura, RLS, ACL e ownership;
 executar o comando oficial Flyway `baseline` na versão002 pela identidade DDL, conforme
-ADR-0003. Essa operação de baseline ainda precisa de executor aprovado. Não fabricar
+ADR-0003. O executor isolado, seu modo de inspeção e a manutenção exclusiva estão em
+BASELINE_FLYWAY.md e infra/compose.baseline.yaml. O baseline remoto continua pendente;
+o alvo inicial exige o ator postgres do atestado. Não fabricar
 `flyway_schema_history`, usar `baseline-on-migrate` ou avançar o marcador para003.
 
 Somente após baseline oficial atestado, registrar aprovação/backup compatível e executar

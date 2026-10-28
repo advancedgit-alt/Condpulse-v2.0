@@ -26,6 +26,7 @@ validação de publicação e limitações em docs/WEB_IMPLANTACAO.md.
 - [Fatia residencial e limites de reservas](docs/adr/0004-fatia-residencial-reservas.md)
 - [Interface web e publicação na mesma origem](docs/WEB_IMPLANTACAO.md)
 - [Pacote de implantação e gates do Coolify](docs/DEPLOY_COOLIFY.md)
+- [Inspeção e baseline oficial do bootstrap](docs/BASELINE_FLYWAY.md)
 - [Modelo e autorização](docs/DADOS_E_AUTORIZACAO.md)
 - [Operação e recuperação](docs/OPERACAO.md)
 - [Estado e pendências](docs/STATUS.md)

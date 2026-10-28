@@ -3,15 +3,25 @@ FROM maven:3.9.11-eclipse-temurin-25@sha256:407c4423cec0cf2981055bc2c6c0dc211d96
 WORKDIR /work
 COPY apps/backend apps/backend
 COPY db/migrations db/migrations
+COPY infra/supabase/bootstrap/foundation-manifest.json infra/supabase/bootstrap/foundation-manifest.json
 COPY infra/health/Healthcheck.java /work/health/Healthcheck.java
 RUN javac -d /work/health /work/health/Healthcheck.java
 RUN mvn -B -ntp -f apps/backend/pom.xml -DskipTests package
+RUN mkdir /work/baseline && cd /work/baseline && jar -xf /work/apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar
 
-FROM eclipse-temurin:25-jre-noble@sha256:ce8543ddd3070ccbeaac2106a74c9387ddeb8d47a1c43348345715c1ef245c7f
+FROM eclipse-temurin:25-jre-noble@sha256:ce8543ddd3070ccbeaac2106a74c9387ddeb8d47a1c43348345715c1ef245c7f AS runtime
 WORKDIR /app
+USER 10001:10001
+
+# Operacao manual exclusiva da ADR-0003; sem Spring, HTTP ou migrate automatico.
+FROM runtime AS baseline
+COPY --from=build --chown=10001:10001 /work/baseline/BOOT-INF/classes /app/classes
+COPY --from=build --chown=10001:10001 /work/baseline/BOOT-INF/lib /app/lib
+ENTRYPOINT ["java","-XX:MaxRAMPercentage=70","-Dlogback.configurationFile=/app/classes/bootstrap/logback-baseline.xml","-cp","/app/classes:/app/lib/*","br.com.condpulse.bootstrap.BootstrapBaseline"]
+
+FROM runtime AS api
 COPY --from=build --chown=10001:10001 /work/apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar /app/app.jar
 COPY --from=build --chown=10001:10001 /work/health/Healthcheck.class /app/health/Healthcheck.class
-USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["java", "-Xmx16m", "-XX:+UseSerialGC", "-cp", "/app/health", "Healthcheck"]
 ENTRYPOINT ["java","-XX:MaxRAMPercentage=70","-jar","/app/app.jar"]
