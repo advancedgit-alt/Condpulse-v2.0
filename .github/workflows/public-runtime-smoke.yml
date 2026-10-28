@@ -2,7 +2,6 @@ name: CondPulse public runtime smoke
 on:
   push:
     branches: [ccr-5e725112-3x8hyg]
-    paths: [.github/workflows/public-runtime-smoke.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -108,7 +107,7 @@ jobs:
                   checks.push('AUTH_PROBLEM_UNEXPECTED');
               }
               return {path, status, contentType, cacheControl, elapsedMs: Date.now() - started,
-                bodyStatus: body?.status === 'UP' ? 'UP' : body?.status === 401 ? 401 : 'UNEXPECTED',
+                bodyStatus: ['UP', 'DOWN', 'OUT_OF_SERVICE', 'UNKNOWN'].includes(body?.status) ? body.status : body?.status === 401 ? 401 : 'UNEXPECTED',
                 problemCode: body?.code === 'AUTHENTICATION_REQUIRED' ? 'AUTHENTICATION_REQUIRED' : null,
                 ok: checks.length === 0, checks};
             } catch (error) {
