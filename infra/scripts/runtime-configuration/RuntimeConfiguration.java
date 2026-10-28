@@ -321,7 +321,7 @@ public final class RuntimeConfiguration {
     private static void stage(Connection c,Config config,boolean exists,String verifier) throws Exception {
         c.setReadOnly(false);c.setAutoCommit(false);
         try {
-            if(!exists)sql(c,"CREATE ROLE "+config.role()+" NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 4");
+            if(!exists)sql(c,"CREATE ROLE "+config.role()+" NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 16");
             sql(c,"GRANT cp_api TO "+config.role()+" WITH ADMIN FALSE");sql(c,"GRANT cp_api TO "+config.role()+" WITH INHERIT TRUE");sql(c,"GRANT cp_api TO "+config.role()+" WITH SET FALSE");
             Instant expiry;
             try(var q=query(c,"select clock_timestamp()+interval '10 minutes'");var r=q.executeQuery()) {require(r.next(),"RUNTIME_DATABASE_TIME_INVALID");expiry=r.getTimestamp(1).toInstant();}

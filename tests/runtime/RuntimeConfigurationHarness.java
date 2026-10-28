@@ -95,11 +95,12 @@ public final class RuntimeConfigurationHarness {
         }
     }
     private static void state(String database, RuntimeConfiguration.Config config, String expected, boolean login, boolean passwordNull) throws Exception {
-        try (var connection = owner(database); var query = connection.prepareStatement("select rolcanlogin,rolpassword is null,rolpassword like 'SCRAM-SHA-256$%',shobj_description(oid,'pg_authid'),rolvaliduntil::text from pg_authid where rolname=?")) {
+        try (var connection = owner(database); var query = connection.prepareStatement("select rolcanlogin,rolpassword is null,rolpassword like 'SCRAM-SHA-256$%',shobj_description(oid,'pg_authid'),rolvaliduntil::text,rolconnlimit from pg_authid where rolname=?")) {
             query.setString(1, config.role()); try (var rows = query.executeQuery()) {
                 require(rows.next() && rows.getBoolean(1) == login && rows.getBoolean(2) == passwordNull);
                 require(passwordNull || rows.getBoolean(3)); require((config.marker() + ":" + expected).equals(rows.getString(4)));
                 if ("READY".equals(expected)) require("infinity".equals(rows.getString(5)));
+                require(rows.getInt(6) == 16);
             }
         }
     }

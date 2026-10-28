@@ -148,6 +148,37 @@ redeploy. Qualquer etapa posterior depende de ação e validação próprias. A
 atualização de variáveis na Vercel exige um novo deployment para produzir efeito;
 este executor não comprova leitura JDBC, readiness, Auth, capacidade ou produção.
 
+
+## Orçamento provisório de conexões no pooler
+
+O padrão de novas identidades passa a CONNECTION LIMIT 16, mantendo o pool
+Hikari da API em2. Isso não altera uma role READY já existente. A identidade
+provisionada no source2f1abf3547736c247fc082b2cc6ed76c18f2d38b iniciou com limite4;
+o marker da credencial continua vinculado a essa origem.
+
+Os dois probes do run40772909749 encontraram readiness503 enquanto
+/v1/me401 com AUTHENTICATION_REQUIRED passou. O banco registrou 53300/FATAL
+na identidade runtime, e foram observados quatro backends Supavisor sob o teto4.
+A amostra de max_connections60 e12 conexões não-runtime permite projetar28 com
+teto16 e32 de folga; é uma amostra, não uma reserva nem aceite de carga.
+
+Ajustar a identidade existente somente com o SQL revisado
+infra/operations/runtime-connection-budget.sql, conforme ADR-0006. É operação
+administrativa do atributo de LOGIN fora do schema Flyway: não criar migration
+Supabase, não editar migrations aplicadas e não executar esse SQL pelo runtime.
+O script trava a mesma chave do executor, exige a role/marker READY exatos,
+atributos seguros, membership única, transição4→16 e margem de20 conexões
+antes da escrita.16 é noop; qualquer outro teto ou condição divergente aborta.
+O SQL não redefine senha, grants, validade ou marker e não encerra sessões.
+
+Preparação/revisão não comprovam execução. Após CI e revisão independente,
+registrar source/hash do SQL, executar no projeto fixo por canal administrativo,
+ler novamente os atributos e repetir o smoke. Não repetir apply da credencial
+em novo SHA para ajustar capacidade. Se o probe continuar503, manter o bloqueio
+e investigar; não relaxar TLS/RLS nem retirar db da readiness. A ampliação do
+smoke para todo push na branch padrão permite verificar cada novo deployment
+sem cookies, credenciais da aplicação ou exposição de corpos/detalhes.
+
 Testes: `node --test tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs`.
 Eles importam o guard e constroem invocações com valores sintéticos; não consultam
 GitHub, Supabase ou Vercel. Os testes Java/JDBC/HTTP do helper possuem evidência
