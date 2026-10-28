@@ -90,6 +90,22 @@ senha de volta. Variáveis de projeto podem ser disponibilizadas também ao buil
 não há promessa de isolamento por Service. O build revisado não deve imprimir,
 incorporar ou expor variáveis servidoras no bundle ou na imagem.
 
+Antes de iniciar o Java, o launcher distingue falhas locais com códigos fixos:
+`RUNTIME_OWNER_PASSWORD_INVALID`, `RUNTIME_VERCEL_TOKEN_INVALID`,
+`RUNTIME_JAVA_HOME_INVALID`, `RUNTIME_RUNNER_TEMP_INVALID` e
+`RUNTIME_PATH_INVALID`. Esses diagnósticos não mostram valores, comprimentos ou
+detalhes de exceção. Não alteram as regras de formato nem removem whitespace:
+um token com espaços ou quebra de linha continua recusado. Conferir ou substituir
+a entrada diretamente no cofre, sem colar o valor em chat, terminal ou logs.
+
+O inspect40741338619, sourceb73c4c18506be1b582e4889bc042e2ca5581efbf,
+geração2ca929e1-1f7e-4a3e-b9ab-1b9ab147ff82, passou nos gates, build,
+compilação e CA, mas parou no antigo `RUNTIME_LAUNCH_CONFIGURATION_INVALID`.
+Esse código agregado não identifica qual entrada falhou. O Java não foi iniciado;
+não houve conexão ou escrita do helper no banco ou na Vercel. Uma nova inspeção
+com os códigos específicos é necessária antes de atribuir a causa a uma credencial
+ou ao ambiente do runner.
+
 ## TLS, falha e limites
 
 A CA pública vem do mesmo endpoint HTTPS fixo revisado para o executor de banco.

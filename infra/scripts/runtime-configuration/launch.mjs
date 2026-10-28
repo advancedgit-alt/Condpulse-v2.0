@@ -11,7 +11,8 @@ const CA = '/run/secrets/db-ca.crt';
 const CONTEXT_CODES = new Set(['REQUEST_CONTEXT_DENIED', 'EXACT_REVIEWED_COMMIT_REQUIRED',
   'RUNTIME_GENERATION_REQUIRED', 'OPERATION_DENIED', 'MAINTENANCE_ACK_REQUIRED',
   'EXPLICIT_RUNTIME_ACK_REQUIRED', 'RUNTIME_ACK_NOT_APPLICABLE',
-  'RUNTIME_LAUNCH_CONFIGURATION_INVALID', 'RUNTIME_CLASSES_PATH_DENIED', 'RUNTIME_ARGUMENTS_DENIED']);
+  'RUNTIME_OWNER_PASSWORD_INVALID', 'RUNTIME_VERCEL_TOKEN_INVALID', 'RUNTIME_JAVA_HOME_INVALID',
+  'RUNTIME_RUNNER_TEMP_INVALID', 'RUNTIME_PATH_INVALID', 'RUNTIME_CLASSES_PATH_DENIED', 'RUNTIME_ARGUMENTS_DENIED']);
 
 /** Pure guard shared by the pre-Environment job and the launcher. It never opens a connection. */
 export function validateRequest(source) {
@@ -42,10 +43,11 @@ function vercelToken(value) { return typeof value === 'string' && /^[\x21-\x7e]{
 /** Constructs a fixed executable/target and an explicit child environment, without side effects. */
 export function runtimeInvocation(source, classes) {
   const request = validateRequest(source);
-  if (!ownerPassword(source.DATABASE_PASSWORD) || !vercelToken(source.CP_VERCEL_TOKEN)
-      || typeof source.JAVA_HOME !== 'string' || !isAbsolute(source.JAVA_HOME)
-      || typeof source.RUNNER_TEMP !== 'string' || !isAbsolute(source.RUNNER_TEMP)
-      || typeof source.PATH !== 'string' || !source.PATH) throw Error('RUNTIME_LAUNCH_CONFIGURATION_INVALID');
+  if (!ownerPassword(source.DATABASE_PASSWORD)) throw Error('RUNTIME_OWNER_PASSWORD_INVALID');
+  if (!vercelToken(source.CP_VERCEL_TOKEN)) throw Error('RUNTIME_VERCEL_TOKEN_INVALID');
+  if (typeof source.JAVA_HOME !== 'string' || !isAbsolute(source.JAVA_HOME)) throw Error('RUNTIME_JAVA_HOME_INVALID');
+  if (typeof source.RUNNER_TEMP !== 'string' || !isAbsolute(source.RUNNER_TEMP)) throw Error('RUNTIME_RUNNER_TEMP_INVALID');
+  if (typeof source.PATH !== 'string' || !source.PATH) throw Error('RUNTIME_PATH_INVALID');
   const expected = join(resolve(source.RUNNER_TEMP), ROOT_FOLDER, 'classes');
   if (typeof classes !== 'string' || !isAbsolute(classes) || resolve(classes) !== expected
       || classes.includes(delimiter) || /[\x00\r\n]/.test(classes)) throw Error('RUNTIME_CLASSES_PATH_DENIED');
