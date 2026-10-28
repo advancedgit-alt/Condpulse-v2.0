@@ -1,6 +1,15 @@
 # Estado verificável - 28/10/2026
 
-## Conferencia da implantacao Vercel - 28/10/2026
+## Banco remoto atualizado - 28/10/2026
+
+- Projeto exclusivo rpnrqfrfwywglvyykgrg, pooler de sessao Sao Paulo, commit revisado ace821b425cb953c0007e574009b0963ada0dddc (CI40629723997 verde). O responsavel cadastrou CP_DATABASE_OPERATIONS_PASSWORD no Environment restrito; nenhum valor foi lido ou copiado pelo agente.
+- Inspect40728907835 passou: JDBC/TLS verify-full e atestacao elegivel, sem escrita. Backup fisico registrado no painel em28/10/2026 07:48:47UTC e nenhuma operacao DDL concorrente na conferencia anterior; isso nao comprova restore nem atende por si so o RPO do PRD.
+- Baseline40730350359 passou, com baselineCreated=true e codes=[]; leitura remota confirmou apenas o marcador oficial BASELINE002. Migrate40730656930 passou com validated=true, target005 e migrationsExecuted=3.
+- Replay40731398800 passou com validated=true, target005 e migrationsExecuted=0. JAR e CA mantiveram os mesmos SHA256 nas quatro operacoes; registro sanitizado: evidence/database-operations-20261028.json.
+- Leitura remota confirmou BASELINE002 e SQL003/004/005 bem-sucedidas; checksums109362481/-481413482/1796503302. As16 tabelas da aplicacao (excluindo o historico Flyway) mantem ENABLE/FORCE RLS e ownership postgres. cp_api, cp_worker e cp_onboarding sao grupos NOLOGIN, sem SUPERUSER/BYPASSRLS. Nenhum login runtime/onboarding foi provisionado nesta etapa.
+- O bloqueio seguinte e o transporte seguro das credenciais runtime para o projeto Vercel. A API permanece sem configuracao de banco; BFF e reservas continuam desligados. Baseline/migrations nao cadastram condominio, unidades, usuarios ou vinculos, nem homologam Auth real.
+
+## Registro anterior da implantacao Vercel - 28/10/2026
 
 - PR#9 integrada em6618dd6e6414eec0160f646d9c033803708fbbe6: CI40626727663 passou no head28d95c4 e CI40627068294 passou no merge.51 Vitest,21 jornadas Chromium e os gates Java/JDBC/imagens ficaram verdes. Deployment dpl_2KvNRRECaeDyNmp89xc7K8eHzJND observado Ready/source6618dd6. As correcoes de login/pool/porta descritas abaixo ja estao integradas; o bloqueio real de credenciais/migrations permanece.
 - Novo executor manual de banco preparado em .github/workflows/database-operations.yml, com inspect/baseline/migrate separados, SHA revisado exato, ACKs e alvo fixo. Nenhuma operacao desse executor foi executada. Source/JAR, CA e guard Flyway sao conferidos separadamente da API. Procedimento: EXECUTOR_BANCO.md.

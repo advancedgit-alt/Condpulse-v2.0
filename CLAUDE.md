@@ -22,15 +22,15 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 - Java25/Spring Boot4.1.2, monólito modular com API/BFF e worker separados.
 - React/TypeScript/Vite na web e React Native/Expo no mobile.
 - PostgreSQL como banco único principal, projetos Supabase exclusivos em São Paulo.
-- Supabase Auth/Storage; aplicação no Coolify dedicado. Sem MongoDB inicial.
+- Supabase Auth/Storage; homologacao da aplicacao na Vercel conforme ADR-0005, solicitada pelo responsavel. Coolify dedicado permanece alternativa. Sem MongoDB inicial.
 - Flyway controla migrations. Runtime sem DDL/SUPERUSER/BYPASSRLS.
 
 ## Estado e pendências
 - docs/STATUS.md registra evidências e limitações.
 - Projeto Condpulse-v2.0 encontrado ativo em São Paulo: rpnrqfrfwywglvyykgrg, PostgreSQL17.11.0.003.
-- V001/V002 aplicadas atomicamente e atestadas no remoto pela exceção ADR-0003; baseline Flyway oficial ainda pendente.
+- V001/V002 aplicadas atomicamente e atestadas pela excecao ADR-0003; baseline Flyway oficial002 e V003/V004/V005 aplicados e validados remotamente em28/10/2026. Evidencias e runs em docs/STATUS.md.
 - Três buckets privados e política de Auth configurados; conferir manifesto e STATUS.
-- BFF permanece desligado até configuração e homologação. V003 ainda não aplicada remotamente.
-- Segundo ambiente, SMTP, host dedicado, cofre, PITR, restore e parceiro físico pendentes.
+- BFF permanece desligado ate configuracao e homologacao. Login runtime e configuracao JDBC da Vercel ainda pendentes.
+- Segundo ambiente, SMTP, worker continuo, cofre de runtime, PITR, restore e parceiro fisico pendentes.
 - Código de fundação não equivale ao produto P0/P1 implementado/homologado.
 

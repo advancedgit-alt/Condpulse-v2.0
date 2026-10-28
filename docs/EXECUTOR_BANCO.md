@@ -1,8 +1,16 @@
 # Executor manual do banco CondPulse
 
-Pacote preparado; nenhum job deste executor foi executado e nenhuma alteracao remota
-foi feita por esta entrega. Nao reseta senha, nao cria login, nao importa dados e nao
-configura a API. O alvo unico e o projeto `rpnrqfrfwywglvyykgrg`, Sao Paulo.
+Executor revisado e executado remotamente em28/10/2026 no commit ace821b425cb953c0007e574009b0963ada0dddc:
+inspect40728907835, baseline40730350359, migrate40730656930 e replay40731398800 passaram. O baseline
+oficial002 e V003/V004/V005 estao aplicados e validados; evidencias em STATUS.md.
+Nao reseta senha, nao cria login, nao importa dados e nao configura a API. O alvo
+unico e o projeto `rpnrqfrfwywglvyykgrg`, Sao Paulo.
+
+O inspect deste CLI atesta exclusivamente o bootstrap legado antes do baseline.
+Com o historico oficial presente, nao reutilizar esse inspect para validar o estado
+pos-migracao. O guard de migrate valida o historico/checksums e admite replay zero
+quando005 ja foi aplicada. A sequencia abaixo registra o procedimento revisado;
+nao repetir baseline nem apagar historico para reproduzi-la.
 
 O workflow `.github/workflows/database-operations.yml` oferece tres operacoes
 independentes. `inspect` e o padrao e nao escreve. `baseline` chama exclusivamente o
@@ -14,6 +22,9 @@ Nao existe transicao automatica inspect -> baseline -> migrate.
 
 O GitHub Environment exclusivo `condpulse-database-operations` foi preparado vazio,
 com Selected branches: somente `ccr-5e725112-3x8hyg`, uma branch e nenhuma tag.
+O responsavel cadastrou posteriormente CP_DATABASE_OPERATIONS_PASSWORD nesse
+Environment; o agente nao leu nem copiou seu valor. As operacoes acima usaram esse
+segredo somente no passo operacional. O registro vazio descreve a preparacao inicial.
 Nao possui reviewers obrigatorios nem tempo de espera. A revisao do codigo em PR,
 o commit exato, a branch permitida e os ACKs de cada escrita sao os controles desta
 entrega. Politicas organizacionais adicionais so se aplicam quando ja existentes;

@@ -1,0 +1,86 @@
+{
+  "project": "CondPulse",
+  "projectRef": "rpnrqfrfwywglvyykgrg",
+  "sourceCommit": "ace821b425cb953c0007e574009b0963ada0dddc",
+  "sourceTree": "bb173174691f3ac7d9c521cb506171a8ec722512",
+  "sourceCiRun": 40629723997,
+  "jarSha256": "ce206739694897e5cdaf81215d07dd9b996b8f0f9909919c1748669057ea7ce1",
+  "caSha256": "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa",
+  "transport": {
+    "host": "aws-1-sa-east-1.pooler.supabase.com",
+    "port": 5432,
+    "mode": "session",
+    "sslmode": "verify-full",
+    "credentialValueAccessedByAgent": false
+  },
+  "backupObservation": {
+    "kind": "physical",
+    "snapshotUtc": "2026-10-28T07:48:47Z",
+    "observedInAuthenticatedDashboard": true,
+    "restoreExercised": false,
+    "includesStorageObjects": false
+  },
+  "operations": [
+    {
+      "mode": "inspect",
+      "run": 40728907835,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40728907835",
+      "conclusion": "success",
+      "result": {
+        "eligible": true,
+        "baselineCreated": false,
+        "fingerprint": "76ba856f63a7c7f73d308e0933300b81d85da6def54a40cc1c8dc48b49cd6ecf",
+        "codes": []
+      }
+    },
+    {
+      "mode": "baseline",
+      "run": 40730350359,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40730350359",
+      "completedAtUtc": "2026-10-28T16:54:09Z",
+      "conclusion": "success",
+      "result": {
+        "eligible": true,
+        "baselineCreated": true,
+        "fingerprint": "76ba856f63a7c7f73d308e0933300b81d85da6def54a40cc1c8dc48b49cd6ecf",
+        "codes": []
+      }
+    },
+    {
+      "mode": "migrate",
+      "run": 40730656930,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40730656930",
+      "completedAtUtc": "2026-10-28T16:56:46Z",
+      "conclusion": "success",
+      "result": { "migrated": true, "validated": true, "target": "005", "migrationsExecuted": 3 }
+    },
+    {
+      "mode": "migrate-replay",
+      "run": 40731398800,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40731398800",
+      "completedAtUtc": "2026-10-28T17:01:03Z",
+      "conclusion": "success",
+      "result": { "migrated": true, "validated": true, "target": "005", "migrationsExecuted": 0 }
+    }
+  ],
+  "remoteReadback": {
+    "history": [
+      { "version": "002", "type": "BASELINE", "checksum": null, "success": true },
+      { "version": "003", "type": "SQL", "checksum": 109362481, "success": true },
+      { "version": "004", "type": "SQL", "checksum": -481413482, "success": true },
+      { "version": "005", "type": "SQL", "checksum": 1796503302, "success": true }
+    ],
+    "applicationTablesExcludingFlywayHistory": 16,
+    "allApplicationTablesRlsEnabledAndForced": true,
+    "allApplicationTablesOwnedByPostgres": true,
+    "groups": ["cp_api", "cp_worker", "cp_onboarding"],
+    "allGroupsNoLoginNoSuperuserNoBypassRls": true,
+    "runtimeAndOnboardingLogins": 0
+  },
+  "limitations": [
+    "This confirms the isolated executor JDBC/TLS path, not the Vercel container JDBC path.",
+    "No runtime or onboarding login, condominium, unit, membership or real business fixture was created.",
+    "No Vercel runtime secret, BFF activation or real Auth journey was completed by these operations.",
+    "A physical backup record does not prove restore or PRD RPO/RTO acceptance."
+  ]
+}
