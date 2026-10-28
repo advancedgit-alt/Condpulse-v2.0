@@ -19,6 +19,7 @@
   "rewrites": [
     { "source": "/auth/:path*", "destination": { "service": "api" } },
     { "source": "/v1/:path*", "destination": { "service": "api" } },
+    { "source": "/actuator/health/readiness", "destination": { "service": "api" } },
     { "source": "/(.*)", "destination": { "service": "web" } }
   ],
   "headers": [{
