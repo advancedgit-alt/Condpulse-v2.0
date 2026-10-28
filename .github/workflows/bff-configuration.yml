@@ -1,0 +1,87 @@
+name: CondPulse BFF configuration (manual, flags remain off)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: inspect consulta; apply prepara chaves BFF sem habilitar login ou reservas
+        type: choice
+        options: [inspect, apply]
+        default: inspect
+        required: true
+      generation:
+        description: UUID canonico da geracao revisada de chaves BFF
+        type: string
+        required: true
+      expected_commit:
+        description: SHA completo revisado da branch principal (40 hex)
+        type: string
+        required: true
+      bff_ack:
+        description: Somente apply; ACK completo obtido na inspecao
+        type: string
+        required: false
+      maintenance_confirmed:
+        description: Aplicacao revisada e janela sem outro provisionamento ou edicao de ambiente
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: condpulse-database-operations-rpnrqfrfwywglvyykgrg
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Validate reviewed manual request before releasing environment secrets
+        env:
+          CP_BFF_CONFIG_OPERATION: ${{ inputs.operation }}
+          CP_BFF_CONFIG_GENERATION: ${{ inputs.generation }}
+          CP_BFF_CONFIG_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_BFF_CONFIG_SOURCE_COMMIT: ${{ github.sha }}
+          CP_BFF_CONFIG_ACK: ${{ inputs.bff_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: |
+          node --input-type=module <<'REQUEST_GATE'
+          import {validateRequest} from './infra/scripts/bff-configuration/stage.mjs';
+          try { validateRequest(process.env); console.log('BFF_REQUEST_APPROVED_FOR_ENVIRONMENT_GATE'); }
+          catch { console.error('BFF_MANUAL_REQUEST_DENIED'); process.exitCode=1; }
+          REQUEST_GATE
+  bff-configuration:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    environment:
+      name: condpulse-database-operations
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Verify BFF helper and workflow policy without managed credentials
+        run: node --test tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
+      - name: Inspect or stage BFF credentials without activation
+        env:
+          CP_VERCEL_TOKEN: ${{ secrets.CP_VERCEL_TOKEN }}
+          CP_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CP_SUPABASE_PUBLISHABLE_KEY }}
+          CP_BFF_CONFIG_OPERATION: ${{ inputs.operation }}
+          CP_BFF_CONFIG_GENERATION: ${{ inputs.generation }}
+          CP_BFF_CONFIG_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_BFF_CONFIG_SOURCE_COMMIT: ${{ github.sha }}
+          CP_BFF_CONFIG_ACK: ${{ inputs.bff_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: node infra/scripts/bff-configuration/stage.mjs

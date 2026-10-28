@@ -1,5 +1,12 @@
 # Estado verificável - 28/10/2026
 
+## Preparação de autenticação BFF — CP-009/CP-066
+
+- Executor manual separado em `.github/workflows/bff-configuration.yml`, sem DDL, senha do banco, escrita Auth, deployment ou alteração de flags. Prepara duas chaves Secret de32bytes distintas e uma Config publicável somente no projeto Vercel CondPulse, após inspect/revisão/ACK/apply. Procedimento: [CONFIGURACAO_BFF.md](CONFIGURACAO_BFF.md).
+- Chaves permanecem no runner/cofre, sem arquivo ou log. Estado parcial/estrangeiro, paginação, overrides, origem/issuer divergente e flags habilitadas bloqueiam o helper; POST sem upsert/retry e erro posterior à tentativa exige reconciliação. Reinspeção de Secrets comprova somente metadados.
+- SELECT remoto agregado, somente leitura, confirmou1 identidade Auth confirmada/não banida e1 conta local, mas0 condomínios, unidades, vínculos e recibos de onboarding. Nenhum dado pessoal individual foi consultado. O piloto exige manifesto real aprovado e principal operacional separado; a CLI não cria usuários Auth.
+- Nenhuma operação remota deste novo executor foi realizada nesta preparação. BFF/reservas continuam false, Auth real/onboarding e aceite de produto continuam pendentes. Resultados de revisão/CI por source serão registrados na PR antes do merge.
+
 ## API JDBC verificada após inicialização — CP-009/CP-066
 
 - O responsável ativou SSL enforcement no projeto exclusivo `rpnrqfrfwywglvyykgrg`; o painel confirmou a opção ligada e o projeto `ACTIVE_HEALTHY`. O guard TLS foi preservado. O JDBC continua com CA e hostname verificados até o pooler; a checagem `pg_stat_ssl` confirmou TLS no trecho backend. A política de verificação de CA/hostname feita pelo próprio pooler não foi atestada.
