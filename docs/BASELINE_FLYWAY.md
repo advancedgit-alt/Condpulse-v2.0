@@ -1,7 +1,7 @@
 # Transição do bootstrap para Flyway
 
 Operação única da ADR-0003 no projeto CondPulse `rpnrqfrfwywglvyykgrg`, São Paulo.
-O executor está separado da API e não aplica V003. O remoto ainda não recebeu baseline.
+O executor está separado da API e não aplica V003/V004/V005. O remoto ainda não recebeu baseline.
 
 ## O que foi conferido
 
@@ -86,14 +86,16 @@ retroativos: a equivalência é demonstrada pela atestação, não pelo marcador
 6. Registrar saída, commit/digests, aprovador, ambiente e conferência do marcador.
    Remover ACK/credenciais temporárias conforme a política do cofre. Não reutilizar
    este executor em um ambiente novo: banco novo segue o migrate normal desde V001.
-7. Somente depois desse aceite, executar validate/migrate paraV003 pelo job separado
-   descrito em DEPLOY_COOLIFY.md. O baseline não habilita BFF ou reservas.
+7. Somente depois desse aceite, executar validate/migrate para V003/V004/V005 pelo
+   job separado de [DEPLOY_COOLIFY.md](DEPLOY_COOLIFY.md), ou pelo executor manual
+   [EXECUTOR_BANCO.md](EXECUTOR_BANCO.md) no GitHub Actions, separado da aplicação
+   Vercel. O baseline não habilita BFF ou reservas.
 
-Após o baseline, `validate` isolado sinaliza V003 ainda pendente. Conferir que essa
-é a única migration pendente e o único diagnóstico de validação. O migrador normal
-mantém validateOnMigrate habilitado, aplica V003 e então passa na validação estrita
-e no replay sem alterações. Não ignorar erros de checksum, migrations ausentes ou
-qualquer outro diagnóstico para liberar a execução.
+Após o baseline, `validate` isolado deve apontar apenas V003/V004/V005 pendentes,
+com o diagnóstico RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED para essas versões.
+O migrador mantém validateOnMigrate habilitado, aplica as migrations revisadas e
+exige validação estrita e replay sem alterações. Não ignorar erros de checksum,
+migrations ausentes ou qualquer outro diagnóstico para liberar a execução.
 
 ## Falha e recuperação
 

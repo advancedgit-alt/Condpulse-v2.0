@@ -1,7 +1,7 @@
 # Homologacao integrada da sessao residencial
 
 Esta etapa prepara o ambiente de ensaio. Nao publica a aplicacao nem aplica baseline,
-V003, contas, vinculos ou fixtures no Supabase. A stack base continua com BFF e reservas
+V003/V004/V005, contas, vinculos ou fixtures no Supabase. A stack base continua com BFF e reservas
 desligados. A homologacao com Supabase Auth real permanece um gate separado.
 
 ## Stack de homologacao
@@ -26,14 +26,20 @@ entropia, autenticidade da chave publicavel ou posse do dominio.
 
 Antes de ligar os processos, conferir:
 
-1. Baseline oficial 002 atestado no projeto existente, depois V003 pelo migrador
-   separado. Um projeto novo recebe V001/V002/V003 pelo migrate normal.
+1. Baseline oficial 002 atestado no projeto existente, depois V003/V004/V005 pelo
+   migrador separado. Um projeto novo recebe V001 a V005 pelo migrate normal.
 2. Identidade runtime membro somente de cp_api e sem DDL/SUPERUSER/BYPASSRLS;
    identidade DDL nunca entra na API. CA validada e JDBC com verify-full.
 3. Conta de teste aprovada em platform.accounts, com UUID do Auth, status ACTIVE,
    vinculo e unidade explicitos. Criar usuario no Auth nao concede esses acessos.
    As fixtures do CI nao sao um procedimento de onboarding remoto.
 4. Imagens aprovadas por digest, ambiente exclusivo, cofre, backup e ingresso restrito.
+
+Para a implantacao Vercel, o procedimento de banco esta em
+[EXECUTOR_BANCO.md](EXECUTOR_BANCO.md): workflow manual GitHub Actions, separado
+da API e com cofre proprio. Preparar esse executor nao comprova execucao remota,
+credenciais runtime ou Auth real. A alternativa Docker Compose/Coolify abaixo
+permanece disponivel com imagens e ambiente aprovados.
 
 Renderizar com Compose5.2.0, sem persistir ou imprimir a configuracao expandida:
 
@@ -87,7 +93,7 @@ Nao marcar CP-011, CP-020 ou lancamento completos com base neste runner.
 
 ## Limites remanescentes
 
-Credenciais JDBC/CA/cofre e executor disponivel, baseline/V003 remotos, dominio HTTPS,
+Credenciais JDBC/CA/cofre, execucao do baseline e V003/V004/V005 remotos, dominio HTTPS,
 host dedicado, Auth/refresh/logout reais sob falha de rede, onboarding aprovado,
 rate limiting de producao, SMTP, MFA, segundo ambiente e backup/restore continuam
 dependencias da liberacao. A previa HTTP em 127.0.0.1:4173 serve para consultar a
