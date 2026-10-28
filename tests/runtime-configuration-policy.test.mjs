@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import {join, resolve, delimiter} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {validateRequest, runtimeInvocation, launchRuntime} from '../infra/scripts/runtime-configuration/launch.mjs';
 
-const workflow = readFileSync(new URL('../.github/workflows/runtime-configuration.yml', import.meta.url), 'utf8');
+const workflow = readFileSync(new URL('../.github/workflows/runtime-configuration.yml', import.meta.url), 'utf8').replace(/\r\n/g,'\n');
 const sha = 'a'.repeat(40), fingerprint = 'b'.repeat(64), project = 'rpnrqfrfwywglvyykgrg';
 const generation = '11000000-0000-4000-8000-000000000001';
 const request = () => ({GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REPOSITORY: 'advancedgit-alt/Condpulse-v2.0',
@@ -67,18 +69,62 @@ test('child credentials travel only through a minimal explicit environment with 
 test('classes and invocation cannot be redirected and process failure remains an unknown outcome', () => {
   for (const value of ['relative', resolve('untrusted-classes'), `${classes}${delimiter}untrusted`])
     assert.throws(() => runtimeInvocation(source(), value), /RUNTIME_CLASSES_PATH_DENIED/);
-  assert.throws(() => runtimeInvocation({...source(), DATABASE_PASSWORD: ''}, classes), /RUNTIME_LAUNCH_CONFIGURATION_INVALID/);
-  assert.throws(() => runtimeInvocation({...source(), CP_VERCEL_TOKEN: 'untrusted\nsecret'}, classes), /RUNTIME_LAUNCH_CONFIGURATION_INVALID/);
+  assert.throws(() => runtimeInvocation({...source(), DATABASE_PASSWORD: ''}, classes), /RUNTIME_OWNER_PASSWORD_INVALID/);
+  assert.throws(() => runtimeInvocation({...source(), CP_VERCEL_TOKEN: 'untrusted\nsecret'}, classes), /RUNTIME_VERCEL_TOKEN_INVALID/);
   const opaque='SYNTHETIC_OPAQUE_TOKEN_~+/=:_-';
   assert.equal(runtimeInvocation({...source(),CP_VERCEL_TOKEN:opaque},classes).env.CP_VERCEL_TOKEN,opaque);
   for(const token of ['short','SYNTHETIC_TOKEN_\rINJECTED','SYNTHETIC_TOKEN_\u0000INJECTED','SYNTHETIC_TOKEN_é_UNSUPPORTED'])
-    assert.throws(()=>runtimeInvocation({...source(),CP_VERCEL_TOKEN:token},classes),/RUNTIME_LAUNCH_CONFIGURATION_INVALID/);
+    assert.throws(()=>runtimeInvocation({...source(),CP_VERCEL_TOKEN:token},classes),/RUNTIME_VERCEL_TOKEN_INVALID/);
   assert.throws(() => launchRuntime(source(), ['--classes', classes, '--apply']), /RUNTIME_ARGUMENTS_DENIED/);
   let calls = 0;
   const fake = (executable, args, options) => { calls++; assert.equal(options.env.CP_RUNTIME_OPERATION, 'inspect'); return {status: 0}; };
   assert.deepEqual(launchRuntime(source(), ['--classes', classes], fake), {exitCode: 0, unknown: false});
   assert.equal(calls, 1);
   assert.deepEqual(launchRuntime(source(), ['--classes', classes], () => ({status: null, signal: 'SIGTERM'})), {exitCode: 1, unknown: true});
+});
+
+test('launch rejects each configuration class with a fixed code before spawning without normalizing credentials',()=>{
+  const cases=[
+    [{DATABASE_PASSWORD:''},'RUNTIME_OWNER_PASSWORD_INVALID'],
+    [{DATABASE_PASSWORD:'SYNTHETIC_OWNER\nPRIVATE_VALUE'},'RUNTIME_OWNER_PASSWORD_INVALID'],
+    [{CP_VERCEL_TOKEN:' SYNTHETIC_PRIVATE_TOKEN_~+/='},'RUNTIME_VERCEL_TOKEN_INVALID'],
+    [{CP_VERCEL_TOKEN:'SYNTHETIC_PRIVATE_TOKEN_~+/= '},'RUNTIME_VERCEL_TOKEN_INVALID'],
+    [{CP_VERCEL_TOKEN:'SYNTHETIC_PRIVATE TOKEN_~+/='},'RUNTIME_VERCEL_TOKEN_INVALID'],
+    [{CP_VERCEL_TOKEN:'SYNTHETIC_PRIVATE_TOKEN\nINJECTED'},'RUNTIME_VERCEL_TOKEN_INVALID'],
+    [{JAVA_HOME:'SYNTHETIC_PRIVATE_RELATIVE_JAVA'},'RUNTIME_JAVA_HOME_INVALID'],
+    [{RUNNER_TEMP:'SYNTHETIC_PRIVATE_RELATIVE_TEMP'},'RUNTIME_RUNNER_TEMP_INVALID'],
+    [{PATH:''},'RUNTIME_PATH_INVALID'],
+  ];
+  let spawned=0;
+  for(const [override,code] of cases) {
+    assert.throws(()=>launchRuntime({...source(),...override},['--classes',classes],()=>{spawned++;return {status:0};}),error=>{
+      assert.equal(error.message,code);
+      assert.doesNotMatch(error.stack,/SYNTHETIC_|PRIVATE_VALUE|INJECTED/);
+      return true;
+    });
+  }
+  assert.equal(spawned,0);
+  const password=' SYNTHETIC_OWNER_PASSWORD_UNCHANGED ';
+  const token='SYNTHETIC_TOKEN_OPAQUE_~+/=';
+  const invocation=runtimeInvocation({...source(),DATABASE_PASSWORD:password,CP_VERCEL_TOKEN:token},classes);
+  assert.equal(invocation.env.DATABASE_PASSWORD,password);assert.equal(invocation.env.CP_VERCEL_TOKEN,token);
+});
+
+test('CLI diagnostic emits only its allowlisted code without either credential, path, length or error details',()=>{
+  const launcher=new URL('../infra/scripts/runtime-configuration/launch.mjs',import.meta.url);
+  const cases=[
+    [{DATABASE_PASSWORD:'SYNTHETIC_OWNER\nPRIVATE_VALUE'},'RUNTIME_OWNER_PASSWORD_INVALID'],
+    [{CP_VERCEL_TOKEN:'SYNTHETIC_TOKEN_WITH_TRAILING_SPACE '},'RUNTIME_VERCEL_TOKEN_INVALID'],
+    [{JAVA_HOME:'SYNTHETIC_PRIVATE_RELATIVE_JAVA'},'RUNTIME_JAVA_HOME_INVALID'],
+    [{RUNNER_TEMP:'SYNTHETIC_PRIVATE_RELATIVE_TEMP'},'RUNTIME_RUNNER_TEMP_INVALID'],
+    [{PATH:''},'RUNTIME_PATH_INVALID'],
+  ];
+  for(const [override,code] of cases) {
+    const result=spawnSync(process.execPath,[fileURLToPath(launcher),'--classes',classes],
+      {env:{...source(),...override},encoding:'utf8',timeout:10000,windowsHide:true});
+    assert.equal(result.status,1);assert.equal(result.stdout,'');assert.equal(result.stderr.trim(),code);
+    assert.doesNotMatch(result.stderr,/SYNTHETIC_|PRIVATE_VALUE|Stack|length|\d/);
+  }
 });
 
 test('workflow is manual and shares the migration lock and protected Environment without secret access during build', () => {
