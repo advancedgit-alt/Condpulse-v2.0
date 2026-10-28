@@ -149,6 +149,17 @@
             "bash tests/web/proxy-smoke.sh"
           ],
           "scope": "Jobs foundation e web passaram com smoke da imagem API e troca real do IP do proxy. O job de configuracao no mesmo head falhou por normalizacao de Compose antigo; a correcao fixa Compose5.2.0 e sua evidencia final fica na PR5. Scanner/SBOM e promocao pendentes. Nao constitui aceite integral do ticket."
+        },
+        {
+          "commit": "5d76d15800a8a8378f78beca8b7f0a6809ca41d0",
+          "environment": "GitHub Actions/Ubuntu/Java25/PostgreSQL17.11 descartavel/HTTPS loopback/Auth sandbox",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40615865225",
+          "commands": [
+            "node tests/integration/https-bff-smoke.mjs",
+            "node --test tests/integration/https-bff-guard.test.mjs",
+            "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
+          ],
+          "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
         }
       ]
     },
@@ -182,6 +193,17 @@
             "npm run test:e2e"
           ],
           "scope": "Cliente web de BFF com CSRF em memória, uma renovação condicionada ao código explícito, sem tokens persistidos; testes de protocolo e logout. Auth real/HTTPS e limitação de tentativas pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "5d76d15800a8a8378f78beca8b7f0a6809ca41d0",
+          "environment": "GitHub Actions/Ubuntu/Java25/PostgreSQL17.11 descartavel/HTTPS loopback/Auth sandbox",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40615865225",
+          "commands": [
+            "node tests/integration/https-bff-smoke.mjs",
+            "node --test tests/integration/https-bff-guard.test.mjs",
+            "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
+          ],
+          "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
         }
       ]
     },
@@ -551,6 +573,17 @@
           "environment": "GitHub Actions/PostgreSQL17.11 descartável",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40602994695",
           "scope": "PostgreSQL17.11, SQL,24 JDBC reais, replay e pool; carga e ambiente gerenciado pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "5d76d15800a8a8378f78beca8b7f0a6809ca41d0",
+          "environment": "GitHub Actions/Ubuntu/Java25/PostgreSQL17.11 descartavel/HTTPS loopback/Auth sandbox",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40615865225",
+          "commands": [
+            "node tests/integration/https-bff-smoke.mjs",
+            "node --test tests/integration/https-bff-guard.test.mjs",
+            "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
+          ],
+          "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
         }
       ]
     },
@@ -668,6 +701,17 @@
             "bash tests/web/proxy-smoke.sh"
           ],
           "scope": "Somente pacote e ensaio de imagem em ambiente descartavel; nao houve push ao registro, migration remota ou release promovida. Nao constitui aceite integral do ticket."
+        },
+        {
+          "commit": "5d76d15800a8a8378f78beca8b7f0a6809ca41d0",
+          "environment": "GitHub Actions/Ubuntu/Java25/PostgreSQL17.11 descartavel/HTTPS loopback/Auth sandbox",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40615865225",
+          "commands": [
+            "node tests/integration/https-bff-smoke.mjs",
+            "node --test tests/integration/https-bff-guard.test.mjs",
+            "node --test tests/release-config.test.mjs tests/release-compose.test.mjs"
+          ],
+          "scope": "Ensaio HTTPS com API/Security/JWT/cifra/JDBC reais passou: login/contexto, reserva/replay/cancelamento, refresh/logout e vinculo revogado; Compose de homologacao e guards conferidos. Auth/proxy/fixtures sinteticos; Supabase real, baseline/V003 remotos, host/cofre/HTTPS, publicacao e aceite integral permanecem pendentes."
         }
       ]
     },
