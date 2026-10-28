@@ -123,7 +123,7 @@ class BootstrapBaselineJdbcTest {
     }
 
     @Test
-    void officialBaselineWritesOnlyVersionTwoAndSeparateMigrateAppliesV003() throws Exception {
+    void officialBaselineWritesOnlyVersionTwoAndSeparateMigrateAppliesReviewedMigrations() throws Exception {
         var inspected = BootstrapBaseline.execute(config(), "inspect", "");
         assertTrue(inspected.eligible());
         assertFalse(inspected.baselineCreated());
@@ -144,19 +144,23 @@ class BootstrapBaselineJdbcTest {
             .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true)
             .validateMigrationNaming(true).validateOnMigrate(true).load();
         // Antes da primeira migracao, a validacao estrita deve apontar somente
-        // V003 pendente. Isso e diferente de ignorar validacao ou drift aplicado.
+        // V003/V004/V005 pendentes. Nunca ignorar validacao ou drift aplicado.
         var beforeMigration = flyway.validateWithResult();
         assertFalse(beforeMigration.validationSuccessful);
-        assertEquals(1, beforeMigration.invalidMigrations.size());
-        var unapplied = beforeMigration.invalidMigrations.getFirst();
-        assertEquals(BigInteger.valueOf(3), new BigInteger(unapplied.version));
-        assertEquals(CoreErrorCode.RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED, unapplied.errorDetails.errorCode);
+        assertEquals(3, beforeMigration.invalidMigrations.size());
+        assertEquals(List.of(BigInteger.valueOf(3),BigInteger.valueOf(4),BigInteger.valueOf(5)),
+            beforeMigration.invalidMigrations.stream().map(m->new BigInteger(m.version)).sorted().toList());
+        for(var unapplied:beforeMigration.invalidMigrations)
+            assertEquals(CoreErrorCode.RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED, unapplied.errorDetails.errorCode);
         var pending = flyway.info().pending();
-        assertEquals(1, pending.length);
-        assertEquals(BigInteger.valueOf(3), new BigInteger(pending[0].getVersion().toString()));
-        assertEquals(1, flyway.migrate().migrationsExecuted);
+        assertEquals(3, pending.length);
+        assertEquals(List.of(BigInteger.valueOf(3),BigInteger.valueOf(4),BigInteger.valueOf(5)),
+            java.util.Arrays.stream(pending).map(m->new BigInteger(m.getVersion().toString())).sorted().toList());
+        assertEquals(3, flyway.migrate().migrationsExecuted);
         flyway.validate();
         assertTrue(relationExists("platform.web_sessions"));
+        assertTrue(relationExists("platform.auth_rate_limits"));
+        assertTrue(relationExists("platform.onboarding_runs"));
         assertEquals(1L, scalarLong("SELECT count(*) FROM platform.flyway_schema_history WHERE type='SQL' AND version IN ('003','3') AND success AND checksum IS NOT NULL"));
         assertEquals(0, flyway.migrate().migrationsExecuted, "Replay nao duplica migrations");
     }

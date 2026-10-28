@@ -12,3 +12,4 @@
 .section-index,.header-breadcrumb,.context-badge span,.aside-note,.guide-card ol,.guide-card>p,.timezone-note,.reservation-filter>span,.reservation-info small,.reservation-actions>span,.policy-summary dt,.field-help,.status-neutral,.login-footer,.security-caption,.app-footer{color:var(--muted)}
 .sidebar-bottom p{color:#93aebe}
 .eyebrow,.text-button:not(.danger-text){color:#006b72}
+.rate-limit-copy{font-size:.875rem;display:flex;align-items:flex-start;gap:8px}

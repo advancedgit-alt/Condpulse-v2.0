@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError } from '../api/client';
+import { useCooldown } from './cooldown';
 
 export function Brand({ light = false }: { light?: boolean }) {
   return <span className={`brand${light ? ' brand-light' : ''}`} aria-label="CondPulse">
@@ -35,9 +36,20 @@ export function errorMessage(error: unknown): string {
 }
 
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
-  return <div className="error-state"><Notice tone="error">{errorMessage(error)}</Notice>
-    {retry && <button className="button button-secondary" type="button" onClick={retry}>Tentar novamente</button>}
+  const remaining = useCooldown(error);
+  return <div className="error-state">{error instanceof ApiError && error.status === 429
+    ? <RateLimitNotice error={error} remaining={remaining} /> : <Notice tone="error">{errorMessage(error)}</Notice>}
+    {retry && <button className="button button-secondary" type="button" disabled={remaining > 0} onClick={() => { if (remaining === 0) retry(); }}>Tentar novamente</button>}
   </div>;
+}
+
+export function RateLimitNotice({ error, remaining }: { error: ApiError; remaining: number }) {
+  return <Notice tone="warning"><p className="rate-limit-copy"><Icon name="clock" />{errorMessage(error)}</p>
+    <p className="rate-limit-copy" aria-hidden="true">{remaining > 0 ? `Nova tentativa em ${remaining} s.` : 'Você já pode tentar novamente.'}</p>
+    <span className="sr-only">{remaining > 0
+      ? `Aguarde até ${error.retryAfterSeconds ?? 60} segundos antes de tentar novamente. Nenhuma tentativa será enviada automaticamente.`
+      : 'A espera terminou. Você pode tentar novamente.'}</span>
+  </Notice>;
 }
 
 export function Empty({ title, children }: { title: string; children: ReactNode }) {

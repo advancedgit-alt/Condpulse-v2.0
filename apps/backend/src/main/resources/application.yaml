@@ -44,6 +44,7 @@ condpulse:
     origin: ${CP_BFF_ORIGIN:}
     publishable-key: ${CP_SUPABASE_PUBLISHABLE_KEY:}
     encryption-key: ${CP_BFF_ENCRYPTION_KEY:}
+    rate-limit-key: ${CP_BFF_RATE_LIMIT_KEY:}
     session-hours: ${CP_BFF_SESSION_HOURS:8}
   auth:
     issuer: ${CP_JWT_ISSUER:}

@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:condpulse:operational-onboarding:v1",
+  "title": "CondPulse — manifesto de onboarding operacional manual",
+  "description": "Entrada exclusiva do CLI isolado, operado manualmente por principal de banco autorizado e credencial própria no cofre. Não é uma API, não concede acesso por user_metadata, não comprova MFA de operadores e não demonstra implantação em produção. O CLI inspeciona por padrão; apply exige confirmação do fingerprint. Dados reais devem vir de fonte aprovada, nunca de fixtures. O parser limita o arquivo inteiro a 1 MiB, rejeita chaves JSON duplicadas, documentos adicionais e coerções de tipos. As validações semânticas de referências, unicidade por identificador, cobertura e regras também são obrigatórias no CLI.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectRef", "operationId", "tenant", "accounts", "units", "memberships", "amenities"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "projectRef": {
+      "type": "string",
+      "const": "rpnrqfrfwywglvyykgrg",
+      "description": "Esta versão aceita somente o projeto CondPulse explicitamente autorizado. Outros ambientes exigem revisão própria."
+    },
+    "operationId": {
+      "$ref": "#/$defs/uuid",
+      "description": "Identificador explícito e estável da operação. Reutilização com conteúdo divergente deve abortar, sem sobrescrever cadastros."
+    },
+    "tenant": { "$ref": "#/$defs/tenant" },
+    "accounts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 250,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/uuid" },
+      "description": "Subjects Auth fornecidos e previamente aprovados. O executor verifica existência, confirmação de e-mail, ausência de exclusão e de banimento vigente; não cria usuários Auth. Toda conta deve possuir ao menos um vínculo no manifesto. Contas existentes inativas não são reativadas automaticamente."
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 250,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/unit" },
+      "description": "IDs e rótulos devem ser únicos no manifesto. Cada unidade deve ser referenciada por ao menos um vínculo; não são geradas unidades de demonstração."
+    },
+    "memberships": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 500,
+      "uniqueItems": true,
+      "contains": {
+        "type": "object",
+        "required": ["role", "unitId"],
+        "properties": { "role": { "const": "MANAGER" }, "unitId": { "type": "null" } }
+      },
+      "minContains": 1,
+      "items": { "$ref": "#/$defs/membership" },
+      "description": "Exige ao menos um MANAGER explícito, sem unidade, como responsável designado. Cada ID e combinação accountId/unitId/role deve ser único. accountId e unitId devem referenciar as listas deste manifesto. O CLI valida a vigência e exige validUntil posterior a validFrom, quando informado. Não aceita permissões arbitrárias ou elevação por metadados."
+    },
+    "amenities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/amenity" },
+      "description": "IDs devem ser únicos. A política completa é explícita e validada pelo domínio de reservas. Áreas com aprovação exigida permanecem sujeitas às capacidades efetivamente implementadas."
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": { "const": "00000000-0000-0000-0000-000000000000" },
+      "description": "UUID explícito, canônico em minúsculas e diferente de zero. Nenhum ID é inventado pelo parser."
+    },
+    "cleanText": {
+      "type": "string",
+      "pattern": "^(?![\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000])(?!.*[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]$)[^\u0000-\u001F\u007F-\u009F]*$",
+      "description": "Texto sem caracteres de controle ou espaços externos segundo Character.isWhitespace/strip do Java. O parser não remove espaços silenciosamente."
+    },
+    "instant": {
+      "type": "string",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 40,
+      "pattern": "^(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.](?:[0-9]{1,6}|[0-9]{6}0{1,3}))?(?:[Zz]|[+-][0-9]{2}:[0-9]{2})$",
+      "description": "Instante ISO com precisão efetiva de até microssegundos. Dígitos adicionais somente zeros; o parser confirma data válida, ano de 0001 a 9999 e precisão preservada pelo PostgreSQL."
+    },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "timeZone"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "name": { "$ref": "#/$defs/cleanText", "minLength": 1, "maxLength": 160 },
+        "timeZone": {
+          "$ref": "#/$defs/cleanText",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Identificador presente em ZoneId.getAvailableZoneIds() no runtime aprovado. Não há fuso padrão implícito."
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "label": { "$ref": "#/$defs/cleanText", "minLength": 1, "maxLength": 40 }
+      }
+    },
+    "membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "accountId", "unitId", "displayName", "role", "validFrom", "validUntil"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "accountId": { "$ref": "#/$defs/uuid" },
+        "unitId": { "anyOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] },
+        "displayName": { "$ref": "#/$defs/cleanText", "minLength": 1, "maxLength": 160 },
+        "role": { "type": "string", "enum": ["RESIDENT", "RESPONSIBLE", "MANAGER"] },
+        "validFrom": { "$ref": "#/$defs/instant" },
+        "validUntil": { "anyOf": [{ "$ref": "#/$defs/instant" }, { "type": "null" }] }
+      },
+      "allOf": [{
+        "if": { "properties": { "role": { "const": "MANAGER" } }, "required": ["role"] },
+        "then": { "properties": { "unitId": { "type": "null" } } },
+        "else": { "properties": { "unitId": { "$ref": "#/$defs/uuid" } } }
+      }]
+    },
+    "amenity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "capacity", "bufferMinutes", "policyVersion", "feeCents", "approvalRequired", "policy"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "name": { "$ref": "#/$defs/cleanText", "minLength": 1, "maxLength": 160 },
+        "capacity": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "bufferMinutes": { "type": "integer", "minimum": 0, "maximum": 1440 },
+        "policyVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "feeCents": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 },
+        "approvalRequired": { "type": "boolean" },
+        "policy": { "$ref": "#/$defs/reservationPolicy" }
+      }
+    },
+    "reservationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "weekDays", "opensAt", "closesAt", "minimumLeadMinutes", "maximumAdvanceDays", "maximumDurationMinutes", "maximumActivePerUnit", "cancellationLeadMinutes"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "weekDays": {
+          "type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 }
+        },
+        "opensAt": { "type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" },
+        "closesAt": { "type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" },
+        "minimumLeadMinutes": { "type": "integer", "minimum": 0, "maximum": 525600 },
+        "maximumAdvanceDays": { "type": "integer", "minimum": 1, "maximum": 366 },
+        "maximumDurationMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
+        "maximumActivePerUnit": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "cancellationLeadMinutes": { "type": "integer", "minimum": 0, "maximum": 525600 }
+      },
+      "description": "Horário de abertura deve ser anterior ao fechamento. O domínio valida também dias, antecedência, duração, cota e cancelamento; nenhuma configuração é completada com valores presumidos."
+    }
+  }
+}

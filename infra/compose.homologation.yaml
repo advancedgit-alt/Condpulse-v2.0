@@ -7,4 +7,5 @@ services:
       CP_RESERVATIONS_ENABLED: "true"
       CP_SUPABASE_PUBLISHABLE_KEY: ${CP_SUPABASE_PUBLISHABLE_KEY:?Informe a chave publicavel do projeto de homologacao}
       CP_BFF_ENCRYPTION_KEY: ${CP_BFF_ENCRYPTION_KEY:?Obtenha a chave AES256 Base64 no cofre de homologacao}
+      CP_BFF_RATE_LIMIT_KEY: ${CP_BFF_RATE_LIMIT_KEY:?Obtenha a chave HMAC Base64 independente no cofre}
       CP_BFF_SESSION_HOURS: "8"

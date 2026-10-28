@@ -187,7 +187,10 @@ class ReservationSecurityIntegrationTest {
    return new BffSecurityConfigurer(sessions,settings,csrf);
   }
   @Bean BffController testBffController(WebSessionService sessions,CsrfTokenRepository csrf) {
-   return new BffController(sessions,csrf,Clock.fixed(NOW,ZoneOffset.UTC));
+   var limits=mock(AuthRateLimiter.class);
+   when(limits.login(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.refresh(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   return new BffController(sessions,csrf,Clock.fixed(NOW,ZoneOffset.UTC),limits);
   }
  }
 }

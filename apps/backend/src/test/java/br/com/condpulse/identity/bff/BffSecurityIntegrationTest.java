@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import jakarta.servlet.Filter;
@@ -51,6 +52,7 @@ class BffSecurityIntegrationTest {
  private MockMvc mvc;
  private WebSessionService sessions;
  private JwtDecoder decoder;
+ private AuthRateLimiter limits;
 
  @BeforeEach void setup() {
   context=new AnnotationConfigWebApplicationContext();
@@ -63,6 +65,7 @@ class BffSecurityIntegrationTest {
   context.refresh();
   sessions=context.getBean(WebSessionService.class);
   decoder=context.getBean("testDecoder",JwtDecoder.class);
+  limits=context.getBean(AuthRateLimiter.class);
   mvc=MockMvcBuilders.webAppContextSetup(context)
    .addFilters(context.getBean("springSecurityFilterChain",Filter.class)).build();
  }
@@ -160,6 +163,40 @@ class BffSecurityIntegrationTest {
   verify(sessions).authenticate(raw); verifyNoMoreInteractions(sessions); verifyNoInteractions(decoder);
  }
 
+ @Test void loginLimitReturns429AndRetryAfterWithoutCallingAuth() throws Exception {
+  var csrf=csrf();
+  when(limits.login("resident@example.invalid")).thenReturn(new AuthRateLimiter.Admission(false,900));
+  var response=mvc.perform(mutation("/auth/login",csrf).contentType(MediaType.APPLICATION_JSON)
+    .content("{\"email\":\"resident@example.invalid\",\"password\":\"synthetic-password\"}"))
+    .andReturn().getResponse();
+  assertEquals(429,response.getStatus()); assertEquals("900",response.getHeader("Retry-After"));
+  assertEquals("no-store",response.getHeader("Cache-Control"));
+  assertTrue(response.getContentAsString().contains("AUTH_RATE_LIMITED"));
+  assertFalse(response.getContentAsString().contains("resident@example.invalid"));
+  verifyNoInteractions(sessions,decoder);
+ }
+ @Test void refreshLimitOrUnavailableStorePreservesCookieWithoutAuthOrLease() throws Exception {
+  for(boolean unavailable:List.of(false,true)) {
+   var csrf=csrf(); String raw=SessionSecrets.newToken();
+   if(unavailable) when(limits.refresh(raw)).thenThrow(new br.com.condpulse.shared.application.BusinessProblem(
+     "AUTH_RATE_LIMIT_UNAVAILABLE",503,"Autenticacao indisponivel."));
+   else when(limits.refresh(raw)).thenReturn(new AuthRateLimiter.Admission(false,60));
+   var response=mvc.perform(mutation("/auth/refresh",csrf).cookie(new Cookie(BffCookies.SESSION,raw)))
+     .andReturn().getResponse();
+   assertEquals(unavailable?503:429,response.getStatus());
+   assertFalse(response.getHeaders("Set-Cookie").stream().anyMatch(value->value.startsWith(BffCookies.SESSION+"=")));
+   verifyNoInteractions(sessions,decoder);
+  }
+ }
+ @Test void logoutStillInvalidatesWhenLoginAndRefreshAreLimited() throws Exception {
+  when(limits.login(any())).thenReturn(new AuthRateLimiter.Admission(false,900));
+  when(limits.refresh(any())).thenReturn(new AuthRateLimiter.Admission(false,60));
+  var csrf=csrf(); String raw=SessionSecrets.newToken();
+  var response=mvc.perform(mutation("/auth/logout",csrf).cookie(new Cookie(BffCookies.SESSION,raw)))
+    .andReturn().getResponse();
+  assertEquals(204,response.getStatus()); verify(sessions).logout(raw); verifyNoInteractions(limits);
+ }
+
  @Test void invalidBearerNeverFallsBackToValidCookieWithinRealChain() throws Exception {
   String raw=SessionSecrets.newToken();
   when(decoder.decode("synthetic-invalid")).thenThrow(new BadJwtException("synthetic-invalid"));
@@ -192,7 +229,7 @@ class BffSecurityIntegrationTest {
  private record Csrf(Cookie cookie,String token) {}
 
  @Configuration(proxyBeanMethods=false)
- @EnableWebMvc @EnableWebSecurity @Import(SecurityConfiguration.class)
+ @EnableWebMvc @EnableWebSecurity @Import({SecurityConfiguration.class,br.com.condpulse.shared.api.ProblemHandler.class})
  static class TestConfiguration {
   @Bean WebSessionService testSessions() { return mock(WebSessionService.class); }
   @Bean @Primary JwtDecoder testDecoder() { return mock(JwtDecoder.class); }
@@ -201,8 +238,14 @@ class BffSecurityIntegrationTest {
    var settings=new BffSettings(ORIGIN,"https://auth.example.invalid/auth/v1","synthetic-publishable-key",8);
    return new BffSecurityConfigurer(sessions,settings,csrf);
   }
-  @Bean BffController testBffController(WebSessionService sessions,CsrfTokenRepository csrf) {
-   return new BffController(sessions,csrf,Clock.fixed(NOW,ZoneOffset.UTC));
+  @Bean AuthRateLimiter testRateLimiter() {
+   var limits=mock(AuthRateLimiter.class);
+   when(limits.login(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.refresh(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   return limits;
+  }
+  @Bean BffController testBffController(WebSessionService sessions,CsrfTokenRepository csrf,AuthRateLimiter limits) {
+   return new BffController(sessions,csrf,Clock.fixed(NOW,ZoneOffset.UTC),limits);
   }
   @Bean IdentityProbe identityProbe() { return new IdentityProbe(); }
  }

@@ -2,6 +2,7 @@ import type {
   Amenity, CancelReservation, CreateReservation, CurrentIdentity, Membership,
   MutationResult, Reservation, ReservationPage, ReservationPolicy, Session, Unit,
 } from './types';
+import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 
 const messages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: 'Entre novamente para continuar.',
@@ -12,6 +13,7 @@ const messages: Record<string, string> = {
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
   AUTH_PROVIDER_UNAVAILABLE: 'O acesso está temporariamente indisponível. Tente novamente mais tarde.',
   AUTH_RATE_LIMITED: 'Aguarde um pouco antes de tentar novamente.',
+  AUTH_RATE_LIMIT_UNAVAILABLE: 'Não foi possível verificar o acesso agora. Tente novamente mais tarde.',
   SESSION_REFRESH_REQUIRED: 'Sua sessão precisa ser renovada. Tente novamente.',
   SESSION_REFRESH_IN_PROGRESS: 'A sessão está sendo renovada. Aguarde antes de tentar novamente.',
   CSRF_ORIGIN_REJECTED: 'Não foi possível validar esta operação. Reabra o sistema e tente novamente.',
@@ -44,6 +46,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly uncertain = false,
+    readonly retryAfterSeconds?: number,
+    readonly retryUntil?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -175,14 +179,17 @@ interface Csrf { headerName: 'X-CSRF-Token'; token: string; }
 /** Cliente BFF da própria origem. Nenhuma credencial do provedor fica no navegador. */
 export class CondPulseApi {
   private readonly fetcher: typeof globalThis.fetch;
+  private readonly now: () => number;
+  private readonly authCooldowns = new Map<string, number>();
   private generation = 0;
   private authTail: Promise<void> = Promise.resolve();
   private refreshFlight: { generation: number; promise: Promise<Session> } | undefined;
   private csrfFlight: { generation: number; promise: Promise<Csrf> } | undefined;
   private readonly expiredListeners = new Set<() => void>();
 
-  constructor(options: { fetch?: typeof globalThis.fetch } = {}) {
+  constructor(options: { fetch?: typeof globalThis.fetch; now?: () => number } = {}) {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.now = options.now ?? (() => globalThis.performance.now());
   }
 
   onSessionExpired(listener: () => void): () => void {
@@ -191,7 +198,11 @@ export class CondPulseApi {
   }
 
   /** Limpa memória e impede respostas de outra sessão; não afirma revogação no servidor. */
-  clearSession(): void { this.generation += 1; this.csrfFlight = undefined; }
+  clearSession(): void {
+    this.generation += 1; this.csrfFlight = undefined;
+    this.authCooldowns.delete('/auth/refresh');
+    // A espera de login não guarda identidade e continua válida ao limpar a sessão.
+  }
 
   private expire(generation: number): void {
     if (generation !== this.generation) return;
@@ -230,6 +241,9 @@ export class CondPulseApi {
 
   private async send(path: string, options: RequestOptions, generation: number, useCsrf = true): Promise<Reply> {
     this.ensureCurrent(generation, options.signal);
+    const deadline = this.authCooldowns.get(path);
+    const remaining = remainingCooldown(deadline, this.now());
+    if (remaining > 0) throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, remaining, deadline);
     const mutation = options.method === 'POST';
     const headers = new Headers({ Accept: 'application/json' });
     if (mutation && useCsrf) {
@@ -269,6 +283,12 @@ export class CondPulseApi {
     }
     ensureResponseCurrent();
     if (!response.ok) {
+      if (response.status === 429) {
+        const seconds = parseRetryAfterSeconds(response.headers.get('Retry-After'));
+        const until = Math.max(this.authCooldowns.get(path) ?? 0, this.now() + seconds * 1_000);
+        if (path === '/auth/login' || path === '/auth/refresh') this.authCooldowns.set(path, until);
+        throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, seconds, until);
+      }
       const candidate = record(value) && isString(value.code) ? value.code : '';
       const code = Object.hasOwn(messages, candidate) ? candidate
         : response.status === 401 ? 'AUTHENTICATION_REQUIRED' : response.status === 404 ? 'API_NOT_AVAILABLE' : 'HTTP_ERROR';
@@ -319,7 +339,11 @@ export class CondPulseApi {
           const reply = await this.send('/auth/refresh', { method: 'POST' }, generation);
           return session(reply.value);
         } catch (error: unknown) {
-          if (!(error instanceof ApiError && error.status === 409 && error.code === 'SESSION_REFRESH_IN_PROGRESS'))
+          const preserved = error instanceof ApiError && (
+            error.status === 409 && error.code === 'SESSION_REFRESH_IN_PROGRESS'
+            || error.status === 429
+            || error.status === 503 && error.code === 'AUTH_RATE_LIMIT_UNAVAILABLE');
+          if (!preserved)
             this.expire(generation);
           throw error;
         }

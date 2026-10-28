@@ -22,8 +22,9 @@ public class BffController {
  private final WebSessionService sessions;
  private final CsrfTokenRepository csrf;
  private final Clock clock;
- public BffController(WebSessionService sessions,CsrfTokenRepository csrf,Clock clock) {
-  this.sessions=sessions; this.csrf=csrf; this.clock=clock;
+ private final AuthRateLimiter limits;
+ public BffController(WebSessionService sessions,CsrfTokenRepository csrf,Clock clock,AuthRateLimiter limits) {
+  this.sessions=sessions; this.csrf=csrf; this.clock=clock; this.limits=limits;
  }
  @GetMapping("/auth/csrf") public CsrfBody csrf(HttpServletRequest request,HttpServletResponse response) {
   response.setHeader("Cache-Control","no-store");
@@ -34,6 +35,7 @@ public class BffController {
  @PostMapping("/auth/login") public SessionBody login(@RequestBody LoginBody body,
     HttpServletRequest request,HttpServletResponse response) {
   String previous=BffCookies.read(request);
+  requireAdmission(limits.login(body.email()),response);
   var result=sessions.login(body.email(),body.password());
   if(previous!=null && !previous.equals(result.opaqueToken())) sessions.logout(previous);
   BffCookies.set(response,result.opaqueToken(),Duration.between(clock.instant(),result.expiresAt()));
@@ -41,6 +43,8 @@ public class BffController {
   return body(result);
  }
  @PostMapping("/auth/refresh") public SessionBody refresh(HttpServletRequest request,HttpServletResponse response) {
+  // Rate limit/dependencia falham antes do lease e nao apagam a sessao existente.
+  requireAdmission(limits.refresh(BffCookies.read(request)),response);
   try {
    var result=sessions.refresh(BffCookies.read(request));
    BffCookies.set(response,result.opaqueToken(),Duration.between(clock.instant(),result.expiresAt()));
@@ -60,6 +64,13 @@ public class BffController {
  }
  private void rotateCsrf(HttpServletRequest request,HttpServletResponse response) {
   var token=csrf.generateToken(request); csrf.saveToken(token,request,response);
+ }
+ private void requireAdmission(AuthRateLimiter.Admission admission,HttpServletResponse response) {
+  if(!admission.allowed()) {
+   response.setHeader("Retry-After",Long.toString(admission.retryAfterSeconds()));
+   response.setHeader("Cache-Control","no-store");
+   throw new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
+  }
  }
  private SessionBody body(WebSessionService.SessionTicket ticket) {
   return new SessionBody(ticket.accountId(),ticket.expiresAt());

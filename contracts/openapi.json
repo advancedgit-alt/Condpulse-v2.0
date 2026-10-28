@@ -130,10 +130,21 @@
             "description": "Renovação em andamento"
           },
           "429": {
-            "description": "Limite de autenticação"
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa. Nao chama o provedor; refresh preserva a sessao.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Segundos inteiros ate nova tentativa; sem retry automatico.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
           },
           "503": {
-            "description": "Provedor indisponível"
+            "description": "AUTH_RATE_LIMIT_UNAVAILABLE preserva a sessao e nao chama o provedor; AUTH_PROVIDER_UNAVAILABLE segue o encerramento seguro existente."
           }
         },
         "requestBody": {
@@ -221,10 +232,21 @@
             "description": "Renovação em andamento"
           },
           "429": {
-            "description": "Limite de autenticação"
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa. Nao chama o provedor; refresh preserva a sessao.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Segundos inteiros ate nova tentativa; sem retry automatico.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
           },
           "503": {
-            "description": "Provedor indisponível"
+            "description": "AUTH_RATE_LIMIT_UNAVAILABLE preserva a sessao e nao chama o provedor; AUTH_PROVIDER_UNAVAILABLE segue o encerramento seguro existente."
           }
         }
       }

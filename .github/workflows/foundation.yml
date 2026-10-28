@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: "24.18.0"
       - name: Foundation and contract checks
-        run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs
+        run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
       - name: Compile and unit tests
         run: mvn -B -ntp -f apps/backend/pom.xml verify
       - name: Migrate with Flyway and validate replay
@@ -88,7 +88,7 @@ jobs:
           CP_JDBC_TEST_OK: DISPOSABLE
           CP_TEST_DB_USER: cp_ci_login
           CP_TEST_DB_PASSWORD: synthetic_ci_runtime_only
-        run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest test
+        run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test
       - name: Build real web assets for integrated HTTPS smoke
         working-directory: apps/web
         run: |
@@ -110,6 +110,14 @@ jobs:
         run: |
           docker build -f infra/Dockerfile.api --target baseline -t condpulse-baseline:ci .
           bash tests/database/baseline-image-smoke.sh
+      - name: Isolated onboarding launcher redacts errors without network
+        run: |
+          docker build -f infra/Dockerfile.api --target onboarding -t condpulse-onboarding:ci .
+          bash tests/database/onboarding-image-smoke.sh
+      - name: Build Vercel API image and verify fail-closed launcher
+        run: |
+          docker build -f Dockerfile.vercel -t condpulse-vercel:ci .
+          bash tests/database/vercel-image-smoke.sh
   release-config:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -133,7 +141,9 @@ jobs:
       - name: Validate release boundaries and actual Compose rendering
         env:
           DOCKER_CONFIG: ${{ runner.temp }}/condpulse-docker-config
-        run: node --test tests/release-config.test.mjs tests/release-compose.test.mjs
+        run: |
+          node --test tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs
+          sh -n infra/vercel/start-api.sh
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
