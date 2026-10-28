@@ -28,9 +28,11 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 ## Estado e pendências
 - docs/STATUS.md registra evidências e limitações.
 - Projeto Condpulse-v2.0 encontrado ativo em São Paulo: rpnrqfrfwywglvyykgrg, PostgreSQL17.11.0.003.
-- V001/V002 aplicadas atomicamente e atestadas pela excecao ADR-0003; baseline Flyway oficial002 e V003/V004/V005 aplicados e validados remotamente em28/10/2026. Evidencias e runs em docs/STATUS.md.
+- V001/V002 aplicadas atomicamente e atestadas pela excecao ADR-0003; baseline Flyway oficial002 e V003/V004/V005 aplicados e validados remotamente em 28/10/2026. Evidencias e runs em docs/STATUS.md.
 - Três buckets privados e política de Auth configurados; conferir manifesto e STATUS.
-- BFF permanece desligado ate configuracao e homologacao. Login runtime e configuracao JDBC da Vercel ainda pendentes.
-- Segundo ambiente, SMTP, worker continuo, cofre de runtime, PITR, restore e parceiro fisico pendentes.
+- Login runtime exclusivo e configuração JDBC/CA aplicados na Vercel Production pelo apply40757578769, source2f1abf3547736c247fc082b2cc6ed76c18f2d38b. BFF/reservas permanecem false; Auth real e onboarding continuam pendentes.
+- O limite da role foi ajustado separadamente de 4 para 16 por SQL operacional revisado/CI 40774877934, com Hikari 2 e guardas de margem da ADR-0006; é orçamento provisório, sem aceite de capacidade.
+- Smoke40777572663/source 5060fec7d4bcff0ae8df49801f1fecd55b7c0925 confirmou readiness 200/JSON/UP após uma consulta extra;503 inicial OUT_OF_SERVICE e /v1/me 401 esperado foram preservados. Prova JDBC pontual, sem homologação de login, cold start ou capacidade.
+- Segundo ambiente, SMTP, worker contínuo, segredos de ativação BFF/onboarding, rotação, PITR, restore e parceiro físico pendentes.
 - Código de fundação não equivale ao produto P0/P1 implementado/homologado.
 

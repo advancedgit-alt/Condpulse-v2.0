@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-28",
+  "timeZone": "America/Sao_Paulo",
+  "scope": {
+    "repository": "advancedgit-alt/Condpulse-v2.0",
+    "supabaseProject": "rpnrqfrfwywglvyykgrg",
+    "region": "sa-east-1",
+    "vercelProject": "prj_IeUa4Zjg1IwaPqJQwv525H14I837",
+    "vercelTeam": "team_6fzA029jxhDb1LpnrnphWGQ0",
+    "vercelTarget": "production",
+    "applicationAcceptance": "partial; not product or launch acceptance"
+  },
+  "runtime": {
+    "sourceSha": "2f1abf3547736c247fc082b2cc6ed76c18f2d38b",
+    "generation": "2ca929e1-1f7e-4a3e-b9ab-1b9ab147ff82",
+    "authorization": "explicit user approval before apply; maintenance_confirmed=true",
+    "jarSha256": "e756b19c84e7c08bf4d9aab63544be04be61e1f846d6114973a1a76f588013f8",
+    "publicCaSha256": "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa",
+    "inspect": {
+      "runId": 40751736891,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40751736891",
+      "conclusion": "success",
+      "outcome": {
+        "eligible": true,
+        "applied": false,
+        "alreadyApplied": false,
+        "state": "ABSENT",
+        "fingerprint": "cf7330e90e00c14bbf48c3200072dcbe7fb30e18e92c2824cf6b615d3f505798",
+        "code": ""
+      }
+    },
+    "apply": {
+      "runId": 40757578769,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40757578769",
+      "conclusion": "success",
+      "resultAt": "2026-10-28T19:50:12.0134558Z",
+      "cleanup": "success",
+      "outcome": {
+        "eligible": true,
+        "applied": true,
+        "alreadyApplied": false,
+        "state": "READY",
+        "fingerprint": "54c9c31b76a57822eb4f9019aaa4c082a3a7fda27c12abd98277af37131a3c6d",
+        "code": ""
+      }
+    },
+    "metadataReadback": {
+      "provenance": "root read-only PostgreSQL metadata query after apply",
+      "role": "cp_runtime_2ca929e11f7e4a3eb9ab1b9ab147ff82",
+      "login": true,
+      "superuser": false,
+      "bypassRls": false,
+      "createDb": false,
+      "createRole": false,
+      "replication": false,
+      "connectionLimit": 4,
+      "validUntil": "infinity",
+      "marker": "condpulse-runtime:rpnrqfrfwywglvyykgrg:2ca929e1-1f7e-4a3e-b9ab-1b9ab147ff82:2f1abf3547736c247fc082b2cc6ed76c18f2d38b:READY",
+      "memberships": [
+        {
+          "role": "cp_api",
+          "admin": false,
+          "inherit": true,
+          "set": false
+        }
+      ],
+      "applicationTables": 16,
+      "enabledAndForcedRlsTables": 16
+    },
+    "vercelMetadata": {
+      "publicConfigs": 10,
+      "sensitiveSecrets": 1,
+      "secretName": "DATABASE_PASSWORD",
+      "target": "production",
+      "secretValuesIncluded": false
+    },
+    "tls": {
+      "sslEnforcement": "enabled by responsible user and observed enabled",
+      "clientToPooler": "PGJDBC verify-full with validated public CA and hostname",
+      "backendEncryptionGuard": "passed pg_stat_ssl gate",
+      "poolerUpstreamCertificatePolicy": "not attested"
+    },
+    "resourceBudgetAdjustment": {
+      "operation": "ALTER ROLE CONNECTION LIMIT 4 -> 16 in one guarded DO instruction",
+      "scope": "operational LOGIN attribute outside the Flyway application schema",
+      "project": "rpnrqfrfwywglvyykgrg",
+      "sourceSha": "c486d5aa921b6d61df610601d127c3400bde6745",
+      "sqlPath": "infra/operations/runtime-connection-budget.sql",
+      "sqlBlobSha": "f736df28170c6988d0eebceb1dc1b4cf904a0247",
+      "adr": "docs/adr/0006-runtime-connection-budget.md",
+      "reviewedCiRunId": 40774877934,
+      "reviewedCiConclusion": "success",
+      "defaultSourcePreservedDuringOperation": "aaf3f65ebc479875cf45a8954073ea842d3680d5",
+      "channel": "authorized administrative Supabase MCP",
+      "operator": "postgres",
+      "result": "DO returned without error; root metadata readback confirmed the change",
+      "reason": {
+        "sqlState": "53300",
+        "severity": "FATAL",
+        "roleMatch": true,
+        "observedRoleBackends": 4,
+        "observedRoleBackendState": "idle SSL backends",
+        "previousRoleLimit": 4
+      },
+      "decision": {
+        "provisional": true,
+        "roleConnectionLimit": 16,
+        "hikariPerInstance": 2,
+        "requiredDatabaseMaxConnections": 60,
+        "minimumSnapshotHeadroom": 20,
+        "headroomIsGuaranteedReservation": false
+      },
+      "sqlGuards": [
+        "exact operator/session/database",
+        "shared advisory transaction lock",
+        "exact role and READY marker",
+        "safe role flags and sole cp_api membership",
+        "no DDL or ownership",
+        "only 4->16; 16 is noop",
+        "database max_connections=60 and other backends+16+20<=60"
+      ],
+      "readback": {
+        "observedAt": "2026-10-28T21:52:59.200997Z",
+        "provenance": "root read-only metadata query after the guarded DO",
+        "roleConnectionLimit": 16,
+        "login": true,
+        "superuser": false,
+        "bypassRls": false,
+        "createDb": false,
+        "createRole": false,
+        "replication": false,
+        "validUntil": "infinity",
+        "originalReadyMarkerPreserved": true,
+        "memberships": [
+          {
+            "role": "cp_api",
+            "admin": false,
+            "inherit": true,
+            "set": false
+          }
+        ],
+        "databaseMaxConnections": 60,
+        "totalObservedBackends": 12,
+        "enabledAndForcedRlsTables": 16,
+        "passwordValueRead": false
+      },
+      "verificationStatus": "503 persisted after the budget change; a later startup-aware public smoke observed one extra readiness GET return200UP.",
+      "unchangedByReviewedSql": [
+        "password",
+        "READY marker and original credential source",
+        "validity",
+        "memberships",
+        "grants",
+        "TLS",
+        "RLS",
+        "application schema",
+        "sessions"
+      ],
+      "pr": 16,
+      "mergeSha": "3052c4880e517d2b3a7a8a4cc78f0f73fcad0e05"
+    }
+  },
+  "initialPostRuntimeDeployment": {
+    "sourceSha": "fe0929dcc4a7e64175a0697728d53ec4c0e1fbe7",
+    "pr": 14,
+    "ciRunId": 40752349238,
+    "ciHeadSha": "6a8fa624a358c2704189c3af1b4820fdbb372812",
+    "ciConclusion": "success",
+    "deploymentId": "dpl_CCKP5SJgdskJuQB3qBEiRBGVBHAZ",
+    "dashboard": "https://vercel.com/sindicoadvanced/condpulse/CCKP5SJgdskJuQB3qBEiRBGVBHAZ",
+    "observedState": "Ready",
+    "target": "production",
+    "buildSeconds": 45,
+    "alias": "https://project-rhvdq.vercel.app",
+    "provenance": "root authenticated dashboard observation after runtime READY",
+    "sourceTreeSha": "fd04997eabfb64ac4e0b0c1f870089a8f1e7286c",
+    "imageDigest": null
+  },
+  "publicProbe": {
+    "status": "PASSED_AFTER_STARTUP_GRACE",
+    "runId": 40777572663,
+    "jobId": 123130708371,
+    "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40777572663",
+    "reviewedPr": 17,
+    "reviewedCiRunId": 40776880447,
+    "reviewedCiHeadSha": "5550618f509eefd6478df2b8ecca6eac2eaabff8",
+    "reviewedCiConclusion": "success",
+    "mergeSha": "5060fec7d4bcff0ae8df49801f1fecd55b7c0925",
+    "report": {
+      "version": 2,
+      "sourceSha": "5060fec7d4bcff0ae8df49801f1fecd55b7c0925",
+      "vercelDeployment": "https://vercel.com/sindicoadvanced/condpulse/SGBWbeE1Jb5citmnMRoKnkFQjdvw",
+      "observedAt": "2026-10-28T22:09:04.946Z",
+      "headUnchanged": true,
+      "startupGraceUsed": true,
+      "initialProbes": [
+        {
+          "path": "/actuator/health/readiness",
+          "status": 503,
+          "contentType": "application/json",
+          "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+          "elapsedMs": 11586,
+          "bodyStatus": "OUT_OF_SERVICE",
+          "problemCode": null,
+          "ok": false,
+          "checks": [
+            "HTTP_STATUS_UNEXPECTED",
+            "READINESS_NOT_UP"
+          ]
+        },
+        {
+          "path": "/v1/me",
+          "status": 401,
+          "contentType": "application/problem+json;charset=UTF-8",
+          "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+          "elapsedMs": 10397,
+          "bodyStatus": 401,
+          "problemCode": "AUTHENTICATION_REQUIRED",
+          "ok": true,
+          "checks": []
+        }
+      ],
+      "startupReadiness": [
+        {
+          "path": "/actuator/health/readiness",
+          "status": 200,
+          "contentType": "application/json",
+          "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+          "elapsedMs": 294,
+          "bodyStatus": "UP",
+          "problemCode": null,
+          "ok": true,
+          "checks": []
+        }
+      ],
+      "passed": true,
+      "probes": [
+        {
+          "path": "/actuator/health/readiness",
+          "status": 200,
+          "contentType": "application/json",
+          "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+          "elapsedMs": 294,
+          "bodyStatus": "UP",
+          "problemCode": null,
+          "ok": true,
+          "checks": []
+        },
+        {
+          "path": "/v1/me",
+          "status": 401,
+          "contentType": "application/problem+json;charset=UTF-8",
+          "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+          "elapsedMs": 10397,
+          "bodyStatus": 401,
+          "problemCode": "AUTHENTICATION_REQUIRED",
+          "ok": true,
+          "checks": []
+        }
+      ]
+    },
+    "interpretation": "Point-in-time JDBC readiness after initialization; the initial503 is preserved.",
+    "association": "Validated Vercel success status and unchanged default head before/after public alias probes; not immutable response provenance.",
+    "applicationCredentialsSent": false,
+    "sameInstanceRecoveryProven": false,
+    "fleetHealthProven": false,
+    "capacityProven": false
+  },
+  "flags": {
+    "bff": false,
+    "reservations": false
+  },
+  "notVerified": [
+    "real Supabase Auth login, refresh and logout",
+    "approved operational onboarding and real tenant/unit/membership data",
+    "AAL2/TOTP for management/support/admin",
+    "complete product P0/P1 acceptance",
+    "continuous worker and notifications",
+    "separate homologation and production environments",
+    "load, cold-start distribution, capacity and p95 targets",
+    "PITR and timed database/object restore",
+    "physical access integration",
+    "image digest attestation for the post-runtime deployment",
+    "operational metrics and monitoring coverage",
+    "connection budget, pool cleanup and capacity across scaled or overlapping Vercel instances"
+  ],
+  "limitations": [
+    "Runtime READY and Vercel Ready are separate observations from the public HTTP probe.",
+    "The pooler upstream CA/hostname verification policy is not attested by pg_stat_ssl.",
+    "No actual password, PAT, Auth Admin key or business data is included.",
+    "The image digest of the post-runtime deployment is not recorded in this artifact.",
+    "CONNECTION LIMIT16 and snapshot headroom are provisional; they do not prove workload capacity or reserve20 slots.",
+    "The passing public smoke preserved an initial503 OUT_OF_SERVICE and used one extra readiness GET.",
+    "Successive requests may reach different instances; no same-instance recovery or healthy fleet is proved.",
+    "Probe elapsedMs values are individual requests, not cold-start SLO, p95 or workload capacity."
+  ],
+  "publicProbeAttempts": [
+    {
+      "runId": 40772909749,
+      "attempt": 1,
+      "jobId": 123114546307,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40772909749",
+      "conclusion": "failure",
+      "report": {
+        "version": 1,
+        "sourceSha": "aaf3f65ebc479875cf45a8954073ea842d3680d5",
+        "vercelDeployment": "https://vercel.com/sindicoadvanced/condpulse/Ezv5GpaCvtg3VWitny6pyW5ueLn9",
+        "observedAt": "2026-10-28T21:34:25.076Z",
+        "headUnchanged": true,
+        "passed": false,
+        "probes": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 503,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 11032,
+            "bodyStatus": "UNEXPECTED",
+            "problemCode": null,
+            "ok": false,
+            "checks": [
+              "HTTP_STATUS_UNEXPECTED",
+              "READINESS_NOT_UP"
+            ]
+          },
+          {
+            "path": "/v1/me",
+            "status": 401,
+            "contentType": "application/problem+json;charset=UTF-8",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 9524,
+            "bodyStatus": 401,
+            "problemCode": "AUTHENTICATION_REQUIRED",
+            "ok": true,
+            "checks": []
+          }
+        ]
+      }
+    },
+    {
+      "runId": 40772909749,
+      "attempt": 2,
+      "jobId": 123116338339,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40772909749/attempts/2",
+      "conclusion": "failure",
+      "report": {
+        "version": 1,
+        "sourceSha": "aaf3f65ebc479875cf45a8954073ea842d3680d5",
+        "vercelDeployment": "https://vercel.com/sindicoadvanced/condpulse/Ezv5GpaCvtg3VWitny6pyW5ueLn9",
+        "observedAt": "2026-10-28T21:37:26.874Z",
+        "headUnchanged": true,
+        "passed": false,
+        "probes": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 503,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 15457,
+            "bodyStatus": "UNEXPECTED",
+            "problemCode": null,
+            "ok": false,
+            "checks": [
+              "HTTP_STATUS_UNEXPECTED",
+              "READINESS_NOT_UP"
+            ]
+          },
+          {
+            "path": "/v1/me",
+            "status": 401,
+            "contentType": "application/problem+json;charset=UTF-8",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 13742,
+            "bodyStatus": 401,
+            "problemCode": "AUTHENTICATION_REQUIRED",
+            "ok": true,
+            "checks": []
+          }
+        ]
+      }
+    },
+    {
+      "runId": 40772909749,
+      "attempt": 3,
+      "jobId": 123123882409,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40772909749/attempts/3",
+      "conclusion": "failure",
+      "report": {
+        "version": 1,
+        "sourceSha": "aaf3f65ebc479875cf45a8954073ea842d3680d5",
+        "vercelDeployment": "https://vercel.com/sindicoadvanced/condpulse/Ezv5GpaCvtg3VWitny6pyW5ueLn9",
+        "observedAt": "2026-10-28T21:53:26.677Z",
+        "headUnchanged": true,
+        "passed": false,
+        "probes": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 503,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 15851,
+            "bodyStatus": "UNEXPECTED",
+            "problemCode": null,
+            "ok": false,
+            "checks": [
+              "HTTP_STATUS_UNEXPECTED",
+              "READINESS_NOT_UP"
+            ]
+          },
+          {
+            "path": "/v1/me",
+            "status": 401,
+            "contentType": "application/problem+json;charset=UTF-8",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 13682,
+            "bodyStatus": 401,
+            "problemCode": "AUTHENTICATION_REQUIRED",
+            "ok": true,
+            "checks": []
+          }
+        ]
+      }
+    },
+    {
+      "runId": 40776049936,
+      "attempt": 1,
+      "jobId": 123125507393,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40776049936",
+      "conclusion": "failure",
+      "report": {
+        "version": 1,
+        "sourceSha": "3052c4880e517d2b3a7a8a4cc78f0f73fcad0e05",
+        "vercelDeployment": "https://vercel.com/sindicoadvanced/condpulse/5EmDShNNhpY2VkhVVJ7Kzuf6FPyp",
+        "observedAt": "2026-10-28T21:57:39.577Z",
+        "headUnchanged": true,
+        "passed": false,
+        "probes": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 503,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 14026,
+            "bodyStatus": "OUT_OF_SERVICE",
+            "problemCode": null,
+            "ok": false,
+            "checks": [
+              "HTTP_STATUS_UNEXPECTED",
+              "READINESS_NOT_UP"
+            ]
+          },
+          {
+            "path": "/v1/me",
+            "status": 401,
+            "contentType": "application/problem+json;charset=UTF-8",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 13530,
+            "bodyStatus": 401,
+            "problemCode": "AUTHENTICATION_REQUIRED",
+            "ok": true,
+            "checks": []
+          }
+        ]
+      }
+    },
+    {
+      "runId": 40777572663,
+      "attempt": 1,
+      "jobId": 123130708371,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40777572663",
+      "conclusion": "success",
+      "report": {
+        "version": 2,
+        "sourceSha": "5060fec7d4bcff0ae8df49801f1fecd55b7c0925",
+        "vercelDeployment": "https://vercel.com/sindicoadvanced/condpulse/SGBWbeE1Jb5citmnMRoKnkFQjdvw",
+        "observedAt": "2026-10-28T22:09:04.946Z",
+        "headUnchanged": true,
+        "startupGraceUsed": true,
+        "initialProbes": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 503,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 11586,
+            "bodyStatus": "OUT_OF_SERVICE",
+            "problemCode": null,
+            "ok": false,
+            "checks": [
+              "HTTP_STATUS_UNEXPECTED",
+              "READINESS_NOT_UP"
+            ]
+          },
+          {
+            "path": "/v1/me",
+            "status": 401,
+            "contentType": "application/problem+json;charset=UTF-8",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 10397,
+            "bodyStatus": 401,
+            "problemCode": "AUTHENTICATION_REQUIRED",
+            "ok": true,
+            "checks": []
+          }
+        ],
+        "startupReadiness": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 200,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 294,
+            "bodyStatus": "UP",
+            "problemCode": null,
+            "ok": true,
+            "checks": []
+          }
+        ],
+        "passed": true,
+        "probes": [
+          {
+            "path": "/actuator/health/readiness",
+            "status": 200,
+            "contentType": "application/json",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 294,
+            "bodyStatus": "UP",
+            "problemCode": null,
+            "ok": true,
+            "checks": []
+          },
+          {
+            "path": "/v1/me",
+            "status": 401,
+            "contentType": "application/problem+json;charset=UTF-8",
+            "cacheControl": "no-cache, no-store, max-age=0, must-revalidate",
+            "elapsedMs": 10397,
+            "bodyStatus": 401,
+            "problemCode": "AUTHENTICATION_REQUIRED",
+            "ok": true,
+            "checks": []
+          }
+        ]
+      }
+    }
+  ]
+}
