@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "CondPulse",
+    "slug": "condpulse",
+    "scheme": "condpulse",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.condpulse.app",
+      "config": { "usesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "br.com.condpulse.app",
+      "allowBackup": false,
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}

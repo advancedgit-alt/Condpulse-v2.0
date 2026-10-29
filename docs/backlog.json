@@ -311,7 +311,7 @@
       "id": "CP-012",
       "delivery": "Sessão nativa segura. Integração Auth com armazenamento seguro e limpeza de dados no logout.",
       "acceptance": "Reinstalação, token expirado e troca de usuário não mostram dados anteriores.",
-      "status": "PLANEJADO",
+      "status": "EM_IMPLEMENTACAO",
       "evidence": []
     },
     {
