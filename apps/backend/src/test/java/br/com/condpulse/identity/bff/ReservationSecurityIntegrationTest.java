@@ -229,7 +229,7 @@ class ReservationSecurityIntegrationTest {
    """.formatted(UNIT,AMENITY,START,END);
  }
  private ReservationModels.View view() {
-  return new ReservationModels.View(RESERVATION,UNIT,AMENITY,"CONFIRMED",START,END,START,END,4,2500,1);
+  return new ReservationModels.View(RESERVATION,UNIT,AMENITY,"CONFIRMED",START,END,START,END,4,2500,1,null);
  }
  private record Csrf(Cookie cookie,String token) {}
 

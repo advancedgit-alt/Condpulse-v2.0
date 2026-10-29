@@ -204,7 +204,7 @@ class ReservationServiceJdbcTest {
   assertEquals(List.of(new ReservationModels.BlockedInterval(from,until)),result.blockedIntervals());
   assertCommittedCounts(3,0,0,0);
  }
- @Test void heldAndPendingIntervalsStayBlockedUntilTheirActualStateTransitionsEvenAfterExpiry() throws Exception {
+ @Test void expiredHoldStaysBlockedUntilTransitionButExpiredApprovalRequestDoesNot() throws Exception {
   Instant expired=Instant.now().minusSeconds(86400);
   UUID held=occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","HELD",start,end,start,end,expired);
   UUID pending=occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING","PENDING_APPROVAL",end,end.plusSeconds(3600),
@@ -212,7 +212,9 @@ class ReservationServiceJdbcTest {
   for(String status:List.of("CANCELLED","EXPIRED","REJECTED"))
    occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING",status,start.minusSeconds(3600),end.plusSeconds(7200),
     start.minusSeconds(3600),end.plusSeconds(7200),null);
-  assertEquals(List.of(new ReservationModels.BlockedInterval(start,end.plusSeconds(3600))),
+  // Retenção HELD de fila só sai com a transição real (fila ainda não implementada). Pedido de aprovação vencido
+  // não pode mais ser confirmado e a próxima criação o expira sob trava: não aparece como ocupação.
+  assertEquals(List.of(new ReservationModels.BlockedInterval(start,end)),
    service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start.minusSeconds(3600),end.plusSeconds(7200)).blockedIntervals());
   db.adminUpdate("update cp.reservations set status='EXPIRED' where tenant_id=? and id in (?,?)",db.tenantA,held,pending);
   assertTrue(service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start.minusSeconds(3600),end.plusSeconds(7200))

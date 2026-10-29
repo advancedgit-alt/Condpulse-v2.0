@@ -24,10 +24,10 @@ public class ReservationManagementStore {
  private static final String MANAGED="""
   select * from (
    select r.tenant_id,r.id as reservation_id,r.kind,r.unit_id,u.label as unit_label,r.amenity_id,a.name as amenity_name,
-    case when r.status in ('HELD','PENDING_APPROVAL') and r.expires_at<=clock_timestamp() then 'EXPIRED' else r.status end as status,
+    case when r.status='PENDING_APPROVAL' and r.expires_at<=clock_timestamp() then 'EXPIRED' else r.status end as status,
     r.starts_at,r.ends_at,r.occupied_from,r.occupied_until,r.expires_at,
     coalesce((r.rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,r.fee_cents,r.version,
-    case when r.status in ('HELD','PENDING_APPROVAL') and r.expires_at<=clock_timestamp() then %s
+    case when r.status='PENDING_APPROVAL' and r.expires_at<=clock_timestamp() then %s
      else r.decision_reason end as decision_reason,
     (select m.display_name from cp.memberships m
       where m.tenant_id=r.tenant_id and m.account_id=r.created_by and m.unit_id is not distinct from r.unit_id
@@ -75,7 +75,7 @@ public class ReservationManagementStore {
   if(unit!=null) reservations.lockUnit(tenant,unit);
   var rows=jdbc.query("""
    select r.id,r.kind,r.unit_id,r.created_by,r.status,r.version,r.ends_at,
-    r.status in ('HELD','PENDING_APPROVAL') and r.expires_at<=clock_timestamp() as deadline_passed,
+    r.status='PENDING_APPROVAL' and r.expires_at<=clock_timestamp() as deadline_passed,
     a.active as amenity_active,u.status as unit_status
    from cp.reservations r
    join cp.amenities a on a.tenant_id=r.tenant_id and a.id=r.amenity_id
@@ -107,7 +107,7 @@ public class ReservationManagementStore {
  public ReservationModels.View expire(UUID tenant,UUID id,long expectedVersion) {
   var rows=jdbc.query("""
    update cp.reservations set status='EXPIRED',decision_reason=?,updated_at=clock_timestamp(),version=version+1
-   where tenant_id=? and id=? and status in ('HELD','PENDING_APPROVAL') and version=? and expires_at<=clock_timestamp()
+   where tenant_id=? and id=? and status='PENDING_APPROVAL' and version=? and expires_at<=clock_timestamp()
    returning"""+ReservationStore.VIEW_RETURNING,(r,n)->ReservationStore.view(r),
    ReservationStore.EXPIRED_REASON,tenant,id,expectedVersion);
   return rows.size()==1?rows.getFirst():null;

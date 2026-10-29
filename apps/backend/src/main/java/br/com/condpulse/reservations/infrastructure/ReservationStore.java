@@ -47,10 +47,10 @@ public class ReservationStore {
  private static final String AMENITY_COLUMNS=AMENITY_FIELDS+" where tenant_id=? and active";
  private static final String RESERVATION_COLUMNS="""
   select id as reservation_id,unit_id,amenity_id,
-   case when status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp() then 'EXPIRED' else status end as status,
+   case when status='PENDING_APPROVAL' and expires_at<=clock_timestamp() then 'EXPIRED' else status end as status,
    starts_at,ends_at,occupied_from,occupied_until,
    coalesce((rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,fee_cents,version,
-   case when status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp() then 'Prazo de decisão encerrado sem confirmação.'
+   case when status='PENDING_APPROVAL' and expires_at<=clock_timestamp() then 'Prazo de decisão encerrado sem confirmação.'
     else decision_reason end as decision_reason,
    rule_snapshot->'policy'->>'schemaVersion' as snapshot_schema,
    rule_snapshot->'policy'->>'cancellationLeadMinutes' as snapshot_cancel_lead
@@ -119,15 +119,16 @@ public class ReservationStore {
  }
 
  /**
-  * Ocupacao da exclusao GiST, inclusive BLOCK. Retencoes e pedidos com prazo vencido nao bloqueiam: nao podem
-  * mais ser confirmados e a criacao os expira sob trava antes de gravar o novo periodo.
+  * Ocupacao da exclusao GiST, inclusive BLOCK. Pedido de aprovacao com prazo vencido nao bloqueia: nao pode mais
+  * ser confirmado e a criacao o expira sob trava antes de gravar. Retencao HELD de fila continua ocupando ate a
+  * transicao real, porque a oferta ao proximo da fila ainda nao existe.
   */
  public List<ReservationModels.BlockedInterval> blockedIntervals(UUID tenant,UUID amenity,Instant from,Instant until) {
   var rows=jdbc.query("""
    select greatest(occupied_from,?) as occupied_from,least(occupied_until,?) as occupied_until
    from cp.reservations where tenant_id=? and amenity_id=?
     and status in ('HELD','PENDING_APPROVAL','CONFIRMED')
-    and not (status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp())
+    and not (status='PENDING_APPROVAL' and expires_at<=clock_timestamp())
     and tstzrange(occupied_from,occupied_until,'[)') && tstzrange(?::timestamptz,?::timestamptz,'[)')
    order by occupied_from,occupied_until limit 1001
    """,(r,n)->new ReservationModels.BlockedInterval(r.getTimestamp("occupied_from").toInstant(),
@@ -201,20 +202,21 @@ public class ReservationStore {
     window.occupiedFrom(),window.occupiedUntil(),amenity.policyVersion(),amenity.feeCents(),0,null);
  }
  /**
-  * Expiração verificada sob a trava da unidade antes de avaliar cota e intervalo: retenções e pedidos vencidos
+  * Expiração verificada sob a trava da unidade antes de avaliar cota e intervalo: pedidos de aprovação vencidos
   * da própria unidade ou que ocupam o período pedido deixam de bloquear. Gera evento sem auditoria de ator.
+  * Retenções HELD ficam para a fila de espera, que decidirá a oferta ao próximo elegível.
   */
  public List<ReservationModels.View> expireStale(UUID tenant,UUID unit,UUID amenity,Instant occupiedFrom,Instant occupiedUntil) {
   // Travas em ordem de id evitam deadlock entre expirações concorrentes de unidades e bloqueios diferentes.
   var expired=jdbc.query("""
    with stale as (
     select id from cp.reservations
-    where tenant_id=? and status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp()
+    where tenant_id=? and status='PENDING_APPROVAL' and expires_at<=clock_timestamp()
      and (unit_id=?::uuid or (amenity_id=? and tstzrange(occupied_from,occupied_until,'[)') && tstzrange(?::timestamptz,?::timestamptz,'[)')))
     order by id for update
    )
    update cp.reservations r set status='EXPIRED',updated_at=clock_timestamp(),version=r.version+1,decision_reason=?
-   from stale where r.id=stale.id and r.tenant_id=? and r.status in ('HELD','PENDING_APPROVAL')
+   from stale where r.id=stale.id and r.tenant_id=? and r.status='PENDING_APPROVAL'
    returning r.id as reservation_id,r.unit_id,r.amenity_id,r.status,r.starts_at,r.ends_at,r.occupied_from,r.occupied_until,
     coalesce((r.rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,r.fee_cents,r.version,r.decision_reason
    """,(r,n)->view(r),tenant,unit,amenity,Timestamp.from(occupiedFrom),Timestamp.from(occupiedUntil),EXPIRED_REASON,tenant);
