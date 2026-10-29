@@ -1,6 +1,7 @@
 # Avisos do condomínio (CP-032, sem anexos nem documentos)
 
-Flag: `CP_ANNOUNCEMENTS_ENABLED` (padrão `false`, sem alteração na Vercel). V016 não foi aplicada a nenhum banco remoto.
+Flag: `CP_ANNOUNCEMENTS_ENABLED` (padrão `false`; ligada na homologação em 29/10/2026). V016 aplicada na homologação
+(`rpnrqfrfwywglvyykgrg`) em 29/10/2026; produção ainda sem migrations. Ver [STATUS.md](STATUS.md).
 Documentos, anexos privados e upload (CP-017) ficam para tickets próprios.
 
 ## Quem faz o quê
@@ -51,6 +52,6 @@ O proprietário está no público pelo banco e pela API; a tela inicial ainda at
 
 ## Pendências
 
-- Aplicação remota da V016 com aprovação; ensaio com Auth real e gestão nomeada.
+- Ensaio com Auth real e gestão nomeada; aplicação na produção pelo executor próprio.
 - Anexos e documentos (CP-017), aviso na caixa interna e push (CP-035), tempo real (CP-036).
 - Tela do proprietário, paginação além dos 100 mais recentes e retenção dos avisos e aberturas.

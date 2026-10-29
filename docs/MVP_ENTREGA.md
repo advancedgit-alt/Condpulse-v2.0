@@ -19,19 +19,23 @@ contagem.
   básico e processo demonstrado de atualização central. Ainda não é aceite do
   produto completo, integração física ou lançamento comercial.
 
-A base já contém isolamento por tenant, migrations V001-V005, sessão BFF e portal
-residencial. O banco remoto recebeu baseline oficial002 e V003-V005; o runtime
-tem prova JDBC pontual após inicialização. As chaves BFF foram preparadas na Vercel
-pela PR#19 e a evidência foi integrada na PR#20. BFF e reservas continuam
-desligados. Esses registros não comprovam login real, cadastro do piloto ou aceite
-das jornadas; consultar [STATUS.md](STATUS.md) e as evidências de cada source.
+Atualização de 29/10/2026: a base contém migrations V001-V017 e os módulos das
+fases 2 a 5 e da F2 (gestão local, convites e primeiro acesso, recuperação, MFA,
+painel master, financeiro, encomendas, visitas, acessos, caixa interna, avisos e
+pedidos). A homologação (`rpnrqfrfwywglvyykgrg`) recebeu V006-V017 pelo executor
+protegido e a Vercel Production ligou BFF, reservas e as flags desses módulos, com
+smoke público verde; recuperação por e-mail (sem SMTP) e worker seguem desligados.
+Não há condomínio cadastrado nem papel de plataforma concedido, então ainda não
+houve login real, cadastro do piloto ou aceite das jornadas; consultar
+[STATUS.md](STATUS.md) e as evidências de cada source.
 
 O rótulo Vercel `Production` do deployment atual identifica o escopo de hospedagem;
 não comprova aceite de produção operacional. Nenhum recurso novo faturável foi
 criado por este lote de planejamento.
 
-Ainda não existem painel master, financeiro de assinaturas, flags por tenant ou
-promoção de release demonstrada. O segundo projeto Supabase foi criado após
+Painel master e financeiro básico existem no código e estão ligados na homologação,
+sem uso real ainda; flags por tenant e promoção de release demonstrada continuam
+inexistentes. O segundo projeto Supabase foi criado após
 autorização de custo, conforme [AMBIENTES.md](AMBIENTES.md); a integração e a
 separação completa dos ambientes continuam pendentes.
 
@@ -39,11 +43,11 @@ separação completa dos ambientes continuam pendentes.
 
 | Fase | Entrega | Gate para concluir | Estado de partida |
 | --- | --- | --- | --- |
-| 1. Ambiente de teste e atualizações | Inventário homologação/produção, tenant de teste e processo central de versões | Separação efetiva de dados/Auth/Storage/segredos/origens, ingresso restrito, responsável e escopo/regras aprovados; custos novos aceitos antes de provisionar | Parcial: dois projetos Supabase próprios existentes; produção reservada ainda sem aplicação/migrations/credenciais; integração, tenant de teste e cadastro aprovado pendentes |
-| 2. Acesso ao sistema | Cadastro operacional, primeiro acesso, recuperação de acesso e MFA/AAL2 administrativo | Principal mínimo conferido; `inspect`/revisão/ACK/`apply` e recibo; Auth real, cookies/CSRF, refresh/logout, recuperação e negações validados; MFA/AAL2 administrativo exigido no backend | CLI e base implementadas/ensaiadas no CI; wrapper protegido preparado, sem execução gerenciada; novos Secrets no cofre, principal, credencial operacional e manifesto reais pendentes; recuperação e MFA administrativos ainda não implementados |
-| 3. Painel do condomínio | Painel residencial e gestão local mínima de unidades, moradores/vínculos, áreas/regras e reservas | Contratos e telas administrativas implementados com autorização/MFA/auditoria; percurso real no navegador/API/banco, conflito/replay/revogação e isolamento entre contextos; aceite do teste restrito registrado | Interface residencial e subset de reservas implementados/ensaiados no CI; API/telas de gestão local e aceite gerenciado pendentes |
-| 4. Painel master | Operação global dos condomínios e escopo administrativo de plataforma | Autorização de plataforma, MFA/AAL2 e auditoria; listagem/cadastro/estado de condomínio aprovados; testes negando acesso cruzado e poder master a gestor local | Implementado atrás de `CP_PLATFORM_ENABLED=false` (V010 não aplicada remotamente); concessão do primeiro papel, Auth real/AAL2 e aceite pendentes |
-| 5. Financeiro da plataforma | Contratos/planos aprovados e situação de cobrança da assinatura | Valores/vigências explícitos, registros rastreáveis e permissões testadas; estados financeiros consistentes e sem falso pagamento confirmado | Implementado atrás de `CP_PLATFORM_BILLING_ENABLED=false` (V011 não aplicada remotamente), só com registro manual de pagamento; valores reais, Auth real/AAL2 e aceite pendentes; provedor de pagamento não contratado/integrado por este plano |
+| 1. Ambiente de teste e atualizações | Inventário homologação/produção, tenant de teste e processo central de versões | Separação efetiva de dados/Auth/Storage/segredos/origens, ingresso restrito, responsável e escopo/regras aprovados; custos novos aceitos antes de provisionar | Parcial: dois projetos Supabase próprios; homologação na V017 com flags ligadas (29/10/2026); executor do banco de produção mergeado, aguardando o segredo do responsável; tenant de teste com manifesto preparado, aguardando o login operacional e os secrets do onboarding |
+| 2. Acesso ao sistema | Cadastro operacional, primeiro acesso, recuperação de acesso e MFA/AAL2 administrativo | Principal mínimo conferido; `inspect`/revisão/ACK/`apply` e recibo; Auth real, cookies/CSRF, refresh/logout, recuperação e negações validados; MFA/AAL2 administrativo exigido no backend | CLI e wrapper de onboarding prontos, sem execução gerenciada (aguardam principal, chave Auth Admin e manifesto no cofre); primeiro acesso por convite, recuperação e MFA/AAL2 administrativo implementados; BFF ligado na homologação, recuperação desligada sem SMTP; login real pendente |
+| 3. Painel do condomínio | Painel residencial e gestão local mínima de unidades, moradores/vínculos, áreas/regras e reservas | Contratos e telas administrativas implementados com autorização/MFA/auditoria; percurso real no navegador/API/banco, conflito/replay/revogação e isolamento entre contextos; aceite do teste restrito registrado | Interface residencial, reservas e API/telas de gestão local implementadas e ligadas na homologação; percurso real e aceite gerenciado pendentes (sem condomínio cadastrado) |
+| 4. Painel master | Operação global dos condomínios e escopo administrativo de plataforma | Autorização de plataforma, MFA/AAL2 e auditoria; listagem/cadastro/estado de condomínio aprovados; testes negando acesso cruzado e poder master a gestor local | Implementado e ligado na homologação (V010 aplicada em 29/10/2026); concessão do primeiro papel, Auth real/AAL2 e aceite pendentes |
+| 5. Financeiro da plataforma | Contratos/planos aprovados e situação de cobrança da assinatura | Valores/vigências explícitos, registros rastreáveis e permissões testadas; estados financeiros consistentes e sem falso pagamento confirmado | Implementado e ligado na homologação (V011 aplicada em 29/10/2026), só com registro manual de pagamento; valores reais, Auth real/AAL2 e aceite pendentes; provedor de pagamento não contratado/integrado por este plano |
 | 6. Homologação e liberação | Validar versão no tenant de teste e promovê-la à produção central | Artefato aprovado identificado, configuração/migrations compatíveis, promoção e retorno da aplicação demonstrados; smoke/observação, capacidade e recuperação compatíveis com o escopo do piloto | Git/CI/publicação e smoke existem; promoção protegida, restore e ensaio de expansão pendentes |
 
 As fases 4 e 5 podem ser preparadas enquanto os dados de piloto são reunidos,

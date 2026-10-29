@@ -1038,6 +1038,12 @@
             "npm run test:e2e"
           ],
           "scope": "Avisos atrás de CP_ANNOUNCEMENTS_ENABLED=false (V016 não aplicada remotamente): rascunho com chave de idempotência, edição pela versão lida, público por condomínio, blocos ou unidades do próprio condomínio, publicação e arquivamento pela gestão com capacidade e AAL2; rascunho e arquivado invisíveis à unidade, inclusive pelo ID (AC-029); lista da unidade sem o texto e abertura autenticada registrada uma vez com horário do banco, sem valor de ciência jurídica. Documentos e anexos (CP-017), aviso na caixa interna/push (CP-035), Auth real e gestão nomeada pendentes: não constitui aceite."
+        },
+        {
+          "commit": "86b00d24932692df63b7f7262172026ea7d73d2b",
+          "environment": "Supabase rpnrqfrfwywglvyykgrg (homologação) pelo executor manual protegido; Vercel Production da homologação",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40866823651",
+          "scope": "V016 aplicada na homologação (repetição 40867123268 sem linha nova) e CP_ANNOUNCEMENTS_ENABLED ligada depois da conferência; smoke público 40867960632 verde com a flag ativa. Sem condomínio cadastrado, Auth real ou aceite: não constitui aceite."
         }
       ]
     },
@@ -1060,6 +1066,12 @@
             "npm run test:e2e"
           ],
           "scope": "Pedidos atrás de CP_REQUESTS_ENABLED=false (V017 não aplicada remotamente): abertura pela unidade com vínculo vigente e chave de idempotência, conversa presa ao pedido com nome e horário do banco, comentário interno só da equipe e nunca visível à unidade, responsável da equipe vigente, prazo comunicado, andamento pela versão lida com transições do banco, resolução obrigatória e registrada na conversa, fechado final; pedido de outra unidade negado mesmo pelo ID. Este run falhou só no ensaio do baseline (contagem até a V016), corrigido no commit seguinte; o CI do PR confere o estado final. Anexos (CP-017), aviso à unidade (CP-034/CP-035), Auth real e equipe nomeada pendentes: não constitui aceite."
+        },
+        {
+          "commit": "b83f6d0793bb0e7a148f156b385c33b5db17be26",
+          "environment": "Supabase rpnrqfrfwywglvyykgrg (homologação) pelo executor manual protegido; Vercel Production da homologação",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40868152258",
+          "scope": "V017 aplicada na homologação (repetição 40868416867 sem linha nova) e CP_REQUESTS_ENABLED ligada depois da conferência, valendo a partir do deployment seguinte. Sem condomínio cadastrado, Auth real ou aceite: não constitui aceite."
         }
       ]
     },
