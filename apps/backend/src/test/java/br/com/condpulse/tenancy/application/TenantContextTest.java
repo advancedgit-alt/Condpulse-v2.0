@@ -61,7 +61,7 @@ class TenantContextTest {
  @Test void managerWithAal2ManagesButDoesNotOperateConcierge() {
   var context=staff("MANAGER",AssuranceLevel.AAL2);
   for(var capability:List.of(StaffCapability.MANAGE_UNITS,StaffCapability.MANAGE_MEMBERSHIPS,
-    StaffCapability.MANAGE_AMENITIES,StaffCapability.DECIDE_RESERVATIONS,StaffCapability.READ_AUDIT))
+    StaffCapability.MANAGE_AMENITIES,StaffCapability.DECIDE_RESERVATIONS,StaffCapability.READ_AUDIT,StaffCapability.PUBLISH_ANNOUNCEMENTS))
    assertDoesNotThrow(()->context.requireCapability(capability));
   var error=assertThrows(BusinessProblem.class,()->context.requireCapability(StaffCapability.OPERATE_CONCIERGE));
   assertEquals("STAFF_ACCESS_DENIED",error.code());

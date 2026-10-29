@@ -137,7 +137,7 @@ class JdbcPoolIsolationTest {
     context.requireCapability(StaffCapability.MANAGE_UNITS);
     return db.jdbc.queryForObject("select current_setting('app.capabilities',true)",String.class);
    });
-   assertEquals("amenities.manage,audit.read,memberships.manage,reservations.decide,units.manage",elevated);
+   assertEquals("amenities.manage,announcements.publish,audit.read,memberships.manage,reservations.decide,units.manage",elevated);
    db.assertEmptyContext();
    String weak=transactions.execute(db.accountC,db.tenantB,AssuranceLevel.AAL1,
     context->db.jdbc.queryForObject("select coalesce(current_setting('app.capabilities',true),'')",String.class));

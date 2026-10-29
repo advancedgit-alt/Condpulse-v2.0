@@ -1023,8 +1023,23 @@
       "id": "CP-032",
       "delivery": "Publicação de avisos e documentos. Rascunho, público-alvo, publicação e registro de abertura.",
       "acceptance": "Rascunho não aparece para morador e abertura não é tratada como ciência jurídica.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "c903f83837d53baff4ac28f4fa831ae54c0ecbeb",
+          "branch": "feat/announcements",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40857377482",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,AnnouncementJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Avisos atrás de CP_ANNOUNCEMENTS_ENABLED=false (V016 não aplicada remotamente): rascunho com chave de idempotência, edição pela versão lida, público por condomínio, blocos ou unidades do próprio condomínio, publicação e arquivamento pela gestão com capacidade e AAL2; rascunho e arquivado invisíveis à unidade, inclusive pelo ID (AC-029); lista da unidade sem o texto e abertura autenticada registrada uma vez com horário do banco, sem valor de ciência jurídica. Documentos e anexos (CP-017), aviso na caixa interna/push (CP-035), Auth real e gestão nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-033",

@@ -22,4 +22,14 @@ class DisplayTextTest {
   assertEquals("",DisplayText.collapse("   "));
   assertEquals("a​b",DisplayText.collapse("a​b"));
  }
+ @Test void multilineKeepsParagraphsButNotInvisibleCharacters() {
+  assertEquals("Assembleia ficticia\n\nPauta: obras",DisplayText.normalizeMultiline("  Assembleia   ficticia \r\n\r\n\n\n Pauta:\tobras \n\n",5000));
+  assertEquals("Linha um\nLinha dois",DisplayText.normalizeMultiline("Linha um\u2028Linha dois",5000));
+  assertNull(DisplayText.normalizeMultiline(" \n \r\n ",5000));
+  assertNull(DisplayText.normalizeMultiline("Texto\u200bescondido",5000));
+  assertNull(DisplayText.normalizeMultiline("Texto com\u0007controle",5000));
+  assertNull(DisplayText.normalizeMultiline("abc\ndef",6),"quebra de linha conta no limite");
+  assertEquals("abc\nde",DisplayText.normalizeMultiline("abc\nde",6));
+  assertNull(DisplayText.normalizeMultiline(null,10));
+ }
 }

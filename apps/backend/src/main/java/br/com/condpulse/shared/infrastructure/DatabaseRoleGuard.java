@@ -10,8 +10,8 @@ public class DatabaseRoleGuard implements ApplicationRunner {
  private final JdbcTemplate jdbc;
  public DatabaseRoleGuard(JdbcTemplate jdbc) { this.jdbc=jdbc; }
  @Override public void run(ApplicationArguments args) {
-  // Trilhas e papéis de plataforma (V010), financeiro (V011), registros de acesso (V014) e outbox/caixa interna (V015)
-  // conferidos por to_regclass: banco ainda sem a migration não falha aqui. O financeiro nunca apaga: estorno e
+  // Trilhas e papéis de plataforma (V010), financeiro (V011), registros de acesso (V014), outbox/caixa interna (V015) e
+  // avisos (V016) conferidos por to_regclass: banco ainda sem a migration não falha aqui. O financeiro nunca apaga: estorno e
   // cancelamento mantêm a linha; o registro de acesso nunca muda: correção é um evento adicional, e unidade, pessoa,
   // horários e origem vêm do banco; tarefa do outbox e aviso não são apagados pela aplicação, que também não escolhe
   // estado, tentativa ou prazo da tarefa nem altera o aviso além da abertura.
@@ -43,6 +43,13 @@ public class DatabaseRoleGuard implements ApplicationRunner {
        from pg_attribute c where c.attrelid='cp.outbox'::regclass
         and c.attname in ('state','attempts','available_at','lease_until','last_error','processed_at')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.notifications'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.announcements'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT,UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.announcements') and c.attname in ('published_by','published_at','archived_by','archived_at',
+        'created_at','updated_at')),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.announcement_reads'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.announcement_reads'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_column_privilege(current_user,to_regclass('cp.announcement_reads'),'read_at','INSERT'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.notifications') and c.attnum>0 and not c.attisdropped and c.attname<>'state'),false)
     from pg_roles where rolname=current_user

@@ -6330,6 +6330,573 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/announcements": {
+      "get": {
+        "operationId": "listManagedAnnouncements",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Rascunhos, publicados e arquivados do condomínio (até 100), com a contagem de aberturas. Gestão com AAL2.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedAnnouncementPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAnnouncementDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Cria rascunho (texto simples). A unidade não vê rascunho (AC-029).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementDraft"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedAnnouncement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ANNOUNCEMENT_TITLE_INVALID, ANNOUNCEMENT_BODY_INVALID, ANNOUNCEMENT_AUDIENCE_INVALID, ANNOUNCEMENT_TARGETS_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/announcements/{announcementId}": {
+      "put": {
+        "operationId": "editAnnouncementDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Altera somente rascunho, pela versão lida.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedAnnouncement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ANNOUNCEMENT_TITLE_INVALID, ANNOUNCEMENT_BODY_INVALID, ANNOUNCEMENT_AUDIENCE_INVALID, ANNOUNCEMENT_TARGETS_INVALID ou ANNOUNCEMENT_VERSION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ANNOUNCEMENT_NOT_FOUND"
+          },
+          "409": {
+            "description": "ANNOUNCEMENT_NOT_DRAFT ou ANNOUNCEMENT_CHANGED"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/announcements/{announcementId}/publish": {
+      "post": {
+        "operationId": "publishAnnouncement",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Publica o rascunho para o público escolhido (autoria e horário do banco). Publicado não muda de texto: para corrigir, arquive e publique outro.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementPublish"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedAnnouncement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ANNOUNCEMENT_VERSION_REQUIRED ou ANNOUNCEMENT_TARGETS_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ANNOUNCEMENT_NOT_FOUND"
+          },
+          "409": {
+            "description": "ANNOUNCEMENT_NOT_DRAFT ou ANNOUNCEMENT_CHANGED"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/announcements/{announcementId}/archive": {
+      "post": {
+        "operationId": "archiveAnnouncement",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Arquiva o publicado (sai da unidade; aberturas continuam registradas) ou descarta o rascunho.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementArchive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedAnnouncement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ANNOUNCEMENT_VERSION_REQUIRED ou ANNOUNCEMENT_REASON_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ANNOUNCEMENT_NOT_FOUND"
+          },
+          "409": {
+            "description": "ANNOUNCEMENT_ARCHIVED ou ANNOUNCEMENT_CHANGED"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/announcements": {
+      "get": {
+        "operationId": "listUnitAnnouncements",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Avisos publicados para a unidade (condomínio, a própria unidade ou o bloco dela), sem o texto. Vínculo vigente (morador, responsável, dependente ou proprietário).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitAnnouncementPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/announcements/{announcementId}/open": {
+      "post": {
+        "operationId": "openAnnouncement",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ANNOUNCEMENTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Abertura autenticada pela própria conta: devolve o texto e registra a primeira abertura (repetir não muda o horário). Não é ciência jurídica; rascunho e arquivado respondem 404.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenedAnnouncement"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado ou CSRF ausente na sessão web"
+          },
+          "404": {
+            "description": "ANNOUNCEMENT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9865,6 +10432,314 @@
           "unread": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "ManagedAnnouncement": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Aviso visto pela gestão. Texto simples (sem HTML). opens conta aberturas autenticadas registradas — abertura não é ciência jurídica nem confirmação de recebimento.",
+        "required": [
+          "announcementId",
+          "title",
+          "body",
+          "audience",
+          "audienceIds",
+          "state",
+          "authoredByMe",
+          "createdAt",
+          "updatedAt",
+          "publishedAt",
+          "archivedAt",
+          "version",
+          "opens"
+        ],
+        "properties": {
+          "announcementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 160
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "TENANT",
+              "BLOCKS",
+              "UNITS"
+            ]
+          },
+          "audienceIds": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED",
+              "ARCHIVED"
+            ]
+          },
+          "authoredByMe": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "opens": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ManagedAnnouncementPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "announcements",
+          "truncated"
+        ],
+        "properties": {
+          "announcements": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ManagedAnnouncement"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AnnouncementDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "body",
+          "audience",
+          "audienceIds"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "TENANT",
+              "BLOCKS",
+              "UNITS"
+            ]
+          },
+          "audienceIds": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Vazio para o condomínio inteiro; de 1 a 200 blocos ou unidades do condomínio."
+          }
+        }
+      },
+      "AnnouncementEdit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "body",
+          "audience",
+          "audienceIds",
+          "expectedVersion"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "TENANT",
+              "BLOCKS",
+              "UNITS"
+            ]
+          },
+          "audienceIds": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Vazio para o condomínio inteiro; de 1 a 200 blocos ou unidades do condomínio."
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AnnouncementPublish": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AnnouncementArchive": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        }
+      },
+      "UnitAnnouncement": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Aviso publicado para a unidade, sem o texto: o texto só vem com a abertura autenticada.",
+        "required": [
+          "announcementId",
+          "title",
+          "publishedAt",
+          "openedAt"
+        ],
+        "properties": {
+          "announcementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "UnitAnnouncementPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "announcements",
+          "truncated"
+        ],
+        "properties": {
+          "announcements": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/UnitAnnouncement"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OpenedAnnouncement": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Texto do aviso e horário da primeira abertura autenticada da própria conta. Abertura não é ciência jurídica.",
+        "required": [
+          "announcementId",
+          "title",
+          "body",
+          "publishedAt",
+          "openedAt"
+        ],
+        "properties": {
+          "announcementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

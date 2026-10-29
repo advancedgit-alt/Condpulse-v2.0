@@ -145,7 +145,7 @@ jobs:
         run: |
           set +e
           psql -X -v ON_ERROR_STOP=1 -c "CREATE ROLE cp_ci_worker LOGIN PASSWORD 'synthetic_ci_worker_only' IN ROLE cp_worker" || exit 1
-          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest,MembershipInvitationJdbcTest,ReservationDecisionJdbcTest,RecoveryStoreJdbcTest,PlatformAdministrationJdbcTest,BillingJdbcTest,ParcelJdbcTest,VisitJdbcTest,AccessJdbcTest,OutboxWorkerJdbcTest,DatabaseRoleGuardJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
+          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest,MembershipInvitationJdbcTest,ReservationDecisionJdbcTest,RecoveryStoreJdbcTest,PlatformAdministrationJdbcTest,BillingJdbcTest,ParcelJdbcTest,VisitJdbcTest,AccessJdbcTest,OutboxWorkerJdbcTest,DatabaseRoleGuardJdbcTest,AnnouncementJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
           status=${PIPESTATUS[0]}
           [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/maven-jdbc.log" "JDBC tests" 80
           exit "$status"
