@@ -38,7 +38,8 @@ describe('canal de atualização da unidade', () => {
     h.last().emit('ready', '{"topics":["parcels"]}');
     h.last().emit('ping', '{}');
     h.last().emit('changed', '{"topics":["parcels","notifications"]}');
-    expect(h.calls).toEqual(['changed:parcels,notifications']);
+    // A abertura consulta tudo uma vez (mudanças entre a consulta da tela e o estado inicial do canal); depois, só o assunto.
+    expect(h.calls).toEqual(['resync', 'changed:parcels,notifications']);
   });
 
   it('assunto desconhecido ou evento malformado consulta tudo de novo', () => {
@@ -56,13 +57,13 @@ describe('canal de atualização da unidade', () => {
     expect(h.calls).toEqual(['resync']);
   });
 
-  it('reconexão do navegador consulta o estado de novo; a primeira abertura não', () => {
+  it('toda abertura consulta o estado de novo, inclusive a reconexão do navegador', () => {
     const h = harness();
     h.last().emit('ready', '{}');
     h.last().emit('end', '{"reason":"timeout"}');
     h.last().fail(false); // navegador reconectando sozinho
     h.last().emit('ready', '{}');
-    expect(h.calls).toEqual(['resync']);
+    expect(h.calls).toEqual(['resync', 'resync']);
     expect(h.sources).toHaveLength(1);
   });
 
@@ -79,13 +80,13 @@ describe('canal de atualização da unidade', () => {
     const h = harness();
     h.last().emit('ready', '{}');
     h.last().emit('end', '{"reason":"expired"}');
-    expect(h.calls).toEqual(['ended:expired']);
+    expect(h.calls).toEqual(['resync', 'ended:expired']);
     expect(h.last().closed).toBe(true);
     expect(h.timers.at(-1)!.ms).toBe(EXPIRED_RETRY_MS);
     h.fire();
     expect(h.sources).toHaveLength(2);
     h.last().emit('ready', '{}');
-    expect(h.calls).toEqual(['ended:expired', 'resync']);
+    expect(h.calls).toEqual(['resync', 'ended:expired', 'resync']);
   });
 
   it('recusa do servidor tenta de novo com espera crescente até o teto, sem consultar a cada falha', () => {
