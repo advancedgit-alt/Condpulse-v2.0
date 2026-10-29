@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { platform, type PlatformSession, type PlatformTenant, type PlatformTenantChange } from '../../api/platform';
+import { collapseText, displayText } from '../../api/text';
 import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
@@ -104,23 +105,45 @@ function PlatformConsole({ section }: { section: Section }) {
   </>;
 }
 
+/** Lista sem busca: também alimenta os nomes da auditoria. */
+const tenantListKey = (accountId: string, search: string | null) => platformKey(accountId, 'tenants', search);
+
 function TenantSection() {
   const scope = usePlatform();
-  const tenants = useQuery({ queryKey: platformKey(scope.accountId, 'tenants'), queryFn: ({ signal }) => platform.tenants(signal) });
+  const [draft, setDraft] = useState('');
+  const [search, setSearch] = useState<string | null>(null);
+  const [searchInvalid, setSearchInvalid] = useState(false);
+  const tenants = useQuery({ queryKey: tenantListKey(scope.accountId, search), queryFn: ({ signal }) => platform.tenants(search, signal) });
   const [editing, setEditing] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   if (useAccessGuard(tenants.error)) return null;
   const manage = scope.session.capabilities.includes('tenants.manage');
+  function find(event: FormEvent) {
+    event.preventDefault();
+    if (!collapseText(draft)) { setSearch(null); setSearchInvalid(false); return; }
+    const normalized = displayText(draft, 160);
+    setSearchInvalid(normalized === null);
+    if (normalized !== null) { setSearch(normalized); setEditing(null); }
+  }
   return <section className="management-section" aria-labelledby="tenants-title">
     <div className="section-heading"><div><span className="section-index">01 / CONDOMÍNIOS</span><h2 id="tenants-title">Condomínios da plataforma</h2></div>
       <button className="button button-secondary button-compact" type="button" disabled={tenants.isFetching} onClick={() => void tenants.refetch()}>Atualizar</button></div>
     <p className="field-help">O cadastro de um condomínio novo segue pelo onboarding operacional aprovado; aqui só aparecem nome, estado e o recibo do cadastro.</p>
+    <form className="reservation-filter tenant-search" role="search" aria-label="Buscar condomínio" onSubmit={find}>
+      <label htmlFor="tenant-search">Buscar por trecho do nome ou id</label>
+      <input id="tenant-search" type="search" value={draft} onChange={(event) => { setDraft(event.target.value); setSearchInvalid(false); }} />
+      <button className="button button-secondary button-compact" type="submit">Buscar</button>
+      {search ? <button className="button button-secondary button-compact" type="button" onClick={() => { setDraft(''); setSearch(null); setSearchInvalid(false); }}>Limpar busca</button> : null}
+      {search ? <span>Resultado para “<bdi>{search}</bdi>” (acentos contam; maiúsculas não).</span> : null}
+    </form>
+    {searchInvalid ? <Notice tone="error">Use até 160 caracteres visíveis na busca.</Notice> : null}
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {tenants.isPending ? <div className="panel"><Loading label="Consultando condomínios…" /></div>
       : tenants.isError && !tenants.data ? <ErrorState error={tenants.error} retry={() => void tenants.refetch()} />
-        : !tenants.data || tenants.data.tenants.length === 0 ? <div className="panel"><Empty title="Nenhum condomínio">Os condomínios cadastrados pelo onboarding aparecerão aqui.</Empty></div>
+        : !tenants.data || tenants.data.tenants.length === 0 ? <div className="panel"><Empty title="Nenhum condomínio">{search
+          ? 'Nenhum condomínio corresponde à busca.' : 'Os condomínios cadastrados pelo onboarding aparecerão aqui.'}</Empty></div>
           : <ol className="management-list" aria-label="Condomínios">{tenants.data.tenants.map((tenant) => <li key={tenant.tenantId} className="management-row">
-            <div><strong>{tenant.name}</strong> <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
+            <div><strong><bdi>{tenant.name}</bdi></strong> <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
               <span>Fuso {tenant.timeZone} · versão {tenant.version} · atualizado em {formatWhen(tenant.updatedAt, PLATFORM_ZONE)}</span>
               <span>{tenant.onboarding ? `Onboarding em ${formatWhen(tenant.onboarding.completedAt, PLATFORM_ZONE)}: ${count(tenant.onboarding.units, 'unidade', 'unidades')}, ${count(tenant.onboarding.memberships, 'vínculo', 'vínculos')}, ${count(tenant.onboarding.amenities, 'área', 'áreas')}`
                 : 'Sem recibo de onboarding registrado.'}</span></div>
@@ -128,7 +151,7 @@ function TenantSection() {
               onClick={() => { setOutcome(null); setEditing(tenant.tenantId); }}>Alterar nome ou estado</button></div> : null}
             {manage && editing === tenant.tenantId ? <TenantEditor tenant={tenant} close={(result) => { setEditing(null); if (result) setOutcome(result); }} /> : null}
           </li>)}</ol>}
-    {tenants.data?.truncated ? <Notice tone="warning">A lista mostra os primeiros 200 condomínios em ordem alfabética.</Notice> : null}
+    {tenants.data?.truncated ? <Notice tone="warning">A lista mostra os primeiros 200 condomínios em ordem alfabética. Use a busca por nome ou id para encontrar os demais.</Notice> : null}
   </section>;
 }
 function count(value: number | null, singular: string, plural: string): string {
@@ -146,8 +169,11 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const stale = tenant.version !== read.version;
-  const trimmed = name.trim().replace(/\s+/g, ' ');
-  const valid = trimmed.length >= 1 && trimmed.length <= 160 && reason.trim().length >= 1 && reason.trim().length <= 500;
+  // Nome intocado vai como null: o servidor mantém o atual, sem renomear por normalização.
+  const untouched = name === read.name;
+  const normalizedName = untouched ? read.name : displayText(name, 160);
+  const normalizedReason = displayText(reason, 500);
+  const valid = normalizedName !== null && normalizedReason !== null;
   function reload() {
     setRead({ version: tenant.version, name: tenant.name, active: tenant.active });
     setName(tenant.name); setActive(tenant.active); setFailure(null);
@@ -157,7 +183,8 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
     if (!valid || pending || stale) return;
     setPending(true); setFailure(null);
     try {
-      const change = await platform.updateTenant(tenant.tenantId, { name: trimmed, active, expectedVersion: read.version, reason: reason.trim() });
+      const change = await platform.updateTenant(tenant.tenantId,
+        { name: untouched ? null : normalizedName, active, expectedVersion: read.version, reason: normalizedReason! });
       await queries.invalidateQueries({ queryKey: platformKey(scope.accountId) });
       close(tenantChangeOutcome(change, read));
     } catch (error) {
@@ -172,7 +199,10 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
     {stale ? <Notice tone="warning">Este condomínio foi alterado depois que você abriu o formulário (versão {read.version} → {tenant.version}).
       <button className="button button-secondary button-compact" type="button" onClick={reload}>Recarregar os dados atuais</button></Notice> : null}
     <label htmlFor={`tenant-name-${tenant.tenantId}`}>Nome do condomínio</label>
-    <input id={`tenant-name-${tenant.tenantId}`} maxLength={160} required value={name} onChange={(event) => setName(event.target.value)} disabled={pending} />
+    <input id={`tenant-name-${tenant.tenantId}`} required value={name} onChange={(event) => setName(event.target.value)} disabled={pending}
+      aria-describedby={`tenant-name-help-${tenant.tenantId}`} aria-invalid={normalizedName === null} />
+    <span className="field-help" id={`tenant-name-help-${tenant.tenantId}`}>{normalizedName === null
+      ? 'Informe um nome com até 160 caracteres, sem caracteres invisíveis.' : 'Até 160 caracteres; espaços repetidos viram um só.'}</span>
     <fieldset className="weekday-fieldset"><legend>Estado</legend>
       <label className="weekday-option"><input type="radio" name={`tenant-state-${tenant.tenantId}`} checked={active} onChange={() => setActive(true)} disabled={pending} />Ativo</label>
       <label className="weekday-option"><input type="radio" name={`tenant-state-${tenant.tenantId}`} checked={!active} onChange={() => setActive(false)} disabled={pending} />Suspenso</label>
@@ -195,15 +225,18 @@ const short = (id: string) => id.slice(0, 8);
 
 function AuditSection() {
   const scope = usePlatform();
-  const queries = useQueryClient();
   const pages = useInfiniteQuery({
     queryKey: platformKey(scope.accountId, 'audit'),
     queryFn: ({ pageParam, signal }) => platform.audit(pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
-  if (useAccessGuard(pages.error)) return null;
-  const known = queries.getQueryData<{ tenants: PlatformTenant[] }>(platformKey(scope.accountId, 'tenants'))?.tenants ?? [];
+  // Nomes atuais pela mesma lista da seção de condomínios (o cache não sobrevive à troca de aba).
+  const catalog = useQuery({ queryKey: tenantListKey(scope.accountId, null), queryFn: ({ signal }) => platform.tenants(null, signal),
+    enabled: scope.session.capabilities.includes('tenants.read') });
+  const accessDenied = useAccessGuard(pages.error ?? catalog.error);
+  if (accessDenied) return null;
+  const known = catalog.data?.tenants ?? [];
   const tenantName = (id: string | null) => (id ? known.find((item) => item.tenantId === id)?.name ?? `condomínio ${short(id)}` : 'plataforma');
   const events = pages.data?.pages.flatMap((page) => page.events) ?? [];
   return <section className="management-section" aria-labelledby="platform-audit-title">
@@ -215,8 +248,8 @@ function AuditSection() {
         : events.length === 0 ? <div className="panel"><Empty title="Sem registros">As alterações feitas pela plataforma aparecerão aqui.</Empty></div>
           : <ol className="management-list audit-list" aria-label="Eventos da plataforma">{events.map((event) => <li key={event.eventId} className="management-row">
             <div><strong>{actionLabels[event.action] ?? event.action}</strong>
-              <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · {tenantName(event.tenantId)} · ator {short(event.actorId)}</span>
-              {event.details.previousName && event.details.name ? <span>De "{event.details.previousName}" para "{event.details.name}"</span> : null}
+              <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · <bdi>{tenantName(event.tenantId)}</bdi> · ator {short(event.actorId)}</span>
+              {event.details.previousName && event.details.name ? <span>De “<bdi>{event.details.previousName}</bdi>” para “<bdi>{event.details.name}</bdi>”</span> : null}
               {event.reason ? <span>Motivo: {event.reason}</span> : null}</div>
           </li>)}</ol>}
     {pages.isError && events.length > 0 ? <ErrorState error={pages.error} retry={() => void pages.fetchNextPage()} /> : null}

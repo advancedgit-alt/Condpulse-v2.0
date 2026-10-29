@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.dao.DataAccessException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** V010 com PostgreSQL real: papel de plataforma, catálogo e estado dos condomínios e auditoria da plataforma. */
@@ -108,8 +107,9 @@ class PlatformAdministrationJdbcTest {
    assertEquals("PLATFORM_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->platform.tenants(db.accountC,AAL2)).code());
    int visible=tenants.execute(db.accountC,db.tenantA,AAL2,context->db.jdbc.queryForObject("select count(*) from platform.tenants",Integer.class));
    assertEquals(1,visible,"Gestor local vê só o próprio condomínio");
-   assertThrows(DataAccessException.class,()->tenants.execute(db.accountC,db.tenantA,AAL2,context->db.jdbc.update(
-    "update platform.tenants set name='GESTOR LOCAL' where id=?",db.tenantA)),"Gestor local não altera o catálogo");
+   int changed=tenants.execute(db.accountC,db.tenantA,AAL2,context->db.jdbc.update(
+    "update platform.tenants set name='GESTOR LOCAL' where id=?",db.tenantA));
+   assertEquals(0,changed,"Gestor local não alcança o catálogo para alterar");
    assertEquals("FICTICIO JDBC A",db.adminString("select name from platform.tenants where id=?",db.tenantA));
   } finally {
    db.adminUpdate("delete from cp.memberships where tenant_id=? and account_id=? and role='MANAGER'",db.tenantA,db.accountC);
@@ -119,11 +119,64 @@ class PlatformAdministrationJdbcTest {
  @Test void revokedRoleOrSuspendedAccountLosesAccessOnTheNextRequest() throws Exception {
   db.grantPlatformAdmin(db.accountA);
   assertNotNull(listed(db.tenantA));
-  db.adminUpdate("update platform.platform_roles set status='REVOKED',revoked_at=now() where account_id=?",db.accountA);
+  db.adminUpdate("update platform.platform_roles set status='REVOKED',revoked_at=now(),revoke_reason='ensaio JDBC de revogacao' where account_id=?",
+   db.accountA);
   assertEquals("PLATFORM_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->platform.tenants(db.accountA,AAL2)).code());
-  db.adminUpdate("update platform.platform_roles set status='ACTIVE',revoked_at=null where account_id=?",db.accountA);
+  assertEquals("ensaio JDBC ficticio",db.adminString("select reason from platform.platform_roles where account_id=?",db.accountA),
+   "Revogação preserva o motivo da concessão");
+  assertEquals("INSERT:ACTIVE,UPDATE:REVOKED",db.adminString(
+   "select string_agg(operation||':'||status,',' order by id) from platform.platform_role_events where account_id=?",db.accountA));
+  db.adminUpdate("update platform.platform_roles set status='ACTIVE',revoked_at=null,revoke_reason=null where account_id=?",db.accountA);
   db.adminUpdate("update platform.accounts set status='SUSPENDED' where id=?",db.accountA);
   assertEquals("ACCOUNT_INACTIVE",assertThrows(BusinessProblem.class,()->platform.tenants(db.accountA,AAL2)).code());
+  db.assertEmptyContext();
+ }
+ @Test void stateChangeWithoutNameKeepsTheStoredNameAndAuditsOnlyTheState() throws Exception {
+  db.grantPlatformAdmin(db.accountA);
+  db.adminUpdate("update platform.tenants set name='FICTICIO  JDBC\u00a0B' where id=?",db.tenantB);
+  var suspended=platform.updateTenant(db.accountA,AAL2,db.tenantB,new PlatformModels.UpdateTenant(null,false,0L,"Contrato encerrado"));
+  assertTrue(suspended.applied()); assertFalse(suspended.tenant().active());
+  assertEquals("FICTICIO  JDBC\u00a0B",suspended.tenant().name(),"Suspender não renomeia por normalização");
+  var replay=platform.updateTenant(db.accountA,AAL2,db.tenantB,new PlatformModels.UpdateTenant(null,false,0L,"Repetição"));
+  assertFalse(replay.applied());
+  assertEquals(List.of("TENANT_SUSPENDED"),platform.audit(db.accountA,AAL2,null,10).events().stream()
+   .filter(e->db.tenantB.equals(e.tenantId())).map(PlatformModels.AuditEvent::action).toList());
+  db.assertEmptyContext();
+ }
+ @Test void namesAreMeasuredInCodePointsAndInvisibleCharactersAreRefused() throws Exception {
+  db.grantPlatformAdmin(db.accountA);
+  String houses="Condomínio "+"\uD83C\uDFE0".repeat(80);
+  assertEquals(91,houses.codePointCount(0,houses.length())); assertTrue(houses.length()>160);
+  var renamed=platform.updateTenant(db.accountA,AAL2,db.tenantB,new PlatformModels.UpdateTenant(houses,true,0L,"Nome longo em UTF-16"));
+  assertEquals(houses,renamed.tenant().name());
+  assertEquals(houses,listed(db.tenantB).name());
+  var spaced=platform.updateTenant(db.accountA,AAL2,db.tenantB,
+   new PlatformModels.UpdateTenant("\u00a0Condomínio\u2003\u00a0Sol\u3000",true,1L,"Espaços Unicode"));
+  assertEquals("Condomínio Sol",spaced.tenant().name());
+  for(String invisible:new String[]{"\u200b","Condomínio\u202eloS","Condomínio\u0000","Nome\uE000"})
+   assertEquals("TENANT_NAME_INVALID",assertThrows(BusinessProblem.class,()->platform.updateTenant(db.accountA,AAL2,db.tenantB,
+    new PlatformModels.UpdateTenant(invisible,true,2L,"Ajuste"))).code(),invisible);
+  assertEquals("TENANT_NAME_INVALID",assertThrows(BusinessProblem.class,()->platform.updateTenant(db.accountA,AAL2,db.tenantB,
+   new PlatformModels.UpdateTenant("\uD83C\uDFE0".repeat(161),true,2L,"Ajuste"))).code());
+  assertEquals("Condomínio Sol",db.adminString("select name from platform.tenants where id=?",db.tenantB));
+  db.assertEmptyContext();
+ }
+ @Test void searchFindsTenantsByNameFragmentOrExactIdWithoutWildcards() throws Exception {
+  db.grantPlatformAdmin(db.accountA);
+  String marker=java.util.UUID.randomUUID().toString().substring(0,8);
+  db.adminUpdate("update platform.tenants set name=? where id=?","Residencial Busca_"+marker+" 100%",db.tenantB);
+  var byName=platform.tenants(db.accountA,AAL2,"  busca_"+marker.toUpperCase()+"  ").tenants();
+  assertEquals(List.of(db.tenantB),byName.stream().map(PlatformModels.Tenant::tenantId).toList());
+  var byId=platform.tenants(db.accountA,AAL2,db.tenantA.toString().toUpperCase()).tenants();
+  assertEquals(List.of(db.tenantA),byId.stream().map(PlatformModels.Tenant::tenantId).toList());
+  var wildcard=platform.tenants(db.accountA,AAL2,"%").tenants();
+  assertTrue(wildcard.stream().allMatch(t->t.name().contains("%")),"Curinga é texto literal");
+  assertTrue(wildcard.stream().anyMatch(t->t.tenantId().equals(db.tenantB)));
+  assertTrue(platform.tenants(db.accountA,AAL2,"residencial_busca_"+marker).tenants().isEmpty(),"Sublinhado é literal, não curinga");
+  assertTrue(platform.tenants(db.accountA,AAL2," \u00a0 ").tenants().stream().anyMatch(t->t.tenantId().equals(db.tenantA)),
+   "Busca vazia lista o catálogo");
+  assertEquals("TENANT_SEARCH_INVALID",assertThrows(BusinessProblem.class,()->platform.tenants(db.accountA,AAL2,"x".repeat(161))).code());
+  assertEquals("TENANT_SEARCH_INVALID",assertThrows(BusinessProblem.class,()->platform.tenants(db.accountA,AAL2,"\u200b")).code());
   db.assertEmptyContext();
  }
  @Test void unknownTenantAndInvalidInputAreRefusedWithoutChanges() throws Exception {

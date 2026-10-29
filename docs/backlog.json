@@ -407,6 +407,20 @@
             "npm run test:e2e"
           ],
           "scope": "Telas web da gestão local atrás de CP_MANAGEMENT_ENABLED=false: porta com segundo fator, pendências, reservas (decisão, cancelamento, bloqueio), áreas/regras, unidades, vínculos/convites e auditoria, com versão lida, repetição natural sem falso sucesso e perda de acesso limpando a tela. API sintética no navegador; primeiro acesso por convite sem conta local, Auth real e aceite em navegador com dados reais pendentes: não constitui aceite."
+        },
+        {
+          "commit": "8e1d8f40b439976ee3e5bc3954409ff01194481b",
+          "branch": "feat/platform-admin",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40824183999",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,PlatformAdministrationJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Painel master (OPS-01) atrás de CP_PLATFORM_ENABLED=false: papel de plataforma separado dos vínculos, AAL2 obrigatório, capacidades por efeito no RLS, gestor local sem poder de plataforma, condomínio suspenso fora do contexto e sem novos vínculos por convite, auditoria da plataforma e trilha de papéis. V010 não aplicada remotamente; Auth real pendente: não constitui aceite."
         }
       ]
     },
@@ -569,6 +583,20 @@
           ],
           "scope": "Disponibilidade anonima por area/contexto, limites e isolamento, microsegundos, limpeza, consulta antiga, conflito sem retry POST e troca/revogacao.16 novos testes Java e6 jornadas incluidos nos144 unitarios/HTTP,44 JDBC runtime,8 JDBC baseline,70 Vitest e27 Chromium aprovados. Nao constitui aceite integral dos tickets, Auth real ou ativacao remota.",
           "webWorkingDirectory": "apps/web"
+        },
+        {
+          "commit": "8e1d8f40b439976ee3e5bc3954409ff01194481b",
+          "branch": "feat/platform-admin",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40824183999",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,PlatformAdministrationJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Painel master (OPS-01) atrás de CP_PLATFORM_ENABLED=false: papel de plataforma separado dos vínculos, AAL2 obrigatório, capacidades por efeito no RLS, gestor local sem poder de plataforma, condomínio suspenso fora do contexto e sem novos vínculos por convite, auditoria da plataforma e trilha de papéis. V010 não aplicada remotamente; Auth real pendente: não constitui aceite."
         }
       ]
     },
@@ -615,6 +643,20 @@
             "python3 tests/database/run.py"
           ],
           "scope": "Correções da revisão independente: revogação entre gestores serializada por condomínio (revogação cruzada não deixa o condomínio sem gestor, teste JDBC concorrente), unicidade de vínculo só entre não revogados (reconvite após rejeição ou revogação), convite de uso único também no banco, conclusão presa ao vínculo do próprio convidado, valid_from fora do grant, account_self só leitura, validade pelo relógio do banco, aceite recusa unidade inativa e gestor não decide o próprio vínculo. 7 verificações SQL novas. Pendentes registrados: endurecimento do aceite com SECURITY DEFINER, email_verified, HMAC do e-mail e MFA supervisionado de CONCIERGE."
+        },
+        {
+          "commit": "015079c9253385eaa04ba0542c7a5b78f7ae815b",
+          "branch": "feat/access-recovery",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética e provedor Auth simulado",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40819926798",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,RecoveryStoreJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Recuperação de acesso pela web atrás de CP_BFF_RECOVERY_ENABLED=false: pedido neutro em prazo fixo, link pelo fragmento, tentativa V009 com cookie próprio, segundo fator com limite por conta, troca confirmada pelo provedor e encerramento de sessões. Provedor simulado; Auth real, e-mail/SMTP e a pré-condição do provedor (recusa de troca AAL1 com TOTP) pendentes: não constitui aceite de CP-020."
         }
       ]
     },

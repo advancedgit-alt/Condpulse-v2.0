@@ -7,6 +7,7 @@ import br.com.condpulse.audit.application.AuditQuery;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.platform.infrastructure.PlatformStore;
 import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.shared.application.DisplayText;
 import br.com.condpulse.shared.infrastructure.SqlStates;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataAccessException;
@@ -30,10 +31,13 @@ public class PlatformService {
    context.effectiveCapabilities().stream().map(PlatformCapability::key).sorted().toList(),
    assurance!=AssuranceLevel.AAL2));
  }
- public PlatformModels.TenantPage tenants(UUID actor,AssuranceLevel assurance) {
+ public PlatformModels.TenantPage tenants(UUID actor,AssuranceLevel assurance) { return tenants(actor,assurance,null); }
+ /** Busca opcional por trecho do nome (sem curingas) ou id exato, para alcançar condomínios além da primeira página. */
+ public PlatformModels.TenantPage tenants(UUID actor,AssuranceLevel assurance,String search) {
+  String filter=search(search);
   return execute(actor,assurance,context->{
    context.require(PlatformCapability.READ_TENANTS);
-   return store.tenants();
+   return store.tenants(filter);
   });
  }
  /**
@@ -46,7 +50,9 @@ public class PlatformService {
   if(tenantId==null) throw notFound();
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
    throw invalid("TENANT_VERSION_REQUIRED","Informe a versão lida do condomínio.");
-  String name=text(request.name(),160,"TENANT_NAME_INVALID","Informe o nome do condomínio com até 160 caracteres.");
+  // Nome ausente mantém o atual: suspender ou reativar nunca renomeia por normalização.
+  String name=request.name()==null?null:text(request.name(),160,"TENANT_NAME_INVALID",
+   "Informe o nome do condomínio com até 160 caracteres visíveis.");
   if(request.active()==null) throw invalid("TENANT_STATE_INVALID","Informe se o condomínio fica ativo ou suspenso.");
   String reason=text(request.reason(),500,"AUDIT_REASON_REQUIRED","Informe o motivo da alteração, com até 500 caracteres.");
   boolean active=request.active();
@@ -54,13 +60,14 @@ public class PlatformService {
    context.require(PlatformCapability.MANAGE_TENANTS);
    var current=store.lockTenant(tenantId);
    if(current==null) throw notFound();
-   if(current.name().equals(name) && current.active()==active) return new PlatformModels.TenantChange(current,false);
-   if(current.version()!=request.expectedVersion() || !store.updateTenant(tenantId,name,active,request.expectedVersion()))
+   String target=name==null?current.name():name;
+   if(current.name().equals(target) && current.active()==active) return new PlatformModels.TenantChange(current,false);
+   if(current.version()!=request.expectedVersion() || !store.updateTenant(tenantId,target,active,request.expectedVersion()))
     throw new BusinessProblem("TENANT_CHANGED",409,"O condomínio foi alterado. Atualize os dados antes de salvar.");
    // Uma ação por mudança: renomear e suspender na mesma gravação deixam os dois registros.
-   if(!current.name().equals(name)) {
+   if(!current.name().equals(target)) {
     var details=new LinkedHashMap<String,String>();
-    details.put("previousName",current.name()); details.put("name",name);
+    details.put("previousName",current.name()); details.put("name",target);
     store.audit(actor,"TENANT_RENAMED",tenantId,reason,details);
    }
    if(current.active()!=active)
@@ -92,11 +99,13 @@ public class PlatformService {
   }
  }
  static String text(String value,int maximum,String code,String message) {
-  if(value==null) throw invalid(code,message);
-  String normalized=value.strip().replaceAll("\\s+"," ");
-  if(normalized.isEmpty() || normalized.length()>maximum || normalized.chars().anyMatch(Character::isISOControl))
-   throw invalid(code,message);
+  String normalized=DisplayText.normalize(value,maximum);
+  if(normalized==null) throw invalid(code,message);
   return normalized;
+ }
+ static String search(String value) {
+  if(value==null || DisplayText.collapse(value).isEmpty()) return null;
+  return text(value,160,"TENANT_SEARCH_INVALID","Use até 160 caracteres visíveis na busca.");
  }
  private static BusinessProblem invalid(String code,String message) { return new BusinessProblem(code,400,message); }
  private static BusinessProblem notFound() {

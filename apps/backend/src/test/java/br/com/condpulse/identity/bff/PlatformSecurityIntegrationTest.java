@@ -87,7 +87,8 @@ class PlatformSecurityIntegrationTest {
   String raw=session("aal2");
   when(platform().session(ACCOUNT,AssuranceLevel.AAL2)).thenReturn(new PlatformModels.PlatformSession(ACCOUNT,"PLATFORM_ADMIN",
    List.of("platform.audit.read","tenants.manage","tenants.read"),false));
-  when(platform().tenants(ACCOUNT,AssuranceLevel.AAL2)).thenReturn(new PlatformModels.TenantPage(List.of(tenant(true,0)),false));
+  when(platform().tenants(ACCOUNT,AssuranceLevel.AAL2,null)).thenReturn(new PlatformModels.TenantPage(List.of(tenant(true,0)),false));
+  when(platform().tenants(ACCOUNT,AssuranceLevel.AAL2,"Sol 100%")).thenReturn(new PlatformModels.TenantPage(List.of(),false));
   var session=mvc.perform(get("/v1/platform/session").servletPath("/v1/platform/session").secure(true)
    .cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
   assertEquals(200,session.getStatus()); assertEquals("no-store",session.getHeader("Cache-Control"));
@@ -95,12 +96,26 @@ class PlatformSecurityIntegrationTest {
   var catalog=mvc.perform(get("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true)
    .cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
   assertEquals(200,catalog.getStatus()); assertTrue(catalog.getContentAsString().contains(TENANT.toString()));
-  verify(platform()).session(ACCOUNT,AssuranceLevel.AAL2); verify(platform()).tenants(ACCOUNT,AssuranceLevel.AAL2);
+  verify(platform()).session(ACCOUNT,AssuranceLevel.AAL2); verify(platform()).tenants(ACCOUNT,AssuranceLevel.AAL2,null);
+  var search=mvc.perform(get("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).param("q","Sol 100%")
+   .cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
+  assertEquals(200,search.getStatus()); assertTrue(search.getContentAsString().contains("\"tenants\":[]"));
+  verify(platform()).tenants(ACCOUNT,AssuranceLevel.AAL2,"Sol 100%");
+ }
+ @Test void bearerTokenReachesTheServiceWithItsAssurance() throws Exception {
+  start(true);
+  var jwt=Jwt.withTokenValue("synthetic-bearer").header("alg","ES256").subject(ACCOUNT.toString()).claim("aal","aal2")
+   .issuedAt(NOW).expiresAt(NOW.plusSeconds(3600)).build();
+  when(context.getBean(JwtDecoder.class).decode("synthetic-bearer")).thenReturn(jwt);
+  when(platform().session(ACCOUNT,AssuranceLevel.AAL2)).thenReturn(new PlatformModels.PlatformSession(ACCOUNT,"PLATFORM_ADMIN",List.of(),false));
+  var response=mvc.perform(get("/v1/platform/session").servletPath("/v1/platform/session").secure(true)
+   .header("Authorization","Bearer synthetic-bearer")).andReturn().getResponse();
+  assertEquals(200,response.getStatus()); verify(platform()).session(ACCOUNT,AssuranceLevel.AAL2);
  }
  @Test void aal1SessionReachesServiceAsAal1AndProblemIsRendered() throws Exception {
   start(true);
   String raw=session(null);
-  when(platform().tenants(ACCOUNT,AssuranceLevel.AAL1)).thenThrow(new BusinessProblem("MFA_REQUIRED",403,"Confirme o segundo fator."));
+  when(platform().tenants(ACCOUNT,AssuranceLevel.AAL1,null)).thenThrow(new BusinessProblem("MFA_REQUIRED",403,"Confirme o segundo fator."));
   var response=mvc.perform(get("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true)
    .cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
   assertEquals(403,response.getStatus()); assertTrue(response.getContentAsString().contains("\"code\":\"MFA_REQUIRED\""));
@@ -136,6 +151,10 @@ class PlatformSecurityIntegrationTest {
   start(true);
   assertEquals(401,mvc.perform(get("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true))
    .andReturn().getResponse().getStatus());
+  int anonymousPut=mvc.perform(put("/v1/platform/tenants/"+TENANT).servletPath("/v1/platform/tenants/"+TENANT).secure(true)
+   .header("Origin",ORIGIN).contentType(MediaType.APPLICATION_JSON)
+   .content("{\"name\":null,\"active\":false,\"expectedVersion\":0,\"reason\":\"Anônimo\"}")).andReturn().getResponse().getStatus();
+  assertTrue(anonymousPut==401 || anonymousPut==403,"PUT anônimo é recusado antes do serviço: "+anonymousPut);
   String raw=session("aal2"); var csrf=csrf();
   // Criar condomínio pela API não existe: o cadastro segue pelo onboarding operacional.
   assertEquals(403,mvc.perform(post("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).header("Origin",ORIGIN)

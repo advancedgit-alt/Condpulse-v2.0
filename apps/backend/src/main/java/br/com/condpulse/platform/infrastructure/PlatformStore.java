@@ -48,13 +48,18 @@ public class PlatformStore {
   return r.wasNull()?null:value;
  }
 
- public PlatformModels.TenantPage tenants() {
-  var rows=jdbc.query(TENANT_SELECT+" order by t.name,t.id limit ?",TENANT,TENANT_PAGE+1);
+ /** Catálogo em ordem alfabética; com busca, filtra por trecho do nome (curingas escapados) ou pelo id exato. */
+ public PlatformModels.TenantPage tenants(String search) {
+  var rows=search==null
+   ?jdbc.query(TENANT_SELECT+" order by t.name,t.id limit ?",TENANT,TENANT_PAGE+1)
+   :jdbc.query(TENANT_SELECT+" where t.name ilike ? escape '\\' or t.id::text=? order by t.name,t.id limit ?",TENANT,
+     "%"+search.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%",search.toLowerCase(java.util.Locale.ROOT),TENANT_PAGE+1);
   return new PlatformModels.TenantPage(rows.stream().limit(TENANT_PAGE).toList(),rows.size()>TENANT_PAGE);
  }
  /** Leitura com bloqueio da linha: a decisão de idempotência e a gravação veem o mesmo estado. */
  public PlatformModels.Tenant lockTenant(UUID tenant) {
-  var rows=jdbc.query(TENANT_SELECT+" where t.id=? for update of t",TENANT,tenant);
+  // NO KEY UPDATE: não conflita com as travas das chaves estrangeiras de cp.* durante a alteração.
+  var rows=jdbc.query(TENANT_SELECT+" where t.id=? for no key update of t",TENANT,tenant);
   return rows.isEmpty()?null:rows.getFirst();
  }
  public PlatformModels.Tenant tenant(UUID tenant) {
