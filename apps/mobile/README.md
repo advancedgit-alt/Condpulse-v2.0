@@ -26,8 +26,8 @@ diante). Sem distribuição: falta build de desenvolvimento próprio e teste em 
   Conflito (horário ocupado entre a consulta e o envio) atualiza a ocupação, desfaz a escolha e pede outro horário.
 - Resultado incerto trava a escolha e repete com a mesma `Idempotency-Key` (nada é reservado duas vezes).
 - Minhas reservas (30 dias): situação, motivo, retirar pedido ou cancelar com confirmação e versão lida.
-- A API aceita escrita com `Authorization: Bearer` sem CSRF quando não há cookie de sessão do CondPulse (cliente nativo);
-  sessão do navegador continua exigindo CSRF (`SecurityConfiguration.bearerWithoutBrowserSession`).
+- Escrita pelo app usa `Authorization: Bearer` sem CSRF: o resource server do Spring não exige CSRF com token Bearer, e
+  só o cookie de sessão do navegador continua exigindo (teste `nativeBearerWritesWithoutCsrfAndOnlyBearerSkipsIt`).
 
 ## Configuração
 

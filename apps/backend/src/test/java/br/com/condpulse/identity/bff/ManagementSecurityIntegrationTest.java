@@ -148,26 +148,26 @@ class ManagementSecurityIntegrationTest {
    .andReturn().getResponse().getStatus());
   verify(units).units(ACCOUNT,TENANT,AssuranceLevel.AAL2); verify(units).units(ACCOUNT,TENANT,AssuranceLevel.AAL1);
  }
- @Test void nativeBearerWritesWithoutCsrfButBrowserSessionStillNeedsIt() throws Exception {
+ @Test void nativeBearerWritesWithoutCsrfAndOnlyBearerSkipsIt() throws Exception {
   when(decoder.decode("synthetic-bearer-aal2")).thenReturn(jwt("aal2"));
   var request=new UnitManagementModels.CreateUnit("103",null);
   when(units.createUnit(ACCOUNT,TENANT,AssuranceLevel.AAL2,request))
    .thenReturn(new UnitManagementModels.Unit(UNIT,"103",null,null,"ACTIVE",0));
   String route=BASE+"/units";
-  // Aplicativo: Bearer, sem cookie do CondPulse e sem Origin; CSRF não se aplica.
+  // Aplicativo: Bearer, sem cookie e sem Origin. O resource server do Spring não exige CSRF com token Bearer
+  // (o navegador não anexa esse cabeçalho sozinho); o cookie de sessão é ignorado quando há Bearer.
   var nativeApp=mvc.perform(post(route).servletPath(route).secure(true).header("Authorization","Bearer synthetic-bearer-aal2")
    .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"103\",\"blockId\":null}")).andReturn().getResponse();
   assertEquals(201,nativeApp.getStatus());
-  // Bearer junto com cookie de sessão do navegador continua exigindo CSRF.
-  var mixed=mvc.perform(post(route).servletPath(route).secure(true).header("Authorization","Bearer synthetic-bearer-aal2")
-   .cookie(new Cookie(BffCookies.SESSION,session("aal2"))).contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"103\"}"))
-   .andReturn().getResponse();
-  assertEquals(403,mixed.getStatus());
+  // Sem Bearer, só o cookie: CSRF continua obrigatório.
+  var cookieOnly=mvc.perform(post(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,session("aal2")))
+   .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"103\"}")).andReturn().getResponse();
+  assertEquals(403,cookieOnly.getStatus());
   // Sem identidade: barrado antes do serviço.
   var anonymous=mvc.perform(post(route).servletPath(route).secure(true).contentType(MediaType.APPLICATION_JSON).content("{}"))
    .andReturn().getResponse();
   assertEquals(403,anonymous.getStatus());
-  // Bearer inválido sem cookie: 401, nunca chega ao serviço.
+  // Bearer inválido: 401, nunca chega ao serviço.
   when(decoder.decode("synthetic-invalid")).thenThrow(new org.springframework.security.oauth2.jwt.BadJwtException("invalido"));
   var invalid=mvc.perform(post(route).servletPath(route).secure(true).header("Authorization","Bearer synthetic-invalid")
    .contentType(MediaType.APPLICATION_JSON).content("{}")).andReturn().getResponse();

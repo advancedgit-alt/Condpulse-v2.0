@@ -1,8 +1,6 @@
 package br.com.condpulse.identity.infrastructure;
 import java.net.URI;
 import java.util.UUID;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import br.com.condpulse.identity.bff.BffSecurityConfigurer;
@@ -49,21 +47,11 @@ public class SecurityConfiguration {
    {"type":"urn:condpulse:problem:%s","title":"Acesso não autorizado.","status":%d,"code":"%s","traceId":"%s"}
    """.formatted(code,status,code,UUID.randomUUID()));
  }
- static boolean bearerWithoutBrowserSession(HttpServletRequest request) {
-  String authorization=request.getHeader("Authorization");
-  if(authorization==null || !authorization.regionMatches(true,0,"Bearer ",0,7) || authorization.length()<=7) return false;
-  Cookie[] cookies=request.getCookies();
-  if(cookies!=null) for(Cookie cookie:cookies) if(cookie.getName().startsWith("__Host-cp")) return false;
-  return !request.getServletPath().startsWith("/auth/");
- }
  @Bean SecurityFilterChain apiSecurity(HttpSecurity http,ObjectProvider<BffSecurityConfigurer> bff) throws Exception {
   var configurer=bff.getIfAvailable();
   if(configurer!=null) configurer.configure(http);
   // BFF é opcional e permanece desligado até configurar/homologar sua origem e segredos.
-  // CSRF protege a sessão por cookie do navegador. Cliente nativo com Bearer e sem cookie de sessão do CondPulse não é
-  // alvo de CSRF (o navegador não anexa esse cabeçalho sozinho) e não tem como obter o token CSRF.
-  return http.csrf(c->c.ignoringRequestMatchers(SecurityConfiguration::bearerWithoutBrowserSession))
-   .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+  return http.sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .requestCache(c->c.disable())
    .authorizeHttpRequests(a->a
     .requestMatchers("/actuator/health","/actuator/health/liveness","/actuator/health/readiness").permitAll()
