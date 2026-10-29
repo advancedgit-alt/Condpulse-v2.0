@@ -43,7 +43,7 @@ async function mount() {
     return new Response(JSON.stringify(identities[account]), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } });
   await manager.start();
-  await render(<QueryClientProvider client={queries}><Root manager={manager} api={api} /></QueryClientProvider>);
+  await render(<QueryClientProvider client={queries}><Root manager={manager} api={api} newKey={() => `test:${Math.random().toString(36).slice(2).padEnd(16, "0")}`} /></QueryClientProvider>);
   return { store, fake, manager, calls, queries, set401: (value: boolean) => { reject401 = value; } };
 }
 async function signIn(email: string, password: string) {

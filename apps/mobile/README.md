@@ -17,6 +17,18 @@ diante). Sem distribuição: falta build de desenvolvimento próprio e teste em 
 - Conta com TOTP verificado precisa do código (AAL2) antes de qualquer token ir para a API.
 - Cache de dados só em memória (TanStack Query); nada do condomínio é gravado no aparelho.
 
+## Reservas (CP-024)
+
+- Com um vínculo de unidade escolhido: áreas do condomínio (capacidade, taxa informativa, aprovação), regras da área
+  (horário, antecedência, duração, limpeza, cancelamento), dia e duração permitidos pela regra e horários calculados com
+  as mesmas regras do servidor (`src/reservations/slots.ts`), marcando o que a consulta de ocupação mostra como ocupado.
+- Envio exige aceite da versão das regras. Área com aprovação vira **pedido aguardando aprovação**, nunca "confirmada".
+  Conflito (horário ocupado entre a consulta e o envio) atualiza a ocupação, desfaz a escolha e pede outro horário.
+- Resultado incerto trava a escolha e repete com a mesma `Idempotency-Key` (nada é reservado duas vezes).
+- Minhas reservas (30 dias): situação, motivo, retirar pedido ou cancelar com confirmação e versão lida.
+- Escrita pelo app usa `Authorization: Bearer` sem CSRF: o resource server do Spring não exige CSRF com token Bearer, e
+  só o cookie de sessão do navegador continua exigindo (teste `nativeBearerWritesWithoutCsrfAndOnlyBearerSkipsIt`).
+
 ## Configuração
 
 Variáveis públicas embutidas no build (nunca segredo; sem `.env` no Git):

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, PERMIT_LINK, type PublicPermit } from '../api/client';
 import { SessionPage, useAuth } from './Auth';
 import { Loading, Notice, errorMessage } from './primitives';
@@ -46,25 +46,29 @@ export function PermitLinkPage() {
   const [permit, setPermit] = useState<PublicPermit | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [loading, setLoading] = useState(Boolean(token));
-  // Sem AbortSignal: a consulta é um POST e cancelá-lo viraria "resultado incerto"; resposta tardia é só ignorada.
-  const load = useCallback(async (current: { active: boolean } = { active: true }) => {
+  // Sem AbortSignal: a consulta é um POST e cancelá-lo viraria "resultado incerto". Só a consulta mais recente (automática
+  // ou manual) vale; resposta tardia de outra, ou de outro link, é ignorada.
+  const latest = useRef(0);
+  const load = useCallback(async () => {
+    const attempt = ++latest.current;
     if (!token) { setLoading(false); return; }
     setLoading(true); setFailure(null);
-    try { const value = await api.viewPermitLink(token); if (current.active) setPermit(value); }
+    const current = () => attempt === latest.current;
+    try { const value = await api.viewPermitLink(token); if (current()) setPermit(value); }
     catch (error) {
-      if (!current.active) return;
+      if (!current()) return;
       if (error instanceof ApiError && error.code === 'PERMIT_LINK_UNAVAILABLE') forget();
       setFailure(error);
-    } finally { if (current.active) setLoading(false); }
+    } finally { if (current()) setLoading(false); }
   }, [token]);
   // Espera a verificação de sessão da aplicação terminar: ela pode reiniciar o cliente e tornaria este POST "incerto".
   const auth = useAuth();
   const settled = auth.status !== 'loading' && auth.status !== 'logoutPending';
   useEffect(() => {
     if (!settled) return undefined;
-    const current = { active: true };
-    void load(current);
-    return () => { current.active = false; };
+    void load();
+    // Desmontar ou trocar de link invalida a consulta em andamento.
+    return () => { latest.current += 1; };
   }, [load, settled]);
 
   if (!token) return <SessionPage><span className="eyebrow">VISITA</span><h1>Link de visita indisponível.</h1>
