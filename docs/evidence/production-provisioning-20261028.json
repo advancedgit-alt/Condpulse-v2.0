@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "scope": "SUPABASE_SECOND_PROJECT_PROVISIONING",
+  "recordBatchDate": "2026-10-28",
+  "recordTimeZone": "America/Sao_Paulo",
+  "repository": {
+    "fullName": "advancedgit-alt/Condpulse-v2.0",
+    "baseCommit": "9b204b282020d285e9de9c0ca30e848930968fe1",
+    "baseTree": "66bcce68a4ade9d837a383d9acb881820d8a5ce5",
+    "referenceMeaning": "Documentation base; not a deployment, migration or infrastructure source execution attestation"
+  },
+  "authorization": {
+    "explicitUserApproval": true,
+    "approvedScope": "One additional CondPulse Supabase project reserved for production",
+    "incrementalBaseCost": {
+      "amount": 10,
+      "currency": "USD",
+      "period": "MONTH"
+    },
+    "paidAddonsAdded": [],
+    "variableUsageOrFutureAddonsApprovedByThisRecord": false
+  },
+  "createdProject": {
+    "id": "tkxcujckpsuawnzkvpjg",
+    "name": "CondPulse-producao",
+    "organizationId": "hkbgyjyyacyiltxqotwj",
+    "region": "sa-east-1",
+    "intendedRole": "RESERVED_PRODUCTION",
+    "creationResponse": {
+      "created_at": "2026-10-29T00:25:18.99128Z",
+      "timestampSource": "Supabase provider response",
+      "localExecutionClockInferred": false
+    },
+    "readback": {
+      "status": "ACTIVE_HEALTHY",
+      "database": {
+        "host": "db.tkxcujckpsuawnzkvpjg.supabase.co",
+        "version": "17.11.0.003",
+        "postgresEngine": "17"
+      }
+    }
+  },
+  "readOnlyVerification": {
+    "snapshotStage": "Initial inventory after project creation, before subsequent Auth and SSL hardening",
+    "scope": "Aggregate application catalog, Auth and Storage inventory; no personal records or key values",
+    "applicationSchemaNames": ["platform", "cp"],
+    "applicationSchemaCount": 0,
+    "applicationTableCount": 0,
+    "applicationRolePrefix": "cp_",
+    "applicationRoleCount": 0,
+    "applicationFlywayHistoryPresent": false,
+    "authUserCount": 0,
+    "storageBucketCount": 0,
+    "securityAdvisor": {
+      "lints": [],
+      "productSecurityAcceptance": false
+    }
+  },
+  "subsequentHardening": {
+    "projectId": "tkxcujckpsuawnzkvpjg",
+    "auth": {
+      "surface": "Supabase dashboard /auth/providers",
+      "publicSignupEnabled": false,
+      "publicSignupChangeSaved": true,
+      "anonymousSignupEnabled": false,
+      "emailConfirmationEnabled": true,
+      "manualIdentityLinkingEnabled": false,
+      "anonymousEmailAndLinkingSettingsPreserved": true,
+      "authUsersMutated": false,
+      "passwordsChanged": false,
+      "privateKeysReadOrCopied": false
+    },
+    "databaseTransport": {
+      "surface": "Supabase dashboard /database/settings",
+      "sslEnforcementBefore": false,
+      "sslEnforcementAfter": true,
+      "nativeEnableSslDialogUsed": true,
+      "restartRequestedByNativeDialog": true,
+      "postChangeReadback": {
+        "status": "ACTIVE_HEALTHY",
+        "databaseVersion": "17.11.0.003"
+      },
+      "subsequentBackendQuery": {
+        "ssl": true,
+        "applicationSchemaCount": 0,
+        "authUserCount": 0,
+        "storageBucketCount": 0
+      },
+      "proofScope": "Dashboard checked setting, subsequent project health and SSL on the inspected backend connection; no application JDBC or pooler CA/hostname attestation",
+      "jdbcVerifyFullVerified": false,
+      "applicationRuntimeVerified": false
+    },
+    "nativeCatalogReadOnly": {
+      "serverTimestamp": "2026-10-29T00:37:44.815753Z",
+      "timestampSource": "PostgreSQL server query response",
+      "localExecutionClockInferred": false,
+      "serverVersionNum": 170011,
+      "actor": "postgres",
+      "applicationSchemaCount": 0,
+      "applicationTableCount": 0,
+      "applicationFlywayHistoryPresent": false,
+      "explicitDefaultPrivilegeGrantsInGlobalOrApplicationSchemas": 0,
+      "defaultPrivilegeScopeIncludesAllCreatorsAndGrantees": true,
+      "builtInDefaultPrivilegesAssertedAbsent": false,
+      "btreeGist": {
+        "availableVersion": "1.7",
+        "installed": false
+      },
+      "managedNativeEventTriggerCount": 6,
+      "managedCatalogModified": false
+    },
+    "applicationSqlOrMigrationExecutorCreatedByThisHardening": false
+  },
+  "existingPreparatoryHomologation": {
+    "projectId": "rpnrqfrfwywglvyykgrg",
+    "projectName": "Condpulse-v2.0",
+    "region": "sa-east-1",
+    "modifiedByThisProvisioning": false,
+    "vercelProjectName": "condpulse",
+    "observedApplicationOrigin": "https://project-rhvdq.vercel.app",
+    "vercelDeploymentScopeLabel": "Production",
+    "deploymentLabelMeansBusinessProductionAccepted": false
+  },
+  "operationsNotPerformed": {
+    "authKeysRead": false,
+    "fixturesOrBusinessDataCreated": false,
+    "applicationMigrationsApplied": false,
+    "applicationRuntimeCredentialsConfigured": false,
+    "vercelRuntimeConnectedToNewProject": false,
+    "productionApplicationOriginConfigured": false,
+    "authJourneysConfiguredOrAccepted": false,
+    "advancedResourcesOrSecretsUsedOrModified": false
+  },
+  "outcome": {
+    "state": "PROJECT_CREATED_APPLICATION_NOT_CONFIGURED",
+    "secondProjectExists": true,
+    "fullEnvironmentSeparationVerified": false,
+    "operationalProductionAccepted": false,
+    "mvpPhaseOneCompleted": false,
+    "freshDatabaseMigrationPath": "Reviewed Flyway migrate V001 through V005; no baseline002 or bootstrap-history copy",
+    "freshFlywayHistoryPolicy": "Preserve any legitimate native SCHEMA marker emitted by createSchemas(true), followed by five SQL migrations V001 through V005; do not fabricate or require a BASELINE record or exactly five total history rows",
+    "nextGate": "Review and verify separate target guards, credentials, TLS, application, Auth, Storage and release-promotion integration"
+  },
+  "limitations": [
+    "ACTIVE_HEALTHY is project health, not an accepted CondPulse application journey",
+    "Zero application schemas or tables does not mean absence of Supabase managed schemas",
+    "Empty security advisor findings do not establish complete product security acceptance",
+    "Saved Auth settings and SSL enforcement do not establish user journeys, JDBC verify-full or application-runtime acceptance",
+    "Provider created_at is preserved without inferring a local completion time",
+    "Existing executors fix the preparatory project and require reviewed target support before any new-project execution",
+    "No backup restore, capacity, RPO/RTO or release-promotion acceptance is established by provisioning"
+  ]
+}

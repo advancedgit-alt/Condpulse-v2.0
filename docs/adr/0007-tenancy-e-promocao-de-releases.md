@@ -18,10 +18,11 @@ cadastro administrativo, assinaturas ou controle de liberação por tenant. As f
 teste no mesmo deployment não impede os demais tenants de receberem código novo.
 
 O plano de implantação exige separação entre homologação e produção, incluindo
-PostgreSQL, Auth, Storage e credenciais. O segundo ambiente ainda precisa ser
-provisionado e verificado; a URL ou o nome de um deployment não comprova essa
-separação. Nenhum recurso novo faturável foi criado por este lote documental;
-esta proposta não provisiona infraestrutura nem autoriza custo novo. O rótulo
+PostgreSQL, Auth, Storage e credenciais. Na formulação desta decisão, o segundo
+projeto ainda não existia. Após aceite específico do custo, ele foi criado e
+conferido conforme [AMBIENTES.md](../AMBIENTES.md); aplicação, credenciais e
+integração continuam pendentes. A URL ou o nome de um deployment não comprova a
+separação. Esta decisão documental não autoriza custos adicionais por si só. O rótulo
 Vercel `Production` do deployment atual é um escopo da plataforma de hospedagem,
 não um aceite de produção operacional do CondPulse.
 

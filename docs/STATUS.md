@@ -1,5 +1,14 @@
 # Estado verificável - 28/10/2026
 
+## Segundo projeto provisionado, aplicação ainda pendente — CP-004
+
+- Após autorização explícita do custo-base adicional de US$10/mês, o projeto `CondPulse-producao` (`tkxcujckpsuawnzkvpjg`) foi criado na organização `hkbgyjyyacyiltxqotwj`, região `sa-east-1`. Leitura posterior confirmou `ACTIVE_HEALTHY` e PostgreSQL17.11.0.003, inclusive após a configuração de SSL. Inventário e evidência: [AMBIENTES.md](AMBIENTES.md) e [production-provisioning-20261028.json](evidence/production-provisioning-20261028.json).
+- Inspeção agregada confirmou zero schemas/tabelas `platform`/`cp`, zero roles `cp_*`, ausência de histórico Flyway da aplicação, zero usuários Auth e zero buckets. O security advisor retornou `lints=[]`; isso não constitui aceite completo de segurança.
+- Pelo painel do projeto novo, signup público foi desativado e salvo; anonymous/manual linking permaneceram desligados e confirmação de e-mail ligada. SSL enforcement foi ativado pelo diálogo nativo que solicita reinício; readback do painel confirmou a opção ligada e a saúde do projeto foi conferida depois. A consulta posterior observou `pg_stat_ssl.ssl=true` na conexão backend. Não é prova JDBC verify-full da aplicação ou da validação de CA/hostname pelo pooler.
+- Projeto existente de homologação preparatória, Vercel, origem, banco e segredos foram preservados. Não foram cadastrados usuários, fixtures ou vínculos, nem lidos/copiados valores de chaves ou senhas; não houve DDL/migration da aplicação, contratação de adicionais, troca de alias ou publicação para clientes.
+- Produção está reservada e ainda sem aplicação, origem, identidades runtime/cofre ou jornadas Auth. O banco novo exige Flyway normal V001–V005, preservando eventual marcador SCHEMA nativo criado pelo próprio Flyway; nunca baseline002 ou cópia do histórico legado. Executores atuais continuam fixos no alvo preparatório e precisam de revisão específica para o novo alvo.
+- A criação do segundo projeto avança a fase1, mas não conclui integração/isolamento, primeiro acesso, capacidade, restore ou promoção. O caminho seguinte continua sendo cadastro aprovado e Auth real em homologação, enquanto a instalação nova de produção é preparada separadamente. Nenhum recurso Advanced alterado.
+
 ## Onboarding protegido e plano do MVP — CP-004/CP-010/CP-020/CP-066
 
 - Novo caminho manual `.github/workflows/onboarding-operations.yml` prepara a CLI existente para `inspect`/`apply` no alvo CondPulse fixo, após gate público do SHA revisado e SHA256 dos bytes do manifesto privado. O ACK externo vincula source/hash/fingerprint; a semântica transacional do CLI não foi alterada.
