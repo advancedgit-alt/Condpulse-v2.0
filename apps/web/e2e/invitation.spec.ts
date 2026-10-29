@@ -87,19 +87,19 @@ test('senha recusada e espera do limite ficam visíveis no formulário, sem reen
   await page.getByLabel('E-mail convidado').fill('convidada-sintetica@example.invalid');
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-WRONG-PASSWORD');
   await page.getByRole('button', { name: 'Aceitar convite e entrar' }).click();
-  await expect(page.getByText('Não foi possível validar seu e-mail e sua senha.')).toBeVisible();
-  await expect(page.getByLabel('E-mail convidado')).toHaveValue('convidada-sintetica@example.invalid');
+  await expect(page.getByText('Não foi possível validar seu e-mail e sua senha.'), 'passo 1: recusa da senha no formulário').toBeVisible();
+  await expect(page.getByLabel('E-mail convidado'), 'passo 1: e-mail preservado').toHaveValue('convidada-sintetica@example.invalid');
   await expect(page.getByLabel('Senha', { exact: true })).toHaveValue('');
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
   await page.getByRole('button', { name: 'Aceitar convite e entrar' }).click();
-  await expect(page.getByText('Aguarde um pouco antes de tentar novamente.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Aceitar convite e entrar' })).toBeDisabled();
+  await expect(page.getByText('Aguarde um pouco antes de tentar novamente.'), 'passo 2: espera no formulário do convite').toBeVisible();
+  await expect(page.getByRole('button', { name: 'Aceitar convite e entrar' }), 'passo 2: envio bloqueado na espera').toBeDisabled();
   // A espera vale também para o login comum (mesmo limite no servidor), sem nova chamada.
   await page.getByRole('link', { name: 'Já tenho acesso: entrar' }).click();
-  await page.getByLabel('E-mail').fill('convidada-sintetica@example.invalid');
+  await page.getByLabel('E-mail', { exact: true }).fill('convidada-sintetica@example.invalid');
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
-  await page.getByRole('button', { name: /Entrar/ }).first().click();
-  await expect(page.getByText('Aguarde um pouco antes de tentar novamente.')).toBeVisible();
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page.getByText('Aguarde um pouco antes de tentar novamente.'), 'passo 3: espera compartilhada no login comum').toBeVisible();
   expect(calls).toBe(2);
 });
 

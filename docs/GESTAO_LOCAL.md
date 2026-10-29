@@ -191,8 +191,14 @@ conta e vínculo `PENDING` na mesma transação, com o e-mail do token) e só en
 a sessão web, renovando o CSRF. Recusa do aceite encerra a sessão aberta no provedor
 e não cria sessão local; se o aceite for gravado mas a sessão não, a resposta indica
 `sessionStarted=false` e a tela orienta o login comum. Mesmo limite de tentativas do
-login, Origin e CSRF. Login comum recusado por conta inexistente aponta para o
-convite aberto na aba.
+login, Origin e CSRF; a web guarda a espera do `429` para as duas rotas. O provedor
+recebe o e-mail na mesma forma contada pelo limite (sem espaços nas pontas, em
+minúsculas). Sessão anterior no navegador é substituída pela nova ou, sem sessão nova,
+removida; falha ao encerrá-la no servidor fica no log e não desfaz o aceite. Erro de
+senha, conta inativa e espera ficam no formulário; resultado incerto (rede ou `5xx`)
+é estado final que orienta o login comum, sem reenviar o mesmo convite. Aceites
+simultâneos da mesma conta nova reutilizam o espelho local. Login comum recusado por
+conta inexistente aponta para o convite aberto na aba.
 
 ## Pendências
 
@@ -203,4 +209,7 @@ SMTP e de credencial administrativa fora da API.
 
 Primeiro acesso por convite: a conta precisa existir no Supabase Auth (cadastro
 público desligado; criação pela operação) e o e-mail do token é usado sem conferir
-`email_verified`, como no aceite autenticado. Ensaio com Auth real pendente.
+`email_verified`, como no aceite autenticado — conferir no ensaio com Auth real as
+opções de confirmação e troca segura de e-mail e a normalização do e-mail pelo
+provedor. Resposta idempotente para convite já aceito pela mesma conta (hoje `404`
+neutro) é melhoria registrada. Ensaio com Auth real pendente.

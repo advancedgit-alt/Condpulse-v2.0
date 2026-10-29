@@ -95,6 +95,7 @@ class MembershipInvitationJdbcTest {
    assertEquals(status,db.adminString("select status from platform.accounts where id=?",person));
    invitations.revoke(db.accountC,db.tenantA,AAL2,created.invitationId());
   }
+ }
  @Test void suspendedTenantDoesNotReceiveNewMembershipsUntilReactivated() throws Exception {
   String email="suspenso."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
   var created=invite(email);
