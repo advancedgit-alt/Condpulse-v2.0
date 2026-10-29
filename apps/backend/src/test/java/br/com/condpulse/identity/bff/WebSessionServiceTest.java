@@ -194,4 +194,52 @@ class WebSessionServiceTest {
   var status=service().mfaStatus(raw);
   assertEquals(AssuranceLevel.AAL2,status.assuranceLevel()); assertEquals(List.of(factor),status.factors());
  }
+ private Jwt invited(UUID account,String email) {
+  var builder=Jwt.withTokenValue("synthetic-invited-access").header("alg","ES256").subject(account.toString())
+   .issuedAt(now).expiresAt(now.plusSeconds(600));
+  if(email!=null) builder.claim("email",email);
+  return builder.build();
+ }
+ private void providerAccepts(UUID account,String email) {
+  when(auth.password("convidada@example.invalid","Senha-sintetica-1"))
+   .thenReturn(new SupabaseAuthClient.TokenResponse("synthetic-invited-access","synthetic-invited-refresh",600));
+  when(decoder.decode("synthetic-invited-access")).thenReturn(invited(account,email));
+ }
+ @Test void firstAccessAcceptsBeforeCreatingTheWebSession() {
+  UUID account=UUID.fromString("22222222-2222-4222-8222-222222222222");
+  providerAccepts(account,"convidada@example.invalid");
+  var seen=new java.util.ArrayList<String>();
+  var result=service().loginAcceptingInvitation("convidada@example.invalid","Senha-sintetica-1",(actor,email)->{
+   verifyNoInteractions(store); seen.add(actor+"|"+email); return "ACEITO";
+  });
+  assertEquals("ACEITO",result.accepted()); assertNotNull(result.session());
+  assertEquals(account,result.session().accountId());
+  assertEquals(List.of(account+"|convidada@example.invalid"),seen);
+  var stored=org.mockito.ArgumentCaptor.forClass(StoredWebSession.class);
+  verify(store).create(stored.capture()); assertEquals(account,stored.getValue().accountId());
+  verify(auth,never()).signOutBestEffort(any());
+ }
+ @Test void refusedInvitationEndsTheProviderSessionAndCreatesNothing() {
+  UUID account=UUID.fromString("22222222-2222-4222-8222-222222222222");
+  providerAccepts(account,null);
+  var error=assertThrows(BusinessProblem.class,()->service().loginAcceptingInvitation("convidada@example.invalid","Senha-sintetica-1",
+   (actor,email)->{ assertNull(email,"Sem claim de e-mail o aceite recebe nulo e recusa"); throw new BusinessProblem("INVITATION_NOT_AVAILABLE",404,"Indisponível."); }));
+  assertEquals("INVITATION_NOT_AVAILABLE",error.code());
+  verify(auth).signOutBestEffort("synthetic-invited-access"); verifyNoInteractions(store);
+ }
+ @Test void sessionFailureAfterAcceptanceKeepsTheAcceptanceWithoutSession() {
+  UUID account=UUID.fromString("22222222-2222-4222-8222-222222222222");
+  providerAccepts(account,"convidada@example.invalid");
+  doThrow(new BusinessProblem("ACCOUNT_INACTIVE",403,"Inativa.")).when(store).create(any());
+  var result=service().loginAcceptingInvitation("convidada@example.invalid","Senha-sintetica-1",(actor,email)->"ACEITO");
+  assertEquals("ACEITO",result.accepted()); assertNull(result.session());
+  verify(auth).signOutBestEffort("synthetic-invited-access");
+ }
+ @Test void firstAccessValidatesInputBeforeTheProvider() {
+  assertEquals("INVALID_LOGIN_REQUEST",assertThrows(BusinessProblem.class,
+   ()->service().loginAcceptingInvitation(" ","Senha-sintetica-1",(actor,email)->"ACEITO")).code());
+  assertEquals("INVALID_LOGIN_REQUEST",assertThrows(BusinessProblem.class,
+   ()->service().loginAcceptingInvitation("convidada@example.invalid","",(actor,email)->"ACEITO")).code());
+  verifyNoInteractions(auth,store);
+ }
 }

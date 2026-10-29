@@ -720,6 +720,94 @@
         }
       }
     },
+    "/auth/invitation/accept": {
+      "post": {
+        "operationId": "acceptInvitationFirstAccess",
+        "security": [],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "description": "Primeiro acesso por convite pela web: a senha do provedor e o token do convite seguem juntos; o aceite cria o espelho local da conta e o vínculo PENDING e só então a sessão web é criada (cookie opaco e CSRF renovado). Exige também CP_BFF_ENABLED. Mesmo limite de tentativas do login. Aceite concluído sem sessão (sessionStarted=false) orienta o login comum.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationFirstAccess"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vínculo PENDING criado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationFirstAccessResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_LOGIN_REQUEST"
+          },
+          "401": {
+            "description": "AUTH_CREDENTIALS_REJECTED"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido; ACCOUNT_INACTIVE"
+          },
+          "404": {
+            "description": "INVITATION_NOT_AVAILABLE: convite inválido, expirado, já usado ou de outro e-mail (resposta neutra)"
+          },
+          "409": {
+            "description": "MEMBERSHIP_ALREADY_EXISTS"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_PROVIDER_UNAVAILABLE ou INVITATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/units": {
       "get": {
         "operationId": "ownTenantUnits",
@@ -4513,6 +4601,72 @@
           },
           "otherSessionsEnded": {
             "type": "boolean"
+          }
+        }
+      },
+      "InvitationFirstAccess": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email",
+          "password",
+          "token"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        }
+      },
+      "InvitationFirstAccessResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "membershipId",
+          "status",
+          "sessionStarted",
+          "accountId",
+          "expiresAt"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "const": "PENDING"
+          },
+          "sessionStarted": {
+            "type": "boolean"
+          },
+          "accountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }

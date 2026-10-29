@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -22,12 +23,43 @@ public final class WebSessionService {
   this.store=store; this.auth=auth; this.cipher=cipher; this.decoder=decoder; this.settings=settings; this.clock=clock;
  }
  public SessionTicket login(String email,String password) {
-  if(email==null || email.isBlank() || email.length()>320 || password==null || password.isEmpty() || password.length()>4096)
-   throw new BusinessProblem("INVALID_LOGIN_REQUEST",400,"Informe os dados de acesso.");
+  requireLoginInput(email,password);
   var tokens=auth.password(email,password);
   Jwt jwt;
   try { jwt=decodeNew(tokens.access_token()); }
   catch(RuntimeException ex) { auth.signOutBestEffort(tokens.access_token()); throw ex; }
+  return start(tokens,jwt);
+ }
+ /**
+  * Primeiro acesso por convite (CP-020): quem ainda não tem conta local entra com a senha do provedor e, antes de
+  * qualquer sessão web, aceita o convite — o aceite cria o espelho local da conta e o vínculo PENDING na mesma
+  * transação. Recusa do aceite encerra a sessão aberta no provedor. Falha ao criar a sessão web depois do aceite
+  * devolve o aceite sem sessão: o vínculo pendente existe e o login comum passa a funcionar.
+  */
+ public <T> FirstAccess<T> loginAcceptingInvitation(String email,String password,BiFunction<UUID,String,T> accept) {
+  requireLoginInput(email,password);
+  java.util.Objects.requireNonNull(accept);
+  var tokens=auth.password(email,password);
+  Jwt jwt; T accepted;
+  try {
+   jwt=decodeNew(tokens.access_token());
+   UUID account=UUID.fromString(jwt.getSubject());
+   Object claim=jwt.getClaims().get("email");
+   accepted=accept.apply(account,claim instanceof String text?text:null);
+  } catch(RuntimeException ex) { auth.signOutBestEffort(tokens.access_token()); throw ex; }
+  SessionTicket session;
+  try { session=start(tokens,jwt); }
+  catch(RuntimeException ex) { session=null; }
+  return new FirstAccess<>(accepted,session);
+ }
+ /** Aceite concluído e, quando foi possível criá-la, a sessão web; sem sessão o convidado entra pelo login comum. */
+ public record FirstAccess<T>(T accepted,SessionTicket session) {}
+ private static void requireLoginInput(String email,String password) {
+  if(email==null || email.isBlank() || email.length()>320 || password==null || password.isEmpty() || password.length()>4096)
+   throw new BusinessProblem("INVALID_LOGIN_REQUEST",400,"Informe os dados de acesso.");
+ }
+ /** Cria a sessão web opaca a partir de tokens já validados; falha encerra a sessão aberta no provedor. */
+ private SessionTicket start(SupabaseAuthClient.TokenResponse tokens,Jwt jwt) {
   UUID account=UUID.fromString(jwt.getSubject());
   String raw=SessionSecrets.newToken(),hash=SessionSecrets.hash(raw);
   var session=new StoredWebSession(UUID.randomUUID(),hash,account,"","",jwt.getExpiresAt(),

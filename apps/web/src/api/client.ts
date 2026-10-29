@@ -1,5 +1,5 @@
 import type {
-  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, Membership,
+  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, InvitationFirstAccess, Membership,
   MfaStatus, MutationResult, RecoveryCompleted, RecoveryVerified, Reservation, ReservationPage, ReservationPolicy, Session,
   TotpEnrollment, Unit,
 } from './types';
@@ -107,6 +107,7 @@ const messages: Record<string, string> = {
   INVITATION_VALIDITY_INVALID: 'A validade deve ter entre 1 e 14 dias.',
   INVITATION_NOT_PENDING: 'O convite não está mais pendente.',
   INVITATION_NOT_AVAILABLE: 'Convite inválido, expirado, já utilizado ou emitido para outro e-mail.',
+  INVITATION_FIRST_ACCESS_UNKNOWN: 'Não foi possível confirmar o aceite do convite. Tente entrar com seu e-mail e senha; se o convite tiver sido aceito, o pedido aparecerá para a gestão.',
   INVITATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir o convite. Tente novamente.',
   RESERVATION_NOT_FOUND: 'Reserva não encontrada neste condomínio.',
   RESERVATION_DECISION_EXPIRED: 'O prazo de decisão terminou. O pedido expirou e a unidade precisa solicitar novamente.',
@@ -205,6 +206,14 @@ export const RECOVERY_LINK = /^[A-Za-z0-9_-]{16,512}$/;
 function invitationAccepted(value: unknown): InvitationAccepted {
   if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== 'PENDING') throw invalidResponse(true);
   return { tenantId: value.tenantId, membershipId: value.membershipId, status: 'PENDING' };
+}
+function invitationFirstAccess(value: unknown): InvitationFirstAccess {
+  const accepted = invitationAccepted(value);
+  if (!record(value) || typeof value.sessionStarted !== 'boolean'
+      || (value.sessionStarted ? !isUUID(value.accountId) || !isDate(value.expiresAt) : value.accountId !== null || value.expiresAt !== null))
+    throw invalidResponse(true);
+  return { ...accepted, sessionStarted: value.sessionStarted, accountId: value.accountId as string | null,
+    expiresAt: value.expiresAt as string | null };
 }
 
 function membership(value: unknown): Membership {
@@ -636,6 +645,26 @@ export class CondPulseApi {
     }
     this.clearSession();
     return result;
+  }
+  /**
+   * Primeiro acesso por convite: entra com a senha do provedor e aceita o convite na mesma chamada, para quem ainda
+   * não tem conta local. Com sessão iniciada o CSRF anterior deixa de valer. Resultado incerto não é repetido.
+   */
+  async acceptInvitationWithLogin(input: { email: string; password: string; token: string }, signal?: AbortSignal): Promise<InvitationFirstAccess> {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(input.token)) throw new ApiError(404, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);
+    const body = JSON.stringify({ email: input.email, password: input.password, token: input.token });
+    return this.auth(async () => {
+      try {
+        const reply = await this.send('/auth/invitation/accept', { method: 'POST', body, ...(signal ? { signal } : {}) }, this.generation);
+        const result = invitationFirstAccess(reply.value);
+        this.clearSession();
+        return result;
+      } catch (error) {
+        if (error instanceof ApiError && (error.uncertain || error.code === 'INVALID_API_RESPONSE'))
+          throw new ApiError(error.status, 'INVITATION_FIRST_ACCESS_UNKNOWN', messages.INVITATION_FIRST_ACCESS_UNKNOWN!, true);
+        throw error;
+      }
+    });
   }
   async acceptInvitation(token: string, signal?: AbortSignal): Promise<InvitationAccepted> {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(400, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);
