@@ -187,7 +187,7 @@ public class ReservationStore {
    insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,
      occupied_from,occupied_until,expires_at,rule_snapshot,fee_cents)
    select ?,a.tenant_id,a.id,?,?,'BOOKING',case when a.approval_required then 'PENDING_APPROVAL' else 'CONFIRMED' end,?,?,?,?,
-    case when a.approval_required then least(clock_timestamp()+interval '24 hours',?::timestamptz) end,
+    case when a.approval_required then least(now()+interval '24 hours',?::timestamptz) end,
     jsonb_build_object('policyVersion',a.policy_version,'policy',a.policy,'bufferMinutes',a.buffer_minutes,
       'capacity',a.capacity,'approvalRequired',a.approval_required,'feeCents',a.fee_cents,'timeZone',?::text),a.fee_cents
    from cp.amenities a where a.tenant_id=? and a.id=? and a.active and a.approval_required=?
@@ -276,8 +276,11 @@ public class ReservationStore {
     value.feeCents(),value.version(),value.decisionReason(),tenant,actor,route,key);
   if(changed!=1) throw new IllegalStateException("Resultado de idempotência não persistido.");
  }
- /** Colunas de RETURNING compatíveis com {@link #view(ResultSet)} para alterações de uma única reserva. */
- public static final String VIEW_RETURNING="""
+ /**
+  * Colunas de RETURNING compatíveis com {@link #view(ResultSet)} para alterações de uma única reserva. Começa com
+  * espaço porque text blocks removem o espaço final da linha "returning" que o antecede.
+  */
+ public static final String VIEW_RETURNING=" "+"""
   id as reservation_id,unit_id,amenity_id,status,starts_at,ends_at,occupied_from,occupied_until,
   coalesce((rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,fee_cents,version,decision_reason
   """;
