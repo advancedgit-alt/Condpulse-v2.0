@@ -1,5 +1,11 @@
 # Estado verificável - 29/10/2026
 
+## Painel master (fase 4, OPS-01) — CP-014/CP-019
+
+- Atrás de `CP_PLATFORM_ENABLED=false` (inclusive na Vercel); V010 não aplicada a nenhum banco remoto. Papel `PLATFORM_ADMIN` em tabela própria, concedido só por SQL operacional revisado (trilha por gatilho em `platform_role_events`); capacidades publicadas no contexto local apenas com conta ativa, papel vigente e AAL2. Catálogo dos condomínios com busca, renomear/suspender/reativar pela versão lida com motivo e auditoria da plataforma por cursor; sem criação de condomínio pela API, sem leitura de dados residenciais e sem personificação. Tela `/master`. Detalhes em [PAINEL_MASTER.md](PAINEL_MASTER.md).
+- CI 40820671070 verde (head `166d06b`) antes da revisão. Revisão independente: um médio e sete baixos, sem crítico/alto. Corrigidos: aceite de convite em condomínio suspenso (404 sem gravar, também recusado pelo banco); políticas exigem a capacidade de cada efeito; trava `FOR NO KEY UPDATE`; nome em code points sem caracteres invisíveis nas duas pontas e `PUT` sem nome mantém o atual; trilha de concessão/revogação do papel; busca por nome/id além dos 200 primeiros; guarda de inicialização cobre papéis e trilhas; nomes atuais na auditoria da web; contrato sem respostas inexistentes. Registrados: o banco não exige a linha de auditoria a cada mudança (garantida pelo serviço na mesma transação), catálogo sem cursor e concorrência só testada no banco. SQL local 166 verificações; Vitest 97; Playwright 43 (Chromium do sandbox). CI 40824183999 verde (head `8e1d8f4`, base atualizada).
+- Pendentes: aplicação remota da V010 com aprovação, concessão do primeiro papel, ensaio com Auth real/AAL2, suporte temporário justificado. Flags remotas inalteradas.
+
 ## Recuperação de acesso pela web — CP-020
 
 - Atrás de `CP_BFF_ENABLED` e `CP_BFF_RECOVERY_ENABLED=false` (inclusive na Vercel). Pedido com resposta neutra em prazo fixo; link pelo fragmento com clique explícito; tentativa de 10 minutos (V009) ligada a cookie próprio que nunca autentica a API; nova senha com código TOTP quando a conta tem fator verificado; sucesso só com confirmação do provedor para a mesma conta, seguido de encerramento global no provedor e das sessões web da conta. Detalhes em [RECUPERACAO_ACESSO.md](RECUPERACAO_ACESSO.md).

@@ -120,7 +120,7 @@ jobs:
           CP_TEST_DB_PASSWORD: synthetic_ci_runtime_only
         run: |
           set +e
-          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest,MembershipInvitationJdbcTest,ReservationDecisionJdbcTest,RecoveryStoreJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
+          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest,MembershipInvitationJdbcTest,ReservationDecisionJdbcTest,RecoveryStoreJdbcTest,PlatformAdministrationJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
           status=${PIPESTATUS[0]}
           [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/maven-jdbc.log" "JDBC tests" 80
           exit "$status"

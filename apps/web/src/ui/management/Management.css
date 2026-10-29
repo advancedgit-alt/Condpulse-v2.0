@@ -32,6 +32,8 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 .invitation-link{display:grid;gap:10px;margin-top:12px;padding:16px;border:1px solid #b9dbc0;border-radius:12px;background:#edf8ef;color:#14532d;font-size:.86rem}
 .invitation-link code{letter-spacing:0}
 .unit-editor{border-top:0;padding-top:0;margin-top:0}
+.tenant-search{margin-bottom:0}
+.tenant-search input{width:min(320px,100%)}
 .management-context{display:grid;gap:12px;margin-top:22px}
 @media(max-width:900px){.management-columns{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.management-tabs{margin-bottom:22px}.management-tabs>a{flex:1 1 auto;justify-content:center;padding:10px 12px}.management-row{padding:16px}.mfa-qr{width:180px;height:180px}}

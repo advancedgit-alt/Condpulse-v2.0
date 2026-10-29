@@ -2917,6 +2917,271 @@
           }
         }
       }
+    },
+    "/v1/platform/session": {
+      "get": {
+        "operationId": "platformSession",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "parameters": [],
+        "description": "Papel de plataforma vigente da própria conta. Sem AAL2 devolve capacidades vazias e mfaRequired=true. Conta sem papel recebe 403.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSession"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/tenants": {
+      "get": {
+        "operationId": "platformTenants",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Busca por trecho do nome (curingas % e _ são texto literal; sem diferenciar maiúsculas; acentos contam) ou pelo id exato. Espaços Unicode são normalizados; vazio lista o catálogo.",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
+        "description": "Catálogo global dos condomínios (tenants.read): nome, fuso, estado, versão e contagens do onboarding. Sem dados de moradores. Criação de condomínio não existe na API: o cadastro segue pelo onboarding operacional.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "TENANT_SEARCH_INVALID: busca com mais de 160 caracteres ou caractere invisível"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/tenants/{tenantId}": {
+      "put": {
+        "operationId": "updatePlatformTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Renomear, suspender ou reativar pela versão lida (tenants.manage), com motivo obrigatório e um evento de auditoria da plataforma por mudança. Pedido igual ao estado atual devolve applied=false sem gravar. Suspender remove o condomínio do contexto de moradores e gestão local; não apaga dados.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTenantUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "TENANT_VERSION_REQUIRED, TENANT_NAME_INVALID, TENANT_STATE_INVALID, AUDIT_REASON_REQUIRED ou PLATFORM_INPUT_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND, ou rota inexistente com CP_PLATFORM_ENABLED=false"
+          },
+          "409": {
+            "description": "TENANT_CHANGED: o condomínio mudou depois da versão lida"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/audit-events": {
+      "get": {
+        "operationId": "platformAuditEvents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ],
+        "description": "Auditoria da plataforma (platform.audit.read), paginada por cursor opaco.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAuditPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_CURSOR_INVALID ou AUDIT_LIMIT_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4513,6 +4778,288 @@
           },
           "otherSessionsEnded": {
             "type": "boolean"
+          }
+        }
+      },
+      "PlatformSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "role",
+          "capabilities",
+          "mfaRequired"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PLATFORM_ADMIN"
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "platform.audit.read",
+                "tenants.manage",
+                "tenants.read"
+              ]
+            }
+          },
+          "mfaRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PlatformOnboardingReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId",
+          "accounts",
+          "units",
+          "memberships",
+          "amenities",
+          "completedAt"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accounts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "units": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "memberships": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "amenities": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformTenant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "name",
+          "timeZone",
+          "active",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "onboarding"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "onboarding": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlatformOnboardingReceipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "PlatformTenantPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenants",
+          "truncated"
+        ],
+        "properties": {
+          "tenants": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/PlatformTenant"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PlatformTenantUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "active",
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "Ausente ou null mantém o nome atual (suspender/reativar não renomeia). Comprimento em code points; espaços Unicode viram um espaço; controles e caracteres invisíveis de formatação são recusados."
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "PlatformTenantChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenant",
+          "applied"
+        ],
+        "properties": {
+          "tenant": {
+            "$ref": "#/components/schemas/PlatformTenant"
+          },
+          "applied": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PlatformAuditEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "actorId",
+          "action",
+          "tenantId",
+          "reason",
+          "details",
+          "createdAt"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z_]{2,63}$"
+          },
+          "tenantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformAuditPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "events",
+          "nextCursor"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/PlatformAuditEvent"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }
