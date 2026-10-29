@@ -1164,6 +1164,116 @@ def worker_checks():
           f"DELETE FROM cp.memberships WHERE account_id in ('{DEP}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{DEP}','{RES2}')")
 
+def announcement_checks():
+    """V016: avisos da gestao com rascunho, publico-alvo, publicacao, arquivamento e abertura autenticada."""
+    MGR, R3, R4, OWN = ("10000000-0000-4000-8000-0000000000a1", "10000000-0000-4000-8000-0000000000a2",
+                        "10000000-0000-4000-8000-0000000000a3", "10000000-0000-4000-8000-0000000000a4")
+    BK, UA3, UA4 = "21000000-0000-4000-8000-0000000000a1", "20000000-0000-4000-8000-0000000000a3", "20000000-0000-4000-8000-0000000000a4"
+    N1, N2, N3, N4 = ("79000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(1, 5))
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MGR}','ACTIVE'),('{R3}','ACTIVE'),('{R4}','ACTIVE'),('{OWN}','ACTIVE');
+        INSERT INTO cp.blocks(id,tenant_id,name) VALUES('{BK}','{TA}','BLOCO AVISOS');
+        INSERT INTO cp.units(id,tenant_id,label,block_id) VALUES('{UA3}','{TA}','FICTICIA 301','{BK}'),('{UA4}','{TA}','FICTICIA 401',NULL);
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MGR}',NULL,'GESTAO AVISOS','MANAGER','ACTIVE'),('{TA}','{R3}','{UA3}','MORADOR 301','RESIDENT','ACTIVE'),
+                ('{TA}','{R4}','{UA4}','MORADOR 401','RESIDENT','ACTIVE'),('{TA}','{OWN}','{UA3}','PROPRIETARIO 301','OWNER','ACTIVE');
+    """)
+    publisher = "announcements.publish"
+    def draft(identifier, audience="TENANT", ids="'{}'", title="Aviso ficticio"):
+        return (f"INSERT INTO cp.announcements(id,tenant_id,title,body,audience,audience_ids,author_id) "
+                f"VALUES('{identifier}','{TA}','{title}','Texto ficticio do aviso','{audience}',{ids}::uuid[],'{MGR}')")
+    def as_manager(statement, state=None):
+        if state:
+            return error(capable(publisher, statement), state, tenant=TA, actor=MGR, role="cp_api")
+        return query(capable(publisher, statement), tenant=TA, actor=MGR, role="cp_api")
+    def visible(identifier, actor, tenant=TA):
+        return value(f"select count(*) from cp.announcements where id='{identifier}'", tenant=tenant, actor=actor, role="cp_api")
+    def change(identifier, assignments, version):
+        return f"UPDATE cp.announcements SET {assignments},version={version + 1} WHERE id='{identifier}'"
+    expect(error(draft(N1), "42501", tenant=TA, actor=MGR, role="cp_api"), "sem capacidade publicada a gestao nao cria aviso")
+    expect(error(capable("units.manage", draft(N1)), "42501", tenant=TA, actor=MGR, role="cp_api"), "outra capacidade nao cria aviso")
+    expect(as_manager(draft(N1).replace(f"'{MGR}')", f"'{AA}')"), "42501"), "aviso sempre em nome da propria conta")
+    expect(as_manager(draft(N1).replace("author_id)", "author_id,state)").replace(f"'{MGR}')", f"'{MGR}','PUBLISHED')"), "42501"),
+           "aplicacao nao cria aviso ja publicado")
+    as_manager(draft(N1))
+    expect(value(f"select state||':'||version||':'||(published_at is null) from cp.announcements where id='{N1}'") == "DRAFT:0:true",
+           "aviso nasce rascunho")
+    expect(visible(N1, AA) == "0", "rascunho nao aparece para a unidade (AC-029)")
+    expect(error(f"INSERT INTO cp.announcement_reads(tenant_id,announcement_id,account_id) VALUES('{TA}','{N1}','{AA}')", "42501",
+                 tenant=TA, actor=AA, role="cp_api"), "rascunho nao recebe abertura")
+    expect(as_manager(change(N1, "title='Titulo alterado'", 5), "23514"), "edicao exige a versao lida")
+    as_manager(change(N1, "title='Assembleia ficticia'", 0))
+    expect(as_manager(change(N1, "audience='UNITS'", 1), "23514"), "publico por unidade exige alvo")
+    expect(as_manager(change(N1, f"audience='UNITS',audience_ids=ARRAY['{UB}']::uuid[]", 1), "23503"), "alvo de outro condominio e recusado")
+    expect(as_manager(change(N1, f"audience='UNITS',audience_ids=ARRAY['{UA3}','{UA3}']::uuid[]", 1), "23514"), "alvo repetido e recusado")
+    expect(as_manager(change(N1, f"audience_ids=ARRAY['{UA3}']::uuid[]", 1), "23514"), "condominio inteiro nao leva lista")
+    expect(as_manager(change(N1, "published_at=now()", 1), "42501"), "aplicacao nao escolhe horario de publicacao")
+    as_manager(change(N1, "state='PUBLISHED'", 1))
+    expect(value(f"select state||':'||version||':'||(published_by='{MGR}')||':'||(published_at is not null) from cp.announcements where id='{N1}'")
+           == "PUBLISHED:2:true:true", "publicacao com autoria e horario do banco")
+    expect(as_manager(change(N1, "body='Texto trocado'", 2), "23514"), "publicado nao muda de texto")
+    expect(as_manager(change(N1, "state='DRAFT'", 2), "23514"), "publicado nao volta a rascunho")
+    expect(visible(N1, AA) == "1" and visible(N1, R3) == "1" and visible(N1, OWN) == "1", "condominio inteiro ve o aviso publicado")
+    expect(visible(N1, AB, tenant=TB) == "0", "outro condominio nao ve o aviso")
+    expect(visible(N1, MGR) == "0", "gestao sem vinculo de unidade e sem capacidade publicada nao ve como morador")
+    # Abertura autenticada: uma por conta, horario do banco, nunca em nome de outra pessoa.
+    opening = f"INSERT INTO cp.announcement_reads(tenant_id,announcement_id,account_id) VALUES('{TA}','{N1}','{AA}')"
+    expect(error(opening.replace(f"'{AA}')", f"'{R3}')"), "42501", tenant=TA, actor=AA, role="cp_api"), "abertura so em nome da propria conta")
+    expect(error(opening.replace("account_id)", "account_id,read_at)").replace(f"'{AA}')", f"'{AA}',now()-interval '1 day')"), "42501",
+                 tenant=TA, actor=AA, role="cp_api"), "aplicacao nao escolhe o horario de abertura")
+    query(opening, tenant=TA, actor=AA, role="cp_api")
+    expect(error(opening, "23505", tenant=TA, actor=AA, role="cp_api"), "uma abertura por conta e aviso")
+    query(f"INSERT INTO cp.announcement_reads(tenant_id,announcement_id,account_id) VALUES('{TA}','{N1}','{R3}')", tenant=TA, actor=R3, role="cp_api")
+    expect(value(f"select count(*) from cp.announcement_reads where announcement_id='{N1}'", tenant=TA, actor=AA, role="cp_api") == "1",
+           "cada pessoa ve so a propria abertura")
+    expect(value(capable(publisher, f"select count(*) from cp.announcement_reads where announcement_id='{N1}'"), tenant=TA, actor=MGR,
+                 role="cp_api") == "2", "gestao conta as aberturas do condominio")
+    expect(error(f"UPDATE cp.announcement_reads SET read_at=now() WHERE account_id='{AA}'", "42501", tenant=TA, actor=AA, role="cp_api"),
+           "abertura nao e alterada")
+    expect(error(capable(publisher, f"DELETE FROM cp.announcement_reads WHERE announcement_id='{N1}'"), "42501", tenant=TA, actor=MGR,
+                 role="cp_api"), "abertura nao e apagada")
+    # Publico por unidade e por bloco.
+    as_manager(draft(N2, audience="UNITS", ids=f"ARRAY['{UA3}']") + "; " + change(N2, "state='PUBLISHED'", 0))
+    expect(visible(N2, R3) == "1" and visible(N2, OWN) == "1", "unidade indicada ve o aviso (morador e proprietario)")
+    expect(visible(N2, R4) == "0" and visible(N2, AA) == "0", "outras unidades nao veem aviso dirigido")
+    expect(error(f"INSERT INTO cp.announcement_reads(tenant_id,announcement_id,account_id) VALUES('{TA}','{N2}','{R4}')", "42501",
+                 tenant=TA, actor=R4, role="cp_api"), "fora do publico nao registra abertura")
+    as_manager(draft(N3, audience="BLOCKS", ids=f"ARRAY['{BK}']") + "; " + change(N3, "state='PUBLISHED'", 0))
+    expect(visible(N3, R3) == "1" and visible(N3, R4) == "0", "aviso por bloco chega so a unidades do bloco")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{R3}'")
+    expect(visible(N3, R3) == "0", "vinculo encerrado deixa de ver o aviso")
+    query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE account_id='{R3}'")
+    query(f"UPDATE cp.units SET status='INACTIVE' WHERE id='{UA3}'")
+    expect(visible(N3, R3) == "0", "unidade inativa deixa de ver o aviso")
+    query(f"UPDATE cp.units SET status='ACTIVE' WHERE id='{UA3}'")
+    # Arquivamento e descarte.
+    as_manager(change(N1, "state='ARCHIVED'", 2))
+    expect(value(f"select state||':'||(archived_by='{MGR}')||':'||(published_at is not null) from cp.announcements where id='{N1}'")
+           == "ARCHIVED:true:true", "arquivamento guarda autoria e a publicacao anterior")
+    expect(visible(N1, AA) == "0", "arquivado sai da unidade")
+    expect(value(f"select count(*) from cp.announcement_reads where announcement_id='{N1}'") == "2", "aberturas continuam registradas")
+    expect(as_manager(change(N1, "state='PUBLISHED'", 3), "23514"), "arquivado nao volta")
+    as_manager(draft(N4) + "; " + change(N4, "state='ARCHIVED'", 0))
+    expect(value(f"select state||':'||(published_at is null) from cp.announcements where id='{N4}'") == "ARCHIVED:true", "rascunho descartado nunca publicado")
+    expect(error(capable(publisher, f"DELETE FROM cp.announcements WHERE id='{N4}'"), "42501", tenant=TA, actor=MGR, role="cp_api"),
+           "aviso nao e apagado")
+    # Eventos e trilha so pela gestao, em nome da propria conta e de aviso existente.
+    event = (f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) "
+             f"VALUES('{TA}','ANNOUNCEMENT_PUBLISHED','{N2}',1,'{{}}')")
+    expect(error(event, "42501", tenant=TA, actor=AA, role="cp_api"), "morador nao grava evento de aviso")
+    expect(as_manager(event.replace(f"'{N2}'", f"'{ROLL}'"), "42501"), "evento so de aviso existente")
+    as_manager(event)
+    trail = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+             f"VALUES('{TA}','{{actor}}','ANNOUNCEMENT_PUBLISHED','ANNOUNCEMENT','{N2}','{ROLL}')")
+    expect(as_manager(trail.format(actor=AA), "42501"), "trilha de aviso so em nome da propria conta")
+    expect(error(trail.format(actor=AA), "42501", tenant=TA, actor=AA, role="cp_api"), "morador nao grava trilha de aviso")
+    as_manager(trail.format(actor=MGR))
+    expect(error("select count(*) from cp.announcements", "42501", tenant=TA, role="cp_worker"), "worker nao le avisos")
+    query(f"DELETE FROM cp.outbox WHERE event_type LIKE 'ANNOUNCEMENT%'; DELETE FROM cp.audit_log WHERE action LIKE 'ANNOUNCEMENT%'; "
+          f"DELETE FROM cp.announcement_reads WHERE tenant_id='{TA}'; DELETE FROM cp.announcements WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MGR}','{R3}','{R4}','{OWN}'); DELETE FROM cp.units WHERE id in ('{UA3}','{UA4}'); "
+          f"DELETE FROM cp.blocks WHERE id='{BK}'; DELETE FROM platform.accounts WHERE id in ('{MGR}','{R3}','{R4}','{OWN}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1268,6 +1378,7 @@ def main():
     visit_checks()
     access_checks()
     worker_checks()
+    announcement_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

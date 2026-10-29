@@ -22,6 +22,26 @@ public final class DisplayText {
   if(normalized.isEmpty() || normalized.codePointCount(0,normalized.length())>maximum || !visible(normalized)) return null;
   return normalized;
  }
+ /**
+  * Texto de várias linhas (corpo de aviso): cada linha normalizada como em {@link #collapse}, quebras de linha mantidas
+  * (no máximo uma linha em branco seguida), sem linhas em branco nas pontas. Null quando vazio, maior que o limite (code
+  * points, quebras incluídas) ou com caractere não exibível.
+  */
+ public static String normalizeMultiline(String value,int maximum) {
+  if(value==null) return null;
+  var lines=new java.util.ArrayList<String>();
+  boolean blank=false;
+  for(String line:value.split("\r\n|\r|\n|\u2028|\u2029",-1)) {
+   String normalized=collapse(line);
+   if(normalized.isEmpty()) { if(!lines.isEmpty() && !blank) { lines.add(""); blank=true; } continue; }
+   if(!visible(normalized)) return null;
+   lines.add(normalized); blank=false;
+  }
+  while(!lines.isEmpty() && lines.getLast().isEmpty()) lines.removeLast();
+  String joined=String.join("\n",lines);
+  if(joined.isEmpty() || joined.codePointCount(0,joined.length())>maximum) return null;
+  return joined;
+ }
  public static boolean visible(String value) {
   return value.codePoints().allMatch(DisplayText::visibleCodePoint);
  }

@@ -19,3 +19,23 @@ export function displayText(value: string, maximum: number): string | null {
   if (!normalized || codePoints(normalized) > maximum || HIDDEN.test(normalized)) return null;
   return normalized;
 }
+
+/**
+ * Texto de várias linhas (corpo de aviso), com a mesma regra do servidor (DisplayText.normalizeMultiline): cada linha
+ * normalizada como displayText, quebras mantidas (no máximo uma linha em branco seguida), sem linhas em branco nas
+ * pontas; null quando vazio, maior que o limite (quebras incluídas) ou com caractere não exibível.
+ */
+export function multilineText(value: string, maximum: number): string | null {
+  const lines: string[] = [];
+  let blank = false;
+  for (const line of value.split(/\r\n|\r|\n|\u2028|\u2029/)) {
+    const normalized = collapseText(line);
+    if (!normalized) { if (lines.length > 0 && !blank) { lines.push(''); blank = true; } continue; }
+    if (HIDDEN.test(normalized)) return null;
+    lines.push(normalized); blank = false;
+  }
+  while (lines.length > 0 && lines.at(-1) === '') lines.pop();
+  const joined = lines.join('\n');
+  if (!joined || codePoints(joined) > maximum) return null;
+  return joined;
+}

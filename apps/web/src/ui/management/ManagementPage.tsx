@@ -6,6 +6,7 @@ import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice } from '../primitives';
 import { dateInZone } from '../dateTime';
+import { AnnouncementSection } from './Announcements';
 import { AuditSection } from './Audit';
 import { MembershipList, PeopleSection } from './People';
 import { PendingReservations, ReservationAgenda } from './Reservations';
@@ -19,6 +20,7 @@ export const managementSections = [
   { id: 'areas', label: 'Áreas' },
   { id: 'unidades', label: 'Unidades' },
   { id: 'pessoas', label: 'Pessoas' },
+  { id: 'avisos', label: 'Avisos' },
   { id: 'auditoria', label: 'Auditoria' },
 ] as const;
 export type ManagementSection = typeof managementSections[number]['id'];
@@ -81,6 +83,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'areas' ? <AmenitySection /> : null}
     {section === 'unidades' ? <UnitSection /> : null}
     {section === 'pessoas' ? <PeopleSection /> : null}
+    {section === 'avisos' ? <AnnouncementSection /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;
 }

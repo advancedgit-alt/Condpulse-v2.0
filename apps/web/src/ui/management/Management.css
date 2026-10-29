@@ -38,3 +38,5 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 .management-context{display:grid;gap:12px;margin-top:22px}
 @media(max-width:900px){.management-columns{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.management-tabs{margin-bottom:22px}.management-tabs>a{flex:1 1 auto;justify-content:center;padding:10px 12px}.management-row{padding:16px}.mfa-qr{width:180px;height:180px}}
+.announcement-body{white-space:pre-line;overflow-wrap:anywhere;font-size:.88rem;line-height:1.55;color:var(--ink,inherit);margin:0;flex-basis:100%}
+.audience-options{display:grid;gap:6px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
