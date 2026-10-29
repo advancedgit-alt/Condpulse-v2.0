@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, type CondPulseApi, type Membership } from '../api/client';
-import type { Amenity, Reservation, ReservationStatus } from '../api/reservations';
+import type { Amenity, CreateReservation as ReservationBody, Reservation, ReservationStatus } from '../api/reservations';
 import { bookableDates, daySlots, durations, type Slot } from '../reservations/slots';
 import { addDays, dateInZone, formatDay, formatTime, formatWhen, money, toInstant } from '../time';
 import { colors, touch } from './theme';
@@ -119,11 +119,14 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
   const visibleDates = dates.slice(page * DATES_PER_PAGE, (page + 1) * DATES_PER_PAGE);
   const [length, setLength] = useState(lengths.includes(60) ? 60 : lengths[0] ?? null);
   const [slot, setSlot] = useState<Slot | null>(null);
-  const [accepted, setAccepted] = useState(false);
+  // Aceite preso à versão lida: se a gestão mudar regras ou taxa enquanto a tela está aberta, o aceite cai e precisa ser refeito.
+  const [acceptedVersion, setAcceptedVersion] = useState<number | null>(null);
+  const accepted = acceptedVersion === area.policyVersion;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   // Chave presa ao horário escolhido: repetir depois de resultado incerto confirma o mesmo pedido.
-  const [pendingKey, setPendingKey] = useState<{ intent: string; key: string } | null>(null);
+  // Depois de resultado incerto, a repetição reenvia exatamente o corpo original (inclusive a versão aceita).
+  const [pendingKey, setPendingKey] = useState<{ intent: string; key: string; body: ReservationBody } | null>(null);
   const range = date ? { from: toInstant(`${date}T00:00`, timeZone), until: toInstant(`${addDays(date, 1)}T00:00`, timeZone) } : null;
   const availability = useQuery({ enabled: range !== null, queryKey: [...scope, 'availability', area.amenityId, date],
     queryFn: ({ signal }) => api.availability(tenantId, unitId, area.amenityId, range!, signal) });
@@ -132,15 +135,21 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
     : [];
   const locked = pendingKey !== null && uncertain(failure);
 
-  function choose(next: Slot | null) { setSlot(next); setAccepted(false); setFailure(null); }
+  const versionChanged = acceptedVersion !== null && !accepted && !locked;
+  function choose(next: Slot | null) { setSlot(next); setAcceptedVersion(null); setFailure(null); }
   async function submit() {
-    if (!slot || !accepted || busy) return;
-    const intent = `${area.amenityId}|${slot.startsAt}|${slot.endsAt}|${area.policyVersion}`;
-    const key = pendingKey?.intent === intent ? pendingKey.key : newKey();
-    setPendingKey({ intent, key }); setBusy(true); setFailure(null);
+    if (busy || !slot) return;
+    let attempt: { intent: string; key: string; body: ReservationBody };
+    if (locked && pendingKey) attempt = pendingKey;
+    else {
+      if (!accepted) return;
+      const intent = `${area.amenityId}|${slot.startsAt}|${slot.endsAt}|${acceptedVersion}`;
+      const body = { unitId, amenityId: area.amenityId, startsAt: slot.startsAt, endsAt: slot.endsAt, acceptedPolicyVersion: acceptedVersion! };
+      attempt = { intent, key: pendingKey?.intent === intent ? pendingKey.key : newKey(), body };
+    }
+    setPendingKey(attempt); setBusy(true); setFailure(null);
     try {
-      const result = await api.createReservation(tenantId, { unitId, amenityId: area.amenityId, startsAt: slot.startsAt, endsAt: slot.endsAt,
-        acceptedPolicyVersion: area.policyVersion }, key);
+      const result = await api.createReservation(tenantId, attempt.body, attempt.key);
       setPendingKey(null);
       void queries.invalidateQueries({ queryKey: [...scope] });
       const when = `${formatWhen(result.reservation.startsAt, timeZone)} às ${formatTime(result.reservation.endsAt, timeZone)}`;
@@ -155,7 +164,7 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
       if (error instanceof ApiError && !error.uncertain) setPendingKey(null);
       if (error instanceof ApiError && ['RESERVATION_CONFLICT', 'RESERVATION_WINDOW_INVALID', 'AMENITY_POLICY_CHANGED'].includes(error.code)) {
         // Outro horário: a disponibilidade e as regras são consultadas de novo e a escolha é desfeita.
-        setSlot(null); setAccepted(false);
+        setSlot(null); setAcceptedVersion(null);
         void availability.refetch();
         void queries.invalidateQueries({ queryKey: [...scope, 'amenities'] });
       }
@@ -198,12 +207,13 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
     {slot ? <View style={styles.confirm} accessibilityLabel="Confirmação da reserva">
       <Text style={styles.body}>{`${formatDay(date!, timeZone)}, ${slot.label} · ${area.approvalRequired ? 'vai como pedido para aprovação' : 'confirmada se o horário continuar livre'}`}</Text>
       <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: accepted, disabled: busy || locked }} disabled={busy || locked}
-        accessibilityLabel={`Li e aceito as regras da área (versão ${area.policyVersion})`} onPress={() => setAccepted(!accepted)} style={styles.check}>
+        accessibilityLabel={`Li e aceito as regras da área (versão ${area.policyVersion})`} onPress={() => setAcceptedVersion(accepted ? null : area.policyVersion)} style={styles.check}>
         <Text style={styles.checkBox}>{accepted ? '☑' : '☐'}</Text>
         <Text style={styles.body}>{`Li e aceito as regras da área (versão ${area.policyVersion})`}</Text>
       </Pressable>
       <Button label={busy ? 'Enviando…' : locked ? 'Tentar confirmar o mesmo pedido' : area.approvalRequired ? 'Solicitar reserva' : 'Reservar'}
-        disabled={!accepted || busy} onPress={() => void submit()} />
+        disabled={(!accepted && !locked) || busy} onPress={() => void submit()} />
+      {versionChanged ? <Notice tone="warning">{`As regras desta área mudaram (agora versão ${area.policyVersion}). Leia de novo e marque o aceite para continuar.`}</Notice> : null}
     </View> : null}
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{message(failure)}</Notice> : null}
     <Button label="Voltar às áreas" secondary disabled={busy || locked} onPress={() => close(null)} />

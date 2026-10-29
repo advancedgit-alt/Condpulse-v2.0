@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { newQueryClient } from '../src/App';
 import { ApiError, type CondPulseApi } from '../src/api/client';
@@ -60,7 +60,7 @@ async function mount() {
       membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
         timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
   </QueryClientProvider>);
-  return fake;
+  return Object.assign(fake, { queries });
 }
 async function pickSlot(label: string) {
   await fireEvent.press(await screen.findByRole('button', { name: 'Ver horários de Salão fictício' }));
@@ -124,6 +124,40 @@ describe('reservas no celular', () => {
     expect(await screen.findByText(/Pedido enviado/)).toBeTruthy();
     expect(fake.state.creates).toHaveLength(2);
     expect(fake.state.creates[1]!.key).toBe(fake.state.creates[0]!.key);
+  });
+
+  it('regras alteradas depois do aceite exigem novo aceite e enviam a versão nova', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    expect(screen.getByRole('button', { name: 'Solicitar reserva' })).toBeEnabled();
+    // A gestão publica a versão 4 com outra taxa; a lista de áreas é consultada de novo (ex.: depois de um cancelamento).
+    fake.mocks.amenities.mockImplementation(async () => [{ ...salao, policyVersion: 4, feeCents: 20000 }, quadra]);
+    await act(async () => { await fake.queries.invalidateQueries(); });
+    expect(await screen.findByText(/As regras desta área mudaram \(agora versão 4\)/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Solicitar reserva' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 4)' })).not.toBeChecked();
+    expect(fake.state.creates).toHaveLength(0);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 4)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    expect(await screen.findByText(/Pedido enviado/)).toBeTruthy();
+    expect((fake.state.creates[0]!.body as { acceptedPolicyVersion: number }).acceptedPolicyVersion).toBe(4);
+  });
+
+  it('repetição depois de resultado incerto reenvia o corpo original, mesmo que as regras mudem', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    expect(await screen.findByText(/o mesmo pedido não é gravado duas vezes/)).toBeTruthy();
+    fake.mocks.amenities.mockImplementation(async () => [{ ...salao, policyVersion: 4 }, quadra]);
+    await act(async () => { await fake.queries.invalidateQueries(); });
+    await screen.findByRole('checkbox', { name: 'Li e aceito as regras da área (versão 4)' });
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/Pedido enviado/)).toBeTruthy();
+    expect(fake.state.creates).toHaveLength(2);
+    expect(fake.state.creates[1]).toEqual(fake.state.creates[0]);
   });
 
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {
