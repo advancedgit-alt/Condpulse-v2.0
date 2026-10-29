@@ -89,6 +89,10 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
   const [body, setBody] = useState(current?.body ?? pending?.body ?? '');
   const [audience, setAudience] = useState<AnnouncementAudience>(current?.audience ?? pending?.audience ?? 'TENANT');
   const [selected, setSelected] = useState<string[]>(current?.audienceIds ?? pending?.audienceIds ?? []);
+  // Versão do conteúdo carregado no formulário: a lista atualizada (outro gestor salvou) não troca a versão enviada.
+  // Assim a gravação sobre um rascunho alterado recebe ANNOUNCEMENT_CHANGED em vez de sobrescrever o texto do outro.
+  const [readVersion] = useState(current?.version ?? 0);
+  const outdated = current !== undefined && current.version !== readVersion;
   const locked = !current && intent.locked;
   const normalizedTitle = displayText(title, 160);
   const normalizedBody = multilineText(body, 5000);
@@ -101,7 +105,7 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
     if (!valid) return;
     const draft: AnnouncementDraftBody = { title: normalizedTitle!, body: normalizedBody!, audience, audienceIds: [...ids].sort() };
     if (current) {
-      const ok = await action.run(() => announcements.editDraft(scope.tenantId, current.announcementId, { ...draft, expectedVersion: current.version }),
+      const ok = await action.run(() => announcements.editDraft(scope.tenantId, current.announcementId, { ...draft, expectedVersion: readVersion }),
         (saved) => ({ tone: 'success', text: `Rascunho salvo: ${saved.title}.` }), async () => { await refresh(); });
       if (ok) close({ tone: 'success', text: `Rascunho salvo: ${draft.title}. Ainda não aparece para as unidades.` });
       else void refresh();
@@ -143,6 +147,7 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
           onChange={(event) => setSelected((previous) => event.target.checked ? [...previous, item.id] : previous.filter((value) => value !== item.id))} /><bdi>{item.label}</bdi></label>)}
       </fieldset> : null}
     <ActionFeedback state={action.state} success={false} />
+    {outdated ? <Notice tone="warning">Outra pessoa da gestão salvou este rascunho depois que você abriu o formulário. Volte e abra de novo para ver a versão atual antes de salvar; salvar agora não sobrescreve a alteração dela.</Notice> : null}
     {locked ? <Notice tone="warning">O resultado não foi confirmado e o rascunho ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo rascunho”: se ele já foi criado, nada novo é gravado.</Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Salvando…' : locked ? 'Tentar confirmar o mesmo rascunho' : current ? 'Salvar rascunho' : 'Criar rascunho'}</button>

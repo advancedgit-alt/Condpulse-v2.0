@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { newOperationKey } from '../../api/client';
-import { management, type ManagedReservation, type ReservationStatus } from '../../api/management';
+import { management, type DecisionResult, type ManagedReservation, type ReservationStatus } from '../../api/management';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { addDays, dateInZone, formatWhen, money, toInstant } from '../dateTime';
 import { ActionFeedback, ReasonForm, managementKey, reservationStatusLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
@@ -9,11 +9,13 @@ import { ActionFeedback, ReasonForm, managementKey, reservationStatusLabels, sta
 type Mode = 'idle' | 'approve' | 'reject' | 'cancel';
 
 /**
- * Mensagem fiel ao estado devolvido: a repetição natural do servidor devolve o estado atual sem nova versão, então
- * uma decisão ou cancelamento feito antes por outra pessoa não aparece como sucesso desta ação.
+ * Mensagem fiel ao estado devolvido. O servidor informa se a decisão foi aplicada por esta chamada: dois gestores que
+ * leram a mesma versão e enviam a mesma decisão recebem o mesmo estado, mas só quem gravou vê sucesso — inferir pela
+ * versão mostraria a segunda como sucesso com o motivo descartado. Sem a indicação (servidor anterior), usa a versão.
  */
-export function decisionOutcome(result: ManagedReservation, decision: 'APPROVE' | 'REJECT', readVersion: number): ActionResult {
-  const applied = result.version === readVersion + 1;
+export function decisionOutcome(outcome: DecisionResult, decision: 'APPROVE' | 'REJECT', readVersion: number): ActionResult {
+  const result = outcome.reservation;
+  const applied = outcome.applied ?? result.version === readVersion + 1;
   if (applied && decision === 'APPROVE' && result.status === 'CONFIRMED') return { tone: 'success', text: 'Pedido aprovado. A reserva está confirmada.' };
   if (applied && decision === 'REJECT' && result.status === 'REJECTED') return { tone: 'success', text: 'Pedido rejeitado. O período foi liberado.' };
   return { tone: 'info', text: `Este pedido já estava ${(reservationStatusLabels[result.status] ?? result.status).toLowerCase()}. Nenhuma alteração foi feita e o seu motivo não foi registrado.` };

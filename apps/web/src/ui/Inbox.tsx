@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { notifications, type InboxNotification } from '../api/notifications';
@@ -32,13 +32,20 @@ export function UnitInbox({ scope, timeZone }: { scope: Scope; timeZone: string 
     refetchInterval: (query) => hidden(query.state.error) ? false : 30_000 });
   const [opening, setOpening] = useState<string | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
+  // Abertura pendente não leva a pessoa de volta a uma unidade que ela já deixou: a navegação só acontece se esta caixa
+  // continua na tela e no mesmo condomínio e unidade de quando o botão foi clicado.
+  const active = useRef({ mounted: true, scope: `${scope.tenantId}:${scope.unitId}` });
+  active.current.scope = `${scope.tenantId}:${scope.unitId}`;
+  useEffect(() => { const state = active.current; state.mounted = true; return () => { state.mounted = false; }; }, []);
   if (hidden(inbox.error)) return null;
   async function open(item: InboxNotification) {
     if (opening) return;
     setOpening(item.notificationId); setFailure(null);
+    const origin = `${scope.tenantId}:${scope.unitId}`;
     try {
       await notifications.open(scope.tenantId, item.notificationId);
       await queries.invalidateQueries({ queryKey: key });
+      if (!active.current.mounted || active.current.scope !== origin) return;
       navigate(`/morador/${scope.tenantId}/${scope.unitId}/${item.kind === 'ARRIVAL_WAITING' ? 'acessos' : 'encomendas'}`);
     } catch (error) {
       setFailure(error);

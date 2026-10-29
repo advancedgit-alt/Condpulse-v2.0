@@ -21,7 +21,7 @@ async function json(route: Route, status: number, body: unknown, headers: Record
 async function installAnnouncementsApi(page: Page) {
   const state = {
     items: [] as Managed[], drafts: [] as { key: string; body: unknown }[], publishes: [] as unknown[], archives: [] as unknown[],
-    opens: [] as string[], loseNextDraft: false, keys: new Map<string, Managed>(),
+    opens: [] as string[], loseNextDraft: false, keys: new Map<string, Managed>(), edits: [] as { expectedVersion: number; title: string }[],
   };
   await page.route(`**/v1/tenants/${TENANT_A}/management/announcements**`, async (route) => {
     const request = route.request();
@@ -39,6 +39,19 @@ async function installAnnouncementsApi(page: Page) {
       state.items.unshift(item);
       if (state.loseNextDraft) { state.loseNextDraft = false; await route.abort('connectionreset'); return; }
       await json(route, 201, item, { 'Idempotency-Replayed': 'false' });
+      return;
+    }
+    const edit = path.match(/^\/([^/]+)$/);
+    if (request.method() === 'PUT' && edit) {
+      const body = request.postDataJSON() as { title: string; body: string; audience: Managed['audience']; audienceIds: string[]; expectedVersion: number };
+      state.edits.push({ expectedVersion: body.expectedVersion, title: body.title });
+      const item = state.items.find((candidate) => candidate.announcementId === edit[1])!;
+      if (item.version !== body.expectedVersion) {
+        await json(route, 409, { type: 'urn:condpulse:problem:ANNOUNCEMENT_CHANGED', status: 409, code: 'ANNOUNCEMENT_CHANGED', detail: 'x' });
+        return;
+      }
+      Object.assign(item, { title: body.title, body: body.body, audience: body.audience, audienceIds: body.audienceIds, version: item.version + 1 });
+      await json(route, 200, item);
       return;
     }
     const action = path.match(/^\/([^/]+)\/(publish|archive)$/);
@@ -68,6 +81,29 @@ async function installAnnouncementsApi(page: Page) {
   });
   return state;
 }
+
+test('rascunho alterado por outro gestor enquanto o formulário está aberto não é sobrescrito', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const state = await installAnnouncementsApi(page);
+  state.items.push({ announcementId: DRAFT, title: 'Manutenção da bomba', body: 'Texto original.', audience: 'TENANT', audienceIds: [], state: 'DRAFT',
+    authoredByMe: true, createdAt: minutes(-10), updatedAt: minutes(-10), publishedAt: null, archivedAt: null, version: 0, opens: 0 });
+  await signIn(page);
+  await page.goto(`/gestao/${TENANT_A}/avisos`);
+  const row = page.getByRole('listitem').filter({ hasText: 'Manutenção da bomba' });
+  await row.getByRole('button', { name: 'Editar rascunho' }).click();
+  const form = page.getByRole('form', { name: 'Editar rascunho Manutenção da bomba' });
+  // Outro gestor salva o mesmo rascunho; a lista é atualizada com o formulário aberto.
+  Object.assign(state.items[0]!, { body: 'Texto do outro gestor.', version: 1 });
+  await page.getByRole('button', { name: 'Atualizar' }).first().click();
+  await expect(form.getByText('Outra pessoa da gestão salvou este rascunho', { exact: false })).toBeVisible();
+  await form.getByLabel('Título').fill('Manutenção da bomba d’água');
+  await form.getByRole('button', { name: 'Salvar rascunho' }).click();
+  await expect.poll(() => state.edits.length).toBe(1);
+  expect(state.edits[0]!.expectedVersion).toBe(0);
+  expect(state.items[0]!.body).toBe('Texto do outro gestor.');
+  expect(state.items[0]!.title).toBe('Manutenção da bomba');
+});
 
 test('gestão cria rascunho com chave pendente, publica com confirmação e vê aberturas sem tratá-las como ciência', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });

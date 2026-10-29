@@ -26,6 +26,21 @@ test('gestor AAL1 só vê a exigência do segundo fator e entra na gestão depoi
   await expect(page.getByText('JBSW Y3DP EHPK 3PXP JBSW Y3DP EHPK 3PXP')).toHaveCount(0);
 });
 
+test('mesma decisão já gravada por outro gestor não aparece como sucesso desta ação', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  state.decisionAlreadyApplied = true;
+  await signIn(page);
+  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  const item = page.locator('.management-item').filter({ hasText: 'Área Sintética A' });
+  await item.getByRole('button', { name: 'Rejeitar' }).click();
+  await item.getByLabel('Motivo da rejeição').fill('Motivo deste gestor');
+  await item.getByRole('button', { name: 'Confirmar rejeição' }).click();
+  await expect(page.getByText('Este pedido já estava', { exact: false })).toBeVisible();
+  await expect(page.getByText('o seu motivo não foi registrado', { exact: false })).toBeVisible();
+  await expect(page.getByText('Pedido rejeitado. O período foi liberado.')).toHaveCount(0);
+});
+
 test('rejeição de pedido exige motivo e a decisão sai uma única vez', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });

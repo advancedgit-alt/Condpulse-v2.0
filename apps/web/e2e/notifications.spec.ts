@@ -19,7 +19,7 @@ async function json(route: Route, status: number, body: unknown) {
 /** Caixa sintética da unidade A, registrada depois da API base (precedência). */
 async function installInbox(page: Page) {
   const state = {
-    opens: [] as { id: string; csrf: string | undefined }[], lists: 0,
+    opens: [] as { id: string; csrf: string | undefined }[], lists: 0, hold: null as Promise<void> | null,
     items: [
       { notificationId: WAITING, unitId: UNIT_A, kind: 'ARRIVAL_WAITING', resourceId: '80000000-0000-4000-8000-0000000000b1', resourceState: 'WAITING',
         state: 'AVAILABLE', createdAt: minutes(-1), readAt: null },
@@ -36,6 +36,7 @@ async function installInbox(page: Page) {
   await page.route(`**/v1/tenants/${TENANT_A}/notifications/*/open`, async (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
     state.opens.push({ id, csrf: route.request().headers()['x-csrf-token'] });
+    if (state.hold) await state.hold;
     const item = state.items.find((candidate) => candidate.notificationId === id)!;
     if (item.state === 'AVAILABLE') { item.state = 'READ_IN_APP'; item.readAt = new Date().toISOString(); }
     await json(route, 200, item);
@@ -65,6 +66,24 @@ test('caixa da unidade lista avisos sem marcar leitura; só abrir registra a lei
   await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/acessos$`));
   expect(state.opens.map((item) => item.id)).toEqual([WAITING]);
   expect(state.opens[0]!.csrf).toBeTruthy();
+});
+
+test('abertura que termina depois de a pessoa sair da página não a leva de volta para outra tela', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installInbox(page);
+  let release!: () => void;
+  state.hold = new Promise<void>((resolve) => { release = resolve; });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  const waiting = page.getByRole('list', { name: 'Avisos da unidade' }).getByRole('listitem').filter({ hasText: 'Chegada aguardando resposta da unidade' });
+  await waiting.getByRole('button', { name: 'Abrir e ver acessos' }).click();
+  await expect.poll(() => state.opens.length).toBe(1);
+  // Antes da resposta, a pessoa vai para as reservas pela navegação da unidade.
+  await page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Reservas' }).click();
+  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
+  release();
+  await page.waitForTimeout(500);
+  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
 });
 
 test('caixa desligada no ambiente não aparece nem mostra erro técnico', async ({ page }) => {
