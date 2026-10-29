@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { api, ApiError, newOperationKey } from '../../api/client';
+import { api } from '../../api/client';
 import { parcels, type Parcel, type ParcelMutation, type ParcelStatus, type ReceiveBody, type RecipientRole } from '../../api/parcels';
 import { collapseText, displayText } from '../../api/text';
 import { useAuth } from '../Auth';
@@ -9,51 +9,26 @@ import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
 import { dateInZone, formatWhen } from '../dateTime';
 import { ActionFeedback, ManagementProvider, useAccessGuard, useAction, useManagement, type ActionResult, type ManagementScope } from '../management/shared';
+import { codeOf, conciergeKey, repeatFailure, settleFailure, unitName, useIntent } from './shared';
+import { ArrivalDesk } from './Arrivals';
 import '../management/Management.css';
 
-/** Chaves de cache da portaria, separadas da gestão e do morador. */
-const conciergeKey = (scope: Pick<ManagementScope, 'accountId' | 'tenantId'>, ...parts: unknown[]) =>
-  ['private', scope.accountId, 'tenant', scope.tenantId, 'concierge', ...parts] as const;
-
-/** Mensagens de repetição no contexto da portaria (o texto geral fala da agenda de reservas). */
-function parcelFailure(error: unknown): unknown {
-  if (!(error instanceof ApiError)) return error;
-  const text = error.code === 'IDEMPOTENCY_KEY_REUSED' ? 'Este envio já foi feito com outros dados. Atualize a lista e confira antes de registrar de novo.'
-    : error.code === 'IDEMPOTENCY_KEY_EXPIRED' ? 'O prazo para repetir este envio terminou. Atualize a lista e confira antes de registrar de novo.'
-      : error.code === 'REQUEST_IN_PROGRESS' ? 'O envio anterior ainda está em processamento. Aguarde e atualize a lista antes de repetir.' : null;
-  return text ? new ApiError(error.status, error.code, text, error.uncertain) : error;
-}
-const uncertain = (error: unknown) => !(error instanceof ApiError) || error.uncertain || error.status >= 500;
-const codeOf = (error: unknown) => error instanceof ApiError ? error.code : '';
-/** Chave nova depois de prazo vencido ou dados diferentes: a anterior nunca mais confirma esta intenção. */
-const freshKeyCodes = ['IDEMPOTENCY_KEY_EXPIRED', 'IDEMPOTENCY_KEY_REUSED'];
-
-/** Mesma intenção reaproveita a chave: repetir depois de resultado incerto não cria segundo registro. */
-function useIntent() {
-  const [intent, setIntent] = useState<{ fingerprint: string; key: string } | null>(null);
-  return {
-    keyFor(fingerprint: string): string {
-      const key = intent?.fingerprint === fingerprint ? intent.key : newOperationKey();
-      setIntent({ fingerprint, key });
-      return key;
-    },
-    reset: () => setIntent(null),
-  };
-}
+export type ConciergeSection = 'encomendas' | 'visitas';
+export const conciergeSections: { id: ConciergeSection; label: string }[] = [{ id: 'encomendas', label: 'Encomendas' }, { id: 'visitas', label: 'Visitas' }];
 
 /** Portaria do condomínio: exige vínculo CONCIERGE vigente e segundo fator; o servidor confere de novo em cada ação. */
-export function ConciergePage() {
+export function ConciergePage({ section }: { section: ConciergeSection }) {
   const { identity } = useAuth();
   const { tenantId = '' } = useParams();
   const membership = identity?.memberships.find((item) => item.tenantId === tenantId && item.role === 'CONCIERGE');
   if (!identity || !membership) return <div className="panel"><Empty title="Portaria indisponível">Seu cadastro não inclui a portaria deste condomínio. Volte para escolher um acesso disponível.</Empty></div>;
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido antes de abrir a portaria.</Notice>; }
-  return <ConciergeGate key={`${identity.accountId}:${tenantId}`} scope={{ accountId: identity.accountId, tenantId,
+  return <ConciergeGate key={`${identity.accountId}:${tenantId}`} section={section} scope={{ accountId: identity.accountId, tenantId,
     tenantName: membership.tenantName, timeZone: membership.timeZone }} />;
 }
 
-function ConciergeGate({ scope }: { scope: ManagementScope }) {
+function ConciergeGate({ scope, section }: { scope: ManagementScope; section: ConciergeSection }) {
   const queries = useQueryClient();
   const status = useQuery({ queryKey: mfaStatusKey(scope.accountId), queryFn: ({ signal }) => api.mfaStatus(signal), refetchOnWindowFocus: false });
   const [demanded, setDemanded] = useState(false);
@@ -81,15 +56,16 @@ function ConciergeGate({ scope }: { scope: ManagementScope }) {
   }
   return <ManagementProvider value={value}>
     <div className="residence-heading"><div><span className="eyebrow">PORTARIA</span><h1>{scope.tenantName}</h1>
-      <p>Recebimentos, retiradas e anulações ficam registrados com o seu acesso. O aviso ao morador segue em fila e nunca condiciona o registro. Horários em {scope.timeZone}.</p></div>
+      <p>{section === 'visitas'
+        ? 'Chegadas, confirmações e encerramentos ficam registrados com o seu acesso. Sem resposta da unidade nada é liberado automaticamente.'
+        : 'Recebimentos, retiradas e anulações ficam registrados com o seu acesso. O aviso ao morador segue em fila e nunca condiciona o registro.'} Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão da portaria</span></div></div></div>
-    <ReceiveParcel />
-    <ParcelQueue />
+    <nav className="management-tabs" aria-label="Seções da portaria">{conciergeSections.map((item) =>
+      <Link key={item.id} to={`/portaria/${scope.tenantId}/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    {section === 'visitas' ? <ArrivalDesk /> : <><ReceiveParcel /><ParcelQueue /></>}
   </ManagementProvider>;
 }
 
-const unitName = (item: { unitLabel?: string; label?: string; blockName: string | null }) =>
-  `${item.blockName ? `${item.blockName} · ` : ''}${item.unitLabel ?? item.label ?? ''}`;
 const volumes = (count: number) => `${count} ${count === 1 ? 'volume' : 'volumes'}`;
 
 function ReceiveParcel() {
@@ -121,7 +97,7 @@ function ReceiveParcel() {
     let failure: unknown = null;
     const ok = await action.run(async () => {
       try { return await parcels.receive(scope.tenantId, key, body); }
-      catch (error) { failure = error; throw parcelFailure(error); }
+      catch (error) { failure = error; throw repeatFailure(error); }
     }, (result: ParcelMutation): ActionResult => {
       const matches = result.parcel.unitId === unitId && result.parcel.status === 'RECEIVED' && result.parcel.quantity === count;
       if (!matches) return { tone: 'warning', text: 'A resposta não confirmou este recebimento. Confira a lista antes de registrar de novo.' };
@@ -135,8 +111,8 @@ function ReceiveParcel() {
     }
     const code = codeOf(failure);
     if (code === 'PARCEL_DUPLICATE_SUSPECTED') { setDuplicate(true); return; }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void refreshQueue(); return; }
-    if (uncertain(failure)) { setLocked(true); void refreshQueue(); }
+    settleFailure(failure, locked, intent, setLocked);
+    void refreshQueue();
   }
   function restart() { intent.reset(); setLocked(false); setDuplicate(false); action.clear(); }
   const busy = action.state.pending || locked;
@@ -264,7 +240,7 @@ function DeliverParcel({ parcel, close }: { parcel: Parcel; close(result: Action
     let failure: unknown = null;
     const ok = await action.run(async () => {
       try { return await parcels.deliver(scope.tenantId, parcel.parcelId, key, body); }
-      catch (error) { failure = error; throw parcelFailure(error); }
+      catch (error) { failure = error; throw repeatFailure(error); }
     }, (done: ParcelMutation): ActionResult => {
       result = done.parcel.parcelId === parcel.parcelId && done.parcel.status === 'DELIVERED' && done.parcel.handoff
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta retirada já estava registrada' : 'Retirada registrada'}: ${done.parcel.handoff.recipientName} retirou a encomenda de ${unitName(done.parcel)} em ${formatWhen(done.parcel.handoff.deliveredAt, scope.timeZone)}.` }
@@ -279,8 +255,8 @@ function DeliverParcel({ parcel, close }: { parcel: Parcel; close(result: Action
       return;
     }
     if (code === 'PARCEL_RECIPIENT_NOT_ALLOWED') { setRecipient(''); setChecked(false); intent.reset(); void recipients.refetch(); return; }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); return; }
-    if (uncertain(failure)) { setLocked(true); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); }
+    settleFailure(failure, locked, intent, setLocked);
+    void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
   }
   const id = `deliver-${parcel.parcelId}`;
   const busy = action.state.pending || locked;
@@ -324,7 +300,7 @@ function VoidParcel({ parcel, close }: { parcel: Parcel; close(result: ActionRes
     let failure: unknown = null;
     const ok = await action.run(async () => {
       try { return await parcels.voidParcel(scope.tenantId, parcel.parcelId, key, body); }
-      catch (error) { failure = error; throw parcelFailure(error); }
+      catch (error) { failure = error; throw repeatFailure(error); }
     }, (done: ParcelMutation): ActionResult => {
       result = done.parcel.parcelId === parcel.parcelId && done.parcel.status === 'VOIDED'
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Este registro já estava anulado' : 'Registro anulado'}: encomenda de ${unitName(done.parcel)} (${volumes(done.parcel.quantity)} em ${done.parcel.storageLocation}). O motivo ficou na auditoria.` }
@@ -338,8 +314,8 @@ function VoidParcel({ parcel, close }: { parcel: Parcel; close(result: ActionRes
       void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
       return;
     }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); return; }
-    if (uncertain(failure)) { setLocked(true); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); }
+    settleFailure(failure, locked, intent, setLocked);
+    void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
   }
   const id = `void-${parcel.parcelId}`;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Anular registro de ${unitName(parcel)}`}>

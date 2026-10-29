@@ -1,0 +1,24 @@
+package br.com.condpulse.visits.application;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.UUID;
+
+/** Hash da intenção normalizada: repetir com a mesma chave e os mesmos dados devolve o mesmo registro. */
+final class VisitRequestHash {
+ private VisitRequestHash() {}
+ static String permit(UUID unit,String visitor,String document,String purpose,Instant from,Instant until) {
+  return digest("PERMIT|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+field(purpose)+"|"+from+"|"+until);
+ }
+ static String arrival(UUID unit,String visitor,String document,UUID permit) {
+  return digest("ARRIVAL|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+permit);
+ }
+ private static String field(String value) { return value==null?"-":value.length()+":"+value; }
+ private static String digest(String value) {
+  try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
+  catch(NoSuchAlgorithmException impossible) { throw new IllegalStateException("SHA-256 indisponível.",impossible); }
+ }
+}

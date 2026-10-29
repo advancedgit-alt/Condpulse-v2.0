@@ -228,10 +228,10 @@ test('morador consulta encomendas da unidade com local e retirada', async ({ pag
   await expect(page.getByRole('list', { name: 'Encomendas retiradas' }).getByText('Retirada por Pessoa Fictícia', { exact: false })).toBeVisible();
   await expect(page.getByText('Armário anulado', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Encomendas' }).first()).toHaveAttribute('aria-current', 'page');
-  // Em tela estreita as três abas da unidade cabem sem rolagem horizontal nem rótulo cortado.
+  // Em tela estreita as quatro abas da unidade cabem sem rolagem horizontal nem rótulo cortado.
   await page.setViewportSize({ width: 360, height: 780 });
   const tabs = page.getByRole('navigation', { name: 'Navegação da unidade' });
-  await expect(tabs.getByRole('link')).toHaveCount(3);
+  await expect(tabs.getByRole('link')).toHaveCount(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth))).toBe(true);
 });
