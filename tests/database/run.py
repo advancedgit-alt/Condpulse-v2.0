@@ -350,6 +350,64 @@ def recovery_checks():
            "sessao de outra conta permanece")
     query(f"DELETE FROM platform.web_sessions WHERE account_id='{AB}'; DELETE FROM platform.recovery_attempts")
 
+def platform_checks():
+    """V010: papel de plataforma so por operacao revisada; catalogo global e auditoria da plataforma por capacidade."""
+    def caps(value, statement):
+        return f"SET LOCAL app.platform_capabilities='{value}'; {statement}"
+    grant_role = (f"INSERT INTO platform.platform_roles(account_id,role,status,reason) "
+                  f"VALUES('{AA}','PLATFORM_ADMIN','ACTIVE','ensaio ficticio')")
+    expect(error(grant_role, "42501", role="cp_api"), "aplicacao nao concede papel de plataforma")
+    query(grant_role)
+    expect(value("select count(*) from platform.platform_roles", role="cp_api") == "1", "conta le o proprio papel de plataforma")
+    expect(value("select count(*) from platform.platform_roles", role="cp_api", actor=AB) == "0",
+           "papel de plataforma de outra conta nao e visivel")
+    expect(error("UPDATE platform.platform_roles SET status='REVOKED',revoked_at=now()", "42501", role="cp_api"),
+           "aplicacao nao altera papel de plataforma")
+    expect(error("select count(*) from platform.platform_roles", "42501", role="cp_worker"), "worker nao le papeis de plataforma")
+    expect(value("select count(*) from platform.tenants", role="cp_api") == "1", "sem capacidade o catalogo segue o vinculo")
+    expect(value(caps("tenants.read", "select count(*) from platform.tenants"), role="cp_api") == "2",
+           "capacidade publicada le o catalogo global")
+    expect(value(caps("tenants.manage", "select count(*) from platform.tenants"), role="cp_api") == "1",
+           "capacidade de gestao nao implica leitura global")
+    expect(value(caps("tenants.read,x", "select platform.has_platform_capability('tenants.manage')::text"), role="cp_api") == "false",
+           "capacidade de plataforma exige correspondencia exata")
+    rename = f"UPDATE platform.tenants SET name='RENOMEADO',version=version+1 WHERE id='{TA}'"
+    expect(error(caps("tenants.read", rename), "42501", role="cp_api"), "leitura global nao altera condominio")
+    local = (f"SET LOCAL app.capabilities='units.manage,memberships.manage,amenities.manage,audit.read'; "
+             f"UPDATE platform.tenants SET name='GESTOR LOCAL' WHERE id='{TB}'")
+    expect(error(local, "42501", role="cp_api", actor=AB, tenant=TB), "gestor local nao ganha poder de plataforma")
+    expect(value(caps("tenants.read,tenants.manage", f"WITH u AS ({rename} RETURNING version) SELECT version FROM u"),
+                 role="cp_api") == "1", "plataforma renomeia condominio pela capacidade")
+    expect(error(caps("tenants.read,tenants.manage", f"UPDATE platform.tenants SET time_zone='UTC' WHERE id='{TA}'"),
+                 "42501", role="cp_api"), "fuso do condominio fica fora do painel")
+    expect(error(caps("tenants.read,tenants.manage", f"UPDATE platform.tenants SET name='' WHERE id='{TA}'"),
+                 "23514", role="cp_api"), "nome vazio e recusado no banco")
+    audit = (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) "
+             f"VALUES('{AA}','TENANT_RENAMED','{TA}','ensaio','{{\"name\":\"RENOMEADO\"}}')")
+    expect(error(audit, "42501", role="cp_api"), "auditoria da plataforma exige capacidade publicada")
+    expect(error(caps("tenants.manage", audit), "42501", role="cp_api", actor=AB), "auditoria pertence ao ator publicado")
+    query(caps("tenants.manage", audit), role="cp_api")
+    expect(error(caps("tenants.manage", audit.replace("'ensaio'", "'ensaio'").replace("details)", "details,created_at)")
+                       .replace("}')", "}',now()-interval '1 day')")), "42501", role="cp_api"), "aplicacao nao escolhe data da auditoria")
+    expect(value("select count(*) from platform.platform_audit_log", role="cp_api") == "0", "auditoria da plataforma exige leitura")
+    expect(value(caps("platform.audit.read", "select count(*) from platform.platform_audit_log"), role="cp_api") == "1",
+           "leitura da auditoria da plataforma por capacidade")
+    expect(error(caps("platform.audit.read,tenants.manage", "UPDATE platform.platform_audit_log SET reason='x'"), "42501", role="cp_api"),
+           "aplicacao nao altera auditoria da plataforma")
+    expect(error(caps("platform.audit.read,tenants.manage", "DELETE FROM platform.platform_audit_log"), "42501", role="cp_api"),
+           "aplicacao nao apaga auditoria da plataforma")
+    query(f"INSERT INTO platform.onboarding_runs(operation_id,tenant_id,manifest_hash,database_actor,counts) "
+          f"VALUES(gen_random_uuid(),'{TA}',repeat('a',64),'cp_onboarding_ficticio','{{\"units\":1}}')")
+    expect(value("select count(*) from platform.onboarding_runs", role="cp_api") == "0", "recibo de onboarding exige capacidade")
+    expect(value(caps("tenants.read", "select (counts->>'units') from platform.onboarding_runs"), role="cp_api") == "1",
+           "plataforma le contagens do onboarding")
+    expect(error(caps("tenants.read", "select manifest_hash from platform.onboarding_runs"), "42501", role="cp_api"),
+           "hash do manifesto fica fora do painel")
+    expect(error(caps("tenants.read", "select database_actor from platform.onboarding_runs"), "42501", role="cp_api"),
+           "principal do banco fica fora do painel")
+    query(f"DELETE FROM platform.onboarding_runs WHERE tenant_id='{TA}'; DELETE FROM platform.platform_audit_log; "
+          f"DELETE FROM platform.platform_roles; UPDATE platform.tenants SET name='FICTICIO A' WHERE id='{TA}'")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -443,6 +501,7 @@ def main():
     invitation_checks()
     decision_checks()
     recovery_checks()
+    platform_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
