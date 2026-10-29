@@ -45,3 +45,17 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 .request-messages li{border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:grid;gap:4px;min-width:0}
 .request-messages li.request-internal{border-style:dashed;background:var(--surface-muted,transparent)}
 .request-messages li span{font-size:.8rem;color:var(--muted,inherit)}
+/* Importação de unidades: prévia por linha, legível no celular. */
+.import-batch{display:grid;gap:12px;margin-top:16px}
+.import-summary{display:flex;flex-wrap:wrap;gap:8px 20px;margin:0}
+.import-summary div{display:grid;gap:2px}
+.import-summary dt{font-size:.78rem;color:var(--muted)}
+.import-summary dd{margin:0;font-weight:700;font-size:1.1rem}
+.import-rows{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:420px;overflow:auto}
+.import-row{display:grid;grid-template-columns:minmax(72px,auto) minmax(0,1fr) minmax(0,auto);gap:4px 12px;padding:6px 8px;border-radius:8px;background:var(--background);overflow-wrap:anywhere}
+.import-invalid .import-outcome{color:var(--error)}
+.import-duplicate .import-outcome{color:#714b10}
+.import-line{font-variant-numeric:tabular-nums;color:var(--muted)}
+.import-actions{display:grid;gap:10px}
+.hash{overflow-wrap:anywhere}
+@media (max-width:560px){.import-row{grid-template-columns:1fr}}

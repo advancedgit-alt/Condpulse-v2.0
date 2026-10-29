@@ -90,6 +90,10 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT UPDATE(kind) ON cp.notifications TO cp_api","REVOKE UPDATE(kind) ON cp.notifications FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(published_at) ON cp.announcements TO cp_api","REVOKE UPDATE(published_at) ON cp.announcements FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(read_at) ON cp.announcement_reads TO cp_api","REVOKE INSERT(read_at) ON cp.announcement_reads FROM cp_api",false);
+  assertRefusedWith("GRANT DELETE ON cp.import_rows TO cp_api","REVOKE DELETE ON cp.import_rows FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(source) ON cp.import_batches TO cp_api","REVOKE UPDATE(source) ON cp.import_batches FROM cp_api",false);
+  assertRefusedWith("GRANT INSERT(created_by) ON cp.import_batches TO cp_api","REVOKE INSERT(created_by) ON cp.import_batches FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(unit_label) ON cp.import_rows TO cp_api","REVOKE UPDATE(unit_label) ON cp.import_rows FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.outbox TO cp_worker","REVOKE DELETE ON cp.outbox FROM cp_worker",true);
   assertRefusedWith("GRANT UPDATE(account_id) ON cp.notifications TO cp_worker","REVOKE UPDATE(account_id) ON cp.notifications FROM cp_worker",true);
   // Depois de desfeitos os grants, as duas roles voltam a iniciar.

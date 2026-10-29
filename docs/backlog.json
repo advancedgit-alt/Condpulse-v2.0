@@ -497,7 +497,7 @@
       "id": "CP-016",
       "delivery": "Importação em staging. CSV, preview, validação, duplicatas, erros por linha e aprovação de lote.",
       "acceptance": "Repetir o mesmo lote não duplica unidades ou vínculos; origem e contagens são registradas.",
-      "status": "PLANEJADO",
+      "status": "EM_IMPLEMENTACAO",
       "evidence": []
     },
     {
