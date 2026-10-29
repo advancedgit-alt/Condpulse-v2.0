@@ -938,7 +938,11 @@ def access_checks():
             return error(concierge + statement, state, tenant=TA, actor=CONC, role="cp_api")
         return query(concierge + statement, tenant=TA, actor=CONC, role="cp_api")
     expect(error(event(E[0], permit=P_NOW, actor=AA), "42501", tenant=TA, role="cp_api"), "morador nao registra entrada")
-    expect(error(event(E[0], permit=P_NOW), "42501", tenant=TA, actor=CONC, role="cp_api"), "portaria sem capacidade publicada nao registra")
+    expect(error(event(E[0], permit=P_NOW), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "portaria sem capacidade publicada nao enxerga a autorizacao (falha fechada no gatilho)")
+    # A chegada da propria unidade e visivel ao morador: o gatilho passa e quem recusa e a politica de gravacao.
+    expect(error(event(E[0], arrival=A_OK, actor=AA), "new row violates row-level security policy", tenant=TA, role="cp_api"),
+           "morador nao registra entrada da propria chegada (politica de gravacao)")
     expect(as_concierge(event(E[0], permit=P_NOW, actor=AA), "42501"), "registro sempre em nome da propria conta")
     expect(as_concierge(event(E[0], arrival=A_WAIT), "23514"), "chegada ainda aguardando nao permite entrada")
     expect(as_concierge(event(E[0], arrival=A_DENIED), "23514"), "chegada recusada nao permite entrada")
@@ -960,10 +964,20 @@ def access_checks():
     as_concierge(event(E[2], permit=P_NOW))
     expect(value(f"select count(*) from cp.access_events where permit_id='{P_NOW}'") == "2", "convite em vigor admite nova entrada no periodo")
     as_concierge(event(E[3], permit=P_OTHER))
+    # Saida e correcao nao carregam base propria (chegada/convite sao sempre os da entrada de referencia).
+    expect(as_concierge(event(E[10], kind="MANUAL_OUT", entry=E[2], arrival=A_OK, evidence="EXIT_OBSERVED"), "23514"),
+           "saida nao aponta para outra chegada")
+    expect(as_concierge(event(E[10], kind="MANUAL_OUT", entry=E[2], permit=P_OTHER, evidence="EXIT_OBSERVED"), "23514"),
+           "saida nao aponta para outro convite")
+    expect(as_concierge(event(E[10], kind="CORRECTION", corrects=E[2], arrival=A_OK, evidence="OPERATOR_CORRECTION",
+                              note="'Base alheia'"), "23514"), "correcao nao aponta para outra chegada")
     expect(value(f"select unit_id from cp.access_events where id='{E[3]}'") == UA2, "portaria registra entrada para qualquer unidade do condominio")
     query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{RES2}'")
     expect(as_concierge(event(E[11], permit=P_OTHER), "23514"), "convite de quem perdeu o vinculo nao autoriza entrada")
     query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE account_id='{RES2}'")
+    query(f"UPDATE cp.units SET status='INACTIVE' WHERE id='{UA}'")
+    expect(as_concierge(event(E[11], arrival=A_OK), "23514"), "chegada autorizada de unidade desativada nao permite entrada")
+    query(f"UPDATE cp.units SET status='ACTIVE' WHERE id='{UA}'")
     # Saida e correcao.
     expect(as_concierge(event(E[4], kind="MANUAL_OUT", entry=E[0], evidence="DOCUMENT_CHECKED"), "23514"), "saida exige evidencia de saida")
     as_concierge(event(E[4], kind="MANUAL_OUT", entry=E[0], evidence="EXIT_OBSERVED"))
@@ -1009,14 +1023,24 @@ def access_checks():
     expect(as_concierge(event(E[10], permit=P_NOW), "23514"), "convite revogado depois da entrada nao autoriza nova entrada")
     expect(value(f"select count(*) from cp.access_events where permit_id='{P_NOW}' and event_type='MANUAL_IN'") == "2",
            "entradas anteriores continuam registradas")
-    # Eventos e trilha.
-    foreign_event = (f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) "
-                     f"VALUES('{TA}','ACCESS_ENTRY_RECORDED','{E[0]}',0,'{{}}')")
-    expect(error(foreign_event, "42501", tenant=TA, actor=RES2, role="cp_api"), "outra unidade nao grava evento do registro")
-    trail = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
-             f"VALUES('{TA}','{AA}','ACCESS_ENTRY_RECORDED','ACCESS_EVENT','{E[0]}','{ROLL}')")
-    expect(as_concierge(trail, "42501"), "trilha de acesso so em nome da propria conta")
-    query(f"DELETE FROM cp.access_events WHERE tenant_id='{TA}'; DELETE FROM cp.arrival_requests WHERE id in ('{A_OK}','{A_WAIT}','{A_DENIED}','{A_OLD}'); "
+    # Eventos e trilha: somente a portaria, do registro da propria conta e com a unidade real do registro.
+    def access_event(aggregate, unit):
+        return (f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) "
+                f"VALUES('{TA}','ACCESS_ENTRY_RECORDED','{aggregate}',0,jsonb_build_object('id','{aggregate}','unitId','{unit}'))")
+    expect(error(access_event(E[0], UA), "42501", tenant=TA, actor=RES2, role="cp_api"), "outra unidade nao grava evento do registro")
+    expect(error(access_event(E[0], UA), "42501", tenant=TA, actor=AA, role="cp_api"), "unidade nao grava evento do proprio registro")
+    expect(as_concierge(access_event(E[0], UA2), "42501"), "evento leva a unidade real do registro")
+    as_concierge(access_event(E[0], UA))
+    expect(value(f"select count(*) from cp.outbox where aggregate_id='{E[0]}'") == "1", "portaria grava o evento do proprio registro")
+    def access_trail(actor, resource):
+        return (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+                f"VALUES('{TA}','{actor}','ACCESS_ENTRY_RECORDED','ACCESS_EVENT','{resource}','{ROLL}')")
+    expect(as_concierge(access_trail(AA, E[0]), "42501"), "trilha de acesso so em nome da propria conta")
+    expect(as_concierge(access_trail(CONC, ROLL), "42501"), "trilha de acesso so de registro existente")
+    expect(error(access_trail(AA, E[0]), "42501", tenant=TA, actor=AA, role="cp_api"), "unidade nao grava trilha de acesso")
+    as_concierge(access_trail(CONC, E[0]))
+    query(f"DELETE FROM cp.outbox WHERE event_type LIKE 'ACCESS%'; DELETE FROM cp.audit_log WHERE action LIKE 'ACCESS%'; "
+          f"DELETE FROM cp.access_events WHERE tenant_id='{TA}'; DELETE FROM cp.arrival_requests WHERE id in ('{A_OK}','{A_WAIT}','{A_DENIED}','{A_OLD}'); "
           f"DELETE FROM cp.visit_permits WHERE id in ('{P_NOW}','{P_LATER}','{P_REVOKED}','{P_OTHER}'); "
           f"DELETE FROM cp.visitors WHERE id in ('{"','".join(V)}'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "

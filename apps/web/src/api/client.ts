@@ -186,6 +186,7 @@ const messages: Record<string, string> = {
   ACCESS_CORRECTION_REASON_REQUIRED: 'Informe o motivo da correção, com até 300 caracteres.',
   ACCESS_ARRIVAL_NOT_AUTHORIZED: 'Esta chegada não tem autorização da unidade: nada é liberado.',
   ACCESS_AUTHORIZATION_EXPIRED: 'A autorização desta chegada não vale mais para entrada. Registre nova chegada.',
+  ACCESS_UNIT_INACTIVE: 'A unidade desta chegada não está ativa: nada é liberado. Siga o procedimento do condomínio.',
   ACCESS_PERMIT_NOT_CURRENT: 'O convite não vale agora (antes do início, vencido, revogado ou de quem perdeu o vínculo) e não autoriza a entrada.',
   ACCESS_ENTRY_ALREADY_RECORDED: 'A entrada desta chegada já foi registrada. Atualize a fila.',
   ACCESS_EXIT_ALREADY_RECORDED: 'A saída desta entrada já foi registrada. Atualize a lista.',

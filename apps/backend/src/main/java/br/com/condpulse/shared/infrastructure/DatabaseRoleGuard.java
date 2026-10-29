@@ -10,27 +10,39 @@ public class DatabaseRoleGuard implements ApplicationRunner {
  private final JdbcTemplate jdbc;
  public DatabaseRoleGuard(JdbcTemplate jdbc) { this.jdbc=jdbc; }
  @Override public void run(ApplicationArguments args) {
-  // Trilhas e papéis de plataforma (V010), financeiro (V011), registros de acesso (V014) e caixa interna (V015)
+  // Trilhas e papéis de plataforma (V010), financeiro (V011), registros de acesso (V014) e outbox/caixa interna (V015)
   // conferidos por to_regclass: banco ainda sem a migration não falha aqui. O financeiro nunca apaga: estorno e
-  // cancelamento mantêm a linha; o registro de acesso nunca muda: correção é um evento adicional; tarefa do outbox e
-  // aviso entregue não são apagados pela aplicação.
+  // cancelamento mantêm a linha; o registro de acesso nunca muda: correção é um evento adicional, e unidade, pessoa,
+  // horários e origem vêm do banco; tarefa do outbox e aviso não são apagados pela aplicação, que também não escolhe
+  // estado, tentativa ou prazo da tarefa nem altera o aviso além da abertura.
+  // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
+  // existem na tabela.
   Boolean unsafe=jdbc.queryForObject("""
     select rolsuper or rolbypassrls or rolcreatedb or rolcreaterole or rolreplication
      or has_schema_privilege(current_user,'cp','CREATE')
      or has_schema_privilege(current_user,'platform','CREATE')
-     or has_table_privilege(current_user,'cp.audit_log','UPDATE')
-     or has_table_privilege(current_user,'cp.audit_log','DELETE')
-     or has_table_privilege(current_user,'cp.audit_log','TRUNCATE')
-     or coalesce(has_table_privilege(current_user,to_regclass('platform.platform_audit_log'),'UPDATE,DELETE,TRUNCATE'),false)
-     or coalesce(has_table_privilege(current_user,to_regclass('platform.platform_roles'),'INSERT,UPDATE,DELETE,TRUNCATE'),false)
-     or coalesce(has_table_privilege(current_user,to_regclass('platform.platform_role_events'),'INSERT,UPDATE,DELETE,TRUNCATE'),false)
+     or has_any_column_privilege(current_user,'cp.audit_log','UPDATE')
+     or has_table_privilege(current_user,'cp.audit_log','DELETE,TRUNCATE')
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.platform_audit_log'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.platform_audit_log'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.platform_roles'),'INSERT,UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.platform_roles'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.platform_role_events'),'INSERT,UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.platform_role_events'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_plans'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_subscriptions'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_charges'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_payments'),'DELETE,TRUNCATE'),false)
-     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_events'),'UPDATE,DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.access_events'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_events'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_events') and c.attname in ('unit_id','visitor_id','occurred_at','received_at','source')),false)
      or has_table_privilege(current_user,'cp.outbox','DELETE,TRUNCATE')
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid='cp.outbox'::regclass and c.attname in ('state','attempts','available_at','lease_until','last_error','processed_at')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.notifications'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.notifications') and c.attnum>0 and not c.attisdropped and c.attname<>'state'),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

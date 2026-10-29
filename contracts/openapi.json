@@ -5887,13 +5887,13 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "STAFF_ACCESS_DENIED, ACCESS_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
-            "description": "ARRIVAL_NOT_FOUND ou VISIT_PERMIT_NOT_FOUND"
+            "description": "ARRIVAL_NOT_FOUND, VISIT_PERMIT_NOT_FOUND ou ACCESS_EVENT_NOT_FOUND (repetição de envio cujo registro não está mais visível)"
           },
           "409": {
-            "description": "ACCESS_ARRIVAL_NOT_AUTHORIZED, ACCESS_AUTHORIZATION_EXPIRED, ACCESS_PERMIT_NOT_CURRENT, ACCESS_ENTRY_ALREADY_RECORDED, ACCESS_STATE_CHANGED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+            "description": "ACCESS_ARRIVAL_NOT_AUTHORIZED, ACCESS_AUTHORIZATION_EXPIRED, ACCESS_UNIT_INACTIVE, ACCESS_PERMIT_NOT_CURRENT, ACCESS_ENTRY_ALREADY_RECORDED, ACCESS_STATE_CHANGED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
           },
           "503": {
             "description": "ACCESS_DEPENDENCY_UNAVAILABLE"
@@ -5994,7 +5994,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "STAFF_ACCESS_DENIED, ACCESS_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
             "description": "ACCESS_EVENT_NOT_FOUND"
@@ -6101,7 +6101,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "STAFF_ACCESS_DENIED, ACCESS_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
             "description": "ACCESS_EVENT_NOT_FOUND"
@@ -9556,7 +9556,8 @@
               "string",
               "null"
             ],
-            "maxLength": 300
+            "maxLength": 300,
+            "description": "Observação interna da portaria; null na visão da unidade."
           },
           "recordedByMe": {
             "type": "boolean"
@@ -9585,6 +9586,7 @@
           "documentLast4",
           "arrivalId",
           "permitId",
+          "linkedPermitId",
           "eventType",
           "source",
           "evidence",
@@ -9594,7 +9596,7 @@
           "correction",
           "exit"
         ],
-        "description": "Entrada registrada manualmente pela portaria — nunca passagem detectada por equipamento — com a correção e a saída mais recente.",
+        "description": "Entrada registrada manualmente pela portaria — nunca passagem detectada por equipamento — com a correção e a saída válida mais recente (ou a última corrigida, sem nenhuma válida). Observações da portaria (note, exit.note) não vão para a unidade; o motivo de correção vai.",
         "properties": {
           "entryId": {
             "type": "string",
@@ -9639,6 +9641,14 @@
             ],
             "format": "uuid"
           },
+          "linkedPermitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Convite ao qual a chegada da entrada foi vinculada (pedido de confirmação a partir do convite); null quando não houver."
+          },
           "eventType": {
             "type": "string",
             "const": "MANUAL_IN"
@@ -9659,7 +9669,8 @@
               "string",
               "null"
             ],
-            "maxLength": 300
+            "maxLength": 300,
+            "description": "Observação interna da portaria; null na visão da unidade."
           },
           "enteredAt": {
             "type": "string",

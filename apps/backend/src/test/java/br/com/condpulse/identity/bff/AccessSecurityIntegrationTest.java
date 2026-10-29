@@ -83,7 +83,7 @@ class AccessSecurityIntegrationTest {
   return new String[]{response.getCookie("__Host-cp_csrf").getValue(),matcher.group(1)};
  }
  private static AccessModels.AccessRecord record() {
-  return new AccessModels.AccessRecord(ENTRY,UNIT,"101",null,"Pessoa Fictícia",null,ARRIVAL,null,"MANUAL_IN","CONCIERGE","DOCUMENT_CHECKED",
+  return new AccessModels.AccessRecord(ENTRY,UNIT,"101",null,"Pessoa Fictícia",null,ARRIVAL,null,null,"MANUAL_IN","CONCIERGE","DOCUMENT_CHECKED",
    null,NOW,true,null,null);
  }
 

@@ -74,6 +74,9 @@ public class AccessService {
      throw new BusinessProblem("ACCESS_ARRIVAL_NOT_AUTHORIZED",409,"Esta chegada não tem autorização da unidade: nada é liberado.");
     if(!arrival.createdAt().isAfter(visits.now().minus(ARRIVAL_WINDOW)))
      throw new BusinessProblem("ACCESS_AUTHORIZATION_EXPIRED",409,"A autorização desta chegada não vale mais para entrada. Registre nova chegada.");
+    // Mesma regra do convite (unidade ativa): unidade desativada depois da autorização não recebe entrada.
+    if(!visits.activeUnit(tenant,arrival.unitId()))
+     throw new BusinessProblem("ACCESS_UNIT_INACTIVE",409,"A unidade desta chegada não está ativa: nada é liberado. Siga o procedimento do condomínio.");
     if(store.validEntryForArrival(tenant,request.arrivalId())) throw entryRecorded();
    } else {
     var permit=visits.permit(tenant,request.permitId(),false);
