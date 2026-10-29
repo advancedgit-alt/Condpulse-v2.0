@@ -19,7 +19,7 @@ const quadra: Amenity = { ...salao, amenityId: QUADRA, name: 'Quadra fictícia',
 
 function fakeApi() {
   const state = { reservations: [] as Reservation[], availabilityCalls: 0, blocked: [] as { occupiedFrom: string; occupiedUntil: string }[],
-    creates: [] as { body: unknown; key: string }[], cancels: [] as { body: unknown; key: string }[], createError: null as ApiError | null };
+    creates: [] as { body: unknown; key: string }[], cancels: [] as { body: unknown; key: string }[], createError: null as ApiError | null, limit: 100 };
   const api = {
     me: jest.fn(),
     amenities: jest.fn(async () => [salao, quadra]),
@@ -27,8 +27,12 @@ function fakeApi() {
       state.availabilityCalls += 1;
       return { amenityId, from: range.from, until: range.until, observedAt: now().toISOString(), blockedIntervals: state.blocked };
     }),
-    reservations: jest.fn(async (_tenant: string, _unit: string, range: { from: string; until: string }) => ({
-      reservations: state.reservations.filter((item) => item.startsAt >= range.from && item.startsAt < range.until), truncated: false })),
+    // Mesmo critério do servidor: sobreposição com o período, ordem por início e corte em \`limit\`.
+    reservations: jest.fn(async (_tenant: string, _unit: string, range: { from: string; until: string }) => {
+      const rows = state.reservations.filter((item) => Date.parse(item.startsAt) < Date.parse(range.until) && Date.parse(item.endsAt) > Date.parse(range.from))
+        .sort((x, y) => x.startsAt.localeCompare(y.startsAt));
+      return { reservations: rows.slice(0, state.limit), truncated: rows.length > state.limit };
+    }),
     createReservation: jest.fn(async (_tenant: string, body: { unitId: string; amenityId: string; startsAt: string; endsAt: string; acceptedPolicyVersion: number }, key: string) => {
       state.creates.push({ body, key });
       if (state.createError) { const error = state.createError; state.createError = null; throw error; }
@@ -158,6 +162,49 @@ describe('reservas no celular', () => {
     expect(await screen.findByText(/Pedido enviado/)).toBeTruthy();
     expect(fake.state.creates).toHaveLength(2);
     expect(fake.state.creates[1]).toEqual(fake.state.creates[0]);
+  });
+
+  it('lista cortada pelo servidor continua a partir da última reserva mostrada, até a omitida', async () => {
+    const fake = fakeApi();
+    const booking = (n: number, day: string): Reservation => ({ reservationId: `41000000-0000-4000-8000-00000000010${n}`, unitId: UNIT, amenityId: SALAO,
+      status: n < 3 ? 'CANCELLED' : 'CONFIRMED', startsAt: `${day}T13:00:00.000Z`, endsAt: `${day}T14:00:00.000Z`, occupiedFrom: `${day}T13:00:00.000Z`,
+      occupiedUntil: `${day}T14:00:00.000Z`, acceptedPolicyVersion: 3, feeCents: 0, version: 1, decisionReason: null });
+    fake.state.reservations = [booking(1, '2030-01-08'), booking(2, '2030-01-09'), booking(3, '2030-01-10')];
+    fake.state.limit = 2;
+    const queries = newQueryClient(Infinity); clients.push(queries);
+    await render(<QueryClientProvider client={queries}>
+      <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => 'test:key-cursor-000001'}
+        membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+          timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
+    </QueryClientProvider>);
+    expect(await screen.findByText(/Continue para ver as seguintes/)).toBeTruthy();
+    expect(within(screen.getByLabelText('Reservas da unidade')).queryByText('Confirmada')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver as reservas seguintes' }));
+    const list = await screen.findByLabelText('Reservas da unidade');
+    await waitFor(() => expect(within(screen.getByLabelText('Reservas da unidade')).getByText('Confirmada')).toBeTruthy());
+    expect(list).toBeTruthy();
+    expect(fake.mocks.reservations.mock.calls.at(-1)![2]).toMatchObject({ from: '2030-01-09T13:00:00.000Z' });
+    await fireEvent.press(screen.getByRole('button', { name: /^Cancelar reserva/ }));
+    expect(screen.getByRole('button', { name: 'Confirmar cancelamento' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Voltar ao início do período' }));
+    expect(await screen.findByText(/Continue para ver as seguintes/)).toBeTruthy();
+  });
+
+  it('corte sem avanço possível não oferece botão que repete a mesma página', async () => {
+    const fake = fakeApi();
+    const same = (n: number): Reservation => ({ reservationId: `41000000-0000-4000-8000-00000000020${n}`, unitId: UNIT, amenityId: SALAO, status: 'CANCELLED',
+      startsAt: '2030-01-07T00:00:00.000Z', endsAt: '2030-01-07T13:00:00.000Z', occupiedFrom: '2030-01-07T00:00:00.000Z',
+      occupiedUntil: '2030-01-07T13:00:00.000Z', acceptedPolicyVersion: 3, feeCents: 0, version: 1, decisionReason: null });
+    fake.state.reservations = [same(1), same(2), same(3)];
+    fake.state.limit = 2;
+    const queries = newQueryClient(Infinity); clients.push(queries);
+    await render(<QueryClientProvider client={queries}>
+      <Reservations api={fake.api} accountId={ACCOUNT} now={() => new Date('2030-01-07T03:00:00Z')} newKey={() => 'test:key-cursor-000002'}
+        membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+          timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
+    </QueryClientProvider>);
+    expect(await screen.findByText(/não foi possível avançar daqui/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ver as reservas seguintes' })).toBeNull();
   });
 
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {

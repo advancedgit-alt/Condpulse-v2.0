@@ -50,12 +50,15 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   const amenities = useQuery({ queryKey: [...scope, 'amenities'], queryFn: ({ signal }) => api.amenities(tenantId, signal) });
   const today = dateInZone(timeZone, now());
   // Períodos de 30 dias a partir de hoje (a API aceita até 31 por consulta), até cobrir a maior antecedência permitida.
-  const [period, setPeriod] = useState(0);
+  const [period, setPeriodState] = useState(0);
+  // Lista cortada pelo servidor (mais de 100 no período): continuar a partir do início da última mostrada.
+  const [cursor, setCursor] = useState<string | null>(null);
+  const setPeriod = (next: number) => { setCursor(null); setPeriodState(next); };
   const lastPeriod = Math.floor(Math.max(0, ...(amenities.data ?? []).map((item) => item.policy?.maximumAdvanceDays ?? 0)) / PERIOD_DAYS);
   const periodStart = addDays(today, period * PERIOD_DAYS);
   const periodEnd = addDays(periodStart, PERIOD_DAYS);
-  const range = useMemo(() => ({ from: toInstant(`${periodStart}T00:00`, timeZone), until: toInstant(`${periodEnd}T00:00`, timeZone) }),
-    [periodStart, periodEnd, timeZone]);
+  const range = useMemo(() => ({ from: cursor ?? toInstant(`${periodStart}T00:00`, timeZone), until: toInstant(`${periodEnd}T00:00`, timeZone) }),
+    [cursor, periodStart, periodEnd, timeZone]);
   const mine = useQuery({ queryKey: [...scope, 'reservations', range.from], queryFn: ({ signal }) => api.reservations(tenantId, unitId, range, signal) });
   const [areaId, setAreaId] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ tone: 'success' | 'info'; text: string } | null>(null);
@@ -101,7 +104,17 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
           : <View accessibilityRole="list" accessibilityLabel="Reservas da unidade">{mine.data.reservations.map((item) =>
             <ReservationCard key={item.reservationId} api={api} scope={scope} membership={membership} reservation={item}
               areaName={names.get(item.amenityId) ?? 'Área'} newKey={newKey} now={now} />)}</View>}
-    {mine.data?.truncated ? <Notice tone="info">A lista mostra só parte das reservas do período.</Notice> : null}
+    {mine.data?.truncated ? (() => {
+      const last = mine.data.reservations.at(-1)?.startsAt ?? null;
+      // Sem avanço possível (a última mostrada começa no início da consulta ou antes): não oferecer botão que repete a mesma página.
+      const next = last !== null && Date.parse(last) > Date.parse(range.from) ? last : null;
+      return <View>
+        <Notice tone="info">{next ? 'A lista mostra só parte das reservas do período. Continue para ver as seguintes.'
+          : 'A lista mostra só parte das reservas do período e não foi possível avançar daqui. Consulte o portal web.'}</Notice>
+        {next ? <Button label="Ver as reservas seguintes" secondary onPress={() => setCursor(next)} /> : null}
+      </View>;
+    })() : null}
+    {cursor ? <Button label="Voltar ao início do período" secondary onPress={() => setCursor(null)} /> : null}
   </View>;
 }
 
