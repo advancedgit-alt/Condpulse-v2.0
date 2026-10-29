@@ -66,7 +66,9 @@ jobs:
           CP_ONBOARDING_JAVA_TEST_REQUIRED: "true"
         run: node --test --test-reporter=tap tests/onboarding-operations-java.test.mjs
       - name: Manual database executor guards without managed credentials
-        run: node --test --test-reporter=tap tests/database-operations.test.mjs tests/production-database-operations.test.mjs
+        # Em série: os dois harnesses migram bancos novos desde a V001 no mesmo cluster, antes de as roles da
+        # aplicação existirem; em paralelo, as V002 concorrentes colidem em pg_authid (CREATE ROLE duplicado).
+        run: node --test --test-concurrency=1 --test-reporter=tap tests/database-operations.test.mjs tests/production-database-operations.test.mjs
       - name: Runtime credential executor guards and disposable provisioning
         run: node --test --test-reporter=tap tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs
       - name: Migrate with Flyway and validate replay
