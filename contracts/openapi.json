@@ -3458,7 +3458,7 @@
             "description": "PARCEL_UNIT_UNAVAILABLE, ou rota inexistente com CP_PARCELS_ENABLED=false"
           },
           "409": {
-            "description": "IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+            "description": "PARCEL_DUPLICATE_SUSPECTED (encomenda igual registrada há menos de 10 minutos; repetir com confirmDuplicate=true depois de conferir), IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
           },
           "503": {
             "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
@@ -3527,10 +3527,10 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "ACCOUNT_INACTIVE (conta sem validação)"
           },
           "404": {
-            "description": "Recurso não disponível ao ator, ou rota inexistente com CP_PARCELS_ENABLED=false"
+            "description": "PARCEL_NOT_FOUND (inexistente, de outra unidade ou anulada para quem não é da portaria), ou rota inexistente com CP_PARCELS_ENABLED=false"
           },
           "503": {
             "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
@@ -3589,7 +3589,7 @@
             }
           }
         ],
-        "description": "Entrega única pela portaria, com documento conferido e versão lida. Segunda tentativa: PARCEL_ALREADY_DELIVERED.",
+        "description": "Retirada única e identificada pela portaria: pessoa escolhida entre os vínculos da unidade, documento conferido e versão lida. Segunda tentativa: PARCEL_ALREADY_DELIVERED.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3637,7 +3637,185 @@
             "description": "Recurso não disponível ao ator, ou rota inexistente com CP_PARCELS_ENABLED=false"
           },
           "409": {
-            "description": "PARCEL_ALREADY_DELIVERED, PARCEL_CHANGED, IDEMPOTENCY_KEY_REUSED ou REQUEST_IN_PROGRESS"
+            "description": "PARCEL_ALREADY_DELIVERED, PARCEL_VOIDED, PARCEL_CHANGED, PARCEL_RECIPIENT_NOT_ALLOWED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}/recipients": {
+      "get": {
+        "operationId": "listParcelRecipients",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Pessoas que podem retirar a encomenda (portaria, AAL2): vínculos residenciais vigentes da unidade, por nome.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "$ref": "#/components/schemas/ParcelRecipient"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARCEL_NOT_FOUND, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}/void": {
+      "post": {
+        "operationId": "voidParcel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Registro indevido (unidade errada, duplicidade): anula a encomenda ainda a retirar, pela versão lida, com chave de idempotência e motivo na auditoria. Nada é apagado; a unidade deixa de vê-la.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PARCEL_VOID_REASON_REQUIRED, PARCEL_VERSION_REQUIRED ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARCEL_NOT_FOUND, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "409": {
+            "description": "PARCEL_ALREADY_DELIVERED, PARCEL_VOIDED, PARCEL_CHANGED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
           },
           "503": {
             "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
@@ -5767,7 +5945,7 @@
           "deliveredAt",
           "evidenceKind"
         ],
-        "description": "Entrega registrada pela portaria. Sem identificador da conta da equipe; operador e horário ficam na auditoria.",
+        "description": "Retirada registrada pela portaria: nome do vínculo residencial escolhido. Sem identificador da conta da equipe; operador e horário ficam na auditoria.",
         "properties": {
           "recipientName": {
             "type": "string",
@@ -5801,7 +5979,9 @@
           "status",
           "receivedAt",
           "version",
-          "handoff"
+          "handoff",
+          "voidReason",
+          "voidedAt"
         ],
         "properties": {
           "parcelId": {
@@ -5839,8 +6019,10 @@
             "type": "string",
             "enum": [
               "RECEIVED",
-              "DELIVERED"
-            ]
+              "DELIVERED",
+              "VOIDED"
+            ],
+            "description": "VOIDED: registro indevido anulado pela portaria; somente a portaria vê."
           },
           "receivedAt": {
             "type": "string",
@@ -5860,6 +6042,22 @@
               }
             ],
             "description": "Presente somente quando DELIVERED."
+          },
+          "voidReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Presente somente quando VOIDED."
+          },
+          "voidedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Presente somente quando VOIDED."
           }
         }
       },
@@ -5913,6 +6111,13 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 160
+          },
+          "confirmDuplicate": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "true depois do aviso PARCEL_DUPLICATE_SUSPECTED, quando a portaria confere que é outra encomenda."
           }
         }
       },
@@ -5920,15 +6125,15 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "recipientName",
+          "recipientMembershipId",
           "identityChecked",
           "expectedVersion"
         ],
         "properties": {
-          "recipientName": {
+          "recipientMembershipId": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 160
+            "format": "uuid",
+            "description": "Vínculo escolhido em /recipients: residencial vigente da unidade da encomenda."
           },
           "identityChecked": {
             "type": "boolean",
@@ -5962,6 +6167,54 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ParcelRecipient": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "membershipId",
+          "displayName",
+          "role"
+        ],
+        "description": "Pessoa que pode retirar: vínculo residencial vigente, de conta ativa, da unidade ativa; dependente só com permissão explícita.",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "RESPONSIBLE",
+              "DEPENDENT"
+            ]
+          }
+        }
+      },
+      "ParcelVoid": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

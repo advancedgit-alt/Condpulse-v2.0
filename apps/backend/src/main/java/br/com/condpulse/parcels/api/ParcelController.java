@@ -46,6 +46,12 @@ public class ParcelController {
      @RequestParam(required=false) String status) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.unitParcels(account(jwt),tenantId,unitId,status));
  }
+ /** Pessoas com vínculo que podem retirar a encomenda (portaria). */
+ @GetMapping("/v1/tenants/{tenantId}/parcels/{parcelId}/recipients")
+ public ResponseEntity<List<ParcelModels.Recipient>> recipients(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID parcelId) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.recipients(account(jwt),tenantId,assurance(jwt),parcelId));
+ }
  @PostMapping("/v1/tenants/{tenantId}/parcels")
  public ResponseEntity<ParcelModels.Parcel> receive(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
      @RequestHeader("Idempotency-Key") String key,@RequestBody ParcelModels.Receive request) {
@@ -55,6 +61,12 @@ public class ParcelController {
  public ResponseEntity<ParcelModels.Parcel> deliver(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID parcelId,
      @RequestHeader("Idempotency-Key") String key,@RequestBody ParcelModels.Deliver request) {
   return mutation(service.deliver(account(jwt),tenantId,assurance(jwt),parcelId,key,request));
+ }
+ /** Registro indevido: anula a encomenda ainda a retirar, pela versão lida e com motivo. */
+ @PostMapping("/v1/tenants/{tenantId}/parcels/{parcelId}/void")
+ public ResponseEntity<ParcelModels.Parcel> voidParcel(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID parcelId,
+     @RequestHeader("Idempotency-Key") String key,@RequestBody ParcelModels.VoidRequest request) {
+  return mutation(service.voidParcel(account(jwt),tenantId,assurance(jwt),parcelId,key,request));
  }
  private static ResponseEntity<ParcelModels.Parcel> mutation(ParcelModels.Mutation result) {
   return ResponseEntity.status(result.status()).cacheControl(CacheControl.noStore())

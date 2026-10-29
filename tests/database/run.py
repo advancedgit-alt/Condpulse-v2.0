@@ -472,17 +472,28 @@ def platform_checks():
     query("DELETE FROM platform.platform_role_events")
 
 def parcel_checks():
-    """V012: portaria recebe e entrega por capacidade; morador ve somente a propria unidade; entrega unica e conferida."""
-    CONC, UA2, P2, P3 = ("10000000-0000-4000-8000-0000000000c1", "20000000-0000-4000-8000-0000000000a2",
-                         "40000000-0000-4000-8000-000000000002", "40000000-0000-4000-8000-000000000003")
+    """V012: portaria recebe, entrega e anula por capacidade; unidade ve so o que e seu; retirada unica e identificada."""
+    CONC, UA2, P2, P3, P4, P5 = ("10000000-0000-4000-8000-0000000000c1", "20000000-0000-4000-8000-0000000000a2",
+                                 "40000000-0000-4000-8000-000000000002", "40000000-0000-4000-8000-000000000003",
+                                 "40000000-0000-4000-8000-000000000004", "40000000-0000-4000-8000-000000000005")
+    DEP, OWN, SUS, RES2 = ("10000000-0000-4000-8000-0000000000d1", "10000000-0000-4000-8000-0000000000d2",
+                           "10000000-0000-4000-8000-0000000000d3", "10000000-0000-4000-8000-0000000000d4")
     query(f"""
-        INSERT INTO platform.accounts(id,status) VALUES('{CONC}','ACTIVE');
+        INSERT INTO platform.accounts(id,status) VALUES('{CONC}','ACTIVE'),('{DEP}','ACTIVE'),('{OWN}','ACTIVE'),('{SUS}','SUSPENDED'),
+          ('{RES2}','ACTIVE');
         INSERT INTO cp.units(id,tenant_id,label) VALUES('{UA2}','{TA}','FICTICIA 102');
         INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
-          VALUES('{TA}','{CONC}',NULL,'PORTARIA FICTICIA','CONCIERGE','ACTIVE');
+          VALUES('{TA}','{CONC}',NULL,'PORTARIA FICTICIA','CONCIERGE','ACTIVE'),
+                ('{TA}','{DEP}','{UA}','DEPENDENTE FICTICIO','DEPENDENT','ACTIVE'),
+                ('{TA}','{OWN}','{UA}','PROPRIETARIO FICTICIO','OWNER','ACTIVE'),
+                ('{TA}','{SUS}','{UA}','CONTA SUSPENSA FICTICIA','RESIDENT','ACTIVE'),
+                ('{TA}','{RES2}','{UA2}','MORADOR FICTICIO 102','RESIDENT','ACTIVE');
         INSERT INTO cp.parcels(id,tenant_id,unit_id,quantity,description,storage_location,received_by)
           VALUES('{P2}','{TA}','{UA2}',2,'CAIXAS FICTICIAS','PRATELEIRA 2','{CONC}');
     """)
+    def member(account):
+        return value(f"select id from cp.memberships where tenant_id='{TA}' and account_id='{account}'")
+    M_AA, M_DEP, M_OWN, M_SUS, M_RES2 = member(AA), member(DEP), member(OWN), member(SUS), member(RES2)
     concierge = "SET LOCAL app.capabilities='concierge.operate'; "
     def as_concierge(statement):
         return concierge + statement
@@ -490,15 +501,26 @@ def parcel_checks():
            "morador ve somente encomendas da propria unidade")
     expect(value(f"select count(*) from cp.parcels where id='{P2}'", tenant=TA, role="cp_api") == "0",
            "UUID de encomenda de outra unidade nao atravessa RLS")
+    for label, account in (("dependente sem permissao", DEP), ("proprietario nao residente", OWN), ("conta suspensa", SUS)):
+        expect(value(f"select count(*) from cp.parcels where id='{PA}'", tenant=TA, actor=account, role="cp_api") == "0",
+               f"{label} nao ve as encomendas da unidade")
+    query(f"UPDATE cp.memberships SET permissions='{{\"parcels\":{{\"view\":true}}}}' WHERE id='{M_DEP}'")
+    expect(value(f"select count(*) from cp.parcels where id='{PA}'", tenant=TA, actor=DEP, role="cp_api") == "1",
+           "dependente com permissao explicita ve as encomendas da unidade")
     expect(value(f"select count(*) from cp.parcels where id in ('{PA}','{P2}')", tenant=TA, actor=CONC, role="cp_api") == "0",
            "portaria sem capacidade publicada (sem AAL2) nao ve encomendas")
     expect(value(as_concierge(f"select count(*) from cp.parcels where id in ('{PA}','{P2}')"), tenant=TA, actor=CONC, role="cp_api") == "2",
            "portaria com capacidade ve as encomendas do condominio")
     expect(value(as_concierge("select count(*) from cp.parcels"), tenant=TB, actor=AB, role="cp_api") == "0",
            "capacidade publicada nao atravessa condominio")
-    def receive(identifier, actor=CONC, extra_cols="", extra_vals=""):
+    expect(value(as_concierge(f"select string_agg(display_name,',' order by display_name) from cp.memberships where unit_id='{UA}'"),
+                 tenant=TA, actor=CONC, role="cp_api") == "CONTA SUSPENSA FICTICIA,DEPENDENTE FICTICIO,PESSOA FICTICIA A",
+           "portaria ve os vinculos residenciais da unidade, sem proprietario")
+    expect(value(f"select count(*) from cp.memberships where unit_id='{UA}'", tenant=TA, actor=CONC, role="cp_api") == "0",
+           "portaria sem capacidade nao ve vinculos")
+    def receive(identifier, actor=CONC, unit=UA, extra_cols="", extra_vals=""):
         return (f"INSERT INTO cp.parcels(id,tenant_id,unit_id,quantity,description,storage_location,received_by{extra_cols}) "
-                f"VALUES('{identifier}','{TA}','{UA}',1,'ENVELOPE FICTICIO','ARMARIO 1','{actor}'{extra_vals})")
+                f"VALUES('{identifier}','{TA}','{unit}',1,'ENVELOPE FICTICIO','ARMARIO 1','{actor}'{extra_vals})")
     expect(error(receive(P3, actor=AA), "42501", tenant=TA, actor=AA, role="cp_api"), "morador nao registra recebimento")
     expect(error(as_concierge(receive(P3, actor=AA)), "42501", tenant=TA, actor=CONC, role="cp_api"),
            "recebimento registra a propria conta da portaria")
@@ -506,6 +528,11 @@ def parcel_checks():
            "encomenda nasce recebida")
     expect(error(as_concierge(receive(P3, extra_cols=",received_at", extra_vals=",now()-interval '1 day'")), "42501", tenant=TA, actor=CONC,
                  role="cp_api"), "aplicacao nao escolhe a data do recebimento")
+    query(f"UPDATE cp.units SET status='INACTIVE' WHERE id='{UA2}'")
+    expect(error(as_concierge(receive(P3, unit=UA2)), "42501", tenant=TA, actor=CONC, role="cp_api"), "unidade inativa nao recebe encomenda")
+    expect(value(f"select count(*) from cp.parcels where id='{P2}'", tenant=TA, actor=RES2, role="cp_api") == "0",
+           "morador de unidade inativa nao ve as encomendas dela")
+    query(f"UPDATE cp.units SET status='ACTIVE' WHERE id='{UA2}'")
     query(as_concierge(receive(P3)), tenant=TA, actor=CONC, role="cp_api")
     expect(value(f"select count(*) from cp.parcels where id='{P3}'", tenant=TA, role="cp_api") == "1", "morador ve encomenda recebida da unidade")
     resident_update = f"WITH u AS (UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{P3}' RETURNING 1) SELECT count(*) FROM u"
@@ -516,19 +543,28 @@ def parcel_checks():
                  role="cp_api"), "entrega sem registro de retirada e recusada no commit")
     expect(error(as_concierge(f"UPDATE cp.parcels SET status='DELIVERED',version=version+2 WHERE id='{P3}'"), "23514", tenant=TA, actor=CONC,
                  role="cp_api"), "versao da encomenda avanca uma unidade")
-    def handoff(operator=CONC, evidence="ASSISTED"):
-        return (f"INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,evidence_kind) "
-                f"VALUES('{TA}','{P3}','{operator}','RECEBEDOR FICTICIO','{evidence}')")
-    deliver = f"UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{P3}'; "
-    expect(error(as_concierge(deliver + handoff(operator=AA)), "42501", tenant=TA, actor=CONC, role="cp_api"),
+    def handoff(parcel=P3, operator=CONC, evidence="ASSISTED", membership=M_AA, name="PESSOA FICTICIA A"):
+        return (f"INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,recipient_membership_id,evidence_kind) "
+                f"VALUES('{TA}','{parcel}','{operator}','{name}','{membership}','{evidence}')")
+    def deliver(parcel=P3):
+        return f"UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{parcel}'; "
+    expect(error(as_concierge(deliver() + handoff(operator=AA)), "42501", tenant=TA, actor=CONC, role="cp_api"),
            "retirada registra a propria conta da portaria")
-    expect(error(as_concierge(deliver + handoff(evidence="CODE")), "42501", tenant=TA, actor=CONC, role="cp_api"),
+    expect(error(as_concierge(deliver() + handoff(evidence="CODE")), "42501", tenant=TA, actor=CONC, role="cp_api"),
            "codigo e delegacao ainda nao sao aceitos")
+    for label, membership, name in (
+            ("vinculo de outra unidade", M_RES2, "MORADOR FICTICIO 102"),
+            ("nome diferente do vinculo", M_AA, "OUTRA PESSOA FICTICIA"),
+            ("proprietario nao residente", M_OWN, "PROPRIETARIO FICTICIO"),
+            ("conta suspensa", M_SUS, "CONTA SUSPENSA FICTICIA"),
+            ("dependente sem permissao de retirada", M_DEP, "DEPENDENTE FICTICIO")):
+        expect(error(as_concierge(deliver() + handoff(membership=membership, name=name)), "42501", tenant=TA, actor=CONC, role="cp_api"),
+               f"retirada por {label} e recusada")
     expect(error(handoff(operator=AA), "42501", tenant=TA, role="cp_api"), "morador nao registra retirada")
     expect(error(as_concierge(handoff()), "23514", tenant=TA, actor=CONC, role="cp_api"), "retirada sem entrega e recusada no commit")
-    query(as_concierge(deliver + handoff()), tenant=TA, actor=CONC, role="cp_api")
+    query(as_concierge(deliver() + handoff()), tenant=TA, actor=CONC, role="cp_api")
     expect(value(f"select status||':'||version from cp.parcels where id='{P3}'") == "DELIVERED:1", "entrega com registro de retirada")
-    expect(value(f"select recipient_name from cp.parcel_handoffs where parcel_id='{P3}'", tenant=TA, role="cp_api") == "RECEBEDOR FICTICIO",
+    expect(value(f"select recipient_name from cp.parcel_handoffs where parcel_id='{P3}'", tenant=TA, role="cp_api") == "PESSOA FICTICIA A",
            "morador ve quem retirou a encomenda da unidade")
     expect(value(f"select count(*) from cp.parcel_handoffs where parcel_id='{P3}'", tenant=TA, actor=AB, role="cp_api") == "0",
            "retirada de outra unidade nao e visivel")
@@ -536,10 +572,40 @@ def parcel_checks():
                  role="cp_api"), "entrega nao volta")
     expect(error(as_concierge(f"DELETE FROM cp.parcel_handoffs WHERE parcel_id='{P3}'"), "42501", tenant=TA, actor=CONC, role="cp_api"),
            "registro de retirada nao e apagado")
+    # Dependente com permissao de retirada, escolhido pela portaria.
+    query(as_concierge(receive(P4)), tenant=TA, actor=CONC, role="cp_api")
+    query(f"UPDATE cp.memberships SET permissions='{{\"parcels\":{{\"view\":true,\"pickup\":true}}}}' WHERE id='{M_DEP}'")
+    query(as_concierge(deliver(P4) + handoff(parcel=P4, membership=M_DEP, name="DEPENDENTE FICTICIO")), tenant=TA, actor=CONC, role="cp_api")
+    expect(value(f"select recipient_membership_id from cp.parcel_handoffs where parcel_id='{P4}'") == M_DEP,
+           "retirada grava o vinculo de quem retirou")
+    # Registro indevido: anulado pela portaria com motivo; some da unidade e nao e retirado.
+    query(as_concierge(receive(P5)), tenant=TA, actor=CONC, role="cp_api")
+    def void(actor=CONC, reason="'Unidade errada'"):
+        return f"UPDATE cp.parcels SET status='VOIDED',voided_by='{actor}',void_reason={reason},version=version+1 WHERE id='{P5}'"
+    expect(error(as_concierge(void(actor=AA)), "42501", tenant=TA, actor=CONC, role="cp_api"), "anulacao registra a propria conta")
+    expect(error(as_concierge(void(reason="NULL")), "23514", tenant=TA, actor=CONC, role="cp_api"), "anulacao exige motivo")
+    expect(error(as_concierge(f"UPDATE cp.parcels SET voided_at=now() WHERE id='{P5}'"), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "aplicacao nao escolhe o horario da anulacao")
+    expect(value(f"WITH u AS ({void(actor=AA)} RETURNING 1) SELECT count(*) FROM u", tenant=TA, role="cp_api") == "0", "morador nao anula")
+    query(as_concierge(void()), tenant=TA, actor=CONC, role="cp_api")
+    expect(value(f"select status||':'||version||':'||(voided_at is not null) from cp.parcels where id='{P5}'") == "VOIDED:1:true",
+           "anulacao com versao e horario do banco")
+    expect(value(f"select count(*) from cp.parcels where id='{P5}'", tenant=TA, role="cp_api") == "0", "unidade nao ve registro anulado")
+    expect(error(as_concierge(deliver(P5) + handoff(parcel=P5)), "23514", tenant=TA, actor=CONC, role="cp_api"),
+           "registro anulado nao e retirado")
+    expect(error(as_concierge(f"UPDATE cp.parcels SET status='RECEIVED',voided_by=NULL,void_reason=NULL,version=version+1 WHERE id='{P5}'"),
+                 "23514", tenant=TA, actor=CONC, role="cp_api"), "anulacao nao volta")
+    # Eventos e trilha de encomendas somente pela portaria, em nome da propria conta.
+    event = f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','PARCEL_DELIVERED','{P2}',9,'{{}}')"
+    expect(error(event, "42501", tenant=TA, role="cp_api"), "morador nao grava evento de encomenda")
+    trail = "INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) VALUES('{tenant}','{actor}','PARCEL_RECEIVED','PARCEL','{p}','{t}')"
+    expect(error(trail.format(tenant=TA, actor=AA, p=P2, t=ROLL), "42501", tenant=TA, role="cp_api"), "morador nao grava trilha de encomenda")
+    expect(error(as_concierge(trail.format(tenant=TA, actor=AA, p=P2, t=ROLL)), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "portaria grava trilha de encomenda so em nome da propria conta")
     expect(error("select count(*) from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le encomendas")
-    query(f"DELETE FROM cp.parcel_handoffs WHERE parcel_id='{P3}'; DELETE FROM cp.parcels WHERE id in ('{P2}','{P3}'); "
-          f"DELETE FROM cp.memberships WHERE account_id='{CONC}'; DELETE FROM cp.units WHERE id='{UA2}'; "
-          f"DELETE FROM platform.accounts WHERE id='{CONC}'")
+    query(f"DELETE FROM cp.parcel_handoffs WHERE parcel_id in ('{P3}','{P4}'); DELETE FROM cp.parcels WHERE id in ('{P2}','{P3}','{P4}','{P5}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{OWN}','{SUS}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
+          f"DELETE FROM platform.accounts WHERE id in ('{CONC}','{DEP}','{OWN}','{SUS}','{RES2}')")
 
 def main():
     guard()
@@ -604,20 +670,22 @@ def main():
     query(f"update cp.reservations set status='CANCELLED',version=version+1 where starts_at='2030-01-01 12:00+00'",tenant=TA,role="cp_api")
     expect(bool(query(reservation(),tenant=TA,role="cp_api").stdout.strip()),"cancelamento libera intervalo")
 
+    member_a = f"(SELECT m.id FROM cp.memberships m WHERE m.tenant_id='{TA}' AND m.account_id='{AA}' AND m.role='RESIDENT')"
     pickup = f"""
         SET LOCAL app.capabilities='concierge.operate';
         WITH claimed AS(
           UPDATE cp.parcels SET status='DELIVERED',version=version+1
           WHERE id='{PA}' AND status='RECEIVED' RETURNING id
         )
-        INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,evidence_kind)
-        SELECT '{TA}',id,'{AA}','RECEBEDOR FICTICIO','ASSISTED' FROM claimed RETURNING id
+        INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,recipient_membership_id,evidence_kind)
+        SELECT '{TA}',id,'{AA}','PESSOA FICTICIA A',{member_a},'ASSISTED' FROM claimed RETURNING id
     """
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
-        results = list(pool.map(lambda _: query(pickup,tenant=TA,role="cp_api"), range(20)))
+        results = list(pool.map(lambda _: query(pickup,tenant=TA,role="cp_api",check=False), range(20)))
+    expect(all(r.returncode == 0 for r in results), "20 retiradas concorrentes terminam sem erro")
     expect(sum(bool(r.stdout.strip()) for r in results) == 1, "20 retiradas concorrentes geram somente um handoff")
     duplicate = (f"SET LOCAL app.capabilities='concierge.operate'; insert into cp.parcel_handoffs(tenant_id,parcel_id,operator_id,"
-                 f"recipient_name,evidence_kind) values('{TA}','{PA}','{AA}','FICTICIO','ASSISTED')")
+                 f"recipient_name,recipient_membership_id,evidence_kind) values('{TA}','{PA}','{AA}','PESSOA FICTICIA A',{member_a},'ASSISTED')")
     expect(error(duplicate,"23505",tenant=TA,role="cp_api"), "UNIQUE impede segunda evidencia de retirada")
 
     def decide(state):

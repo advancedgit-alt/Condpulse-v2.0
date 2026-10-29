@@ -10,7 +10,9 @@ const unit = '20000000-0000-4000-8000-000000000001';
 const received = {
   parcelId: '40000000-0000-4000-8000-000000000001', unitId: unit, unitLabel: '101', blockName: null, quantity: 1,
   description: '', storageLocation: 'Prateleira B', status: 'RECEIVED', receivedAt: '2030-01-01T12:00:00Z', version: 0, handoff: null,
+  voidReason: null, voidedAt: null,
 };
+const member = '50000000-0000-4000-8000-000000000001';
 const handoff = { recipientName: 'Pessoa Fictícia', deliveredAt: '2030-01-01T15:00:00Z', evidenceKind: 'ASSISTED' };
 
 describe('contratos das encomendas', () => {
@@ -25,12 +27,24 @@ describe('contratos das encomendas', () => {
     expect(() => parcel({ ...received, storageLocation: '' })).toThrow();
     expect(() => parcel({ ...received, handoff: undefined })).toThrow();
   });
+  it('anulada só com motivo, horário e versão avançada; motivo nunca aparece fora da anulação', () => {
+    const voided = { ...received, status: 'VOIDED', version: 1, voidReason: 'Unidade errada', voidedAt: '2030-01-01T13:00:00Z' };
+    expect(parcel(voided).voidReason).toBe('Unidade errada');
+    expect(() => parcel({ ...voided, voidReason: null })).toThrow();
+    expect(() => parcel({ ...voided, voidedAt: null })).toThrow();
+    expect(() => parcel({ ...voided, version: 0 })).toThrow();
+    expect(() => parcel({ ...voided, handoff })).toThrow();
+    expect(() => parcel({ ...received, voidReason: 'Unidade errada' })).toThrow();
+    expect(() => parcel({ ...received, voidReason: undefined })).toThrow();
+  });
   it('recebimento leva a chave e o CSRF; repetição é sinalizada; resposta incoerente vira resultado incerto', async () => {
     let reply = () => json(received, 201, { 'Idempotency-Replayed': 'true' });
+    let people = () => json([{ membershipId: member, displayName: 'Pessoa Fictícia', role: 'OWNER' }]);
     const fetcher = vi.fn<typeof globalThis.fetch>();
     fetcher.mockImplementation(async (input, init) => {
       if (String(input) === '/auth/csrf') return json({ headerName: 'X-CSRF-Token', token: 'synthetic-csrf' });
       if (init?.method === 'POST') return reply();
+      if (String(input).endsWith('/recipients')) return people();
       return json({ parcels: [received], truncated: false });
     });
     const client = createParcelsApi(new CondPulseApi({ fetch: fetcher }));
@@ -45,7 +59,14 @@ describe('contratos das encomendas', () => {
     expect(JSON.parse(String(post[1]?.body))).toEqual(body);
     reply = () => json({ ...received, status: 'DELIVERED', version: 1, handoff: null }, 200);
     await expect(client.deliver(tenant, received.parcelId, 'web:synthetic-key-0002',
-      { recipientName: 'Pessoa Fictícia', identityChecked: true, expectedVersion: 0 })).rejects.toMatchObject({ uncertain: true });
+      { recipientMembershipId: member, identityChecked: true, expectedVersion: 0 })).rejects.toMatchObject({ uncertain: true });
+    // Proprietário não aparece entre quem retira: resposta assim é recusada.
+    await expect(client.recipients(tenant, received.parcelId)).rejects.toBeTruthy();
+    people = () => json([{ membershipId: member, displayName: 'Pessoa Fictícia', role: 'RESIDENT' }]);
+    expect(await client.recipients(tenant, received.parcelId)).toEqual([{ membershipId: member, displayName: 'Pessoa Fictícia', role: 'RESIDENT' }]);
+    reply = () => json({ ...received, status: 'VOIDED', version: 1, voidReason: 'Duplicado', voidedAt: '2030-01-01T13:00:00Z' });
+    expect((await client.voidParcel(tenant, received.parcelId, 'web:synthetic-key-0003', { reason: 'Duplicado', expectedVersion: 0 })).parcel.status).toBe('VOIDED');
+    expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/parcels/${received.parcelId}/void`);
     await client.list(tenant, { status: 'RECEIVED', location: 'Prateleira 100%' });
     expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/parcels?status=RECEIVED&location=Prateleira+100%25`);
     await client.unitParcels(tenant, unit, null);

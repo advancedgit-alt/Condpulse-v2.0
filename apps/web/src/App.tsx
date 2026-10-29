@@ -63,8 +63,11 @@ function Shell() {
   const residence = `/morador/${tenantId}/${unitId}`;
   const residentSection = location.pathname.split('/')[4] ?? 'inicio';
   const atDashboard = residentSection === 'inicio';
+  // Encomendas só para vínculo residencial (proprietário não residente não as vê; dependente depende de permissão no servidor).
+  const parcelsTab = Boolean(auth.identity?.memberships.some(membership => membership.tenantId === tenantId && membership.unitId === unitId
+    && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(membership.role)));
   const residentItems = [{ id: 'inicio', label: 'Início', icon: 'home' as const }, { id: 'reservas', label: 'Reservas', icon: 'calendar' as const },
-    { id: 'encomendas', label: 'Encomendas', icon: 'box' as const }];
+    ...(parcelsTab ? [{ id: 'encomendas', label: 'Encomendas', icon: 'box' as const }] : [])];
   async function changeContext() {
     if (switching || operations.locked) return;
     setSwitching(true);
