@@ -95,6 +95,24 @@ class MembershipInvitationJdbcTest {
    assertEquals(status,db.adminString("select status from platform.accounts where id=?",person));
    invitations.revoke(db.accountC,db.tenantA,AAL2,created.invitationId());
   }
+ @Test void suspendedTenantDoesNotReceiveNewMembershipsUntilReactivated() throws Exception {
+  String email="suspenso."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
+  var created=invite(email);
+  UUID person=newcomer();
+  db.adminUpdate("update platform.tenants set active=false where id=?",db.tenantA);
+  try {
+   assertEquals("INVITATION_NOT_AVAILABLE",assertThrows(BusinessProblem.class,
+    ()->invitations.accept(person,email,new MembershipModels.AcceptInvitation(created.token()))).code());
+   db.assertEmptyContext();
+   assertEquals("0",db.adminString("select count(*) from platform.accounts where id=?",person),"Recusa desfaz o espelho da conta");
+   assertEquals("PENDING",db.adminString("select status from cp.membership_invitations where id=?",created.invitationId()));
+   assertEquals("0",db.adminString("select count(*) from cp.memberships where invitation_id=?",created.invitationId()));
+  } finally {
+   db.adminUpdate("update platform.tenants set active=true where id=?",db.tenantA);
+  }
+  var accepted=invitations.accept(person,email,new MembershipModels.AcceptInvitation(created.token()));
+  assertEquals("PENDING",accepted.status()); assertEquals(db.tenantA,accepted.tenantId());
+  db.assertEmptyContext();
  }
  @Test void wrongEmailExpiredRevokedOrForgedInvitationsCreateNothing() throws Exception {
   String email="destino."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";

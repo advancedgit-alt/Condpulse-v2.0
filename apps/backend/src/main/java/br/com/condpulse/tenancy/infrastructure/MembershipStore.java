@@ -130,6 +130,11 @@ public class MembershipStore {
    where id=? and status='PENDING'
    """,account,membership,invitation)==1;
  }
+ /** Condomínio ativo, visível ao convidado somente pelo convite pendente apresentado (V010). */
+ public boolean tenantActive(UUID tenant) {
+  Integer count=jdbc.queryForObject("select count(*) from platform.tenants where id=? and active",Integer.class,tenant);
+  return count!=null && count==1;
+ }
  public String accountStatus(UUID account) {
   var rows=jdbc.query("select status from platform.accounts where id=?",(r,n)->r.getString("status"),account);
   return rows.size()==1?rows.getFirst():null;

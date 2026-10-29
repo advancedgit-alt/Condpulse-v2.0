@@ -109,6 +109,8 @@ public class InvitationService {
     if(invitation==null || !MessageDigest.isEqual(invitation.emailHash().getBytes(StandardCharsets.US_ASCII),
        emailHash(invitation.id(),email).getBytes(StandardCharsets.US_ASCII)))
      throw notAvailable();
+    // Condomínio suspenso pela plataforma não recebe vínculo novo (o banco também recusa o INSERT).
+    if(!store.tenantActive(invitation.tenantId())) throw notAvailable();
     jdbc.queryForObject("select set_config('app.tenant_id',?,true)",String.class,invitation.tenantId().toString());
     // Unidade inativada depois do convite não recebe vínculo novo.
     if(invitation.unitId()!=null && !store.activeUnit(invitation.tenantId(),invitation.unitId())) throw notAvailable();

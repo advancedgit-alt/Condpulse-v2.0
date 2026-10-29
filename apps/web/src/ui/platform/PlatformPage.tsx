@@ -1,0 +1,260 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useParams } from 'react-router-dom';
+import { ApiError } from '../../api/client';
+import { platform, type PlatformSession, type PlatformTenant, type PlatformTenantChange } from '../../api/platform';
+import { collapseText, displayText } from '../../api/text';
+import { useAuth } from '../Auth';
+import { MfaPanel, mfaStatusKey } from '../Mfa';
+import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
+import { formatWhen } from '../dateTime';
+import '../management/Management.css';
+
+/** Horários da plataforma no fuso de operação do projeto; cada condomínio mostra o próprio fuso no cadastro. */
+const PLATFORM_ZONE = 'America/Sao_Paulo';
+const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'auditoria', label: 'Auditoria' }] as const;
+type Section = typeof sections[number]['id'];
+const platformKey = (accountId: string, ...parts: unknown[]) => ['private', accountId, 'platform', ...parts] as const;
+
+interface PlatformValue { accountId: string; session: PlatformSession; requireMfa(): void; denied(error: unknown): void }
+const PlatformContext = createContext<PlatformValue | null>(null);
+function usePlatform(): PlatformValue {
+  const value = useContext(PlatformContext);
+  if (!value) throw new Error('Contexto da plataforma ausente.');
+  return value;
+}
+function isAccessError(error: unknown): boolean {
+  return error instanceof ApiError && ['MFA_REQUIRED', 'PLATFORM_ACCESS_DENIED'].includes(error.code);
+}
+function react(error: unknown, scope: Pick<PlatformValue, 'requireMfa' | 'denied'>): void {
+  if (!(error instanceof ApiError)) return;
+  if (error.code === 'MFA_REQUIRED') scope.requireMfa();
+  else if (error.code === 'PLATFORM_ACCESS_DENIED') scope.denied(error);
+}
+/** Erro de acesso de consulta: reage depois da renderização e esconde o conteúdo enquanto a porta muda de estado. */
+function useAccessGuard(error: unknown): boolean {
+  const scope = usePlatform();
+  const access = isAccessError(error);
+  useEffect(() => { if (access) react(error, scope); }, [access, error, scope]);
+  return access;
+}
+
+export interface Outcome { text: string; tone: 'success' | 'warning' | 'info' }
+/** Mensagem fiel ao que o servidor fez: repetição natural (applied=false) não aparece como sucesso desta ação. */
+export function tenantChangeOutcome(change: PlatformTenantChange, before: Pick<PlatformTenant, 'name' | 'active'>): Outcome {
+  if (!change.applied) return { tone: 'info', text: 'O condomínio já estava neste estado. Nada foi alterado e o seu motivo não foi registrado.' };
+  const parts: string[] = [];
+  if (change.tenant.name !== before.name) parts.push(`Nome atualizado para "${change.tenant.name}".`);
+  if (change.tenant.active !== before.active) parts.push(change.tenant.active
+    ? 'Condomínio reativado: moradores e gestão local voltam a acessar.'
+    : 'Condomínio suspenso: moradores e gestão local perdem o acesso na próxima requisição. Nenhum dado foi apagado.');
+  return { tone: 'success', text: parts.length ? parts.join(' ') : 'Alteração registrada.' };
+}
+
+/** Painel master: papel de plataforma vigente e segundo fator; o servidor confere de novo em cada ação. */
+export function PlatformPage() {
+  const { identity } = useAuth();
+  const { section = 'condominios' } = useParams();
+  if (!identity) return null;
+  const current = sections.some((item) => item.id === section) ? section as Section : 'condominios';
+  return <PlatformGate key={identity.accountId} accountId={identity.accountId} section={current} />;
+}
+
+function PlatformGate({ accountId, section }: { accountId: string; section: Section }) {
+  const queries = useQueryClient();
+  const session = useQuery({ queryKey: platformKey(accountId, 'session'), queryFn: ({ signal }) => platform.session(signal),
+    refetchOnWindowFocus: false, retry: false });
+  const [demanded, setDemanded] = useState(false);
+  const [denied, setDenied] = useState<unknown>(null);
+  const requireMfa = useCallback(() => setDemanded(true), []);
+  const deny = useCallback((error: unknown) => {
+    setDenied(error);
+    void queries.cancelQueries({ queryKey: platformKey(accountId) }); queries.removeQueries({ queryKey: platformKey(accountId) });
+  }, [queries, accountId]);
+  const value = useMemo(() => session.data ? { accountId, session: session.data, requireMfa, denied: deny } : null,
+    [accountId, session.data, requireMfa, deny]);
+  if (denied) return <div className="panel"><Notice tone="error">A administração da plataforma não está mais disponível para esta conta. Os dados exibidos foram removidos.</Notice>
+    <Link className="button button-secondary" to="/contextos">Voltar para meus acessos</Link></div>;
+  if (session.isPending) return <div className="panel"><Loading label="Conferindo o acesso à plataforma…" /></div>;
+  if (session.isError && !session.data) {
+    const code = session.error instanceof ApiError ? session.error.code : '';
+    if (code === 'PLATFORM_ACCESS_DENIED') return <div className="panel"><Empty title="Área restrita">Esta área é exclusiva da administração da plataforma. O acesso é concedido por procedimento operacional, não pelo condomínio.</Empty></div>;
+    if (code === 'API_NOT_AVAILABLE') return <div className="panel"><Empty title="Painel indisponível">O painel da plataforma não está ativo neste ambiente.</Empty></div>;
+    return <ErrorState error={session.error} retry={() => void session.refetch()} />;
+  }
+  if (!value) return null;
+  if (value.session.mfaRequired || demanded) {
+    return <MfaPanel accountId={accountId} onVerified={() => {
+      setDemanded(false);
+      void queries.invalidateQueries({ queryKey: mfaStatusKey(accountId) });
+      void queries.invalidateQueries({ queryKey: platformKey(accountId) });
+      void queries.invalidateQueries({ queryKey: ['identity'] });
+    }} />;
+  }
+  return <PlatformContext.Provider value={value}><PlatformConsole section={section} /></PlatformContext.Provider>;
+}
+
+function PlatformConsole({ section }: { section: Section }) {
+  return <>
+    <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
+      <p>Cadastro e estado dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
+      <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
+    <nav className="management-tabs" aria-label="Seções do painel master">{sections.map((item) =>
+      <Link key={item.id} to={`/master/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    {section === 'condominios' ? <TenantSection /> : <AuditSection />}
+  </>;
+}
+
+/** Lista sem busca: também alimenta os nomes da auditoria. */
+const tenantListKey = (accountId: string, search: string | null) => platformKey(accountId, 'tenants', search);
+
+function TenantSection() {
+  const scope = usePlatform();
+  const [draft, setDraft] = useState('');
+  const [search, setSearch] = useState<string | null>(null);
+  const [searchInvalid, setSearchInvalid] = useState(false);
+  const tenants = useQuery({ queryKey: tenantListKey(scope.accountId, search), queryFn: ({ signal }) => platform.tenants(search, signal) });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  if (useAccessGuard(tenants.error)) return null;
+  const manage = scope.session.capabilities.includes('tenants.manage');
+  function find(event: FormEvent) {
+    event.preventDefault();
+    if (!collapseText(draft)) { setSearch(null); setSearchInvalid(false); return; }
+    const normalized = displayText(draft, 160);
+    setSearchInvalid(normalized === null);
+    if (normalized !== null) { setSearch(normalized); setEditing(null); }
+  }
+  return <section className="management-section" aria-labelledby="tenants-title">
+    <div className="section-heading"><div><span className="section-index">01 / CONDOMÍNIOS</span><h2 id="tenants-title">Condomínios da plataforma</h2></div>
+      <button className="button button-secondary button-compact" type="button" disabled={tenants.isFetching} onClick={() => void tenants.refetch()}>Atualizar</button></div>
+    <p className="field-help">O cadastro de um condomínio novo segue pelo onboarding operacional aprovado; aqui só aparecem nome, estado e o recibo do cadastro.</p>
+    <form className="reservation-filter tenant-search" role="search" aria-label="Buscar condomínio" onSubmit={find}>
+      <label htmlFor="tenant-search">Buscar por trecho do nome ou id</label>
+      <input id="tenant-search" type="search" value={draft} onChange={(event) => { setDraft(event.target.value); setSearchInvalid(false); }} />
+      <button className="button button-secondary button-compact" type="submit">Buscar</button>
+      {search ? <button className="button button-secondary button-compact" type="button" onClick={() => { setDraft(''); setSearch(null); setSearchInvalid(false); }}>Limpar busca</button> : null}
+      {search ? <span>Resultado para “<bdi>{search}</bdi>” (acentos contam; maiúsculas não).</span> : null}
+    </form>
+    {searchInvalid ? <Notice tone="error">Use até 160 caracteres visíveis na busca.</Notice> : null}
+    {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
+    {tenants.isPending ? <div className="panel"><Loading label="Consultando condomínios…" /></div>
+      : tenants.isError && !tenants.data ? <ErrorState error={tenants.error} retry={() => void tenants.refetch()} />
+        : !tenants.data || tenants.data.tenants.length === 0 ? <div className="panel"><Empty title="Nenhum condomínio">{search
+          ? 'Nenhum condomínio corresponde à busca.' : 'Os condomínios cadastrados pelo onboarding aparecerão aqui.'}</Empty></div>
+          : <ol className="management-list" aria-label="Condomínios">{tenants.data.tenants.map((tenant) => <li key={tenant.tenantId} className="management-row">
+            <div><strong><bdi>{tenant.name}</bdi></strong> <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
+              <span>Fuso {tenant.timeZone} · versão {tenant.version} · atualizado em {formatWhen(tenant.updatedAt, PLATFORM_ZONE)}</span>
+              <span>{tenant.onboarding ? `Onboarding em ${formatWhen(tenant.onboarding.completedAt, PLATFORM_ZONE)}: ${count(tenant.onboarding.units, 'unidade', 'unidades')}, ${count(tenant.onboarding.memberships, 'vínculo', 'vínculos')}, ${count(tenant.onboarding.amenities, 'área', 'áreas')}`
+                : 'Sem recibo de onboarding registrado.'}</span></div>
+            {manage && editing !== tenant.tenantId ? <div className="button-row"><button className="button button-secondary button-compact" type="button"
+              onClick={() => { setOutcome(null); setEditing(tenant.tenantId); }}>Alterar nome ou estado</button></div> : null}
+            {manage && editing === tenant.tenantId ? <TenantEditor tenant={tenant} close={(result) => { setEditing(null); if (result) setOutcome(result); }} /> : null}
+          </li>)}</ol>}
+    {tenants.data?.truncated ? <Notice tone="warning">A lista mostra os primeiros 200 condomínios em ordem alfabética. Use a busca por nome ou id para encontrar os demais.</Notice> : null}
+  </section>;
+}
+function count(value: number | null, singular: string, plural: string): string {
+  return value === null ? `${plural}: não informado` : `${value} ${value === 1 ? singular : plural}`;
+}
+
+function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result: Outcome | null): void }) {
+  const scope = usePlatform();
+  const queries = useQueryClient();
+  // Versão e valores lidos ao abrir: nova consulta da lista não troca o alvo da alteração em andamento.
+  const [read, setRead] = useState({ version: tenant.version, name: tenant.name, active: tenant.active });
+  const [name, setName] = useState(tenant.name);
+  const [active, setActive] = useState(tenant.active);
+  const [reason, setReason] = useState('');
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const stale = tenant.version !== read.version;
+  // Nome intocado vai como null: o servidor mantém o atual, sem renomear por normalização.
+  const untouched = name === read.name;
+  const normalizedName = untouched ? read.name : displayText(name, 160);
+  const normalizedReason = displayText(reason, 500);
+  const valid = normalizedName !== null && normalizedReason !== null;
+  function reload() {
+    setRead({ version: tenant.version, name: tenant.name, active: tenant.active });
+    setName(tenant.name); setActive(tenant.active); setFailure(null);
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!valid || pending || stale) return;
+    setPending(true); setFailure(null);
+    try {
+      const change = await platform.updateTenant(tenant.tenantId,
+        { name: untouched ? null : normalizedName, active, expectedVersion: read.version, reason: normalizedReason! });
+      await queries.invalidateQueries({ queryKey: platformKey(scope.accountId) });
+      close(tenantChangeOutcome(change, read));
+    } catch (error) {
+      react(error, scope);
+      setFailure(error);
+      // Conflito ou resultado incerto: a lista atualizada mostra a versão atual e o aviso de recarga.
+      void queries.invalidateQueries({ queryKey: platformKey(scope.accountId, 'tenants') });
+    } finally { setPending(false); }
+  }
+  const uncertain = failure !== null && (!(failure instanceof ApiError) || failure.uncertain || failure.status >= 500);
+  return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Alterar ${tenant.name}`}>
+    {stale ? <Notice tone="warning">Este condomínio foi alterado depois que você abriu o formulário (versão {read.version} → {tenant.version}).
+      <button className="button button-secondary button-compact" type="button" onClick={reload}>Recarregar os dados atuais</button></Notice> : null}
+    <label htmlFor={`tenant-name-${tenant.tenantId}`}>Nome do condomínio</label>
+    <input id={`tenant-name-${tenant.tenantId}`} required value={name} onChange={(event) => setName(event.target.value)} disabled={pending}
+      aria-describedby={`tenant-name-help-${tenant.tenantId}`} aria-invalid={normalizedName === null} />
+    <span className="field-help" id={`tenant-name-help-${tenant.tenantId}`}>{normalizedName === null
+      ? 'Informe um nome com até 160 caracteres, sem caracteres invisíveis.' : 'Até 160 caracteres; espaços repetidos viram um só.'}</span>
+    <fieldset className="weekday-fieldset"><legend>Estado</legend>
+      <label className="weekday-option"><input type="radio" name={`tenant-state-${tenant.tenantId}`} checked={active} onChange={() => setActive(true)} disabled={pending} />Ativo</label>
+      <label className="weekday-option"><input type="radio" name={`tenant-state-${tenant.tenantId}`} checked={!active} onChange={() => setActive(false)} disabled={pending} />Suspenso</label>
+    </fieldset>
+    {!active && read.active ? <Notice tone="warning">Suspender tira o condomínio do acesso de moradores e da gestão local na próxima requisição. Dados, reservas e sessões não são apagados.</Notice> : null}
+    <label htmlFor={`tenant-reason-${tenant.tenantId}`}>Motivo (fica na auditoria da plataforma)</label>
+    <textarea id={`tenant-reason-${tenant.tenantId}`} maxLength={500} required rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={pending} />
+    {failure ? <Notice tone={uncertain ? 'warning' : 'error'}>{errorMessage(failure)}{uncertain ? ' Atualize a lista e confira o estado antes de repetir.' : ''}</Notice> : null}
+    <div className="button-row">
+      <button className={`button ${!active && read.active ? 'button-danger' : ''}`} type="submit" disabled={!valid || pending || stale}>{pending ? 'Salvando…' : 'Salvar alteração'}</button>
+      <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={pending}>Voltar</button>
+    </div>
+  </form>;
+}
+
+const actionLabels: Record<string, string> = {
+  TENANT_RENAMED: 'Condomínio renomeado', TENANT_SUSPENDED: 'Condomínio suspenso', TENANT_REACTIVATED: 'Condomínio reativado',
+};
+const short = (id: string) => id.slice(0, 8);
+
+function AuditSection() {
+  const scope = usePlatform();
+  const pages = useInfiniteQuery({
+    queryKey: platformKey(scope.accountId, 'audit'),
+    queryFn: ({ pageParam, signal }) => platform.audit(pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+  });
+  // Nomes atuais pela mesma lista da seção de condomínios (o cache não sobrevive à troca de aba).
+  const catalog = useQuery({ queryKey: tenantListKey(scope.accountId, null), queryFn: ({ signal }) => platform.tenants(null, signal),
+    enabled: scope.session.capabilities.includes('tenants.read') });
+  const accessDenied = useAccessGuard(pages.error ?? catalog.error);
+  if (accessDenied) return null;
+  const known = catalog.data?.tenants ?? [];
+  const tenantName = (id: string | null) => (id ? known.find((item) => item.tenantId === id)?.name ?? `condomínio ${short(id)}` : 'plataforma');
+  const events = pages.data?.pages.flatMap((page) => page.events) ?? [];
+  return <section className="management-section" aria-labelledby="platform-audit-title">
+    <div className="section-heading"><div><span className="section-index">02 / AUDITORIA</span><h2 id="platform-audit-title">Trilha da plataforma</h2></div>
+      <button className="button button-secondary button-compact" type="button" disabled={pages.isFetching} onClick={() => void pages.refetch()}>Atualizar</button></div>
+    <p className="field-help">Registros somente leitura, com autor e motivo. Horários em {PLATFORM_ZONE}.</p>
+    {pages.isPending ? <div className="panel"><Loading label="Consultando auditoria…" /></div>
+      : pages.isError && events.length === 0 ? <ErrorState error={pages.error} retry={() => void pages.refetch()} />
+        : events.length === 0 ? <div className="panel"><Empty title="Sem registros">As alterações feitas pela plataforma aparecerão aqui.</Empty></div>
+          : <ol className="management-list audit-list" aria-label="Eventos da plataforma">{events.map((event) => <li key={event.eventId} className="management-row">
+            <div><strong>{actionLabels[event.action] ?? event.action}</strong>
+              <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · <bdi>{tenantName(event.tenantId)}</bdi> · ator {short(event.actorId)}</span>
+              {event.details.previousName && event.details.name ? <span>De “<bdi>{event.details.previousName}</bdi>” para “<bdi>{event.details.name}</bdi>”</span> : null}
+              {event.reason ? <span>Motivo: {event.reason}</span> : null}</div>
+          </li>)}</ol>}
+    {pages.isError && events.length > 0 ? <ErrorState error={pages.error} retry={() => void pages.fetchNextPage()} /> : null}
+    {pages.hasNextPage ? <button className="button button-secondary" type="button" disabled={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
+      {pages.isFetchingNextPage ? 'Carregando…' : 'Carregar mais'}</button> : null}
+  </section>;
+}
+

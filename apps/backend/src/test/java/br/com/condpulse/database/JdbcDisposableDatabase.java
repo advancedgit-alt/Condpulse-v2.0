@@ -93,6 +93,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id in (?,?) and account_id in (?,?,?) and invitation_id is null",
    tenantA,tenantB,accountA,accountB,accountC);
   adminUpdate("update cp.units set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
+  adminUpdate("update platform.tenants set active=true where id in (?,?)",tenantA,tenantB);
  }
  void adminUpdate(String sql,Object...args) throws SQLException {
   try(Connection connection=admin()) { update(connection,sql,args); }
@@ -112,6 +113,17 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  long recoveryCount(String hash) throws SQLException {
   return Long.parseLong(adminString("select count(*) from platform.recovery_attempts where token_hash=?",hash));
+ }
+ /** Papel de plataforma concedido como o procedimento operacional faria (fora da role runtime). */
+ void grantPlatformAdmin(UUID account) throws SQLException {
+  adminUpdate("insert into platform.platform_roles(account_id,role,status,reason) values(?,'PLATFORM_ADMIN','ACTIVE','ensaio JDBC ficticio')",
+   account);
+ }
+ void clearPlatformFixtures() throws SQLException {
+  adminUpdate("delete from platform.platform_audit_log where actor_id in (?,?,?) or tenant_id in (?,?)",
+   accountA,accountB,accountC,tenantA,tenantB);
+  adminUpdate("delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
+  adminUpdate("delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
  }
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
@@ -147,7 +159,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  int backendPid() { return jdbc.queryForObject("select pg_backend_pid()",Integer.class); }
  void assertEmptyContext() {
   for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities","app.invitation_hash",
-    "app.recovery_hash","app.recovery_purge"}) {
+    "app.recovery_hash","app.recovery_purge","app.platform_capabilities"}) {
    String value=jdbc.queryForObject("select coalesce(current_setting(?,true),'')",String.class,setting);
    org.junit.jupiter.api.Assertions.assertEquals("",value,"Contexto não pode sobreviver à devolução ao pool: "+setting);
   }
@@ -157,6 +169,10 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    connection.setAutoCommit(false);
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.recovery_attempts where account_id in (?,?,?)",accountA,accountB,accountC);
+   update(connection,"delete from platform.platform_audit_log where actor_id in (?,?,?) or tenant_id in (?,?)",
+    accountA,accountB,accountC,tenantA,tenantB);
+   update(connection,"delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
+   update(connection,"delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
    for(String table:new String[]{"outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.

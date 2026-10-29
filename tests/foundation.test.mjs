@@ -16,7 +16,7 @@ test('rastreabilidade preserva 68 tickets e 60 cenarios sem marcar aceite fictic
 test('contrato publica somente a superficie implementada da fundacao',()=>{
  const spec=json('contracts/openapi.json');
  assert.equal(spec.openapi,'3.1.0');
- assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout','/auth/mfa','/auth/mfa/enroll','/auth/mfa/verify','/auth/recovery','/auth/recovery/verify','/auth/recovery/complete','/auth/invitation/accept','/v1/tenants/{tenantId}/units','/v1/tenants/{tenantId}/amenities','/v1/tenants/{tenantId}/amenities/{amenityId}/availability','/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel','/v1/tenants/{tenantId}/management/blocks','/v1/tenants/{tenantId}/management/units','/v1/tenants/{tenantId}/management/units/{unitId}','/v1/tenants/{tenantId}/management/amenities','/v1/tenants/{tenantId}/management/amenities/{amenityId}','/v1/tenants/{tenantId}/management/audit-events','/v1/tenants/{tenantId}/management/memberships','/v1/tenants/{tenantId}/management/memberships/{membershipId}/decision','/v1/tenants/{tenantId}/management/memberships/{membershipId}/revoke','/v1/tenants/{tenantId}/management/invitations','/v1/tenants/{tenantId}/management/invitations/{invitationId}/revoke','/v1/invitations/accept','/v1/tenants/{tenantId}/management/reservations','/v1/tenants/{tenantId}/management/reservations/{reservationId}/decision','/v1/tenants/{tenantId}/management/reservations/{reservationId}/cancel','/v1/tenants/{tenantId}/management/amenities/{amenityId}/maintenance-blocks']);
+ assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout','/auth/mfa','/auth/mfa/enroll','/auth/mfa/verify','/auth/recovery','/auth/recovery/verify','/auth/recovery/complete','/auth/invitation/accept','/v1/tenants/{tenantId}/units','/v1/tenants/{tenantId}/amenities','/v1/tenants/{tenantId}/amenities/{amenityId}/availability','/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel','/v1/tenants/{tenantId}/management/blocks','/v1/tenants/{tenantId}/management/units','/v1/tenants/{tenantId}/management/units/{unitId}','/v1/tenants/{tenantId}/management/amenities','/v1/tenants/{tenantId}/management/amenities/{amenityId}','/v1/tenants/{tenantId}/management/audit-events','/v1/tenants/{tenantId}/management/memberships','/v1/tenants/{tenantId}/management/memberships/{membershipId}/decision','/v1/tenants/{tenantId}/management/memberships/{membershipId}/revoke','/v1/tenants/{tenantId}/management/invitations','/v1/tenants/{tenantId}/management/invitations/{invitationId}/revoke','/v1/invitations/accept','/v1/tenants/{tenantId}/management/reservations','/v1/tenants/{tenantId}/management/reservations/{reservationId}/decision','/v1/tenants/{tenantId}/management/reservations/{reservationId}/cancel','/v1/tenants/{tenantId}/management/amenities/{amenityId}/maintenance-blocks','/v1/platform/session','/v1/platform/tenants','/v1/platform/tenants/{tenantId}','/v1/platform/audit-events']);
  const maintenance=spec.paths['/v1/tenants/{tenantId}/management/amenities/{amenityId}/maintenance-blocks'].post;
  assert.ok(maintenance.parameters.some(p=>p.name==='Idempotency-Key' && p.required));
  assert.deepEqual(spec.components.schemas.ReservationDecision.properties.decision.enum,['APPROVE','REJECT']);
@@ -48,6 +48,14 @@ test('contrato publica somente a superficie implementada da fundacao',()=>{
   assert.ok(route.parameters.some(p=>p.name==='Idempotency-Key' && p.required));
   assert.ok(route.parameters.some(p=>p.name==='X-CSRF-Token' && p.required));
  }
+ for(const [path,item] of Object.entries(spec.paths).filter(([p])=>p.startsWith('/v1/platform/'))) for(const operation of Object.values(item)) {
+  assert.equal(operation['x-feature-flag'],'CP_PLATFORM_ENABLED',path);
+  assert.match(operation.responses['403'].description,/PLATFORM_ACCESS_DENIED/,path);
+  assert.match(operation.responses['403'].description,/MFA_REQUIRED/,path);
+ }
+ assert.deepEqual(Object.keys(spec.paths['/v1/platform/tenants']),['get'],'condominio nao e criado pela API');
+ assert.deepEqual(Object.keys(spec.components.schemas.PlatformTenantUpdate.properties),['name','active','expectedVersion','reason']);
+ assert.ok(!JSON.stringify(spec.components.schemas.PlatformTenant).includes('manifest'));
  assert.ok(spec.paths['/v1/me'].get.security[0].bearerAuth);
  const availability=spec.paths['/v1/tenants/{tenantId}/amenities/{amenityId}/availability'].get;
  assert.equal(availability['x-feature-flag'],'CP_RESERVATIONS_ENABLED');
