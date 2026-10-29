@@ -86,13 +86,14 @@ concessão foi feita.
 ### Roteiro revisado do primeiro administrador
 
 [`ops/sql/platform-admin-grant.sql`](../ops/sql/platform-admin-grant.sql) executa a concessão inicial numa única
-transação e só conclui se todas as pré-condições valerem: identidade de execução fora de `cp_api`/`cp_worker`/
+transação, sob trava de `platform_roles` que serializa execuções simultâneas, e só conclui se todas as pré-condições valerem: identidade de execução fora de `cp_api`/`cp_worker`/
 `cp_onboarding` (nem membro desses grupos), motivo de 10 a 500 caracteres, conta existente e ativa em
 `platform.accounts`, fator TOTP verificado em `auth.mfa_factors` e nenhum papel de plataforma ativo (o roteiro serve
 só para o primeiro). No fim confere, na mesma transação, um único papel ativo da conta e o evento gravado pelo gatilho.
 Ensaiado em PostgreSQL descartável com a cadeia V001 em diante e um `auth.mfa_factors` sintético: sem TOTP, motivo
 curto, conta inexistente, segundo administrador, variável ausente e execução como `cp_api` falharam sem gravar; o caso
-válido gravou um papel e um evento `INSERT/ACTIVE`.
+válido gravou um papel e um evento `INSERT/ACTIVE`. Duas execuções simultâneas para contas diferentes: sem a trava as duas
+concediam o papel; com a trava a segunda espera e é recusada.
 
 BLOQUEADO: aprovação escrita do responsável nomeando a conta que recebe `PLATFORM_ADMIN`, cadastro do TOTP dessa
 conta e escolha da identidade de operação que executa — responsável — canal privado; a execução registra run/horário

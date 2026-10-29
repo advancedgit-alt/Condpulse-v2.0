@@ -18,6 +18,9 @@
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
+-- Trava que conflita consigo mesma, mantida até o COMMIT: duas execuções simultâneas (mesmo para contas diferentes)
+-- passam em série, e a segunda já vê o papel ativo gravado pela primeira e é recusada.
+LOCK TABLE platform.platform_roles IN SHARE ROW EXCLUSIVE MODE;
 SELECT set_config('cp.grant_account',:'account',true), set_config('cp.grant_reason',:'reason',true);
 DO $$
 DECLARE
