@@ -140,6 +140,10 @@ jobs:
             console.log(JSON.stringify({version: 2, sourceSha: sha, vercelDeployment: deployment,
               observedAt: new Date().toISOString(), headUnchanged: true,
               startupGraceUsed: startupReadiness.length > 0, initialProbes, startupReadiness, passed, probes}));
+            // Anotação legível pela API (os logs do Actions não são baixáveis por todos): status inicial e se a repetição foi usada.
+            console.log(`::notice title=Readiness::initial=${initialProbes[0].status}/${initialProbes[0].bodyStatus ?? 'NONE'} ` +
+              `elapsedMs=${initialProbes[0].elapsedMs} startupGraceUsed=${startupReadiness.length > 0} ` +
+              `final=${probes[0].status}/${probes[0].bodyStatus ?? 'NONE'} passed=${passed}`);
             if (!passed) process.exitCode = 1;
           } catch (error) {
             console.log(JSON.stringify({phase: 'FAILED', sourceSha: sha,
