@@ -46,8 +46,8 @@ test('only the final reviewed invocation receives private onboarding inputs',()=
 
 test('CI exercises onboarding boundary tests and real Java protocol without managed secrets',()=>{
   for(const source of [workflow,foundation])
-    assert.match(source,/node --test tests\/onboarding-operations\.test\.mjs tests\/onboarding-operations-policy\.test\.mjs/);
-  assert.match(foundation,/node --test tests\/onboarding-operations-java\.test\.mjs/);
+    assert.match(source,/node --test(?: --test-reporter=tap)? tests\/onboarding-operations\.test\.mjs tests\/onboarding-operations-policy\.test\.mjs/);
+  assert.match(foundation,/node --test --test-reporter=tap tests\/onboarding-operations-java\.test\.mjs/);
   assert.match(workflow,/807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa/);
   assert.match(workflow,/ssl|PostgreSQL CA/);
 });
