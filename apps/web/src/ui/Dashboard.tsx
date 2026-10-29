@@ -7,6 +7,7 @@ import { useAuth } from './Auth';
 import { scopeKey, type Scope } from './Operations';
 import { Empty, ErrorState, Icon, Loading, Notice } from './primitives';
 import { dateInZone, formatWhen, queryRange } from './dateTime';
+import { UnitInbox } from './Inbox';
 import './Dashboard.css';
 
 const residentialRoles = new Set<Membership['role']>(['RESIDENT', 'RESPONSIBLE', 'DEPENDENT']);
@@ -106,6 +107,7 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
       <section className="panel dashboard-welcome" aria-labelledby="dashboard-shortcuts"><span className="section-index">SEU CONTEXTO</span><h2 id="dashboard-shortcuts">Um espaço para a sua rotina.</h2><p>Você está consultando a unidade <strong>{unitLabel}</strong>. O acesso é conferido pelo servidor em cada consulta.</p><Link className="button" to={agenda}><Icon name="calendar" />Abrir reservas<Icon name="arrow" /></Link><p className="dashboard-context-note">Horários do condomínio: <strong>{membership.timeZone}</strong></p></section>
       <aside className="panel dashboard-guide" aria-label="Sobre este resumo"><span className="round-icon"><Icon name="shield" /></span><h2>Apenas o seu contexto.</h2><p>Este resumo reúne solicitações da unidade selecionada. A agenda de outras unidades não aparece aqui.</p><p>A confirmação de uma nova reserva depende das regras e da disponibilidade conferidas no envio.</p></aside>
     </div>
+    <UnitInbox scope={scope} timeZone={membership.timeZone} />
     <section className="dashboard-reservations" aria-labelledby="dashboard-reservations-title"><div className="section-heading"><div><span className="section-index">PRÓXIMOS COMPROMISSOS</span><h2 id="dashboard-reservations-title">Próximas reservas da unidade</h2></div><button className="button button-secondary button-compact" disabled={validating} onClick={() => void refresh()}>{validating ? 'Atualizando.' : 'Atualizar resumo'}</button></div>
       <p className="dashboard-window">Consulta de 30 dias locais, iniciada em {new Intl.DateTimeFormat('pt-BR', { timeZone: membership.timeZone, day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(range.value?.from ?? now))}. Horários em {membership.timeZone}.</p>
       {stale && !validating && !denial ? <Notice tone="warning">Este resumo usa a última consulta, feita há mais de um minuto. Atualize antes de tomar uma decisão.</Notice> : null}

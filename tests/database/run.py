@@ -603,7 +603,8 @@ def parcel_checks():
     expect(error(trail.format(tenant=TA, actor=AA, p=P2, t=ROLL), "42501", tenant=TA, role="cp_api"), "morador nao grava trilha de encomenda")
     expect(error(as_concierge(trail.format(tenant=TA, actor=AA, p=P2, t=ROLL)), "42501", tenant=TA, actor=CONC, role="cp_api"),
            "portaria grava trilha de encomenda so em nome da propria conta")
-    expect(error("select count(*) from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le encomendas")
+    # V015 libera ao worker somente unidade e situacao (aviso de encomenda ainda a retirar); dados da encomenda nao.
+    expect(error("select description,storage_location from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le dados da encomenda")
     query(f"DELETE FROM cp.parcel_handoffs WHERE parcel_id in ('{P3}','{P4}'); DELETE FROM cp.parcels WHERE id in ('{P2}','{P3}','{P4}','{P5}'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{OWN}','{SUS}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{CONC}','{DEP}','{OWN}','{SUS}','{RES2}')")
@@ -1021,6 +1022,124 @@ def access_checks():
           f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{CONC}','{DEP}','{RES2}')")
 
+def worker_checks():
+    """V015: outbox arrendado pelo worker com transicoes conferidas e caixa interna so para destinatario apto."""
+    DEP, RES2, UA2 = ("10000000-0000-4000-8000-000000000101", "10000000-0000-4000-8000-000000000102", "20000000-0000-4000-8000-000000000103")
+    E1, E2, E3, E4 = ("77000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(1, 5))
+    P1, P2 = "78000000-0000-4000-8000-000000000001", "78000000-0000-4000-8000-000000000002"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{DEP}','ACTIVE'),('{RES2}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UA2}','{TA}','FICTICIA 105');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{DEP}','{UA}','DEPENDENTE AVISOS','DEPENDENT','ACTIVE'),('{TA}','{RES2}','{UA2}','MORADOR 105','RESIDENT','ACTIVE');
+        INSERT INTO cp.parcels(id,tenant_id,unit_id,quantity,description,storage_location,received_by)
+          VALUES('{P1}','{TA}','{UA}',1,'CAIXA AVISO','PORTARIA','{AA}'),('{P2}','{TA}','{UA}',1,'CAIXA AVISO 2','PORTARIA','{AA}');
+        INSERT INTO cp.outbox(id,tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES
+          ('{E1}','{TA}','PARCEL_RECEIVED','{P1}',0,jsonb_build_object('parcelId','{P1}','unitId','{UA}')),
+          ('{E2}','{TA}','PARCEL_RECEIVED','{P2}',0,jsonb_build_object('parcelId','{P2}','unitId','{UA}')),
+          ('{E3}','{TA}','RESERVATION_CONFIRMED','{ROLL}',1,'{{}}'),
+          ('{E4}','{TB}','PARCEL_RECEIVED','{P1}',0,jsonb_build_object('parcelId','{P1}','unitId','{UB}'));
+    """)
+    def lease(event, until="clock_timestamp()+interval '60 seconds'"):
+        return f"UPDATE cp.outbox SET state='LEASED',attempts=attempts+1,lease_until={until} WHERE id='{event}'"
+    def notify(event, account, kind="PARCEL_RECEIVED", resource=P1, unit=UA):
+        return (f"INSERT INTO cp.notifications(tenant_id,account_id,unit_id,outbox_id,kind,resource_id) "
+                f"VALUES('{TA}','{account}','{unit}','{event}','{kind}','{resource}')")
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload,state) "
+                 f"VALUES('{TA}','TEST','{ROLL}',9,'{{}}','DELIVERED')", "42501", tenant=TA, role="cp_api"), "aplicacao cria somente tarefa pendente")
+    expect(error(f"UPDATE cp.outbox SET state='DELIVERED' WHERE id='{E1}'", "42501", tenant=TA, role="cp_api"), "aplicacao nao processa tarefa")
+    expect(error(lease(E1, until="clock_timestamp()-interval '1 second'"), "23514", tenant=TA, role="cp_worker"), "arrendamento exige prazo futuro")
+    expect(error(lease(E1, until="clock_timestamp()+interval '1 hour'"), "23514", tenant=TA, role="cp_worker"), "arrendamento tem prazo curto")
+    expect(error(f"UPDATE cp.outbox SET payload='{{}}' WHERE id='{E1}'", "42501", tenant=TA, role="cp_worker"), "worker nao muda o conteudo da tarefa")
+    expect(error(notify(E1, AA), "42501", tenant=TA, role="cp_worker"), "aviso so para tarefa arrendada")
+    query(lease(E1), tenant=TA, role="cp_worker")
+    expect(value(f"select state||':'||attempts from cp.outbox where id='{E1}'") == "LEASED:1", "worker arrenda a tarefa com tentativa contada")
+    expect(value(f"WITH u AS ({lease(E1)} RETURNING 1) SELECT count(*) FROM u", tenant=TB, role="cp_worker") == "0",
+           "worker de outro condominio nao alcanca a tarefa")
+    expect(error(lease(E1), "23514", tenant=TA, role="cp_worker"), "arrendamento vigente nao e tomado por outro worker")
+    expect(error(notify(E1, AA, kind="ARRIVAL_WAITING"), "42501", tenant=TA, role="cp_worker"), "tipo do aviso corresponde ao evento")
+    expect(error(notify(E1, AA, unit=UA2), "42501", tenant=TA, role="cp_worker"), "aviso para a unidade do evento")
+    expect(error(notify(E1, RES2), "42501", tenant=TA, role="cp_worker"), "morador de outra unidade nao recebe o aviso")
+    forged = "77000000-0000-4000-8000-000000000005"
+    query(f"INSERT INTO cp.outbox(id,tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{forged}','{TA}','PARCEL_RECEIVED',"
+          f"'{P1}',7,jsonb_build_object('parcelId','{P1}','unitId','{UA2}'))")
+    query(lease(forged), tenant=TA, role="cp_worker")
+    expect(error(notify(forged, RES2, unit=UA2), "42501", tenant=TA, role="cp_worker"),
+           "payload com unidade diferente da encomenda nao gera aviso")
+    query(f"DELETE FROM cp.outbox WHERE id='{forged}'")
+    expect(error(notify(E1, DEP), "42501", tenant=TA, role="cp_worker"), "dependente sem permissao de encomendas nao recebe o aviso")
+    query(notify(E1, AA), tenant=TA, role="cp_worker")
+    expect(error(notify(E1, AA), "23505", tenant=TA, role="cp_worker"), "um aviso por tarefa, destinatario e canal")
+    repeated = query(notify(E1, AA) + " ON CONFLICT (tenant_id,outbox_id,account_id,channel) DO NOTHING", tenant=TA, role="cp_worker")
+    expect(repeated.returncode == 0 and value(f"select count(*) from cp.notifications where outbox_id='{E1}'") == "1",
+           "repeticao do efeito nao duplica o aviso")
+    query(f"UPDATE cp.outbox SET state='DELIVERED' WHERE id='{E1}'", tenant=TA, role="cp_worker")
+    expect(value(f"select state||':'||(processed_at is not null)||':'||(lease_until is null) from cp.outbox where id='{E1}'") == "DELIVERED:true:true",
+           "conclusao com horario do banco")
+    expect(error(f"UPDATE cp.outbox SET state='PENDING',available_at=now()+interval '1 minute',last_error='x' WHERE id='{E1}'", "23514",
+                 tenant=TA, role="cp_worker"), "tarefa concluida e final")
+    # Nova tentativa e falha visivel.
+    query(lease(E2), tenant=TA, role="cp_worker")
+    expect(error(f"UPDATE cp.outbox SET state='PENDING',available_at=clock_timestamp()-interval '1 second',last_error='Falha temporaria' "
+                 f"WHERE id='{E2}'", "23514", tenant=TA, role="cp_worker"), "nova tentativa tem horario futuro")
+    expect(error(f"UPDATE cp.outbox SET state='PENDING',available_at=clock_timestamp()+interval '10 seconds' WHERE id='{E2}'", "23514",
+                 tenant=TA, role="cp_worker"), "nova tentativa registra o erro")
+    query(f"UPDATE cp.outbox SET state='PENDING',available_at=clock_timestamp()+interval '10 seconds',last_error='Falha temporaria' WHERE id='{E2}'",
+          tenant=TA, role="cp_worker")
+    expect(value(f"select state||':'||attempts||':'||last_error from cp.outbox where id='{E2}'") == "PENDING:1:Falha temporaria",
+           "falha volta para a fila com tentativa e erro")
+    query(f"SET session_replication_role=replica; UPDATE cp.outbox SET available_at=now()-interval '1 second' WHERE id='{E2}'")
+    query(lease(E2), tenant=TA, role="cp_worker")
+    expect(error(f"UPDATE cp.outbox SET state='FAILED' WHERE id='{E2}'", "23514", tenant=TA, role="cp_worker"), "falha exige erro saneado")
+    query(f"UPDATE cp.outbox SET state='FAILED',last_error='Destinatarios indisponiveis' WHERE id='{E2}'", tenant=TA, role="cp_worker")
+    expect(value(f"select state||':'||attempts||':'||(processed_at is not null) from cp.outbox where id='{E2}'") == "FAILED:2:true",
+           "falha definitiva fica visivel")
+    expect(error(f"UPDATE cp.outbox SET state='PENDING',available_at=now()+interval '1 minute',last_error='x' WHERE id='{E2}'", "23514",
+                 tenant=TA, role="cp_worker"), "falha nao volta sozinha para a fila")
+    query(lease(E3), tenant=TA, role="cp_worker")
+    query(f"UPDATE cp.outbox SET state='SKIPPED' WHERE id='{E3}'", tenant=TA, role="cp_worker")
+    expect(value(f"select state from cp.outbox where id='{E3}'") == "SKIPPED", "evento sem consumidor fica ignorado, nao entregue")
+    # Caixa interna do destinatario.
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E1}'", tenant=TA, role="cp_api") == "1", "destinatario ve o proprio aviso")
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E1}'", tenant=TA, actor=RES2, role="cp_api") == "0",
+           "outra unidade nao ve o aviso")
+    expect(value(f"WITH u AS (UPDATE cp.notifications SET state='READ_IN_APP' WHERE outbox_id='{E1}' RETURNING 1) SELECT count(*) FROM u",
+                 tenant=TA, actor=RES2, role="cp_api") == "0", "outra pessoa nao abre o aviso")
+    query(f"UPDATE cp.notifications SET state='READ_IN_APP' WHERE outbox_id='{E1}'", tenant=TA, role="cp_api")
+    expect(value(f"select state||':'||(read_at is not null) from cp.notifications where outbox_id='{E1}'") == "READ_IN_APP:true",
+           "abertura autenticada registra a leitura com horario do banco")
+    expect(error(f"UPDATE cp.notifications SET state='READ_IN_APP' WHERE outbox_id='{E1}'", "23514", tenant=TA, role="cp_api"),
+           "aviso aberto nao muda mais")
+    expect(error(f"UPDATE cp.notifications SET kind='ARRIVAL_WAITING' WHERE outbox_id='{E1}'", "42501", tenant=TA, role="cp_api"),
+           "destinatario so altera a abertura")
+    expect(error(notify(E1, AA), "42501", tenant=TA, role="cp_api"), "aplicacao nao cria aviso")
+    query(f"UPDATE cp.memberships SET permissions='{{\"parcels\":{{\"view\":true}}}}' WHERE account_id='{DEP}'")
+    query(f"SET session_replication_role=replica; INSERT INTO cp.notifications(tenant_id,account_id,unit_id,outbox_id,kind,resource_id) "
+          f"VALUES('{TA}','{DEP}','{UA}','{E1}','PARCEL_RECEIVED','{P1}')")
+    expect(value(f"select count(*) from cp.notifications where account_id='{DEP}'", tenant=TA, actor=DEP, role="cp_api") == "1",
+           "dependente com permissao ve o aviso")
+    query(f"UPDATE cp.memberships SET permissions='{{}}' WHERE account_id='{DEP}'")
+    expect(value(f"select count(*) from cp.notifications where account_id='{DEP}'", tenant=TA, actor=DEP, role="cp_api") == "0",
+           "sem a permissao o aviso deixa de aparecer")
+    expect(value(f"select count(*) from cp.memberships where tenant_id='{TB}'", tenant=TA, role="cp_worker") == "0",
+           "worker nao le vinculo de outro condominio")
+    expect(error("select description from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le descricao da encomenda")
+    expect(error("select storage_location from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le local de guarda")
+    expect(error("select full_name from cp.visitors", "42501", tenant=TA, role="cp_worker"), "worker nao le nome de visitante")
+    expect(error("select visitor_id from cp.arrival_requests", "42501", tenant=TA, role="cp_worker"), "worker nao le quem chegou")
+    expect(value(f"select status from cp.parcels where id='{PA}'", tenant=TA, role="cp_worker") in ("RECEIVED", "DELIVERED"),
+           "worker le so a situacao da encomenda do condominio em contexto")
+    expect(value(f"select count(*) from cp.parcels where id='{PA}'", tenant=TB, role="cp_worker") == "0",
+           "worker de outro condominio nao ve a encomenda")
+    expect(value(f"select count(*) from cp.arrival_requests where id='{ARR}'", tenant=TB, role="cp_worker") == "0",
+           "worker de outro condominio nao ve a chegada")
+    expect(value(f"select count(*) from cp.arrival_requests where id='{ARR}'", tenant=TA, role="cp_worker") == "1",
+           "worker ve a situacao da chegada do condominio em contexto")
+    query(f"DELETE FROM cp.notifications WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.outbox WHERE id in ('{E1}','{E2}','{E3}','{E4}'); "
+          f"DELETE FROM cp.parcels WHERE id in ('{P1}','{P2}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{DEP}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
+          f"DELETE FROM platform.accounts WHERE id in ('{DEP}','{RES2}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1124,6 +1243,7 @@ def main():
     parcel_checks()
     visit_checks()
     access_checks()
+    worker_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

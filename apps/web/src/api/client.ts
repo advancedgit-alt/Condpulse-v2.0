@@ -196,6 +196,8 @@ const messages: Record<string, string> = {
   ACCESS_EVENT_NOT_FOUND: 'Registro de acesso não encontrado.',
   ACCESS_FORBIDDEN: 'Esta ação não está disponível para o seu vínculo.',
   ACCESS_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
+  NOTIFICATION_NOT_FOUND: 'Aviso não encontrado. Ele pode ter deixado de valer para o seu vínculo.',
+  NOTIFICATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar os avisos agora. Tente novamente.',
   TENANT_CHANGED: 'O condomínio foi alterado por outra pessoa. Recarregue os dados antes de salvar.',
   TENANT_NOT_FOUND: 'Condomínio não encontrado.',
   TENANT_NAME_INVALID: 'Informe o nome do condomínio com até 160 caracteres.',

@@ -14,8 +14,15 @@ API:
 
 Migrador: perfil migrate, URL/usuario/senha de DDL separados, job de release.
 API nao recebe credencial migradora. O perfil migrate termina apos Flyway validar/aplicar.
-Worker: perfil worker sem porta publica. O consumidor outbox ainda nao foi implementado:
-nao subir processo vazio como se notificacoes estivessem operacionais.
+Worker: perfil worker sem porta publica (SPRING_PROFILES_ACTIVE=worker), mesma imagem da API.
+- DATABASE_USER/PASSWORD: login runtime associado apenas ao grupo cp_worker (nunca cp_api).
+- DB_POOL_SIZE: 2 como hipotese inicial, somada ao orcamento de conexoes da role.
+- CP_WORKER_OUTBOX_ENABLED=false por padrao: sem a flag o perfil nao processa nada.
+- CP_WORKER_POLL_MILLIS: intervalo entre passadas (padrao 2000).
+O consumidor gera somente a caixa interna (chegada aguardando e encomenda recebida);
+push, e-mail e SMS nao existem. Nenhum worker continuo foi implantado: nao anunciar
+notificacoes como operacionais. Caixa na API: CP_NOTIFICATIONS_ENABLED=false.
+Ver docs/NOTIFICACOES.md.
 
 BFF: CP_BFF_ENABLED=false por padrao. Para habilitar depois da homologacao:
 - CP_BFF_ORIGIN: origem HTTPS exata da web, sem caminho/barra final.
