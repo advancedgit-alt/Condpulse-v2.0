@@ -8,10 +8,10 @@ import static org.mockito.Mockito.*;
 
 /** Laço do worker: só existe no perfil worker com a flag ligada e só faz passadas depois da aplicação pronta. */
 class OutboxSchedulingTest {
- private static ApplicationContextRunner runner(String...profiles) {
-  return new ApplicationContextRunner().withUserConfiguration(OutboxScheduling.class)
-   .withBean(OutboxWorker.class,()->mock(OutboxWorker.class))
-   .withInitializer(context->context.getEnvironment().setActiveProfiles(profiles));
+ // Perfil pela propriedade: ela vale antes do registro dos beans (OutboxWorker também é @Profile("worker")).
+ private static ApplicationContextRunner runner(String profile) {
+  return new ApplicationContextRunner().withPropertyValues("spring.profiles.active="+profile)
+   .withUserConfiguration(OutboxScheduling.class).withBean(OutboxWorker.class,()->mock(OutboxWorker.class));
  }
 
  @Test void loopExistsOnlyInTheWorkerProfileWithTheFlagOn() {
