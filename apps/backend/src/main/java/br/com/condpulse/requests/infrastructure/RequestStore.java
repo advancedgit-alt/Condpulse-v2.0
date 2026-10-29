@@ -133,11 +133,28 @@ public class RequestStore {
    """,state,assignee,dueOn==null?null:Date.valueOf(dueOn),resolution,tenant,request,expectedVersion)==1;
  }
 
- public void event(UUID tenant,String type,UUID request,long version,UUID unit,UUID message) {
+ /**
+  * Quantas mensagens visíveis o pedido tem, contando a recém-gravada. O gatilho da mensagem trava o pedido até o fim da
+  * transação e, em READ COMMITTED, este comando já enxerga as mensagens confirmadas antes da trava: duas mensagens do
+  * mesmo pedido nunca recebem o mesmo número. Unidade e gestão enxergam as mesmas mensagens visíveis, e mensagem não
+  * é apagada nem muda de visibilidade.
+  */
+ public long visibleMessages(UUID tenant,UUID request) {
+  Long count=jdbc.queryForObject("""
+   select count(*) from cp.request_messages where tenant_id=? and request_id=? and visibility='RESIDENT'
+   """,Long.class,tenant,request);
+  return count==null?0:count;
+ }
+ /**
+  * Evento do pedido. A identidade no outbox (tipo, pedido, número) precisa ser única: o número é a versão do pedido na
+  * abertura e no andamento, e o número da mensagem visível em mensagem nova (mensagem não muda a versão do pedido).
+  * O payload sempre leva a versão do pedido.
+  */
+ public void event(UUID tenant,String type,UUID request,long number,long version,UUID unit,UUID message) {
   jdbc.update("""
    insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload)
    values(?,?,?,?,jsonb_strip_nulls(jsonb_build_object('id',?::uuid,'unitId',?::uuid,'version',?::bigint,'messageId',?::uuid)))
-   """,tenant,type,request,version,request,unit,version,message);
+   """,tenant,type,request,number,request,unit,version,message);
  }
 
  public record IdempotentReply(boolean fresh,UUID resource,int responseStatus) {}
