@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,existsSync,mkdtempSync,writeFileSync,rmSync,realpathSync,lstatSync} from 'node:fs';
+import {readFileSync,existsSync,mkdtempSync,writeFileSync,rmSync,realpathSync,lstatSync,readdirSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {resolve,dirname,basename,join,delimiter} from 'node:path';
@@ -38,10 +38,12 @@ test('repository, branch, event and reviewed exact commit cannot be selected aro
     assert.throws(()=>request.validateRequest({...inspect(),REQUEST_OPERATION:operation}),/OPERATION_DENIED/);
 });
 
-test('migrate binds its acknowledgement to V003-V005 and this reviewed commit',()=>{
-  const migrate={...inspect(),REQUEST_OPERATION:'migrate',MAINTENANCE_CONFIRMED:'true',MIGRATION_ACK:`${project}:003-005:${sha}`};
+test('migrate binds an explicit version range to this project and reviewed commit',()=>{
+  const migrate={...inspect(),REQUEST_OPERATION:'migrate',MAINTENANCE_CONFIRMED:'true',MIGRATION_ACK:`${project}:006-015:${sha}`};
   assert.doesNotThrow(()=>request.validateRequest(migrate));
-  for(const ack of ['',`${project}:003-005:${'b'.repeat(40)}`,`${project}:003-006:${sha}`])
+  assert.doesNotThrow(()=>request.validateRequest({...migrate,MIGRATION_ACK:`${project}:003-005:${sha}`}));
+  for(const ack of ['',`${project}:006-015:${'b'.repeat(40)}`,`${project}:002-015:${sha}`,`${project}:015-006:${sha}`,
+    `${project}:6-15:${sha}`,`other:006-015:${sha}`,`${project}:006-015:${sha} `,`${project}:006-015`])
     assert.throws(()=>request.validateRequest({...migrate,MIGRATION_ACK:ack}),/EXPLICIT_MIGRATION_ACK_REQUIRED/);
   assert.throws(()=>request.validateRequest({...migrate,BASELINE_ACK:`${project}:002:${'c'.repeat(64)}`}),/BASELINE_ACK_NOT_APPLICABLE/);
 });
@@ -54,7 +56,9 @@ test('operation child has fixed target, secret only in environment and no inheri
   assert.equal(invocation.env.DATABASE_PASSWORD,secret);assert.ok(!invocation.args.join(' ').includes(secret));
   assert.match(invocation.env.DATABASE_URL,/^jdbc:postgresql:\/\/aws-1-sa-east-1\.pooler\.supabase\.com:5432\/postgres\?sslmode=verify-full&sslrootcert=\/run\/secrets\/db-ca\.crt$/);
   assert.equal(invocation.env.DATABASE_USER,`postgres.${project}`);
-  assert.deepEqual(Object.keys(invocation.env).sort(),['PATH','JAVA_HOME','DATABASE_URL','DATABASE_USER','DATABASE_PASSWORD','CP_BASELINE_PROJECT_REF','CP_BASELINE_ACK'].sort());
+  assert.deepEqual(Object.keys(invocation.env).sort(),['PATH','JAVA_HOME','DATABASE_URL','DATABASE_USER','DATABASE_PASSWORD','CP_BASELINE_PROJECT_REF','CP_BASELINE_ACK','CP_MIGRATION_ACK','CP_EXPECTED_COMMIT'].sort());
+  assert.equal(launcher.operationInvocation({...source,REQUEST_OPERATION:'migrate',CP_MIGRATION_ACK:`${project}:006-015:${sha}`}).env.CP_MIGRATION_ACK,
+    `${project}:006-015:${sha}`);
   assert.deepEqual(invocation.args.slice(-2),['br.com.condpulse.bootstrap.BootstrapBaseline','inspect']);
   assert.equal(launcher.operationInvocation({...source,REQUEST_OPERATION:'migrate'}).args.at(-1),'br.com.condpulse.bootstrap.DatabaseOperationsMigrateGuard');
   assert.throws(()=>launcher.operationInvocation({...source,REQUEST_OPERATION:'repair'}),/OPERATION_CONFIGURATION_INVALID/);
@@ -79,11 +83,15 @@ test('migration guard only reads history then validates source before official m
   assert.match(java,/BootstrapBaseline\.productionConfig\(System\.getenv\(\)\)/);
   assert.match(java,/BootstrapManifest\.sourceCodes\(BootstrapManifest\.load\(\)\)\.isEmpty\(\)/);
   assert.match(java,/version == 2 && "BASELINE"\.equals/);
-  assert.match(java,/version >= 3 && version <= 5/);assert.match(java,/r\.getBoolean\("success"\)/);
+  assert.match(java,/version >= 3 && version <= to/);assert.match(java,/r\.getBoolean\("success"\)/);
+  assert.match(java,/require\(last >= from - 1 && last <= to\)/);assert.match(java,/require\(latest == to\)/);
+  assert.match(java,/migration\.getState\(\)\.isResolved\(\)/);assert.match(java,/ack\.endsWith\(":" \+ commit\)/);
+  assert.match(java,/skipDefaultCallbacks\(true\)/);
+  assert.match(java,/\^rpnrqfrfwywglvyykgrg:\(\[0-9\]\{3\}\)-\(\[0-9\]\{3\}\):\(\[a-f0-9\]\{40\}\)\$/);
   assert.match(java,/r\.getObject\("checksum"\) != null/);assert.match(java,/current_user,pg_try_advisory_lock/);
   assert.match(java,/pg_get_userbyid\(c\.relowner\)<>'postgres'/);
   assert.match(java,/baselineOnMigrate\(false\)\.cleanDisabled\(true\)/);
-  assert.match(java,/validateOnMigrate\(true\)\.outOfOrder\(false\)\.target\("005"\)/);
+  assert.match(java,/validateOnMigrate\(true\)\.outOfOrder\(false\)\.target\(String\.valueOf\(range\[1\]\)\)/);
   assert.ok(java.indexOf('validateWithResult()')<java.indexOf('flyway.migrate()'));
   assert.match(java,/RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED/);
   assert.doesNotMatch(java,/\.baseline\(|\.repair\(|\.clean\(|SpringApplication|UPDATE |INSERT |DELETE |CREATE /);
@@ -133,7 +141,7 @@ test('exact embedded Java guard compiles and fails closed without project before
 const disposable=process.env.CP_DB_TEST_OK==='DISPOSABLE' && ['localhost','127.0.0.1'].includes(process.env.PGHOST)
   && process.env.PGDATABASE==='condpulse_ci' && process.env.PGUSER==='postgres' && process.env.PGPASSWORD==='condpulse_ci_only'
   && /^[0-9]{1,5}$/.test(process.env.PGPORT??'');
-test('exact migration guard applies official legacy baseline then replays and blocks incompatible history/checksum',
+test('exact migration guard applies official legacy baseline then replays and blocks gaps, short ranges and incompatible history/checksum',
   {skip:!existsSync(jar)||!hasCompiler||!disposable?'Requires JDK25, built JAR and explicitly disposable loopback PostgreSQL; runs after Maven in foundation CI.':false},()=>{
   const temporary=resolve(mkdtempSync(join(tmpdir(),'condpulse-dbops-jdbc-')));
   try {
@@ -150,7 +158,9 @@ test('exact migration guard applies official legacy baseline then replays and bl
         PGDATABASE:'condpulse_ci',PGUSER:'postgres',PGPASSWORD:'condpulse_ci_only'},
       encoding:'utf8',timeout:120000,windowsHide:true});
     assert.equal(run.status,0,`Disposable guard scenarios: ${run.stderr}`);
-    assert.deepEqual(JSON.parse(run.stdout.trim()),{passed:true,positive:3,replay:0,missingBaselineDenied:true,checksumDriftDenied:true,aboveHeadDenied:true});
+    const versions=readdirSync(join(root,'db/migrations')).filter(name=>/^V[0-9]{3}__.+\.sql$/.test(name)).length;
+    assert.deepEqual(JSON.parse(run.stdout.trim()),{passed:true,positive:versions-2,replay:0,missingBaselineDenied:true,checksumDriftDenied:true,
+      aboveHeadDenied:true,gapDenied:true,shortRangeDenied:true,resumeFrom006:versions-5});
     assert.equal(run.stderr.trim(),'');
   } finally {
     const actual=realpathSync(temporary),base=realpathSync(tmpdir());
