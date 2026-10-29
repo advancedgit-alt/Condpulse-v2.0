@@ -108,10 +108,10 @@ class AnnouncementJdbcTest {
   assertEquals("ANNOUNCEMENT_TITLE_INVALID",assertThrows(BusinessProblem.class,()->draft("Oi","TENANT",List.of())).code());
   assertEquals("ANNOUNCEMENT_BODY_INVALID",assertThrows(BusinessProblem.class,()->announcements.createDraft(manager,db.tenantA,AAL2,key(),
    new AnnouncementModels.Draft("Aviso invisível","Texto​escondido","TENANT",List.of()))).code());
-  // Vínculo encerrado deixa de ver o aviso.
+  // Vínculo encerrado deixa de ver o aviso: sem vínculo vigente, o contexto do condomínio já é negado.
   db.adminUpdate("update cp.memberships set status='REVOKED' where tenant_id=? and account_id=?",db.tenantA,db.accountC);
-  assertEquals("UNIT_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->announcements.unitAnnouncements(db.accountC,db.tenantA,db.otherUnitA)).code());
-  assertEquals("ANNOUNCEMENT_NOT_FOUND",assertThrows(BusinessProblem.class,()->announcements.open(db.accountC,db.tenantA,everyone.announcementId())).code());
+  assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->announcements.unitAnnouncements(db.accountC,db.tenantA,db.otherUnitA)).code());
+  assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->announcements.open(db.accountC,db.tenantA,everyone.announcementId())).code());
   db.assertEmptyContext();
  }
  @Test void discardedDraftIsArchivedWithoutPublication() throws Exception {
