@@ -30,7 +30,16 @@ export function PermitLinkPage() {
   const [token, setToken] = useState(captureVisitLink);
   // Outro link aberto na mesma aba (só o fragmento muda): ler de novo e limpar a barra.
   useEffect(() => {
-    const changed = () => { setPermit(null); setToken(captureVisitLink()); };
+    const changed = () => {
+      // Âncora da própria página (ex.: "Ir para o conteúdo") não é outro link de visita.
+      const anchor = window.location.hash.slice(1);
+      if (anchor && document.getElementById(decodeURIComponent(anchor))) return;
+      const next = captureVisitLink();
+      setToken((current) => {
+        if (current !== next) { setPermit(null); setFailure(null); }
+        return next;
+      });
+    };
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
   }, []);

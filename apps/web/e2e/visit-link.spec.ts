@@ -32,6 +32,11 @@ test('quem recebe o link vê o essencial sem conta; o token sai da barra e só v
   expect(calls[0]!.body).toEqual({ token: TOKEN });
   expect(calls[0]!.csrf).toBeTruthy();
   expect(requested.some((url) => url.includes(TOKEN))).toBe(false);
+  // "Ir para o conteúdo" muda o fragmento da página, mas não é outro link: o convite continua na tela.
+  await page.keyboard.press('Tab');
+  await page.getByRole('link', { name: 'Ir para o conteúdo' }).click();
+  await expect(page.getByRole('heading', { name: 'Olá, Visita.' })).toBeVisible();
+  expect(calls).toHaveLength(1);
   // Recarregar a aba continua mostrando o convite (token guardado só nesta aba), sem voltar à barra de endereço.
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Olá, Visita.' })).toBeVisible();
