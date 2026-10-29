@@ -57,6 +57,8 @@ export class SessionManager {
   private readonly listeners = new Set<(state: SessionState) => void>();
   private lastAccount: string | null = null;
   private ending: Promise<void> | null = null;
+  /** Último access token entregue pelo Auth, só para a revogação remota na saída. */
+  private lastToken: string | null = null;
   /** Última revogação remota em andamento (só para acompanhamento e testes). */
   revoking: Promise<void> = Promise.resolve();
   private subscription: { unsubscribe(): void } | null = null;
@@ -94,6 +96,7 @@ export class SessionManager {
 
   private async evaluate(session: AuthSession): Promise<void> {
     const accountId = session.user.id;
+    this.lastToken = session.access_token;
     // Outra conta no mesmo aparelho: nada do cache anterior pode aparecer.
     if (this.lastAccount !== accountId) this.clearData();
     this.lastAccount = accountId;
@@ -137,7 +140,9 @@ export class SessionManager {
     const result = await this.auth.getSession();
     // A saída pode ter começado durante a leitura.
     if (this.state.status !== 'signedIn' || this.ending) return null;
-    return result.error ? null : result.data.session?.access_token ?? null;
+    const token = result.error ? null : result.data.session?.access_token ?? null;
+    if (token) this.lastToken = token;
+    return token;
   }
   /** Renovação forçada depois de um 401; recusa encerra a sessão. */
   async refresh(): Promise<string | null> {
@@ -145,7 +150,7 @@ export class SessionManager {
     try {
       const result = await this.auth.refreshSession();
       if (this.state.status !== 'signedIn' || this.ending) return null;
-      if (!result.error && result.data.session) return result.data.session.access_token;
+      if (!result.error && result.data.session) { this.lastToken = result.data.session.access_token; return this.lastToken; }
     } catch { /* tratado abaixo */ }
     await this.expire();
     return null;
@@ -162,11 +167,9 @@ export class SessionManager {
     this.set({ status: 'signedOut', reason });
     this.ending = (async () => {
       try {
-        let token: string | null = null;
-        try {
-          const current = await this.auth.getSession();
-          token = current.error ? null : current.data.session?.access_token ?? null;
-        } catch { token = null; }
+        // Token já conhecido em memória: nenhuma leitura que possa renovar pela rede antes de apagar o cofre.
+        const token = this.lastToken;
+        this.lastToken = null;
         // Primeiro o aparelho: o cliente do Auth lê a sessão do cofre, então apagar o cofre encerra a sessão local.
         await this.vault.wipe();
         // Depois a revogação remota, em segundo plano e com prazo real (a requisição é cancelada, não só ignorada).

@@ -156,4 +156,18 @@ describe('sessão nativa', () => {
       expect(aborted).toBe(true);
     } finally { jest.useRealTimers(); }
   });
+
+  it('saída apaga o cofre sem esperar leitura da sessão que possa renovar pela rede', async () => {
+    const { store, vault, fake, manager } = setup();
+    await manager.start();
+    await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    const token = await manager.accessToken();
+    await vault.setItem('cp-auth', 'sessao');
+    // Daqui em diante, ler a sessão fica pendurado (renovação com rede lenta).
+    fake.auth.getSession = () => new Promise(() => undefined);
+    await manager.signOut();
+    expect(store.items.size).toBe(0);
+    await manager.revoking;
+    expect(fake.state.revoked).toEqual([token]);
+  });
 });
