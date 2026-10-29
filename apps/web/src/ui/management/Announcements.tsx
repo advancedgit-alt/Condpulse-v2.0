@@ -113,6 +113,7 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
     const ok = await action.run(async () => {
       try { return await announcements.createDraft(scope.tenantId, key, draft); }
       catch (error) { failure = error; throw repeatFailure(error); }
+      finally { intent.settle(); }
     }, (done) => {
       result = { tone: done.replayed ? 'info' : 'success', text: done.replayed ? `Este rascunho já estava criado: ${done.announcement.title} (${stateLabels[done.announcement.state][0].toLowerCase()}).`
         : `Rascunho criado: ${done.announcement.title}. Ainda não aparece para as unidades; publique quando estiver pronto.` };
@@ -124,7 +125,7 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
     void refresh();
   }
   const options = audience === 'BLOCKS' ? targets.blocks : audience === 'UNITS' ? targets.units : [];
-  const busy = action.state.pending || locked;
+  const busy = action.state.pending || locked || (!current && intent.inFlight);
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={current ? `Editar rascunho ${current.title}` : 'Novo aviso'}>
     <label htmlFor={`${id}-title`}>Título</label>
     <input id={`${id}-title`} maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy} autoComplete="off" />
@@ -142,6 +143,7 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
           onChange={(event) => setSelected((previous) => event.target.checked ? [...previous, item.id] : previous.filter((value) => value !== item.id))} /><bdi>{item.label}</bdi></label>)}
       </fieldset> : null}
     <ActionFeedback state={action.state} success={false} />
+    {!current && intent.completedElsewhere ? <Notice>Este rascunho já foi criado pelo formulário aberto antes. Criar de novo só confirma o mesmo rascunho; confira a lista.</Notice> : null}
     {locked ? <Notice tone="warning">O resultado não foi confirmado e o rascunho ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo rascunho”: se ele já foi criado, nada novo é gravado.</Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Salvando…' : locked ? 'Tentar confirmar o mesmo rascunho' : current ? 'Salvar rascunho' : 'Criar rascunho'}</button>

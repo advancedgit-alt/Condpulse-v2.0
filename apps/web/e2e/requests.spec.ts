@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { TENANT_A, UNIT_A, installSyntheticApi, signIn } from './fixtures';
+import { TENANT_A, UNIT_A, chooseContext, installSyntheticApi, signIn } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
 test.use({ timezoneId: 'UTC' });
@@ -42,7 +42,8 @@ const summary = (view: ReturnType<typeof managedView>) => {
 /** API sintética dos pedidos (unidade e gestão), registrada depois da API base. */
 async function installRequestsApi(page: Page) {
   const state = { items: [] as Request[], opens: [] as { key: string; body: unknown }[], messages: [] as { key: string; body: unknown }[],
-    updates: [] as unknown[], loseNextOpen: false, keys: new Map<string, Request>() };
+    updates: [] as unknown[], loseNextOpen: false, keys: new Map<string, Request>(), messageKeys: new Map<string, Message>(),
+    holdMessage: null as Promise<void> | null };
   await page.route(`**/v1/tenants/${TENANT_A}/units/${UNIT_A}/requests`, async (route) => {
     const request = route.request();
     if (request.method() === 'GET') {
@@ -71,10 +72,15 @@ async function installRequestsApi(page: Page) {
     if (!item) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
     if (request.method() === 'GET') { await json(route, 200, unitView(item)); return; }
     const body = request.postDataJSON() as { body: string };
-    state.messages.push({ key: request.headers()['idempotency-key']!, body });
+    const messageKey = request.headers()['idempotency-key']!;
+    state.messages.push({ key: messageKey, body });
+    const replay = state.messageKeys.get(messageKey);
+    if (replay) { await json(route, 201, replay, { 'Idempotency-Replayed': 'true' }); return; }
     const message: Message = { messageId: `97000000-0000-4000-8000-00000000000${item.messages.length + 2}`, authorRole: 'UNIT', authorName: 'PESSOA FICTÍCIA',
       mine: true, visibility: 'RESIDENT', body: body.body, createdAt: minutes(0) };
     item.messages.push(message);
+    state.messageKeys.set(messageKey, message);
+    if (state.holdMessage) await state.holdMessage;
     await json(route, 201, message, { 'Idempotency-Replayed': 'false' });
   });
   await page.route(`**/v1/tenants/${TENANT_A}/management/requests**`, async (route) => {
@@ -139,6 +145,66 @@ test('unidade abre pedido com chave pendente, conversa no próprio pedido e não
   await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Pode vir à tarde.')).toBeVisible();
   await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Você')).toBeVisible();
   expect(state.messages.map((item) => item.body)).toEqual([{ body: 'Pode vir à tarde.' }]);
+});
+
+test('pedido com resultado incerto não fica pendente para a próxima conta depois de sair', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installRequestsApi(page);
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.getByRole('button', { name: 'Abrir pedido' }).click();
+  const form = page.getByRole('form', { name: 'Abrir pedido' });
+  await form.getByLabel('Título').fill('Portão travado');
+  await form.getByLabel('Descrição').fill('Não abre pelo controle.');
+  state.loseNextOpen = true;
+  await form.getByRole('button', { name: 'Enviar pedido' }).click();
+  await expect(form.getByText('O resultado não foi confirmado e o pedido ficou travado', { exact: false })).toBeVisible();
+  // Nova entrada na mesma aba, sem recarregar a página (a memória da aba continua).
+  await page.getByRole('button', { name: 'Sair', exact: true }).click();
+  await page.getByLabel('E-mail', { exact: true }).fill('morador-sintetico@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByLabel('Senha', { exact: true }).press('Enter');
+  await expect(page).toHaveURL(/\/contextos/);
+  await chooseContext(page, 'A', 'inicio');
+  await page.getByRole('button', { name: 'Abrir pedido' }).click();
+  const reopened = page.getByRole('form', { name: 'Abrir pedido' });
+  await expect(reopened.getByLabel('Título')).toHaveValue('');
+  await expect(reopened.getByText('O resultado não foi confirmado', { exact: false })).toHaveCount(0);
+  await expect(reopened.getByRole('button', { name: 'Enviar pedido' })).toBeVisible();
+  await reopened.getByLabel('Título').fill('Outro pedido');
+  await reopened.getByLabel('Descrição').fill('Texto do outro pedido.');
+  await reopened.getByRole('button', { name: 'Enviar pedido' }).click();
+  await expect.poll(() => state.opens.length).toBe(2);
+  expect(state.opens[1]!.key).not.toBe(state.opens[0]!.key);
+});
+
+test('conversa reaberta durante o envio não grava a mesma mensagem de novo depois que o envio termina', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installRequestsApi(page);
+  state.items.push({ requestId: REQUEST, unitId: UNIT_A, category: 'NOISE', title: 'Barulho fictício', description: 'Barulho depois das 22h.',
+    state: 'OPEN', assigneeMembershipId: null, dueOn: null, resolution: null, requesterName: 'PESSOA FICTÍCIA', createdAt: minutes(-30),
+    updatedAt: minutes(-30), resolvedAt: null, closedAt: null, version: 0, messages: [] });
+  let release!: () => void;
+  state.holdMessage = new Promise<void>((resolve) => { release = resolve; });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  const row = page.getByRole('list', { name: 'Pedidos da unidade' }).getByRole('listitem').filter({ hasText: 'Barulho fictício' });
+  await row.getByRole('button', { name: 'Ver conversa' }).click();
+  await row.getByLabel('Mensagem para a gestão').fill('Continua o barulho.');
+  await row.getByRole('button', { name: 'Enviar mensagem' }).click();
+  await expect.poll(() => state.messages.length).toBe(1);
+  // Antes da resposta, a pessoa fecha e reabre a conversa: o formulário reaberto mostra o envio em andamento.
+  await row.getByRole('button', { name: 'Fechar conversa' }).click();
+  await row.getByRole('button', { name: 'Ver conversa' }).click();
+  await expect(row.getByLabel('Mensagem para a gestão')).toHaveValue('Continua o barulho.');
+  await expect(row.getByRole('button', { name: 'Enviando…' })).toBeDisabled();
+  release();
+  state.holdMessage = null;
+  await expect(row.getByText('Este envio já foi concluído pela conversa aberta antes', { exact: false })).toBeVisible();
+  await row.getByRole('button', { name: 'Enviar mensagem' }).click();
+  await expect.poll(() => state.messages.length).toBe(2);
+  expect(state.messages[1]!.key).toBe(state.messages[0]!.key);
+  expect(state.items[0]!.messages.filter((message) => message.body === 'Continua o barulho.')).toHaveLength(1);
 });
 
 test('gestão registra comentário interno, define responsável e prazo e conclui com resolução visível', async ({ page }) => {

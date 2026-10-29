@@ -101,6 +101,7 @@ function StaffMessageForm({ request }: { request: ManagedRequest }) {
     const ok = await action.run(async () => {
       try { return await requests.staffMessage(scope.tenantId, request.requestId, operationKey, normalized, visibility); }
       catch (error) { failure = error; throw repeatFailure(error); }
+      finally { intent.settle(); }
     }, (done) => ({ tone: done.replayed ? 'info' : 'success', text: done.replayed ? 'Esta mensagem já estava registrada.'
       : visibility === 'INTERNAL' ? 'Comentário interno registrado.' : 'Mensagem enviada para a unidade.' }),
     async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'request', request.requestId) }); });
@@ -109,13 +110,14 @@ function StaffMessageForm({ request }: { request: ManagedRequest }) {
     settleFailure(failure, intent.locked, intent, intent.setLocked);
     void queries.invalidateQueries({ queryKey: managementKey(scope, 'request', request.requestId) });
   }
-  const busy = action.state.pending || intent.locked;
+  const busy = action.state.pending || intent.locked || intent.inFlight;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Mensagem no pedido ${request.title}`}>
     <label htmlFor={id}>Mensagem</label>
     <textarea id={id} maxLength={2000} rows={3} value={body} onChange={(event) => setBody(event.target.value)} disabled={busy} />
     <label className="weekday-option"><input type="checkbox" checked={internal} disabled={busy} onChange={(event) => setInternal(event.target.checked)} />
       Comentário interno (não aparece para a unidade)</label>
     <ActionFeedback state={action.state} />
+    {intent.completedElsewhere ? <Notice>Este envio já foi concluído pela conversa aberta antes. Enviar de novo só confirma o mesmo envio, sem gravar outra vez; confira a conversa.</Notice> : null}
     {intent.locked ? <Notice tone="warning">O envio não foi confirmado. Use “Tentar confirmar a mesma mensagem”: se ela já foi gravada, nada novo é enviado.</Notice> : null}
     <div className="button-row"><button className="button" type="submit" disabled={normalized === null || action.state.pending}>
       {action.state.pending ? 'Enviando…' : intent.locked ? 'Tentar confirmar a mesma mensagem' : internal ? 'Registrar comentário interno' : 'Enviar para a unidade'}</button></div>

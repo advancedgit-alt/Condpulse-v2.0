@@ -83,6 +83,8 @@ function ReceiveParcel() {
   // Aviso de duplicidade suspeita (POR-02) e trava depois de resultado incerto: nada é reenviado com outra chave sem conferir.
   const [duplicate, setDuplicate] = useState(false);
   const [locked, setLocked] = useState(false);
+  // A repetição de um envio incerto usa o mesmo corpo, inclusive a confirmação de duplicidade: mesmo corpo, mesma chave.
+  const [lastConfirm, setLastConfirm] = useState(false);
   if (useAccessGuard(units.error)) return null;
   const count = Number(quantity);
   const normalizedLocation = displayText(location, 160);
@@ -91,6 +93,7 @@ function ReceiveParcel() {
   const refreshQueue = () => queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
   async function submit(confirmDuplicate: boolean) {
     if (!valid) return;
+    setLastConfirm(confirmDuplicate);
     const body: ReceiveBody = { unitId, quantity: count, description: normalizedDescription || null, storageLocation: normalizedLocation!,
       ...(confirmDuplicate ? { confirmDuplicate: true as const } : {}) };
     const key = intent.keyFor(JSON.stringify(body));
@@ -106,7 +109,7 @@ function ReceiveParcel() {
         : { tone: 'success', text: `Encomenda registrada para ${unitName(result.parcel)}: ${volumes(result.parcel.quantity)} em ${result.parcel.storageLocation}. O aviso ao morador segue em fila.` };
     }, async () => { await refreshQueue(); });
     if (ok) {
-      intent.reset(); setDuplicate(false); setLocked(false); setQuantity('1'); setDescription(''); setLocation('');
+      intent.reset(); setDuplicate(false); setLocked(false); setLastConfirm(false); setQuantity('1'); setDescription(''); setLocation('');
       return;
     }
     const code = codeOf(failure);
@@ -114,7 +117,7 @@ function ReceiveParcel() {
     settleFailure(failure, locked, intent, setLocked);
     void refreshQueue();
   }
-  function restart() { intent.reset(); setLocked(false); setDuplicate(false); action.clear(); }
+  function restart() { intent.reset(); setLocked(false); setDuplicate(false); setLastConfirm(false); action.clear(); }
   const busy = action.state.pending || locked;
   return <section className="management-section" aria-labelledby="receive-title">
     <div className="section-heading"><div><span className="section-index">01 / RECEBER</span><h2 id="receive-title">Receber encomenda</h2></div></div>
@@ -145,7 +148,7 @@ function ReceiveParcel() {
         : <ActionFeedback state={action.state} />}
       {locked ? <Notice tone="warning">O resultado do último envio não foi confirmado e o formulário ficou travado. Confira a lista abaixo: se a encomenda já aparece, não registre de novo.
         <span className="button-row">
-          <button className="button button-secondary button-compact" type="button" onClick={() => void submit(false)} disabled={action.state.pending}>Tentar confirmar o mesmo envio</button>
+          <button className="button button-secondary button-compact" type="button" onClick={() => void submit(lastConfirm)} disabled={action.state.pending}>Tentar confirmar o mesmo envio</button>
           <button className="button button-secondary button-compact" type="button" onClick={restart} disabled={action.state.pending}>Conferi a lista: começar outro registro</button></span></Notice> : null}
       <button className="button" type="submit" disabled={!valid || busy || duplicate}>{action.state.pending ? 'Registrando…' : 'Registrar recebimento'}</button>
     </form>

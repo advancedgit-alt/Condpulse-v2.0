@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { ApiError, newOperationKey } from '../api/client';
 
 /** Mensagens de repetição neutras (o texto geral fala da agenda de reservas): servem à portaria e aos acessos da unidade. */
@@ -47,37 +47,96 @@ export function useIntent() {
  * Fechar e reabrir o formulário — Voltar, troca de filtro ou de unidade, outra ação aberta na lista — não gera chave nova
  * depois de um resultado incerto, e a repetição confirma o mesmo envio. Vale enquanto a página estiver aberta:
  * recarregar a página descarta a pendência, e a lista atualizada continua sendo a referência antes de repetir.
+ *
+ * A pendência pertence à conta autenticada: trocar de conta, sair ou perder a sessão descarta todas (a idempotência do
+ * servidor inclui o autor, então a chave de outra conta nunca confirmaria o envio anterior). Desde o início do envio
+ * (`inFlight`) a chave e os dados ficam presos ao alvo: outro formulário do mesmo alvo reabre com o mesmo conteúdo e não
+ * envia até a resposta chegar.
+ *
+ * Envio concluído (`completed`) mantém a identidade da operação: um formulário reaberto com os dados desse envio (enquanto
+ * ele estava em andamento ou travado) só consegue repeti-lo com a mesma chave, e o servidor devolve o que já foi gravado
+ * em vez de gravar de novo. Quem enviou e recebeu a resposta começa do zero.
  */
-export interface PendingOperation { fingerprint: string; key: string; locked: boolean; body: unknown }
+export interface PendingOperation { fingerprint: string; key: string; locked: boolean; inFlight: boolean; completed: boolean; body: unknown }
 const pendingOperations = new Map<string, PendingOperation>();
+const listeners = new Set<() => void>();
+let owner: string | null = null;
+let revision = 0;
+function changed() { revision += 1; listeners.forEach((listener) => listener()); }
 export const pendingOperation = {
   get: (slot: string): PendingOperation | null => pendingOperations.get(slot) ?? null,
-  /** Mesmos dados reaproveitam a chave; com o envio travado a chave antiga continua mesmo com outros dados. */
-  keyFor(slot: string, fingerprint: string, body: unknown): string {
+  /**
+   * Mesmos dados reaproveitam a chave. Com o envio travado (resultado incerto) ou ainda em andamento, a chave e os dados
+   * anteriores continuam mesmo com outros dados.
+   */
+  keyFor(slot: string, fingerprint: string, body: unknown, restoredKey: string | null = null): string {
     const previous = pendingOperations.get(slot);
-    if (previous?.locked) return previous.key;
-    const key = previous?.fingerprint === fingerprint ? previous.key : newOperationKey();
-    pendingOperations.set(slot, { fingerprint, key, locked: false, body });
+    if (previous && !previous.completed && (previous.locked || previous.inFlight)) {
+      pendingOperations.set(slot, { ...previous, inFlight: true });
+      changed();
+      return previous.key;
+    }
+    // Formulário reaberto com os dados de um envio já concluído: repetir confirma o mesmo envio (mesma chave).
+    if (previous?.completed && restoredKey === previous.key && previous.fingerprint === fingerprint) {
+      pendingOperations.set(slot, { ...previous, inFlight: true });
+      changed();
+      return previous.key;
+    }
+    const key = previous && !previous.completed && previous.fingerprint === fingerprint ? previous.key : newOperationKey();
+    pendingOperations.set(slot, { fingerprint, key, locked: false, inFlight: true, completed: false, body });
+    changed();
     return key;
+  },
+  /** Envio confirmado ou recusado pelo estado: nada fica pendente, mas a identidade continua para formulários reabertos. */
+  complete(slot: string) {
+    const previous = pendingOperations.get(slot);
+    if (previous) { pendingOperations.set(slot, { ...previous, locked: false, inFlight: false, completed: true }); changed(); }
+  },
+  /** A resposta chegou (sucesso, recusa ou falha): o envio deixa de estar em andamento; a trava decide o resto. */
+  settle(slot: string) {
+    const previous = pendingOperations.get(slot);
+    if (previous?.inFlight) { pendingOperations.set(slot, { ...previous, inFlight: false }); changed(); }
   },
   lock(slot: string, locked: boolean) {
     const previous = pendingOperations.get(slot);
-    if (previous) pendingOperations.set(slot, { ...previous, locked });
+    if (previous) { pendingOperations.set(slot, { ...previous, locked, inFlight: false }); changed(); }
   },
-  clear(slot: string) { pendingOperations.delete(slot); },
+  clear(slot: string) { if (pendingOperations.delete(slot)) changed(); },
+  /** Saída, sessão perdida ou nova entrada: nenhuma pendência passa para a próxima conta desta aba. */
+  clearAll() { owner = null; if (pendingOperations.size > 0) { pendingOperations.clear(); } changed(); },
+  /** Conta autenticada atual; outra conta encontra a lista vazia. */
+  bindAccount(accountId: string | null) {
+    if (accountId === owner) return;
+    owner = accountId;
+    pendingOperations.clear();
+    changed();
+  },
+  subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+  revision: () => revision,
 };
 export function usePendingOperation(slot: string) {
-  const [, setVersion] = useState(0);
-  const changed = () => setVersion((value) => value + 1);
+  useSyncExternalStore(pendingOperation.subscribe, pendingOperation.revision, pendingOperation.revision);
   const current = pendingOperation.get(slot);
+  // Chave do envio cujos dados este formulário recebeu ao abrir (em andamento ou travado), se houver.
+  const [restoredKey, setRestoredKey] = useState<string | null>(() => {
+    const opened = pendingOperation.get(slot);
+    return opened && !opened.completed && (opened.locked || opened.inFlight) ? opened.key : null;
+  });
+  const active = current && !current.completed ? current : null;
   return {
-    locked: current?.locked ?? false,
-    /** Dados do envio travado: o formulário reabre com o mesmo conteúdo. */
-    lockedBody: current?.locked ? current.body : null,
-    keyFor: (fingerprint: string, body: unknown) => pendingOperation.keyFor(slot, fingerprint, body),
-    reset() { pendingOperation.clear(slot); changed(); },
-    /** Envio confirmado ou recusado pelo estado: nada fica pendente (o formulário fecha em seguida). */
-    finish() { pendingOperation.clear(slot); },
-    setLocked(value: boolean) { pendingOperation.lock(slot, value); changed(); },
+    locked: active?.locked ?? false,
+    /** Envio deste alvo ainda sem resposta, feito por este ou por outro formulário: não enviar de novo. */
+    inFlight: active?.inFlight ?? false,
+    /** Dados do envio travado ou em andamento: o formulário reabre com o mesmo conteúdo. */
+    lockedBody: active?.locked || active?.inFlight ? active.body : null,
+    /** O envio cujos dados este formulário mostra já foi concluído por outro formulário: repetir só confirma o mesmo. */
+    completedElsewhere: restoredKey !== null && current?.completed === true && current.key === restoredKey,
+    keyFor: (fingerprint: string, body: unknown) => pendingOperation.keyFor(slot, fingerprint, body, restoredKey),
+    /** Chamar quando a resposta chegar, em qualquer resultado (bloco finally da chamada). */
+    settle() { pendingOperation.settle(slot); },
+    reset() { pendingOperation.clear(slot); setRestoredKey(null); },
+    /** Envio confirmado ou recusado pelo estado: quem recebeu a resposta começa do zero. */
+    finish() { pendingOperation.complete(slot); setRestoredKey(null); },
+    setLocked(value: boolean) { pendingOperation.lock(slot, value); },
   };
 }
