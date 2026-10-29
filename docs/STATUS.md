@@ -1,5 +1,12 @@
 # Estado verificável - 29/10/2026
 
+## MFA de equipe e capacidades — CP-013/CP-014
+
+- PR com capacidades por papel: `MANAGER` (unidades, vínculos, áreas, decisões de reserva, auditoria) e `CONCIERGE` (portaria). `SUPPORT` e papéis residenciais não recebem capacidade. Toda capacidade exige token `aal2`; AAL1 recebe `403 MFA_REQUIRED` sem alteração.
+- O executor de tenant publica `app.capabilities` no contexto local somente após conta ativa, vínculo vigente e AAL2; o ensaio JDBC confirma ausência de vazamento no pool.
+- BFF: `GET /auth/mfa`, `POST /auth/mfa/enroll` e `POST /auth/mfa/verify` (CSRF/Origin, 10 tentativas por sessão em 5 min, nova sessão opaca AAL2 com o mesmo limite absoluto). Procedimento de recuperação manual em [OPERACAO_MFA.md](OPERACAO_MFA.md).
+- CI 40803199004 verde nos três jobs no head `c78ff1a`. Testes com provedor sintético; Supabase Auth real, telas web e códigos de recuperação pendentes. Flags remotas inalteradas.
+
 ## Pacote de especificação versionado — CP-001/CP-002
 
 - O pacote v1.0 (27/10/2026) foi incorporado em `spec/` como referência imutável: 65 arquivos byte a byte conferidos contra o manifesto SHA256 do ZIP por `tests/spec-package.test.mjs`. PDF/DOCX do PRD (mesmo texto do Markdown), a pesquisa de concorrentes em PDF e a proposta de origem superada ficaram fora do repositório público.
