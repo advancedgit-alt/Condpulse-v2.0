@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: "24.18.0"
       - name: Foundation and contract checks
-        run: node --test tests/foundation.test.mjs tests/spec-package.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
+        run: node --test --test-reporter=tap tests/foundation.test.mjs tests/spec-package.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
       - name: Specification package structural validation on a temporary copy
         run: |
           python3 -c 'import yaml' 2>/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q python3-yaml; }
@@ -51,9 +51,9 @@ jobs:
           mkdir -p "$copy" && cp -R spec "$copy/"
           python3 -I "$copy/spec/qualidade/validar_estrutura.py"
       - name: BFF staging guards and protocol without managed credentials
-        run: node --test tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
+        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
       - name: Manual onboarding boundary without managed credentials
-        run: node --test tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
+        run: node --test --test-reporter=tap tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
       - name: Compile and unit tests
         run: |
           set +e
@@ -64,11 +64,11 @@ jobs:
       - name: Real onboarding CLI protocol without managed credentials or network
         env:
           CP_ONBOARDING_JAVA_TEST_REQUIRED: "true"
-        run: node --test tests/onboarding-operations-java.test.mjs
+        run: node --test --test-reporter=tap tests/onboarding-operations-java.test.mjs
       - name: Manual database executor guards without managed credentials
-        run: node --test tests/database-operations.test.mjs tests/production-database-operations.test.mjs
+        run: node --test --test-reporter=tap tests/database-operations.test.mjs tests/production-database-operations.test.mjs
       - name: Runtime credential executor guards and disposable provisioning
-        run: node --test tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs
+        run: node --test --test-reporter=tap tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs
       - name: Migrate with Flyway and validate replay
         env:
           SPRING_PROFILES_ACTIVE: migrate
@@ -208,7 +208,7 @@ jobs:
         env:
           DOCKER_CONFIG: ${{ runner.temp }}/condpulse-docker-config
         run: |
-          node --test tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs
+          node --test --test-reporter=tap tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs
           sh -n infra/vercel/start-api.sh
   web:
     runs-on: ubuntu-latest
