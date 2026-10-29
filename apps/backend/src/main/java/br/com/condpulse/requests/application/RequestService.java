@@ -76,7 +76,7 @@ public class RequestService {
    UUID id=UUID.randomUUID();
    store.insert(id,tenant,unit,actor,category,title,description);
    audit.record(tenant,actor,"REQUEST_OPENED","SERVICE_REQUEST",id,null);
-   store.event(tenant,"REQUEST_OPENED",id,0,unit,null);
+   store.event(tenant,"REQUEST_OPENED",id,0,0,unit,null);
    store.finish(tenant,actor,route,key,id,201);
    return new RequestModels.OpenResult(require(store.unitRequest(tenant,id)),false,201);
   });
@@ -103,7 +103,7 @@ public class RequestService {
    if("CLOSED".equals(found.state())) throw closed();
    UUID id=UUID.randomUUID();
    var message=store.insertMessage(id,tenant,requestId,actor,"UNIT","RESIDENT",body,false);
-   store.event(tenant,"REQUEST_MESSAGE_ADDED",requestId,versionOf(tenant,requestId),found.unitId(),id);
+   messageAdded(tenant,requestId,versionOf(tenant,requestId),found.unitId(),id);
    store.finish(tenant,actor,route,key,id,201);
    return new RequestModels.MessageResult(requireMessage(message),false,201);
   });
@@ -141,7 +141,7 @@ public class RequestService {
    UUID id=UUID.randomUUID();
    var message=store.insertMessage(id,tenant,requestId,actor,"STAFF",visibility,body,true);
    // Comentário interno não gera evento para a unidade.
-   if("RESIDENT".equals(visibility)) store.event(tenant,"REQUEST_MESSAGE_ADDED",requestId,head.version(),head.unitId(),id);
+   if("RESIDENT".equals(visibility)) messageAdded(tenant,requestId,head.version(),head.unitId(),id);
    store.finish(tenant,actor,route,key,id,201);
    return new RequestModels.MessageResult(requireMessage(message),false,201);
   });
@@ -187,11 +187,18 @@ public class RequestService {
    if(stateChanged) audit.record(tenant,actor,"REQUEST_STATE_CHANGED","SERVICE_REQUEST",requestId,null);
    if(assignmentChanged) audit.record(tenant,actor,"REQUEST_ASSIGNED","SERVICE_REQUEST",requestId,null);
    if(resolving) store.insertMessage(UUID.randomUUID(),tenant,requestId,actor,"STAFF","RESIDENT","Resolução: "+resolution,true);
-   store.event(tenant,"REQUEST_UPDATED",requestId,version,head.unitId(),null);
+   store.event(tenant,"REQUEST_UPDATED",requestId,version,version,head.unitId(),null);
    return require(store.managedRequest(tenant,requestId));
   });
  }
 
+ /**
+  * Cada mensagem visível tem o próprio evento, identificado pelo número da mensagem no pedido. Mensagem não muda a
+  * versão do pedido: com a versão na identidade, a segunda mensagem seguida repetia a anterior no outbox e falhava (503).
+  */
+ private void messageAdded(UUID tenant,UUID requestId,long version,UUID unit,UUID message) {
+  store.event(tenant,"REQUEST_MESSAGE_ADDED",requestId,store.visibleMessages(tenant,requestId),version,unit,message);
+ }
  private long versionOf(UUID tenant,UUID requestId) {
   var head=store.head(tenant,requestId);
   if(head==null) throw notFound();
