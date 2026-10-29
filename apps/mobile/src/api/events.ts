@@ -46,9 +46,6 @@ export function connectUnitEvents(url: string, handlers: UnitEventHandlers, crea
   let source: EventSourceLike | null = null;
   let disposed = false;
   let failures = 0;
-  let opened = false;
-  // Qualquer queda ou recusa antes do primeiro ready também exige consultar de novo quando o canal abrir.
-  let lost = false;
   let pending: unknown = null;
   const schedule = (ms: number) => {
     if (disposed) return;
@@ -63,8 +60,9 @@ export function connectUnitEvents(url: string, handlers: UnitEventHandlers, crea
     source = current;
     current.addEventListener('ready', () => {
       if (source !== current) return;
-      if (opened || lost) handlers.resync();
-      opened = true; lost = false; failures = 0;
+      // Toda abertura consulta de novo: o estado inicial do servidor pode já incluir mudanças posteriores à consulta da tela.
+      handlers.resync();
+      failures = 0;
     });
     current.addEventListener('changed', (event) => {
       if (source !== current) return;
@@ -78,11 +76,10 @@ export function connectUnitEvents(url: string, handlers: UnitEventHandlers, crea
       if (source !== current) return;
       const reason = parse(event)?.reason;
       if (reason === 'revoked') { stop(); disposed = true; handlers.ended('revoked'); return; }
-      if (reason === 'expired') { stop(); lost = true; handlers.ended('expired'); schedule(EXPIRED_RETRY_MS); }
+      if (reason === 'expired') { stop(); handlers.ended('expired'); schedule(EXPIRED_RETRY_MS); }
     });
     current.onerror = () => {
       if (source !== current) return;
-      lost = true;
       if (current.readyState !== CLOSED) return;
       stop();
       schedule(Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** failures));

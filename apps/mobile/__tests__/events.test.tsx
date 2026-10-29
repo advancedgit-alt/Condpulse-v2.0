@@ -46,7 +46,7 @@ describe('lógica do canal (igual à web)', () => {
     h.last().emit('changed', '{"topics":["reservations"]}');
     h.last().emit('changed', '{"topics":["reservations","x"]}');
     h.last().emit('changed', 'nao-json');
-    expect(h.calls).toEqual(['changed:reservations', 'resync', 'resync']);
+    expect(h.calls).toEqual(['resync', 'changed:reservations', 'resync', 'resync']);
   });
   it('revogado encerra sem nova tentativa; expirado reabre em 5 s e consulta de novo', () => {
     const h = harness();
@@ -56,7 +56,7 @@ describe('lógica do canal (igual à web)', () => {
     h.timers.fire();
     h.last().emit('ready', '{}');
     h.last().emit('end', '{"reason":"revoked"}');
-    expect(h.calls).toEqual(['ended:expired', 'resync', 'ended:revoked']);
+    expect(h.calls).toEqual(['resync', 'ended:expired', 'resync', 'ended:revoked']);
     h.last().fail(true);
     expect(h.timers.pending()).toHaveLength(0);
   });
@@ -216,14 +216,15 @@ describe('canal na tela da unidade', () => {
     await waitFor(() => expect(fetches).toEqual({ reservations: 1, other: 1 }));
     expect(sources).toHaveLength(1);
     expect(sources[0]!.url).toBe('/v1/tenants/t/units/u/events');
-    sources[0]!.emit('ready', '{}');
+    sources[0]!.emit('ready', '{}'); // abertura consulta tudo da unidade
+    await waitFor(() => expect(fetches).toEqual({ reservations: 2, other: 2 }));
     sources[0]!.emit('changed', '{"topics":["reservations","parcels"]}');
-    await waitFor(() => expect(fetches.reservations).toBe(2));
-    expect(fetches.other).toBe(1);
+    await waitFor(() => expect(fetches.reservations).toBe(3));
+    expect(fetches.other).toBe(2);
     listener!('background');
     expect(sources[0]!.closed).toBe(true);
     listener!('active');
-    await waitFor(() => expect(fetches).toEqual({ reservations: 3, other: 2 }));
+    await waitFor(() => expect(fetches).toEqual({ reservations: 4, other: 3 }));
     expect(sources).toHaveLength(2);
     await cleanup();
     expect(sources[1]!.closed).toBe(true);
