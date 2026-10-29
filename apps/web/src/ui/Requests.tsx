@@ -91,16 +91,17 @@ function OpenForm({ scope, close }: { scope: Scope; close(created: { requestId: 
   }
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label="Abrir pedido">
     <label htmlFor="request-category">Categoria</label>
-    <select id="request-category" value={category} disabled={busy || locked} onChange={(event) => setCategory(event.target.value as RequestCategory)}>
+    <select id="request-category" value={category} disabled={busy || locked || intent.inFlight} onChange={(event) => setCategory(event.target.value as RequestCategory)}>
       {requestCategories.map((value) => <option key={value} value={value}>{categoryLabels[value]}</option>)}
     </select>
     <label htmlFor="request-title">Título</label>
-    <input id="request-title" maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy || locked} autoComplete="off" />
+    <input id="request-title" maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy || locked || intent.inFlight} autoComplete="off" />
     <label htmlFor="request-description">Descrição</label>
     <textarea id="request-description" maxLength={2000} rows={5} value={description} onChange={(event) => setDescription(event.target.value)}
-      disabled={busy || locked} aria-describedby="request-description-help" />
+      disabled={busy || locked || intent.inFlight} aria-describedby="request-description-help" />
     <span className="field-help" id="request-description-help">Texto simples. Não inclua senhas, documentos pessoais ou dados de outras pessoas.</span>
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}</Notice> : null}
+    {intent.completedElsewhere ? <Notice>Este pedido já foi enviado pelo formulário aberto antes. Enviar de novo só confirma o mesmo pedido, sem abrir outro; confira a lista.</Notice> : null}
     {locked ? <Notice tone="warning">O resultado não foi confirmado e o pedido ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo pedido”: se ele já foi enviado, nada novo é gravado.</Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || busy || intent.inFlight}>{busy || intent.inFlight ? 'Enviando…' : locked ? 'Tentar confirmar o mesmo pedido' : 'Enviar pedido'}</button>
@@ -164,10 +165,11 @@ function ReplyForm({ scope, request }: { scope: Scope; request: UnitRequest }) {
   }
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Responder no pedido ${request.title}`}>
     <label htmlFor={id}>Mensagem para a gestão</label>
-    <textarea id={id} maxLength={2000} rows={3} value={body} onChange={(event) => setBody(event.target.value)} disabled={busy || intent.locked} />
+    <textarea id={id} maxLength={2000} rows={3} value={body} onChange={(event) => setBody(event.target.value)} disabled={busy || intent.locked || intent.inFlight} />
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}</Notice> : null}
+    {intent.completedElsewhere ? <Notice>Este envio já foi concluído pela conversa aberta antes. Enviar de novo só confirma o mesmo envio, sem gravar outra vez; confira a conversa.</Notice> : null}
     {intent.locked ? <Notice tone="warning">O envio não foi confirmado. Use “Tentar confirmar a mesma mensagem”: se ela já foi gravada, nada novo é enviado.</Notice> : null}
-    <div className="button-row"><button className="button" type="submit" disabled={normalized === null || busy}>
-      {busy ? 'Enviando…' : intent.locked ? 'Tentar confirmar a mesma mensagem' : 'Enviar mensagem'}</button></div>
+    <div className="button-row"><button className="button" type="submit" disabled={normalized === null || busy || intent.inFlight}>
+      {busy || intent.inFlight ? 'Enviando…' : intent.locked ? 'Tentar confirmar a mesma mensagem' : 'Enviar mensagem'}</button></div>
   </form>;
 }

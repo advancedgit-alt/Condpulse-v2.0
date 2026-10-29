@@ -117,6 +117,7 @@ function StaffMessageForm({ request }: { request: ManagedRequest }) {
     <label className="weekday-option"><input type="checkbox" checked={internal} disabled={busy} onChange={(event) => setInternal(event.target.checked)} />
       Comentário interno (não aparece para a unidade)</label>
     <ActionFeedback state={action.state} />
+    {intent.completedElsewhere ? <Notice>Este envio já foi concluído pela conversa aberta antes. Enviar de novo só confirma o mesmo envio, sem gravar outra vez; confira a conversa.</Notice> : null}
     {intent.locked ? <Notice tone="warning">O envio não foi confirmado. Use “Tentar confirmar a mesma mensagem”: se ela já foi gravada, nada novo é enviado.</Notice> : null}
     <div className="button-row"><button className="button" type="submit" disabled={normalized === null || action.state.pending}>
       {action.state.pending ? 'Enviando…' : intent.locked ? 'Tentar confirmar a mesma mensagem' : internal ? 'Registrar comentário interno' : 'Enviar para a unidade'}</button></div>
