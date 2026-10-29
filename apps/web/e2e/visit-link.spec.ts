@@ -80,3 +80,26 @@ test('sem token ou com token malformado não chama o servidor', async ({ page })
   expect(new URL(page.url()).hash).toBe('');
   expect(calls).toBe(0);
 });
+
+test('resposta tardia da tentativa manual não sobrescreve outro link aberto depois', async ({ page }) => {
+  await installSyntheticApi(page);
+  const OTHER = 'R'.repeat(21) + '_-' + 'v'.repeat(20);
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => { release = resolve; });
+  let attempts = 0;
+  await page.route(VIEW, async (route) => {
+    attempts += 1;
+    const token = (route.request().postDataJSON() as { token: string }).token;
+    if (token === TOKEN && attempts === 1) { await json(route, 503, { code: 'PERMIT_LINK_DEPENDENCY_UNAVAILABLE' }); return; }
+    if (token === TOKEN) { await hold; await json(route, 200, { ...permit, visitorFirstName: 'Antiga' }); return; }
+    await json(route, 200, { ...permit, visitorFirstName: 'Nova' });
+  });
+  await page.goto(`/visita#${TOKEN}`);
+  await page.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect.poll(() => attempts).toBe(2);
+  await page.evaluate((next) => { window.location.hash = next; }, OTHER);
+  await expect(page.getByRole('heading', { name: 'Olá, Nova.' })).toBeVisible();
+  release();
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('heading', { name: 'Olá, Nova.' })).toBeVisible();
+});
