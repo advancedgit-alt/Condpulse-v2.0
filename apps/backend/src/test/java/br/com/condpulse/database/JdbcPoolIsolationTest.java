@@ -1,7 +1,9 @@
 package br.com.condpulse.database;
 
+import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.identity.application.CurrentIdentityQuery;
 import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.tenancy.application.StaffCapability;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import br.com.condpulse.tenancy.application.TenantUnitsQuery;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -125,6 +127,31 @@ class JdbcPoolIsolationTest {
   }));
   assertEquals("TENANT_ACCESS_DENIED",denied.code()); assertFalse(called.get()); db.assertEmptyContext();
   assertEquals(db.tenantB,transactions.execute(db.accountB,db.tenantB,context->context.tenantId())); db.assertEmptyContext();
+ }
+ @Test void staffCapabilitiesReachTheDatabaseContextOnlyForAal2ManagersAndNeverLeak() throws Exception {
+  var transactions=new TenantTransactionExecutor(db.jdbc,db.manager); int pid=db.backendPid();
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'GESTOR FICTICIO JDBC','MANAGER','ACTIVE')",
+   db.tenantB,db.accountC);
+  try {
+   String elevated=transactions.execute(db.accountC,db.tenantB,AssuranceLevel.AAL2,context->{
+    context.requireCapability(StaffCapability.MANAGE_UNITS);
+    return db.jdbc.queryForObject("select current_setting('app.capabilities',true)",String.class);
+   });
+   assertEquals("amenities.manage,audit.read,memberships.manage,reservations.decide,units.manage",elevated);
+   db.assertEmptyContext();
+   String weak=transactions.execute(db.accountC,db.tenantB,AssuranceLevel.AAL1,
+    context->db.jdbc.queryForObject("select coalesce(current_setting('app.capabilities',true),'')",String.class));
+   assertEquals("",weak); db.assertEmptyContext();
+   // Mesmo AAL2, um morador nao recebe capacidade de equipe no contexto do banco.
+   String resident=transactions.execute(db.accountA,db.tenantA,AssuranceLevel.AAL2,
+    context->db.jdbc.queryForObject("select coalesce(current_setting('app.capabilities',true),'')",String.class));
+   assertEquals("",resident); db.assertEmptyContext();
+   assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->transactions.execute(db.accountC,db.tenantB,
+    AssuranceLevel.AAL1,context->{context.requireCapability(StaffCapability.MANAGE_UNITS);return null;})).code());
+   db.assertEmptyContext(); assertEquals(pid,db.backendPid());
+  } finally {
+   db.adminUpdate("delete from cp.memberships where tenant_id=? and account_id=? and role='MANAGER'",db.tenantB,db.accountC);
+  }
  }
  @Test void unitQueryLimitsResidentToOwnUnitsWithinTheTenantAndRejectsInactiveUnit() throws Exception {
   var units=new TenantUnitsQuery(new TenantTransactionExecutor(db.jdbc,db.manager),db.jdbc);

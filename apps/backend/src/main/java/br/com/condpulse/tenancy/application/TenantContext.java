@@ -1,16 +1,26 @@
 package br.com.condpulse.tenancy.application;
 
 import java.time.ZoneId;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 
 /** Snapshot de vínculos próprios, resolvido novamente em cada transação de negócio. */
-public record TenantContext(UUID accountId,UUID tenantId,ZoneId timeZone,List<Membership> memberships) {
+public record TenantContext(UUID accountId,UUID tenantId,ZoneId timeZone,List<Membership> memberships,
+    AssuranceLevel assurance) {
  public TenantContext {
   Objects.requireNonNull(accountId); Objects.requireNonNull(tenantId); Objects.requireNonNull(timeZone);
+  Objects.requireNonNull(assurance);
   memberships=List.copyOf(memberships);
+ }
+ /** Fluxos residenciais existentes não dependem do segundo fator. */
+ public TenantContext(UUID accountId,UUID tenantId,ZoneId timeZone,List<Membership> memberships) {
+  this(accountId,tenantId,timeZone,memberships,AssuranceLevel.AAL1);
  }
 
  public void requireBookableUnit(UUID unitId) {
@@ -20,6 +30,24 @@ public record TenantContext(UUID accountId,UUID tenantId,ZoneId timeZone,List<Me
  public void requireCancellableUnit(UUID unitId) {
   if(unitId==null || memberships.stream().noneMatch(m->unitId.equals(m.unitId()) && m.canCancelReservation()))
    throw denied();
+ }
+ /** Capacidades concedidas pelos papéis vigentes, antes de considerar o segundo fator. */
+ public Set<StaffCapability> grantedCapabilities() {
+  var granted=EnumSet.noneOf(StaffCapability.class);
+  for(var membership:memberships) granted.addAll(StaffCapability.forRole(membership.role()));
+  return Collections.unmodifiableSet(granted);
+ }
+ /** Capacidades utilizáveis nesta transação: exigem papel vigente e AAL2. */
+ public Set<StaffCapability> effectiveCapabilities() {
+  return assurance==AssuranceLevel.AAL2?grantedCapabilities():Set.of();
+ }
+ public void requireCapability(StaffCapability capability) {
+  Objects.requireNonNull(capability);
+  if(!grantedCapabilities().contains(capability))
+   throw new BusinessProblem("STAFF_ACCESS_DENIED",403,"Esta ação não está disponível para o seu vínculo.");
+  // Papel correto com sessão AAL1 recebe orientação explícita; nenhuma alteração ocorre.
+  if(assurance!=AssuranceLevel.AAL2)
+   throw new BusinessProblem("MFA_REQUIRED",403,"Confirme o segundo fator de autenticação para continuar.");
  }
  private BusinessProblem denied() {
   return new BusinessProblem("UNIT_ACCESS_DENIED",404,"Unidade não disponível para esta operação.");

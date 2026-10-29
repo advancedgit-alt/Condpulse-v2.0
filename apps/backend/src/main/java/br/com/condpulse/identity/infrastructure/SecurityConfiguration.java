@@ -59,8 +59,8 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units","/v1/tenants/*/amenities",
       "/v1/tenants/*/amenities/*/availability","/v1/tenants/*/reservations").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/reservations","/v1/tenants/*/reservations/*/cancel").authenticated()
-    .requestMatchers(HttpMethod.GET,"/auth/csrf").permitAll()
-    .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout").permitAll()
+    .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
+    .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify").permitAll()
     .anyRequest().denyAll())
    .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults())
     .authenticationEntryPoint((req,res,ex)->problem(res,401))

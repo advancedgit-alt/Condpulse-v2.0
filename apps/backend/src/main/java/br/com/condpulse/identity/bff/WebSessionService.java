@@ -2,7 +2,9 @@ package br.com.condpulse.identity.bff;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -94,6 +96,109 @@ public final class WebSessionService {
    try { auth.signOutBestEffort(cipher.open(session.encryptedAccessToken(),session.cipherContext("access"))); }
    catch(IllegalStateException ex) { /* Sessão local já invalidada, chave antiga não a reativa. */ }
   }
+ }
+ /** Estado do segundo fator da própria sessão; nunca devolve tokens do provedor. */
+ public MfaStatus mfaStatus(String raw) {
+  var current=current(raw);
+  return new MfaStatus(assurance(current.jwt()),auth.totpFactors(current.accessToken()));
+ }
+ public SupabaseAuthClient.TotpEnrollment enrollTotp(String raw) {
+  return auth.enrollTotp(current(raw).accessToken());
+ }
+ /**
+  * Verifica TOTP e substitui a sessão opaca por uma nova sessão AAL2 com o mesmo limite absoluto.
+  * A sessão fica reservada contra renovação concorrente. Recusa definitiva do provedor preserva a sessão;
+  * qualquer resultado incerto depois do envio encerra a sessão local e no provedor, sem repetição.
+  */
+ public SessionTicket verifyTotp(String raw,String factorId,String code) {
+  UUID factor=parseFactor(factorId);
+  if(code==null || !code.matches("[0-9]{6}"))
+   throw new BusinessProblem("MFA_CODE_REJECTED",422,"Informe o código de 6 dígitos do aplicativo autenticador.");
+  String hash=hash(raw);
+  UUID lease=UUID.randomUUID();
+  var session=store.claimRefresh(hash,lease);
+  String access;
+  try {
+   access=cipher.open(session.encryptedAccessToken(),session.cipherContext("access"));
+  } catch(IllegalStateException ex) {
+   discard(hash,null);
+   throw new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente para continuar.");
+  }
+  try {
+   Jwt current=decoder.decode(access);
+   if(!session.accountId().toString().equalsIgnoreCase(current.getSubject())) {
+    discard(hash,null);
+    throw new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente para continuar.");
+   }
+  } catch(JwtException ex) {
+   store.releaseRefresh(hash,lease);
+   throw new BusinessProblem("SESSION_REFRESH_REQUIRED",401,"Renove a sessão para continuar.");
+  }
+  SupabaseAuthClient.TokenResponse tokens;
+  try { tokens=auth.verifyTotp(access,factor,code); }
+  catch(BusinessProblem ex) {
+   if(DEFINITIVE_MFA_REJECTIONS.contains(ex.code())) { store.releaseRefresh(hash,lease); throw ex; }
+   discard(hash,access); throw ex;
+  } catch(RuntimeException ex) { discard(hash,access); throw ex; }
+  UUID account=session.accountId();
+  try {
+   Jwt jwt=decodeNew(tokens.access_token());
+   if(!account.toString().equalsIgnoreCase(jwt.getSubject()) || assurance(jwt)!=AssuranceLevel.AAL2)
+    throw new BusinessProblem("AUTH_PROVIDER_UNAVAILABLE",503,"Não foi possível confirmar o segundo fator.");
+   String nextRaw=SessionSecrets.newToken(),nextHash=SessionSecrets.hash(nextRaw);
+   var draft=new StoredWebSession(UUID.randomUUID(),nextHash,account,"","",jwt.getExpiresAt(),session.expiresAt(),0);
+   var stored=new StoredWebSession(draft.id(),nextHash,account,
+     cipher.seal(tokens.access_token(),draft.cipherContext("access")),
+     cipher.seal(tokens.refresh_token(),draft.cipherContext("refresh")),
+     jwt.getExpiresAt(),draft.expiresAt(),0);
+   store.replace(hash,lease,stored);
+   return new SessionTicket(nextRaw,account,stored.expiresAt());
+  } catch(RuntimeException ex) {
+   discard(hash,tokens.access_token());
+   throw ex;
+  }
+ }
+ /** Conta da sessão opaca válida, usada para limites por conta antes de chamar o provedor. */
+ public UUID accountOf(String raw) { return store.load(hash(raw)).accountId(); }
+ private void discard(String hash,String accessToSignOut) {
+  try { store.remove(hash); }
+  catch(RuntimeException ignored) { /* Reserva vencida também impede reutilizar a sessão. */ }
+  if(accessToSignOut!=null) auth.signOutBestEffort(accessToSignOut);
+ }
+ private static final java.util.Set<String> DEFINITIVE_MFA_REJECTIONS=java.util.Set.of(
+  "MFA_CODE_REJECTED","MFA_FACTOR_NOT_FOUND","MFA_OPERATION_REJECTED","AUTH_RATE_LIMITED","SESSION_REFRESH_REQUIRED");
+ private CurrentAccess current(String raw) {
+  var session=store.load(hash(raw));
+  String access;
+  try { access=cipher.open(session.encryptedAccessToken(),session.cipherContext("access")); }
+  catch(IllegalStateException ex) {
+   store.remove(session.tokenHash());
+   throw new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente para continuar.");
+  }
+  Jwt jwt;
+  try { jwt=decoder.decode(access); }
+  catch(JwtException ex) {
+   throw new BusinessProblem("SESSION_REFRESH_REQUIRED",401,"Renove a sessão para continuar.");
+  }
+  if(!session.accountId().toString().equalsIgnoreCase(jwt.getSubject())) {
+   store.remove(session.tokenHash());
+   throw new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente para continuar.");
+  }
+  return new CurrentAccess(session,access,jwt);
+ }
+ private static AssuranceLevel assurance(Jwt jwt) { return AssuranceLevel.fromClaim(jwt.getClaims().get("aal")); }
+ private static UUID parseFactor(String factorId) {
+  try {
+   UUID parsed=UUID.fromString(factorId);
+   if(parsed.toString().equalsIgnoreCase(factorId)) return parsed;
+  } catch(IllegalArgumentException | NullPointerException ignored) { /* resposta neutra abaixo */ }
+  throw new BusinessProblem("MFA_FACTOR_NOT_FOUND",404,"Fator de autenticação não encontrado.");
+ }
+ private record CurrentAccess(StoredWebSession session,String accessToken,Jwt jwt) {
+  @Override public String toString() { return "CurrentAccess[tokens=REDACTED]"; }
+ }
+ public record MfaStatus(AssuranceLevel assuranceLevel,List<SupabaseAuthClient.Factor> factors) {
+  public MfaStatus { factors=List.copyOf(factors); }
  }
  private String hash(String raw) {
   try { return SessionSecrets.hash(raw); }

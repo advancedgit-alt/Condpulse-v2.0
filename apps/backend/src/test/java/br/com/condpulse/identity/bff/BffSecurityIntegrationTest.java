@@ -197,6 +197,71 @@ class BffSecurityIntegrationTest {
   assertEquals(204,response.getStatus()); verify(sessions).logout(raw); verifyNoInteractions(limits);
  }
 
+ private static final String FACTOR="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+ @Test void mfaVerifyRotatesSessionOnlyWithCsrfOriginCookieAndAccountLimit() throws Exception {
+  var csrf=csrf(); String raw=SessionSecrets.newToken(),next=SessionSecrets.newToken();
+  when(sessions.accountOf(raw)).thenReturn(ACCOUNT);
+  when(sessions.verifyTotp(raw,FACTOR,"123456"))
+   .thenReturn(new WebSessionService.SessionTicket(next,ACCOUNT,NOW.plusSeconds(3600)));
+  var response=mvc.perform(mutation("/auth/mfa/verify",csrf).cookie(new Cookie(BffCookies.SESSION,raw))
+   .contentType(MediaType.APPLICATION_JSON).content("{\"factorId\":\""+FACTOR+"\",\"code\":\"123456\"}"))
+   .andReturn().getResponse();
+  assertEquals(200,response.getStatus()); assertEquals("no-store",response.getHeader("Cache-Control"));
+  assertTrue(response.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_session="+next+";")));
+  assertTrue(response.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_csrf=")));
+  assertFalse(response.getContentAsString().contains(next)); assertFalse(response.getContentAsString().contains("123456"));
+  var order=inOrder(sessions,limits);
+  order.verify(sessions).accountOf(raw); order.verify(limits).mfaVerify(ACCOUNT); order.verify(sessions).verifyTotp(raw,FACTOR,"123456");
+  verifyNoMoreInteractions(sessions);
+ }
+ @Test void mfaMutationsWithoutCsrfOrOriginNeverReachSessionsOrLimits() throws Exception {
+  String body="{\"factorId\":\""+FACTOR+"\",\"code\":\"123456\"}";
+  for(String path:new String[]{"/auth/mfa/verify","/auth/mfa/enroll"}) {
+   var missingCsrf=mvc.perform(post(path).servletPath(path).secure(true).header("Origin",ORIGIN)
+    .cookie(new Cookie(BffCookies.SESSION,SessionSecrets.newToken())).contentType(MediaType.APPLICATION_JSON).content(body))
+    .andReturn().getResponse();
+   assertEquals(403,missingCsrf.getStatus(),path);
+   var csrf=csrf();
+   var missingOrigin=mvc.perform(post(path).servletPath(path).secure(true).cookie(csrf.cookie()).header("X-CSRF-Token",csrf.token())
+    .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+   assertEquals(403,missingOrigin.getStatus(),path); assertTrue(missingOrigin.getContentAsString().contains("CSRF_ORIGIN_REJECTED"));
+   var foreign=mvc.perform(post(path).servletPath(path).secure(true).cookie(csrf.cookie()).header("X-CSRF-Token",csrf.token())
+    .header("Origin","https://attacker.example.invalid").contentType(MediaType.APPLICATION_JSON).content(body))
+    .andReturn().getResponse();
+   assertEquals(403,foreign.getStatus(),path);
+  }
+  verifyNoInteractions(sessions,decoder); verify(limits,never()).mfaVerify(any()); verify(limits,never()).mfaEnroll(any());
+ }
+ @Test void invalidSessionIsRejectedBeforeConsumingMfaLimits() throws Exception {
+  var csrf=csrf();
+  when(sessions.accountOf(null)).thenThrow(new br.com.condpulse.shared.application.BusinessProblem("SESSION_EXPIRED",401,"Entre novamente."));
+  var response=mvc.perform(mutation("/auth/mfa/verify",csrf).contentType(MediaType.APPLICATION_JSON)
+   .content("{\"factorId\":\""+FACTOR+"\",\"code\":\"123456\"}")).andReturn().getResponse();
+  assertEquals(401,response.getStatus()); verify(limits,never()).mfaVerify(any());
+  verify(sessions,never()).verifyTotp(any(),any(),any());
+ }
+ @Test void mfaStatusIsNoStoreLimitedByAccountAndReportsAssuranceWithoutTokens() throws Exception {
+  String raw=SessionSecrets.newToken();
+  when(sessions.accountOf(raw)).thenReturn(ACCOUNT);
+  when(sessions.mfaStatus(raw)).thenReturn(new WebSessionService.MfaStatus(
+   br.com.condpulse.identity.application.AssuranceLevel.AAL1,
+   List.of(new SupabaseAuthClient.Factor(UUID.fromString(FACTOR),"VERIFIED","CondPulse 1"))));
+  var response=mvc.perform(get("/auth/mfa").servletPath("/auth/mfa").secure(true)
+   .cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
+  assertEquals(200,response.getStatus()); assertEquals("no-store",response.getHeader("Cache-Control"));
+  assertTrue(response.getContentAsString().contains("\"assuranceLevel\":\"AAL1\""));
+  assertTrue(response.getContentAsString().contains(FACTOR)); assertFalse(response.getContentAsString().contains(raw));
+  verify(limits).mfaStatus(ACCOUNT);
+ }
+ @Test void mfaEnrollmentLimitPerAccountReturns429WithoutProviderCall() throws Exception {
+  var csrf=csrf(); String raw=SessionSecrets.newToken();
+  when(sessions.accountOf(raw)).thenReturn(ACCOUNT);
+  when(limits.mfaEnroll(ACCOUNT)).thenReturn(new AuthRateLimiter.Admission(false,120));
+  var response=mvc.perform(mutation("/auth/mfa/enroll",csrf).cookie(new Cookie(BffCookies.SESSION,raw)))
+   .andReturn().getResponse();
+  assertEquals(429,response.getStatus()); assertEquals("120",response.getHeader("Retry-After"));
+  verify(sessions).accountOf(raw); verifyNoMoreInteractions(sessions);
+ }
  @Test void invalidBearerNeverFallsBackToValidCookieWithinRealChain() throws Exception {
   String raw=SessionSecrets.newToken();
   when(decoder.decode("synthetic-invalid")).thenThrow(new BadJwtException("synthetic-invalid"));
@@ -242,6 +307,9 @@ class BffSecurityIntegrationTest {
    var limits=mock(AuthRateLimiter.class);
    when(limits.login(any())).thenReturn(AuthRateLimiter.Admission.permitted());
    when(limits.refresh(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.mfaVerify(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.mfaEnroll(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.mfaStatus(any())).thenReturn(AuthRateLimiter.Admission.permitted());
    return limits;
   }
   @Bean BffController testBffController(WebSessionService sessions,CsrfTokenRepository csrf,AuthRateLimiter limits) {

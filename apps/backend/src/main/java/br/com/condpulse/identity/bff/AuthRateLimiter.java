@@ -48,6 +48,17 @@ public final class AuthRateLimiter {
   String principal=opaqueSession!=null && opaqueSession.matches("[A-Za-z0-9_-]{43}") ? opaqueSession : "anonymous";
   return admit("refresh",principal,600,30,60);
  }
+ /**
+  * Segundo fator por conta (HMAC do UUID, sem identidade em claro), cobrado somente depois de validar a sessao:
+  * novas sessoes da mesma conta nao renovam tentativas e requisicoes anonimas nao consomem o limite global.
+  */
+ public Admission mfaVerify(java.util.UUID account) { return admit("mfa-verify",accountPrincipal(account),300,5,900); }
+ public Admission mfaEnroll(java.util.UUID account) { return admit("mfa-enroll",accountPrincipal(account),300,5,900); }
+ public Admission mfaStatus(java.util.UUID account) { return admit("mfa-status",accountPrincipal(account),600,30,60); }
+ private static String accountPrincipal(java.util.UUID account) {
+  if(account==null) throw new IllegalArgumentException("Conta obrigatoria para limite de segundo fator.");
+  return account.toString();
+ }
  private Admission admit(String operation,String principal,int globalLimit,int subjectLimit,int subjectSeconds) {
   // O bucket global e sempre o primeiro: variacao do identificador nao cria linhas ilimitadas.
   List<Bucket> buckets=List.of(new Bucket(digest(operation+"|global"),globalLimit,60),

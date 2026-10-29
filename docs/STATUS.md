@@ -1,5 +1,13 @@
 # Estado verificável - 29/10/2026
 
+## MFA de equipe e capacidades — CP-013/CP-014
+
+- PR com capacidades por papel: `MANAGER` (unidades, vínculos, áreas, decisões de reserva, auditoria) e `CONCIERGE` (portaria). `SUPPORT` e papéis residenciais não recebem capacidade. Toda capacidade exige token `aal2`; AAL1 recebe `403 MFA_REQUIRED` sem alteração.
+- O executor de tenant publica `app.capabilities` no contexto local somente após conta ativa, vínculo vigente e AAL2; o ensaio JDBC confirma ausência de vazamento no pool.
+- BFF: `GET /auth/mfa`, `POST /auth/mfa/enroll` e `POST /auth/mfa/verify` (CSRF/Origin, 10 tentativas por sessão em 5 min, nova sessão opaca AAL2 com o mesmo limite absoluto). Procedimento de recuperação manual em [OPERACAO_MFA.md](OPERACAO_MFA.md).
+- Revisão independente apontou falha não fechada após verificação incerta e limite apenas por sessão. Corrigido: a sessão é reservada antes do provedor; recusa definitiva libera a reserva; resultado incerto encerra a sessão local e no provedor; a troca para AAL2 é atômica (DELETE+INSERT na mesma transação, ensaiada em PostgreSQL real). Limites por conta: 5 verificações e 5 cadastros a cada 15 min.
+- CI 40803199004 (head `c78ff1a`) e CI 40805244326 (head `9a46a54`, correções) verdes nos três jobs. Provedor sintético; Supabase Auth real, telas web, códigos de recuperação e prova adicional no primeiro cadastro pendentes (risco e mitigação em OPERACAO_MFA.md). Flags remotas inalteradas.
+
 ## Pacote de especificação versionado — CP-001/CP-002
 
 - O pacote v1.0 (27/10/2026) foi incorporado em `spec/` como referência imutável: 65 arquivos byte a byte conferidos contra o manifesto SHA256 do ZIP por `tests/spec-package.test.mjs`. PDF/DOCX do PRD (mesmo texto do Markdown), a pesquisa de concorrentes em PDF e a proposta de origem superada ficaram fora do repositório público.
