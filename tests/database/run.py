@@ -535,8 +535,19 @@ def billing_checks():
                  "select count(*) from platform.billing_charges", role="cp_api", tenant=TA) == "0",
            "gestao local nao ve o financeiro da plataforma")
     expect(error("select count(*) from platform.billing_charges", "42501", role="cp_worker"), "worker nao le o financeiro")
-    query("DELETE FROM platform.billing_payments; DELETE FROM platform.billing_charges; DELETE FROM platform.billing_subscriptions; "
-          "DELETE FROM platform.billing_plans")
+    mass = "WITH u AS (UPDATE platform.billing_plans SET active=false RETURNING 1) SELECT count(*) FROM u"
+    expect(value(caps("billing.manage", mass), role="cp_api") == "0", "gestao financeira sem leitura nao varre planos")
+    expect(value(caps(full, mass), role="cp_api") == "1", "gestao financeira com leitura altera os planos visiveis")
+    def trail(action):
+        return (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) "
+                f"VALUES('{AA}','{action}','{TA}','ensaio')")
+    query(caps("billing.manage", trail("BILLING_PLAN_UPDATED")), role="cp_api")
+    expect(error(caps("billing.manage", trail("TENANT_SUSPENDED")), "42501", role="cp_api"), "financeiro nao grava evento de condominio")
+    expect(error(caps("billing.manage", trail("BILLINGX_FORJADO")), "42501", role="cp_api"), "prefixo do financeiro e literal")
+    expect(error(caps("tenants.manage", trail("BILLING_PAYMENT_RECORDED")), "42501", role="cp_api"), "catalogo nao grava evento financeiro")
+    expect(error(caps("billing.read", trail("BILLING_PLAN_UPDATED")), "42501", role="cp_api"), "leitura financeira nao grava trilha")
+    query("DELETE FROM platform.platform_audit_log; DELETE FROM platform.billing_payments; DELETE FROM platform.billing_charges; "
+          "DELETE FROM platform.billing_subscriptions; DELETE FROM platform.billing_plans")
 
 def main():
     guard()

@@ -1,45 +1,20 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
-import { platform, type PlatformSession, type PlatformTenant, type PlatformTenantChange } from '../../api/platform';
+import { platform, type PlatformTenant, type PlatformTenantChange } from '../../api/platform';
 import { collapseText, displayText } from '../../api/text';
 import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import '../management/Management.css';
+import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
+import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 
-/** Horários da plataforma no fuso de operação do projeto; cada condomínio mostra o próprio fuso no cadastro. */
-const PLATFORM_ZONE = 'America/Sao_Paulo';
-const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'auditoria', label: 'Auditoria' }] as const;
+export type { Outcome } from './shared';
+const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'financeiro', label: 'Financeiro' }, { id: 'auditoria', label: 'Auditoria' }] as const;
 type Section = typeof sections[number]['id'];
-const platformKey = (accountId: string, ...parts: unknown[]) => ['private', accountId, 'platform', ...parts] as const;
-
-interface PlatformValue { accountId: string; session: PlatformSession; requireMfa(): void; denied(error: unknown): void }
-const PlatformContext = createContext<PlatformValue | null>(null);
-function usePlatform(): PlatformValue {
-  const value = useContext(PlatformContext);
-  if (!value) throw new Error('Contexto da plataforma ausente.');
-  return value;
-}
-function isAccessError(error: unknown): boolean {
-  return error instanceof ApiError && ['MFA_REQUIRED', 'PLATFORM_ACCESS_DENIED'].includes(error.code);
-}
-function react(error: unknown, scope: Pick<PlatformValue, 'requireMfa' | 'denied'>): void {
-  if (!(error instanceof ApiError)) return;
-  if (error.code === 'MFA_REQUIRED') scope.requireMfa();
-  else if (error.code === 'PLATFORM_ACCESS_DENIED') scope.denied(error);
-}
-/** Erro de acesso de consulta: reage depois da renderização e esconde o conteúdo enquanto a porta muda de estado. */
-function useAccessGuard(error: unknown): boolean {
-  const scope = usePlatform();
-  const access = isAccessError(error);
-  useEffect(() => { if (access) react(error, scope); }, [access, error, scope]);
-  return access;
-}
-
-export interface Outcome { text: string; tone: 'success' | 'warning' | 'info' }
 /** Mensagem fiel ao que o servidor fez: repetição natural (applied=false) não aparece como sucesso desta ação. */
 export function tenantChangeOutcome(change: PlatformTenantChange, before: Pick<PlatformTenant, 'name' | 'active'>): Outcome {
   if (!change.applied) return { tone: 'info', text: 'O condomínio já estava neste estado. Nada foi alterado e o seu motivo não foi registrado.' };
@@ -95,18 +70,19 @@ function PlatformGate({ accountId, section }: { accountId: string; section: Sect
 }
 
 function PlatformConsole({ section }: { section: Section }) {
+  const scope = usePlatform();
+  const billing = scope.session.capabilities.includes('billing.read');
+  const visible = sections.filter((item) => item.id !== 'financeiro' || billing);
+  const current = visible.some((item) => item.id === section) ? section : 'condominios';
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
-      <p>Cadastro e estado dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
+      <p>Cadastro, estado e assinatura dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
-    <nav className="management-tabs" aria-label="Seções do painel master">{sections.map((item) =>
-      <Link key={item.id} to={`/master/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
-    {section === 'condominios' ? <TenantSection /> : <AuditSection />}
+    <nav className="management-tabs" aria-label="Seções do painel master">{visible.map((item) =>
+      <Link key={item.id} to={`/master/${item.id}`} aria-current={item.id === current ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : <TenantSection />}
   </>;
 }
-
-/** Lista sem busca: também alimenta os nomes da auditoria. */
-const tenantListKey = (accountId: string, search: string | null) => platformKey(accountId, 'tenants', search);
 
 function TenantSection() {
   const scope = usePlatform();
@@ -194,7 +170,7 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
       void queries.invalidateQueries({ queryKey: platformKey(scope.accountId, 'tenants') });
     } finally { setPending(false); }
   }
-  const uncertain = failure !== null && (!(failure instanceof ApiError) || failure.uncertain || failure.status >= 500);
+  const uncertain = failure !== null && isUncertain(failure);
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Alterar ${tenant.name}`}>
     {stale ? <Notice tone="warning">Este condomínio foi alterado depois que você abriu o formulário (versão {read.version} → {tenant.version}).
       <button className="button button-secondary button-compact" type="button" onClick={reload}>Recarregar os dados atuais</button></Notice> : null}
@@ -221,7 +197,6 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
 const actionLabels: Record<string, string> = {
   TENANT_RENAMED: 'Condomínio renomeado', TENANT_SUSPENDED: 'Condomínio suspenso', TENANT_REACTIVATED: 'Condomínio reativado',
 };
-const short = (id: string) => id.slice(0, 8);
 
 function AuditSection() {
   const scope = usePlatform();
@@ -240,16 +215,17 @@ function AuditSection() {
   const tenantName = (id: string | null) => (id ? known.find((item) => item.tenantId === id)?.name ?? `condomínio ${short(id)}` : 'plataforma');
   const events = pages.data?.pages.flatMap((page) => page.events) ?? [];
   return <section className="management-section" aria-labelledby="platform-audit-title">
-    <div className="section-heading"><div><span className="section-index">02 / AUDITORIA</span><h2 id="platform-audit-title">Trilha da plataforma</h2></div>
+    <div className="section-heading"><div><span className="section-index">03 / AUDITORIA</span><h2 id="platform-audit-title">Trilha da plataforma</h2></div>
       <button className="button button-secondary button-compact" type="button" disabled={pages.isFetching} onClick={() => void pages.refetch()}>Atualizar</button></div>
     <p className="field-help">Registros somente leitura, com autor e motivo. Horários em {PLATFORM_ZONE}.</p>
     {pages.isPending ? <div className="panel"><Loading label="Consultando auditoria…" /></div>
       : pages.isError && events.length === 0 ? <ErrorState error={pages.error} retry={() => void pages.refetch()} />
         : events.length === 0 ? <div className="panel"><Empty title="Sem registros">As alterações feitas pela plataforma aparecerão aqui.</Empty></div>
           : <ol className="management-list audit-list" aria-label="Eventos da plataforma">{events.map((event) => <li key={event.eventId} className="management-row">
-            <div><strong>{actionLabels[event.action] ?? event.action}</strong>
+            <div><strong>{actionLabels[event.action] ?? billingActionLabel(event.action) ?? event.action}</strong>
               <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · <bdi>{tenantName(event.tenantId)}</bdi> · ator {short(event.actorId)}</span>
-              {event.details.previousName && event.details.name ? <span>De “<bdi>{event.details.previousName}</bdi>” para “<bdi>{event.details.name}</bdi>”</span> : null}
+              {event.action === 'TENANT_RENAMED' && event.details.previousName && event.details.name ? <span>De “<bdi>{event.details.previousName}</bdi>” para “<bdi>{event.details.name}</bdi>”</span> : null}
+              {event.action.startsWith('BILLING_') ? billingAuditDetails(event.details) : null}
               {event.reason ? <span>Motivo: {event.reason}</span> : null}</div>
           </li>)}</ol>}
     {pages.isError && events.length > 0 ? <ErrorState error={pages.error} retry={() => void pages.fetchNextPage()} /> : null}

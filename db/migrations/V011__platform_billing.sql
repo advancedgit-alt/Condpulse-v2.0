@@ -137,13 +137,14 @@ ALTER TABLE platform.billing_charges FORCE ROW LEVEL SECURITY;
 ALTER TABLE platform.billing_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform.billing_payments FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON platform.billing_plans,platform.billing_subscriptions,platform.billing_charges,platform.billing_payments FROM PUBLIC;
+-- UPDATE só alcança linhas com billing.read (UPDATE sem WHERE não varre a tabela) e grava só com billing.manage.
 
 CREATE POLICY billing_plans_read ON platform.billing_plans FOR SELECT TO cp_api
  USING(platform.has_platform_capability('billing.read'));
 CREATE POLICY billing_plans_insert ON platform.billing_plans FOR INSERT TO cp_api
  WITH CHECK(platform.has_platform_capability('billing.manage') AND created_by = platform.current_actor_id());
 CREATE POLICY billing_plans_update ON platform.billing_plans FOR UPDATE TO cp_api
- USING(true) WITH CHECK(platform.has_platform_capability('billing.manage'));
+ USING(platform.has_platform_capability('billing.read')) WITH CHECK(platform.has_platform_capability('billing.manage'));
 GRANT SELECT ON platform.billing_plans TO cp_api;
 GRANT INSERT(id,name,price_cents,period,created_by) ON platform.billing_plans TO cp_api;
 GRANT UPDATE(name,price_cents,active,version,updated_at) ON platform.billing_plans TO cp_api;
@@ -153,7 +154,7 @@ CREATE POLICY billing_subscriptions_read ON platform.billing_subscriptions FOR S
 CREATE POLICY billing_subscriptions_insert ON platform.billing_subscriptions FOR INSERT TO cp_api
  WITH CHECK(platform.has_platform_capability('billing.manage') AND created_by = platform.current_actor_id() AND status = 'ACTIVE');
 CREATE POLICY billing_subscriptions_update ON platform.billing_subscriptions FOR UPDATE TO cp_api
- USING(true) WITH CHECK(platform.has_platform_capability('billing.manage'));
+ USING(platform.has_platform_capability('billing.read')) WITH CHECK(platform.has_platform_capability('billing.manage'));
 GRANT SELECT ON platform.billing_subscriptions TO cp_api;
 GRANT INSERT(id,tenant_id,plan_id,price_cents,period,starts_on,due_day,status,created_by) ON platform.billing_subscriptions TO cp_api;
 GRANT UPDATE(ends_on,status,version,ended_at) ON platform.billing_subscriptions TO cp_api;
@@ -163,7 +164,7 @@ CREATE POLICY billing_charges_read ON platform.billing_charges FOR SELECT TO cp_
 CREATE POLICY billing_charges_insert ON platform.billing_charges FOR INSERT TO cp_api
  WITH CHECK(platform.has_platform_capability('billing.manage') AND created_by = platform.current_actor_id() AND status = 'OPEN');
 CREATE POLICY billing_charges_update ON platform.billing_charges FOR UPDATE TO cp_api
- USING(true) WITH CHECK(platform.has_platform_capability('billing.manage'));
+ USING(platform.has_platform_capability('billing.read')) WITH CHECK(platform.has_platform_capability('billing.manage'));
 GRANT SELECT ON platform.billing_charges TO cp_api;
 GRANT INSERT(id,subscription_id,tenant_id,period_start,period_end,amount_cents,due_on,status,created_by) ON platform.billing_charges TO cp_api;
 GRANT UPDATE(status,cancel_reason,version) ON platform.billing_charges TO cp_api;
@@ -173,7 +174,14 @@ CREATE POLICY billing_payments_read ON platform.billing_payments FOR SELECT TO c
 CREATE POLICY billing_payments_insert ON platform.billing_payments FOR INSERT TO cp_api
  WITH CHECK(platform.has_platform_capability('billing.manage') AND recorded_by = platform.current_actor_id() AND status = 'RECORDED');
 CREATE POLICY billing_payments_update ON platform.billing_payments FOR UPDATE TO cp_api
- USING(true) WITH CHECK(platform.has_platform_capability('billing.manage') AND voided_by = platform.current_actor_id());
+ USING(platform.has_platform_capability('billing.read')) WITH CHECK(platform.has_platform_capability('billing.manage') AND voided_by = platform.current_actor_id());
 GRANT SELECT ON platform.billing_payments TO cp_api;
 GRANT INSERT(id,charge_id,amount_cents,paid_on,method,reference,status,recorded_by) ON platform.billing_payments TO cp_api;
 GRANT UPDATE(status,voided_by,voided_at,void_reason) ON platform.billing_payments TO cp_api;
+
+-- Trilha da plataforma por capacidade e prefixo da ação: o financeiro só registra BILLING_* e o catálogo só TENANT_*.
+DROP POLICY platform_audit_insert ON platform.platform_audit_log;
+CREATE POLICY platform_audit_insert ON platform.platform_audit_log FOR INSERT TO cp_api
+ WITH CHECK(actor_id = platform.current_actor_id() AND (
+  (platform.has_platform_capability('tenants.manage') AND action LIKE 'TENANT\_%')
+  OR (platform.has_platform_capability('billing.manage') AND action LIKE 'BILLING\_%')));
