@@ -51,6 +51,17 @@ public class MembershipStore {
    where tenant_id=? and id=? and version=? and status in ('PENDING','ACTIVE','SUSPENDED')
    """,tenant,membership,expectedVersion)==1;
  }
+ /** Serializa revogações que afetam gestores do condomínio (evita revogação cruzada sem gestor). */
+ public void lockManagers(UUID tenant) {
+  jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"cp.memberships.managers:"+tenant);
+ }
+ public boolean activeManager(UUID tenant,UUID account) {
+  Integer count=jdbc.queryForObject("""
+   select count(*) from cp.memberships where tenant_id=? and account_id=? and role='MANAGER' and status='ACTIVE'
+    and valid_from<=now() and(valid_until is null or valid_until>now())
+   """,Integer.class,tenant,account);
+  return count!=null && count>0;
+ }
  public long otherActiveManagers(UUID tenant,UUID membership) {
   Long count=jdbc.queryForObject("""
    select count(*) from cp.memberships where tenant_id=? and id<>? and role='MANAGER' and status='ACTIVE'
@@ -70,12 +81,13 @@ public class MembershipStore {
    Integer.class,tenant,unit);
   return count!=null && count==1;
  }
- public void insertInvitation(UUID id,UUID tenant,UUID unit,String role,String displayName,String emailHash,
-     String tokenHash,Instant expiresAt,UUID createdBy) {
-  jdbc.update("""
+ /** Validade calculada pelo relógio do banco, o mesmo de created_at e do CHECK de 14 dias. */
+ public Instant insertInvitation(UUID id,UUID tenant,UUID unit,String role,String displayName,String emailHash,
+     String tokenHash,int validDays,UUID createdBy) {
+  return jdbc.queryForObject("""
    insert into cp.membership_invitations(id,tenant_id,unit_id,role,display_name,email_hash,token_hash,expires_at,created_by)
-   values(?,?,?,?,?,?,?,?,?)
-   """,id,tenant,unit,role,displayName,emailHash,tokenHash,Timestamp.from(expiresAt),createdBy);
+   values(?,?,?,?,?,?,?,now()+make_interval(days=>?),?) returning expires_at
+   """,(r,n)->r.getTimestamp("expires_at").toInstant(),id,tenant,unit,role,displayName,emailHash,tokenHash,validDays,createdBy);
  }
  public List<MembershipModels.Invitation> invitations(UUID tenant) {
   return jdbc.query("""
@@ -105,10 +117,11 @@ public class MembershipStore {
   return rows.size()==1?rows.getFirst():null;
  }
  public void insertPendingMembership(UUID id,PresentedInvitation invitation,UUID account) {
+  // valid_from usa o padrão do banco; invitation_id torna o convite de uso único também no banco.
   jdbc.update("""
-   insert into cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status,valid_from)
-   values(?,?,?,?,?,?,'PENDING',clock_timestamp())
-   """,id,invitation.tenantId(),account,invitation.unitId(),invitation.displayName(),invitation.role());
+   insert into cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status,invitation_id)
+   values(?,?,?,?,?,?,'PENDING',?)
+   """,id,invitation.tenantId(),account,invitation.unitId(),invitation.displayName(),invitation.role(),invitation.id());
  }
  public boolean completeInvitation(UUID invitation,UUID account,UUID membership) {
   return jdbc.update("""

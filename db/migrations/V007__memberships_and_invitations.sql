@@ -6,6 +6,16 @@
 CREATE POLICY account_self_insert ON platform.accounts FOR INSERT TO cp_api
  WITH CHECK(id=platform.current_actor_id() AND status='ACTIVE');
 GRANT INSERT(id,status) ON platform.accounts TO cp_api;
+-- account_self (V002) valia para todos os comandos e se somava à política acima: o ator podia criar a
+-- própria conta em qualquer situação. Passa a valer somente para leitura.
+DROP POLICY account_self ON platform.accounts;
+CREATE POLICY account_self ON platform.accounts FOR SELECT TO cp_api USING(id=platform.current_actor_id());
+
+-- Vínculo revogado (inclusive rejeitado) não impede novo convite para a mesma unidade e papel. Continua
+-- existindo no máximo um vínculo não revogado por conta, unidade e papel.
+ALTER TABLE cp.memberships DROP CONSTRAINT memberships_tenant_id_account_id_unit_id_role_key;
+CREATE UNIQUE INDEX memberships_current_role ON cp.memberships(tenant_id,account_id,unit_id,role) NULLS NOT DISTINCT
+ WHERE status<>'REVOKED';
 
 CREATE TABLE cp.membership_invitations (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,6 +43,10 @@ CREATE TABLE cp.membership_invitations (
  CHECK((status='ACCEPTED')=(accepted_by IS NOT NULL AND accepted_at IS NOT NULL AND membership_id IS NOT NULL))
 );
 CREATE INDEX membership_invitations_pending ON cp.membership_invitations(tenant_id,status,expires_at);
+-- Uso único garantido também no banco: cada convite gera no máximo um vínculo.
+ALTER TABLE cp.memberships ADD COLUMN invitation_id uuid UNIQUE;
+ALTER TABLE cp.memberships ADD CONSTRAINT memberships_invitation_fk
+ FOREIGN KEY(tenant_id,invitation_id) REFERENCES cp.membership_invitations(tenant_id,id);
 ALTER TABLE cp.membership_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cp.membership_invitations FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON cp.membership_invitations FROM PUBLIC;
@@ -55,7 +69,10 @@ CREATE POLICY invitation_by_token ON cp.membership_invitations FOR SELECT TO cp_
 CREATE POLICY invitation_accept ON cp.membership_invitations FOR UPDATE TO cp_api
  USING(token_hash=nullif(current_setting('app.invitation_hash',true),'') AND status='PENDING' AND expires_at>now())
  WITH CHECK(token_hash=nullif(current_setting('app.invitation_hash',true),'') AND status='ACCEPTED'
-  AND accepted_by=platform.current_actor_id());
+  AND accepted_by=platform.current_actor_id() AND EXISTS(
+   SELECT 1 FROM cp.memberships m
+   WHERE m.tenant_id=cp.membership_invitations.tenant_id AND m.id=cp.membership_invitations.membership_id
+    AND m.account_id=platform.current_actor_id() AND m.invitation_id=cp.membership_invitations.id));
 
 -- Gestão de vínculos do próprio condomínio.
 CREATE POLICY membership_staff_read ON cp.memberships FOR SELECT TO cp_api
@@ -63,14 +80,16 @@ CREATE POLICY membership_staff_read ON cp.memberships FOR SELECT TO cp_api
 CREATE POLICY membership_staff_update ON cp.memberships FOR UPDATE TO cp_api
  USING(tenant_id=platform.current_tenant_id() AND platform.has_capability('memberships.manage'))
  WITH CHECK(tenant_id=platform.current_tenant_id() AND platform.has_capability('memberships.manage'));
-GRANT UPDATE(status,valid_until,updated_at,version) ON cp.memberships TO cp_api;
+GRANT UPDATE(status,updated_at,version) ON cp.memberships TO cp_api;
 -- Convidado cria somente o próprio vínculo pendente, igual ao convite válido.
 CREATE POLICY membership_invitation_insert ON cp.memberships FOR INSERT TO cp_api
  WITH CHECK(account_id=platform.current_actor_id() AND status='PENDING'
   AND tenant_id=platform.current_tenant_id() AND EXISTS(
    SELECT 1 FROM cp.membership_invitations i
    WHERE i.token_hash=nullif(current_setting('app.invitation_hash',true),'')
+    AND i.id=cp.memberships.invitation_id
     AND i.tenant_id=cp.memberships.tenant_id AND i.status='PENDING' AND i.expires_at>now()
     AND i.role=cp.memberships.role AND i.unit_id IS NOT DISTINCT FROM cp.memberships.unit_id
     AND i.display_name=cp.memberships.display_name));
-GRANT INSERT(id,tenant_id,account_id,unit_id,display_name,role,status,valid_from) ON cp.memberships TO cp_api;
+-- valid_from fica no padrão do banco: o convidado não escolhe o início da vigência.
+GRANT INSERT(id,tenant_id,account_id,unit_id,display_name,role,status,invitation_id) ON cp.memberships TO cp_api;

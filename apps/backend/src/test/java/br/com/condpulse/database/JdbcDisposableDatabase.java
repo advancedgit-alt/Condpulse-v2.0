@@ -89,7 +89,9 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  void restoreActiveFixtures() throws SQLException {
   adminUpdate("update platform.accounts set status='ACTIVE' where id in (?,?,?)",accountA,accountB,accountC);
-  adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
+  // Somente vínculos-base das contas fixas: vínculos criados por convite ou revogados por um teste não voltam.
+  adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id in (?,?) and account_id in (?,?,?) and invitation_id is null",
+   tenantA,tenantB,accountA,accountB,accountC);
   adminUpdate("update cp.units set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
  }
  void adminUpdate(String sql,Object...args) throws SQLException {

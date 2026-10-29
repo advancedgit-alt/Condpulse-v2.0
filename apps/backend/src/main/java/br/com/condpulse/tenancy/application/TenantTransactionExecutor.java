@@ -41,6 +41,7 @@ public class TenantTransactionExecutor {
    // Nunca herdar contexto de outra requisição ou de uma sessão BFF nesta conexão.
    jdbc.queryForObject("select set_config('app.session_hash','',true)",String.class);
    jdbc.queryForObject("select set_config('app.capabilities','',true)",String.class);
+   jdbc.queryForObject("select set_config('app.invitation_hash','',true)",String.class);
    jdbc.queryForObject("select set_config('app.tenant_id','',true)",String.class);
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());
    Integer active=jdbc.queryForObject(
