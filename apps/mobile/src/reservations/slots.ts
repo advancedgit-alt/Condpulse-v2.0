@@ -20,23 +20,27 @@ const minutes = (hhmm: string) => {
 };
 const wall = (date: string, total: number) => `${date}T${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 
-/** Datas que a regra permite oferecer a partir de hoje (no fuso do condomínio), limitadas a `limit`. */
-export function bookableDates(policy: Policy, timeZone: string, now = new Date(), limit = 14): string[] {
+/** Todas as datas que a regra permite, de hoje até a antecedência máxima (no fuso do condomínio); a tela pagina. */
+export function bookableDates(policy: Policy, timeZone: string, now = new Date()): string[] {
   const today = dateInZone(timeZone, now);
   const dates: string[] = [];
-  for (let offset = 0; offset <= policy.maximumAdvanceDays && dates.length < limit; offset += 1) {
+  for (let offset = 0; offset <= policy.maximumAdvanceDays; offset += 1) {
     const date = addDays(today, offset);
     if (policy.weekDays.includes(isoWeekDay(date))) dates.push(date);
   }
   return dates;
 }
 
-/** Durações oferecidas: passos de 30 minutos até a duração máxima e o tamanho do horário de funcionamento. */
+/**
+ * Durações oferecidas: passos de 30 minutos e, quando o máximo (regra ou horário de funcionamento menos a limpeza) não
+ * é múltiplo de 30, também o próprio máximo — uma área com limite de 20 minutos continua reservável.
+ */
 export function durations(policy: Policy, bufferMinutes: number): number[] {
   const window = minutes(policy.closesAt) - minutes(policy.opensAt) - bufferMinutes;
   const maximum = Math.min(policy.maximumDurationMinutes, window);
   const options: number[] = [];
   for (let value = STEP_MINUTES; value <= maximum; value += STEP_MINUTES) options.push(value);
+  if (maximum > 0 && maximum % STEP_MINUTES !== 0) options.push(maximum);
   return options;
 }
 

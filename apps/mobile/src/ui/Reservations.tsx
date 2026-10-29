@@ -14,6 +14,7 @@ import { colors, touch } from './theme';
  * A chave de envio é a mesma ao repetir depois de resultado incerto: nada é reservado duas vezes.
  */
 export type KeyFactory = () => string;
+const DATES_PER_PAGE = 14;
 const statusLabels: Record<ReservationStatus, string> = {
   CONFIRMED: 'Confirmada', PENDING_APPROVAL: 'Aguardando aprovação', HELD: 'Em retenção', REJECTED: 'Não aprovada',
   CANCELLED: 'Cancelada', EXPIRED: 'Expirada',
@@ -94,6 +95,8 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
   const dates = useMemo(() => bookableDates(policy, timeZone, now()), [policy, timeZone, now]);
   const lengths = useMemo(() => durations(policy, area.bufferMinutes), [policy, area.bufferMinutes]);
   const [date, setDate] = useState(dates[0] ?? null);
+  const [page, setPage] = useState(0);
+  const visibleDates = dates.slice(page * DATES_PER_PAGE, (page + 1) * DATES_PER_PAGE);
   const [length, setLength] = useState(lengths.includes(60) ? 60 : lengths[0] ?? null);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [accepted, setAccepted] = useState(false);
@@ -149,8 +152,13 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
     </View>
     {dates.length === 0 || lengths.length === 0 ? <Notice tone="info">Não há dias ou durações disponíveis pelas regras atuais.</Notice> : <>
       <Text style={styles.label}>Dia</Text>
-      <View style={styles.row}>{dates.map((item) => <Chip key={item} label={formatDay(item, timeZone)} selected={item === date}
+      <View style={styles.row}>{visibleDates.map((item) => <Chip key={item} label={formatDay(item, timeZone)} selected={item === date}
         disabled={busy || locked} onPress={() => { setDate(item); choose(null); }} />)}</View>
+      {dates.length > DATES_PER_PAGE ? <View style={styles.row}>
+        <Chip label="Dias anteriores" selected={false} disabled={page === 0 || busy || locked} onPress={() => setPage(page - 1)} />
+        <Chip label="Próximos dias" selected={false} disabled={(page + 1) * DATES_PER_PAGE >= dates.length || busy || locked}
+          onPress={() => setPage(page + 1)} />
+      </View> : null}
       <Text style={styles.label}>Duração</Text>
       <View style={styles.row}>{lengths.map((item) => <Chip key={item} label={item % 60 === 0 ? `${item / 60} h` : `${item} min`}
         selected={item === length} disabled={busy || locked} onPress={() => { setLength(item); choose(null); }} />)}</View>
@@ -205,7 +213,8 @@ function ReservationCard({ api, scope, membership, reservation, areaName, newKey
       if (!uncertain(error)) setKey(null);
     } finally {
       setBusy(false);
-      void queries.invalidateQueries({ queryKey: [...scope, 'reservations'] });
+      // Reservas e ocupação do contexto: o horário liberado volta a aparecer livre em quem estiver escolhendo.
+      void queries.invalidateQueries({ queryKey: [...scope] });
     }
   }
   const reason = ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(reservation.status) ? reservation.decisionReason : null;

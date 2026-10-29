@@ -164,4 +164,34 @@ describe('reservas no celular', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Tentar novamente' }));
     expect(await screen.findByText('Salão fictício')).toBeTruthy();
   });
+
+  it('cancelar libera o horário na escolha aberta, e dias além dos primeiros 14 ficam acessíveis', async () => {
+    const fake = fakeApi();
+    const own: Reservation = { reservationId: '41000000-0000-4000-8000-000000000010', unitId: UNIT, amenityId: SALAO, status: 'CONFIRMED',
+      startsAt: '2030-01-07T13:00:00Z', endsAt: '2030-01-07T14:00:00Z', occupiedFrom: '2030-01-07T13:00:00Z', occupiedUntil: '2030-01-07T14:00:00Z',
+      acceptedPolicyVersion: 3, feeCents: 15000, version: 1, decisionReason: null };
+    fake.state.reservations = [own];
+    fake.state.blocked = [{ occupiedFrom: own.occupiedFrom, occupiedUntil: own.occupiedUntil }];
+    const original = fake.mocks.cancelReservation.getMockImplementation()!;
+    fake.mocks.cancelReservation.mockImplementation(async (...args) => { fake.state.blocked = []; return original(...args); });
+    fake.mocks.amenities.mockImplementation(async () => [{ ...salao, policy: { ...policy, weekDays: [1, 2, 3, 4, 5, 6, 7], maximumAdvanceDays: 30 } }, quadra]);
+    const queries = newQueryClient(Infinity); clients.push(queries);
+    await render(<QueryClientProvider client={queries}>
+      <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => 'test:key-cancel-000002'}
+        membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+          timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
+    </QueryClientProvider>);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Ver horários de Salão fictício' }));
+    expect(await screen.findByRole('button', { name: '10:00–11:00 ocupado' })).toBeDisabled();
+    const list = screen.getByLabelText('Reservas da unidade');
+    await fireEvent.press(within(list).getByRole('button', { name: /^Cancelar reserva/ }));
+    await fireEvent.press(within(list).getByRole('button', { name: 'Confirmar cancelamento' }));
+    expect(await screen.findByRole('button', { name: 'Horário 10:00–11:00' })).toBeEnabled();
+    // 31 dias permitidos: 14 por página.
+    expect(screen.getByRole('button', { name: 'Dias anteriores' })).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximos dias' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximos dias' }));
+    expect(screen.getByRole('button', { name: 'Próximos dias' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /6 de fev/ })).toBeTruthy();
+  });
 });

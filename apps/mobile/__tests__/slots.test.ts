@@ -11,11 +11,19 @@ describe('horários oferecidos no celular', () => {
     expect(bookableDates(policy, zone, now)).toEqual(['2030-01-07', '2030-01-08', '2030-01-09', '2030-01-10', '2030-01-11',
       '2030-01-14', '2030-01-15', '2030-01-16', '2030-01-17']);
     expect(bookableDates({ ...policy, weekDays: [6, 7] }, zone, now)).toEqual(['2030-01-12', '2030-01-13']);
+    // Toda a janela configurada, sem corte: 31 dias corridos com todos os dias liberados.
+    const all = bookableDates({ ...policy, weekDays: [1, 2, 3, 4, 5, 6, 7], maximumAdvanceDays: 30 }, zone, now);
+    expect(all).toHaveLength(31);
+    expect(all.at(-1)).toBe('2030-02-06');
   });
 
   it('durações em passos de 30 minutos até o máximo que cabe com a limpeza', () => {
     expect(durations(policy, 0)).toEqual([30, 60, 90, 120]);
     expect(durations({ ...policy, maximumDurationMinutes: 600 }, 60)).toEqual([30, 60, 90, 120, 150, 180]);
+    // Limite menor que o passo ou fora do múltiplo: o próprio máximo é oferecido.
+    expect(durations({ ...policy, maximumDurationMinutes: 20 }, 0)).toEqual([20]);
+    expect(durations({ ...policy, maximumDurationMinutes: 100 }, 0)).toEqual([30, 60, 90, 100]);
+    expect(durations({ ...policy, opensAt: '08:00', closesAt: '08:45', maximumDurationMinutes: 120 }, 20)).toEqual([25]);
   });
 
   it('respeita antecedência mínima, limpeza dentro do horário e marca o ocupado', () => {
