@@ -85,7 +85,7 @@ class VisitSecurityIntegrationTest {
   return new String[]{response.getCookie("__Host-cp_csrf").getValue(),matcher.group(1)};
  }
  private static VisitModels.Permit permit() {
-  return new VisitModels.Permit(PERMIT,UNIT,"101",null,"Pessoa Fictícia",null,null,NOW,NOW.plusSeconds(7200),"ACTIVE",true,null,null,0,NOW);
+  return new VisitModels.Permit(PERMIT,UNIT,"101",null,"Pessoa Fictícia",null,null,NOW,NOW.plusSeconds(7200),"ACTIVE",true,null,null,0,NOW,false);
  }
  private static VisitModels.Arrival arrival(String state) {
   return new VisitModels.Arrival(ARRIVAL,UNIT,"101",null,"Pessoa Fictícia",null,null,state,NOW.plusSeconds(300),null,null,null,false,0,NOW);

@@ -8421,6 +8421,252 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/permits/{permitId}/link": {
+      "post": {
+        "operationId": "shareVisitPermitLink",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "permitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Link compartilhável do convite (CP-037): gera um token novo e revoga o link anterior na mesma transação. Sem chave de operação (a resposta não é guardada; resposta perdida se resolve gerando outro link). Só convites em vigor ou agendados; mesma regra de quem pode revogar o convite.",
+        "responses": {
+          "201": {
+            "description": "Link criado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-referrer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermitLink"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado ou CSRF inválido"
+          },
+          "404": {
+            "description": "VISIT_PERMIT_NOT_FOUND"
+          },
+          "409": {
+            "description": "VISIT_PERMIT_LINK_UNAVAILABLE"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/permits/{permitId}/link/revoke": {
+      "post": {
+        "operationId": "revokeVisitPermitLink",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "permitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Revoga o link em vigor do convite; o convite continua valendo para a portaria. Sem link em vigor, nada muda.",
+        "responses": {
+          "200": {
+            "description": "Convite atualizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermit"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado ou CSRF inválido"
+          },
+          "404": {
+            "description": "VISIT_PERMIT_NOT_FOUND"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/auth/permit-links/view": {
+      "post": {
+        "operationId": "viewPermitLink",
+        "security": [],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "description": "Quem tem o link vê o convite sem conta (CP-037). Exige também CP_BFF_ENABLED: Origin e CSRF do BFF, token no corpo (nunca na URL do servidor), limite de tentativas global e por hash do token. Resposta sem unidade, sem identificadores e só com o primeiro nome. Link desconhecido, revogado, de convite revogado ou vencido: a mesma resposta neutra.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PermitLinkViewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Convite em vigor ou agendado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-referrer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicVisitPermit"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido"
+          },
+          "404": {
+            "description": "PERMIT_LINK_UNAVAILABLE (resposta neutra)"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PERMIT_LINK_DEPENDENCY_UNAVAILABLE ou AUTH_RATE_LIMIT_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11199,7 +11445,8 @@
           "revokedAt",
           "revokeReason",
           "version",
-          "createdAt"
+          "createdAt",
+          "shareLinkActive"
         ],
         "description": "Convite (visita prevista) da unidade: autorização temporal, não prova de identidade nem de entrada.",
         "properties": {
@@ -11282,6 +11529,10 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "shareLinkActive": {
+            "type": "boolean",
+            "description": "Link compartilhável em vigor (CP-037); a portaria sempre recebe false."
           }
         }
       },
@@ -13360,6 +13611,82 @@
             "items": {
               "$ref": "#/components/schemas/Attachment"
             }
+          }
+        }
+      },
+      "VisitPermitLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "validUntil"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Token bruto, devolvido só nesta resposta; o banco guarda apenas o SHA-256. A web o coloca no fragmento da URL (/visita#token), nunca no caminho ou na consulta."
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicVisitPermit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantName",
+          "visitorFirstName",
+          "purpose",
+          "validFrom",
+          "validUntil",
+          "timeZone",
+          "state"
+        ],
+        "properties": {
+          "tenantName": {
+            "type": "string"
+          },
+          "visitorFirstName": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "ACTIVE"
+            ]
+          }
+        }
+      },
+      "PermitLinkViewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
           }
         }
       }

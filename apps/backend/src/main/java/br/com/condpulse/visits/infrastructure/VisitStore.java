@@ -37,7 +37,10 @@ public class VisitStore {
   select p.id,p.unit_id,u.label as unit_label,b.name as block_name,v.full_name,v.document_last4,p.purpose,p.valid_from,p.valid_until,
     case when p.state='ACTIVE' and p.valid_until<=clock_timestamp() then 'EXPIRED'
      when p.state='ACTIVE' and p.valid_from>clock_timestamp() then 'SCHEDULED' else p.state end as effective_state,
-    p.created_by=platform.current_actor_id() as created_by_me,p.revoked_at,p.revoke_reason,p.version,p.created_at
+    p.created_by=platform.current_actor_id() as created_by_me,p.revoked_at,p.revoke_reason,p.version,p.created_at,
+    -- Link em vigor só conta com o convite ainda válido; a portaria não vê links (política) e recebe false.
+    p.state='ACTIVE' and p.valid_until>clock_timestamp() and exists(select 1 from cp.permit_links l
+     where l.tenant_id=p.tenant_id and l.permit_id=p.id and l.revoked_at is null) as share_link
   from cp.visit_permits p
   join cp.visitors v on v.tenant_id=p.tenant_id and v.id=p.visitor_id
   join cp.units u on u.tenant_id=p.tenant_id and u.id=p.unit_id
@@ -46,7 +49,8 @@ public class VisitStore {
  private static final RowMapper<VisitModels.Permit> PERMIT=(r,n)->new VisitModels.Permit(r.getObject("id",UUID.class),
   r.getObject("unit_id",UUID.class),r.getString("unit_label"),r.getString("block_name"),r.getString("full_name"),
   r.getString("document_last4"),r.getString("purpose"),instant(r,"valid_from"),instant(r,"valid_until"),r.getString("effective_state"),
-  r.getBoolean("created_by_me"),instant(r,"revoked_at"),r.getString("revoke_reason"),r.getLong("version"),instant(r,"created_at"));
+  r.getBoolean("created_by_me"),instant(r,"revoked_at"),r.getString("revoke_reason"),r.getLong("version"),instant(r,"created_at"),
+  r.getBoolean("share_link"));
  private static Instant instant(ResultSet r,String column) throws SQLException {
   Timestamp value=r.getTimestamp(column);
   return value==null?null:value.toInstant();
@@ -103,6 +107,16 @@ public class VisitStore {
    update cp.visit_permits set state='REVOKED',revoked_by=?,revoke_reason=?,version=version+1
    where tenant_id=? and id=? and state='ACTIVE' and version=? and valid_until>clock_timestamp()
    """,actor,reason,tenant,permit,expectedVersion)==1;
+ }
+
+ /** Revoga o link em vigor do convite (se houver), em nome de quem pede; o banco grava o horário. */
+ public int revokeLinks(UUID tenant,UUID permit,UUID actor) {
+  return jdbc.update("update cp.permit_links set revoked_by=? where tenant_id=? and permit_id=? and revoked_at is null",actor,tenant,permit);
+ }
+ /** Novo link: unidade, horário e conferência de vigência e autoria pelo gatilho; só o hash do token chega aqui. */
+ public void insertLink(UUID id,UUID tenant,UUID permit,UUID unit,String tokenHash,UUID actor) {
+  jdbc.update("insert into cp.permit_links(id,tenant_id,permit_id,unit_id,token_hash,created_by) values(?,?,?,?,?,?)",
+   id,tenant,permit,unit,tokenHash,actor);
  }
 
  private static final String ARRIVAL_SELECT="""

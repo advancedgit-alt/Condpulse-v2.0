@@ -26,6 +26,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Link compartilhável do convite — CP-037
+
+- V020 (`cp.permit_links`): token só como SHA-256, um link em vigor por convite, revogação com horário do banco, leitura sem conta somente pelo hash da transação. Rotas atrás de `CP_VISITS_ENABLED` (já ligada na homologação); a abertura sem conta exige também o BFF (ligado). V020 ainda não aplicada na homologação: será aplicada pelo executor protegido depois do merge. Detalhes em [VISITAS.md](VISITAS.md).
+- Pendentes: conclusão de dados pelo convidado, envio pelo celular e ensaio com Auth real.
+
 ## Atualização em tempo real da unidade — CP-036 (API e web)
 
 - Atrás de `CP_REALTIME_ENABLED` (padrão `false`, não ligada na Vercel). Sem migration. Canal SSE por unidade que só informa nomes de assunto; a tela consulta o detalhe pelas rotas normais e consulta tudo de novo ao reconectar. Cada passada confere a sessão BFF (ou a validade do token Bearer) e repete a validação do condomínio; perda de acesso fecha o canal. Detalhes em [TEMPO_REAL.md](TEMPO_REAL.md).

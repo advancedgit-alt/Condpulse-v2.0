@@ -80,7 +80,7 @@ A rota de unidades existe com `CP_PARCELS_ENABLED` **ou** `CP_VISITS_ENABLED`.
 - **Privacidade**: as respostas não trazem contas de quem criou, revogou ou decidiu; a tela só sabe se foi a própria
   conta (`createdByMe`, `decidedByMe`). Quem fez cada ação fica na auditoria do condomínio. O evento do outbox não leva
   o nome do visitante.
-- **Fora deste recorte**: convite compartilhável por link com token (CP-037), convidados de reserva (CP-038),
+- **Fora deste recorte**: convidados de reserva (CP-038),
   prestadores recorrentes e janelas, registro de entrada/saída (CP-028), fila operacional completa com ocorrências
   (CP-027), envio do aviso (worker CP-034 e push CP-035) e tempo real (CP-036).
 
@@ -101,5 +101,32 @@ A rota de unidades existe com `CP_PARCELS_ENABLED` **ou** `CP_VISITS_ENABLED`.
 - Revogação dos convites pela gestão quando o vínculo de quem convidou termina (hoje só deixam de valer para a
   portaria) e limite de convites em aberto por unidade (a lista da portaria mostra 100 e pede busca).
 - Prazo configurável por condomínio (hoje 5 minutos fixos no banco).
-- Aviso efetivo à unidade (CP-034/CP-035), tempo real (CP-036), registro de entrada/saída (CP-028), link de convite
-  (CP-037) e retenção dos dados de visitantes.
+- Aviso efetivo à unidade (CP-034/CP-035), tempo real (CP-036), registro de entrada/saída (CP-028), conclusão de dados pelo
+  convidado no link (CP-037) e retenção dos dados de visitantes.
+
+## Link compartilhável do convite (CP-037)
+
+Atrás de `CP_VISITS_ENABLED`; a abertura sem conta exige também `CP_BFF_ENABLED`. Banco: V020 (`cp.permit_links`).
+
+- **Token**: 32 bytes aleatórios em Base64 URL (43 caracteres), devolvido uma única vez em
+  `POST /v1/tenants/{t}/permits/{p}/link`. O banco guarda só o SHA-256 em hexadecimal; nada de token em log, auditoria,
+  banco ou URL do servidor. A web monta `/visita#token`: o fragmento não vai ao servidor, a página limpa a barra de
+  endereço na abertura e guarda o token só na aba (para recarregar). `Referrer-Policy: no-referrer`.
+- **Quem pode**: a mesma regra da revogação do convite (adulto da unidade ou quem criou, com a permissão de convidar).
+  Só convite em vigor ou agendado. Gerar outro link revoga o anterior na mesma transação (um link em vigor por convite).
+  `POST .../link/revoke` revoga o link sem revogar o convite. Sem chave de operação: guardar a resposta exigiria guardar o
+  token; resposta perdida se resolve gerando outro link.
+- **Quem abre o link** (`POST /auth/permit-links/view`, Origin e CSRF do BFF, limite global de 120/min e 20 a cada 15 min
+  por hash): vê o nome do condomínio, o primeiro nome, a finalidade, o período e se está agendado ou em vigor. Sem
+  unidade, sem identificadores. Link desconhecido, revogado, de convite revogado ou vencido têm a mesma resposta neutra.
+- **Banco**: a leitura sem conta não define condomínio nem ator; as políticas liberam só o link daquele hash, o convite
+  dele, a pessoa e o nome do condomínio, enquanto o link estiver em vigor (funções `cp.permit_link_open` e
+  `cp.permit_link_visitor`, evitando recursão entre políticas). A portaria não vê links. Link nunca é apagado; só a
+  revogação muda, com horário do banco.
+- **Não é prova de entrada**: o link não abre portas nem substitui a conferência da portaria.
+- **Pendentes**: o convidado concluir dados pelo link (ex.: documento), envio do link pelo aplicativo do celular, uso do
+  link pela portaria e conferência de vínculo ativo de quem convidou na própria visão do link (hoje a portaria confere
+  ao receber a pessoa).
+- **Evidências**: `tests/database/run.py` (`permit_link_checks`, 30 verificações), `PermitLinkJdbcTest`,
+  `PermitLinkSecurityIntegrationTest`, `PermitLinkTokensTest`, `DatabaseRoleGuardJdbcTest`; web `api/permitLink.test.ts`,
+  `e2e/visit-link.spec.ts` e os testes de link em `e2e/visits.spec.ts`.

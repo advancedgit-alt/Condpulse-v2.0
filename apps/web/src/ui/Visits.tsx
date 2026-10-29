@@ -185,11 +185,55 @@ function Permits({ scope, permits, truncated }: { scope: Scope; permits: VisitPe
     {active.length === 0 && !creating ? <div className="panel"><Empty title="Nenhum convite em aberto">Convide quem você espera: a portaria vê o nome e o período e confere a pessoa na chegada.</Empty></div>
       : <ol className="management-list" aria-label="Convites em aberto">{active.map((item) => <PermitRow key={item.permitId} scope={scope} permit={item}>
         {revoking === item.permitId ? <RevokeForm scope={scope} permit={item} close={finish} />
-          : <div className="button-row"><button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setCreating(false); setRevoking(item.permitId); }}>Revogar convite</button></div>}
+          : <><div className="button-row"><button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setCreating(false); setRevoking(item.permitId); }}>Revogar convite</button></div>
+            <ShareLink scope={scope} permit={item} /></>}
       </PermitRow>)}</ol>}
     {closed.length > 0 ? <ol className="management-list" aria-label="Convites encerrados">{closed.map((item) => <PermitRow key={item.permitId} scope={scope} permit={item} />)}</ol> : null}
     {truncated ? <Notice tone="warning">A lista mostra os 100 convites de fim mais recente.</Notice> : null}
   </>;
+}
+
+/**
+ * Link compartilhável do convite (CP-037). O token aparece só uma vez, nesta tela, e vai no fragmento da URL (nunca
+ * enviado ao servidor pela barra de endereço). Gerar outro revoga o anterior; revogar o link não revoga o convite.
+ */
+function ShareLink({ scope, permit }: { scope: Scope; permit: VisitPermit }) {
+  const queries = useQueryClient();
+  const action = useLocalAction();
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
+  async function share() {
+    setCopied(null);
+    const { value } = await action.run(() => visits.shareLink(scope.tenantId, permit.permitId));
+    await queries.invalidateQueries({ queryKey: unitKey(scope, 'permits') });
+    if (value) setLink(`${window.location.origin}/visita#${value.token}`);
+  }
+  async function revoke() {
+    setLink(null); setCopied(null);
+    await action.run(() => visits.revokeLink(scope.tenantId, permit.permitId));
+    await queries.invalidateQueries({ queryKey: unitKey(scope, 'permits') });
+  }
+  async function copy() {
+    if (!link) return;
+    try { await navigator.clipboard.writeText(link); setCopied('ok'); } catch { setCopied('failed'); }
+  }
+  return <div className="share-link" aria-label={`Link do convite de ${permit.visitorName}`}>
+    {link ? <>
+      <label htmlFor={`share-${permit.permitId}`}>Link para enviar a <bdi>{permit.visitorName}</bdi></label>
+      <input id={`share-${permit.permitId}`} readOnly value={link} onFocus={(event) => event.currentTarget.select()} />
+      <span className="field-help">Este link aparece só agora. Ele mostra o condomínio, o primeiro nome e o período; não mostra a unidade. Gerar outro revoga este.</span>
+      {copied === 'ok' ? <Notice tone="success">Link copiado.</Notice> : copied === 'failed' ? <Notice tone="warning">Não foi possível copiar. Selecione o link e copie manualmente.</Notice> : null}
+    </> : permit.shareLinkActive ? <span className="field-help">Há um link em vigor para este convite.</span> : null}
+    {action.failure && uncertain(action.failure)
+      ? <Notice tone="warning">Não foi possível confirmar se o link foi gerado. Gere outro: o anterior deixa de valer.</Notice> : action.notice}
+    <div className="button-row">
+      {link ? <button className="button button-compact" type="button" onClick={() => void copy()}>Copiar link</button> : null}
+      <button className="button button-secondary button-compact" type="button" disabled={action.pending} onClick={() => void share()}>
+        {action.pending ? 'Gerando…' : permit.shareLinkActive || link ? 'Gerar novo link' : 'Compartilhar link'}</button>
+      {permit.shareLinkActive || link ? <button className="button button-secondary button-compact" type="button" disabled={action.pending}
+        onClick={() => void revoke()}>Revogar link</button> : null}
+    </div>
+  </div>;
 }
 
 function PermitRow({ scope, permit, children }: { scope: Scope; permit: VisitPermit; children?: ReactNode }) {

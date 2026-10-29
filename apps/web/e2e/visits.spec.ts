@@ -13,7 +13,7 @@ const minutes = (value: number) => new Date(Date.now() + value * 60_000).toISOSt
 interface SyntheticPermit {
   permitId: string; unitId: string; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
   purpose: string | null; validFrom: string; validUntil: string; state: 'SCHEDULED' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'; createdByMe: boolean;
-  revokedAt: string | null; revokeReason: string | null; version: number; createdAt: string;
+  revokedAt: string | null; revokeReason: string | null; version: number; createdAt: string; shareLinkActive: boolean;
 }
 interface SyntheticArrival {
   arrivalId: string; unitId: string; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
@@ -34,6 +34,7 @@ interface VisitState {
   permitPosts: { key: string; body: unknown }[]; arrivalPosts: { key: string; body: unknown }[];
   decisions: unknown[]; assisted: unknown[]; cancels: unknown[]; revokes: unknown[]; expectedSearches: string[]; queueSearches: string[];
   loseNextRegister: boolean; decidedElsewhere: boolean; refuseLinked: string | null; loseNextPermit: boolean; permitFailure: string | null;
+  linkPosts: { permitId: string; csrf: string | undefined; key: string | undefined }[]; linkRevokes: string[]; tokens: string[];
 }
 
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -44,7 +45,7 @@ async function problem(route: Route, status: number, code: string) {
 }
 const permitFixture = (overrides: Partial<SyntheticPermit> = {}): SyntheticPermit => ({ permitId: PERMIT, unitId: UNIT_A, unitLabel: '101 — Sintética A',
   blockName: 'Bloco 1', visitorName: 'Visita Prevista', documentLast4: '12AB', purpose: 'Visita familiar', validFrom: minutes(-30), validUntil: minutes(90),
-  state: 'ACTIVE', createdByMe: false, revokedAt: null, revokeReason: null, version: 0, createdAt: minutes(-60), ...overrides });
+  state: 'ACTIVE', createdByMe: false, revokedAt: null, revokeReason: null, version: 0, createdAt: minutes(-60), shareLinkActive: false, ...overrides });
 const arrivalFixture = (overrides: Partial<SyntheticArrival> = {}): SyntheticArrival => ({ arrivalId: ARRIVAL, unitId: UNIT_A, unitLabel: '101 — Sintética A',
   blockName: 'Bloco 1', visitorName: 'Pessoa Fictícia', documentLast4: null, permitId: null, state: 'WAITING', expiresAt: minutes(5), decidedAt: null,
   decisionSource: null, decisionNote: null, decidedByMe: false, version: 0, createdAt: minutes(0), ...overrides });
@@ -54,7 +55,8 @@ async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): 
   const state: VisitState = { records: [], entryPosts: [], exitPosts: [], correctionPosts: [], refuseEntry: null, loseNextEntry: false,
     entryKeys: new Map(), permits: [], arrivals: [],
     permitPosts: [], arrivalPosts: [], decisions: [], assisted: [], cancels: [], revokes: [], expectedSearches: [], queueSearches: [],
-    loseNextRegister: false, decidedElsewhere: false, refuseLinked: null, loseNextPermit: false, permitFailure: null };
+    loseNextRegister: false, decidedElsewhere: false, refuseLinked: null, loseNextPermit: false, permitFailure: null,
+    linkPosts: [], linkRevokes: [], tokens: [] };
   if (concierge) {
     await page.route('**/v1/me', async (route) => {
       if (!api.authenticated) { await route.fallback(); return; }
@@ -87,6 +89,24 @@ async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): 
       state.permits.unshift(permit);
       if (state.loseNextPermit) { state.loseNextPermit = false; await route.abort('connectionreset'); return; }
       await json(route, 201, permit, { 'Idempotency-Replayed': 'false' });
+      return;
+    }
+    const share = path.match(/^\/permits\/([^/]+)\/link$/);
+    if (share && method === 'POST') {
+      state.linkPosts.push({ permitId: share[1]!, csrf: request.headers()['x-csrf-token'], key: request.headers()['idempotency-key'] });
+      const permit = state.permits.find((item) => item.permitId === share[1])!;
+      const token = `${String.fromCharCode(65 + state.linkPosts.length)}`.repeat(21) + '_-' + 'z'.repeat(20);
+      state.tokens.push(token);
+      permit.shareLinkActive = true;
+      await json(route, 201, { token, validUntil: permit.validUntil });
+      return;
+    }
+    const unshare = path.match(/^\/permits\/([^/]+)\/link\/revoke$/);
+    if (unshare && method === 'POST') {
+      state.linkRevokes.push(unshare[1]!);
+      const permit = state.permits.find((item) => item.permitId === unshare[1])!;
+      permit.shareLinkActive = false;
+      await json(route, 200, permit);
       return;
     }
     const revoke = path.match(/^\/permits\/([^/]+)\/revoke$/);
@@ -594,4 +614,46 @@ test('convite revogado no servidor não vincula chegada e a portaria vê o motiv
   await expect(page.getByText('Este convite foi revogado. Nada foi registrado.')).toBeVisible();
   await expect(page.getByText('Chegada registrada:', { exact: false })).toHaveCount(0);
   expect(state.arrivals).toHaveLength(0);
+});
+
+test('morador compartilha o link do convite: token só no fragmento, copiar, gerar outro e revogar', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const api = await installSyntheticApi(page);
+  const state = await installVisitsApi(page, api, false);
+  state.permits.push(permitFixture({ visitorName: 'Visita Link', createdByMe: true }));
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  const share = page.getByLabel('Link do convite de Visita Link');
+  await share.getByRole('button', { name: 'Compartilhar link' }).click();
+  await expect.poll(() => state.tokens.length).toBe(1);
+  const field = share.getByRole('textbox', { name: /Link para enviar a/ });
+  await expect(field).toHaveValue(new RegExp(`/visita#${state.tokens[0]}$`));
+  expect(new URL(await field.inputValue()).pathname).toBe('/visita');
+  expect(state.linkPosts).toHaveLength(1);
+  expect(state.linkPosts[0]!.csrf).toBeTruthy();
+  expect(state.linkPosts[0]!.key).toBeUndefined();
+  await expect(share.getByText('Este link aparece só agora', { exact: false })).toBeVisible();
+  await share.getByRole('button', { name: 'Copiar link' }).click();
+  await expect(share.getByText('Link copiado.')).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await field.inputValue());
+  await share.getByRole('button', { name: 'Gerar novo link' }).click();
+  await expect.poll(() => state.tokens.length).toBe(2);
+  await expect(field).toHaveValue(new RegExp(`/visita#${state.tokens[1]}$`));
+  expect(state.tokens[0]).not.toBe(state.tokens[1]);
+  await share.getByRole('button', { name: 'Revogar link' }).click();
+  await expect(share.getByRole('textbox')).toHaveCount(0);
+  await expect(share.getByRole('button', { name: 'Compartilhar link' })).toBeVisible();
+  expect(state.linkRevokes).toEqual([state.permits[0]!.permitId]);
+  // O convite continua em aberto: revogar o link não revoga o convite.
+  await expect(page.getByRole('list', { name: 'Convites em aberto' }).getByText('Visita Link')).toBeVisible();
+});
+
+test('convite encerrado não oferece link', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const state = await installVisitsApi(page, api, false);
+  state.permits.push(permitFixture({ visitorName: 'Visita Antiga', state: 'EXPIRED', validFrom: minutes(-300), validUntil: minutes(-60) }));
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await expect(page.getByRole('list', { name: 'Convites encerrados' }).getByText('Visita Antiga')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Compartilhar link' })).toHaveCount(0);
 });

@@ -41,6 +41,16 @@ public class VisitController {
      @RequestBody VisitModels.RevokePermit request) {
   return ok(service.revokePermit(account(jwt),tenantId,permitId,request));
  }
+ /** Link compartilhável (CP-037): gera um novo (revogando o anterior) e devolve o token uma única vez. */
+ @PostMapping("/v1/tenants/{tenantId}/permits/{permitId}/link")
+ public ResponseEntity<VisitModels.PermitLink> shareLink(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID permitId) {
+  return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).header("Referrer-Policy","no-referrer")
+   .body(service.shareLink(account(jwt),tenantId,permitId));
+ }
+ @PostMapping("/v1/tenants/{tenantId}/permits/{permitId}/link/revoke")
+ public ResponseEntity<VisitModels.Permit> revokeLink(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID permitId) {
+  return ok(service.revokeLink(account(jwt),tenantId,permitId));
+ }
  @GetMapping("/v1/tenants/{tenantId}/units/{unitId}/arrivals")
  public ResponseEntity<VisitModels.ArrivalPage> unitArrivals(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID unitId) {
   return ok(service.unitArrivals(account(jwt),tenantId,unitId));

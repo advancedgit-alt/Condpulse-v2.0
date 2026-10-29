@@ -109,6 +109,49 @@ public class VisitService {
    return revoked;
   });
  }
+ /**
+  * Link compartilhável do convite (CP-037). Cada pedido gera um token novo e revoga o anterior na mesma transação: o
+  * token bruto só existe nesta resposta (o banco guarda o SHA-256). Sem chave de operação de propósito: guardar a
+  * resposta para repetir exigiria guardar o token; resposta perdida se resolve gerando outro link.
+  */
+ public VisitModels.PermitLink shareLink(UUID actor,UUID tenant,UUID permitId) {
+  if(permitId==null) throw permitNotFound();
+  String token=PermitLinkTokens.newToken();
+  String hash=PermitLinkTokens.hash(token);
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of("23514",VisitService::linkUnavailable),context->{
+   var current=linkable(actor,tenant,permitId);
+   store.revokeLinks(tenant,permitId,actor);
+   store.insertLink(UUID.randomUUID(),tenant,permitId,current.unitId(),hash,actor);
+   audit.record(tenant,actor,"VISIT_PERMIT_LINK_CREATED","VISIT_PERMIT",permitId,null);
+   return new VisitModels.PermitLink(token,current.validUntil());
+  });
+ }
+ /** Revoga o link em vigor; o convite continua valendo para a portaria. Sem link em vigor, nada muda. */
+ public VisitModels.Permit revokeLink(UUID actor,UUID tenant,UUID permitId) {
+  if(permitId==null) throw permitNotFound();
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of(),context->{
+   var current=store.permit(tenant,permitId,false);
+   if(current==null || !mayManage(tenant,current)) throw permitNotFound();
+   if(store.revokeLinks(tenant,permitId,actor)>0) audit.record(tenant,actor,"VISIT_PERMIT_LINK_REVOKED","VISIT_PERMIT",permitId,null);
+   var after=store.permit(tenant,permitId,false);
+   if(after==null) throw new IllegalStateException("Convite não foi encontrado na mesma transação.");
+   return after;
+  });
+ }
+ private VisitModels.Permit linkable(UUID actor,UUID tenant,UUID permitId) {
+  var current=store.permit(tenant,permitId,true);
+  if(current==null || !mayManage(tenant,current)) throw permitNotFound();
+  if(!"ACTIVE".equals(current.state()) && !"SCHEDULED".equals(current.state())) throw linkUnavailable();
+  return current;
+ }
+ /** Mesma regra da revogação: adulto da unidade ou quem criou, com a permissão de convidar. */
+ private boolean mayManage(UUID tenant,VisitModels.Permit permit) {
+  return store.member(tenant,permit.unitId(),null) || (permit.createdByMe() && store.member(tenant,permit.unitId(),"create"));
+ }
+ private static BusinessProblem linkUnavailable() {
+  return new BusinessProblem("VISIT_PERMIT_LINK_UNAVAILABLE",409,"Só convites em vigor ou agendados podem ser compartilhados.");
+ }
+
  public VisitModels.ArrivalPage unitArrivals(UUID actor,UUID tenant,UUID unit) {
   return execute(actor,tenant,AssuranceLevel.AAL1,Map.of(),context->{
    requireMember(tenant,unit,"decide");

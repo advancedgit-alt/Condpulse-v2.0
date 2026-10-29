@@ -8,6 +8,7 @@ import { DashboardPage } from './ui/Dashboard';
 import { StaleDataNotice } from './ui/StaleData';
 import { InvitationPage } from './ui/Invitation';
 import { RecoveryPage } from './ui/Recovery';
+import { PermitLinkPage } from './ui/PermitLinkPage';
 import { ManagementPage, managementSections } from './ui/management/ManagementPage';
 import { PlatformPage } from './ui/platform/PlatformPage';
 import { ConciergePage, conciergeSections } from './ui/concierge/ConciergePage';
@@ -24,7 +25,7 @@ export default function App() {
   } }));
   return <QueryClientProvider client={queries}><BrowserRouter><AuthProvider>
     <a href="#main-content" className="skip-link">Ir para o conteúdo</a><OfflineNotice />
-    <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route path="/recuperar-acesso" element={<RecoveryPage />} /><Route element={<ProtectedShell />}>
+    <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route path="/recuperar-acesso" element={<RecoveryPage />} /><Route path="/visita" element={<PermitLinkPage />} /><Route element={<ProtectedShell />}>
       <Route path="/contextos" element={<ContextPage />} />
       <Route path="/morador/:tenantId/:unitId/inicio" element={<DashboardPage />} />
       <Route path="/morador/:tenantId/:unitId/reservas" element={<ReservationsPage />} />

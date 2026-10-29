@@ -13,7 +13,11 @@ export interface VisitPermit {
   permitId: UUID; unitId: UUID; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
   purpose: string | null; validFrom: ISODateTime; validUntil: ISODateTime; state: PermitState; createdByMe: boolean;
   revokedAt: ISODateTime | null; revokeReason: string | null; version: number; createdAt: ISODateTime;
+  /** Link compartilhável em vigor (CP-037); a portaria sempre recebe false. */
+  shareLinkActive: boolean;
 }
+/** Token devolvido uma única vez; a web o leva no fragmento (/visita#token). */
+export interface PermitLink { token: string; validUntil: ISODateTime }
 export interface Arrival {
   arrivalId: UUID; unitId: UUID; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
   permitId: UUID | null; state: ArrivalState; expiresAt: ISODateTime; decidedAt: ISODateTime | null; decisionSource: DecisionSource | null;
@@ -57,14 +61,21 @@ export function visitPermit(value: unknown, uncertain = false): VisitPermit {
       || !optional(value.purpose, 200) || !instant(value.validFrom) || !instant(value.validUntil)
       || !oneOf(value.state, ['SCHEDULED', 'ACTIVE', 'REVOKED', 'EXPIRED']) || typeof value.createdByMe !== 'boolean'
       || !(value.revokedAt === null || instant(value.revokedAt)) || !optional(value.revokeReason, 500) || !isInteger(value.version)
-      || !instant(value.createdAt) || Date.parse(value.validUntil) <= Date.parse(value.validFrom)) throw invalidResponse(uncertain);
+      || !instant(value.createdAt) || Date.parse(value.validUntil) <= Date.parse(value.validFrom)
+      || typeof value.shareLinkActive !== 'boolean') throw invalidResponse(uncertain);
   // Revogado somente com motivo e horário, e com a versão já avançada.
   const revoked = value.state === 'REVOKED';
   if (revoked !== (value.revokedAt !== null) || revoked !== (value.revokeReason !== null) || (revoked && value.version < 1)) throw invalidResponse(uncertain);
   return { permitId: value.permitId, unitId: value.unitId, unitLabel: value.unitLabel, blockName: value.blockName as string | null,
     visitorName: value.visitorName, documentLast4: value.documentLast4 as string | null, purpose: value.purpose as string | null,
     validFrom: value.validFrom, validUntil: value.validUntil, state: value.state, createdByMe: value.createdByMe,
-    revokedAt: value.revokedAt as ISODateTime | null, revokeReason: value.revokeReason as string | null, version: value.version, createdAt: value.createdAt };
+    revokedAt: value.revokedAt as ISODateTime | null, revokeReason: value.revokeReason as string | null, version: value.version, createdAt: value.createdAt,
+    shareLinkActive: value.shareLinkActive };
+}
+export function permitLink(value: unknown): PermitLink {
+  if (!record(value) || !isString(value.token) || !/^[A-Za-z0-9_-]{43}$/.test(value.token) || !instant(value.validUntil)
+      || Object.keys(value).length !== 2) throw invalidResponse(true);
+  return { token: value.token, validUntil: value.validUntil };
 }
 export function arrival(value: unknown, uncertain = false): Arrival {
   if (!record(value) || !isUUID(value.arrivalId) || !isUUID(value.unitId) || !isString(value.unitLabel)
@@ -141,6 +152,10 @@ export function createVisitsApi(client: CondPulseApi = api) {
         (value, response): PermitMutation => ({ permit: visitPermit(value, true), replayed: replayed(response) }), { method: 'POST', body, key }),
     revokePermit: async (tenantId: string, permitId: string, body: { reason: string; expectedVersion: number }) =>
       client.call(`${base(tenantId)}/permits/${identifier(permitId)}/revoke`, (value) => visitPermit(value, true), { method: 'POST', body }),
+    shareLink: async (tenantId: string, permitId: string) =>
+      client.call(`${base(tenantId)}/permits/${identifier(permitId)}/link`, permitLink, { method: 'POST' }),
+    revokeLink: async (tenantId: string, permitId: string) =>
+      client.call(`${base(tenantId)}/permits/${identifier(permitId)}/link/revoke`, (value) => visitPermit(value, true), { method: 'POST' }),
     unitArrivals: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/units/${identifier(unitId)}/arrivals`, arrivalPage, options(signal)),
     decide: async (tenantId: string, arrivalId: string, decision: 'APPROVE' | 'DENY') =>

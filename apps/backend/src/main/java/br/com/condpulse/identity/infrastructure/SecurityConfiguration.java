@@ -82,7 +82,8 @@ public class SecurityConfiguration {
     // portaria (AAL2) no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/permits","/v1/tenants/*/units/*/arrivals","/v1/tenants/*/concierge/permits",
       "/v1/tenants/*/arrivals").authenticated()
-    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/permits","/v1/tenants/*/permits/*/revoke","/v1/tenants/*/arrivals",
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/permits","/v1/tenants/*/permits/*/revoke",
+      "/v1/tenants/*/permits/*/link","/v1/tenants/*/permits/*/link/revoke","/v1/tenants/*/arrivals",
       "/v1/tenants/*/arrivals/*/decision","/v1/tenants/*/arrivals/*/assisted-decision","/v1/tenants/*/arrivals/*/cancel").authenticated()
     // Registro manual de entrada e saída: capacidade da portaria (AAL2) ou vínculo da unidade no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-events","/v1/tenants/*/units/*/access-events").authenticated()
@@ -123,7 +124,8 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.PUT,"/v1/platform/billing/plans/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify",
-      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete","/auth/invitation/accept").permitAll()
+      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete","/auth/invitation/accept",
+      "/auth/permit-links/view").permitAll()
     .anyRequest().denyAll())
    .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults())
     .authenticationEntryPoint((req,res,ex)->problem(res,401))
