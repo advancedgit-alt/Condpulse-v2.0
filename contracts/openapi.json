@@ -7574,6 +7574,466 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/imports": {
+      "get": {
+        "operationId": "managementImportBatches",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Últimos 50 lotes de importação de unidades do condomínio.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitImportBatchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "managementOpenImport",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Abre lote em prévia a partir de CSV (mapa de colunas 1: bloco, unidade, codigo_externo). Não cria unidades. O mesmo conteúdo (SHA-256) devolve o lote vivo com 200.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitImportOpen"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Import-Batch-Created": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "description": "false quando o mesmo arquivo já tinha lote vivo"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitImportDetail"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Import-Batch-Created": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "description": "false quando o mesmo arquivo já tinha lote vivo"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitImportDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Arquivo recusado: IMPORT_FILE_EMPTY, IMPORT_FILE_TOO_LARGE, IMPORT_TOO_MANY_ROWS, IMPORT_HEADER_INVALID ou IMPORT_FILE_NAME_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "IMPORT_BATCH_RACE"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/imports/{batchId}": {
+      "get": {
+        "operationId": "managementImportBatch",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "batchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Prévia do lote com resultado por linha; alreadyExists calculado na leitura.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitImportDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Lote não disponível, IMPORT_BATCH_NOT_FOUND (inclusive de outro condomínio)"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/imports/{batchId}/approve": {
+      "post": {
+        "operationId": "managementApproveImport",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "batchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Aprova o lote pela versão lida: cria só blocos e unidades que faltam, com trilha. Lote com linha inválida ou repetida exige acceptPartial=true. Repetir não cria nada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitImportApprove"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Import-Decision-Applied": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "description": "false quando o lote já estava nesse estado (repetição)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitImportDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Lote não disponível, IMPORT_BATCH_NOT_FOUND (inclusive de outro condomínio)"
+          },
+          "409": {
+            "description": "IMPORT_PARTIAL_NOT_ACCEPTED, IMPORT_BATCH_CHANGED, IMPORT_BATCH_DISCARDED ou IMPORT_BATCH_RACE"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/imports/{batchId}/discard": {
+      "post": {
+        "operationId": "managementDiscardImport",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "batchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Descarta o lote em prévia pela versão lida; o histórico continua visível.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitImportDiscard"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Import-Decision-Applied": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "description": "false quando o lote já estava nesse estado (repetição)"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitImportDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Lote não disponível, IMPORT_BATCH_NOT_FOUND (inclusive de outro condomínio)"
+          },
+          "409": {
+            "description": "IMPORT_BATCH_APPROVED ou IMPORT_BATCH_CHANGED"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12075,6 +12535,264 @@
             "items": {
               "$ref": "#/components/schemas/RequestTeamMember"
             }
+          }
+        }
+      },
+      "UnitImportOpen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileName",
+          "content"
+        ],
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 260,
+            "description": "Só o nome final é guardado (até 200)."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 262144,
+            "description": "Texto CSV em UTF-8, até 2.000 linhas."
+          }
+        }
+      },
+      "UnitImportBatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "batchId",
+          "source",
+          "fileHash",
+          "mappingVersion",
+          "state",
+          "totalRows",
+          "validRows",
+          "invalidRows",
+          "duplicateRows",
+          "partial",
+          "createdAt",
+          "version"
+        ],
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "fileHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "mappingVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PREVIEW",
+              "APPROVED",
+              "DISCARDED"
+            ]
+          },
+          "totalRows": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "validRows": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "invalidRows": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duplicateRows": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "createdUnits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "existingUnits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "createdBlocks": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "UnitImportRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "line",
+          "outcome",
+          "alreadyExists"
+        ],
+        "properties": {
+          "line": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "block": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 60
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 40
+          },
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "VALID",
+              "INVALID",
+              "DUPLICATE"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "alreadyExists": {
+            "type": "boolean"
+          },
+          "applied": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "CREATED",
+              "EXISTING",
+              null
+            ]
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "UnitImportDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "batch",
+          "rows"
+        ],
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/UnitImportBatch"
+          },
+          "rows": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "$ref": "#/components/schemas/UnitImportRow"
+            }
+          }
+        }
+      },
+      "UnitImportBatchPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "batches"
+        ],
+        "properties": {
+          "batches": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/UnitImportBatch"
+            }
+          }
+        }
+      },
+      "UnitImportApprove": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "acceptPartial": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "UnitImportDiscard": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
