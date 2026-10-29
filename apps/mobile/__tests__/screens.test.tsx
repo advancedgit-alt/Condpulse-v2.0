@@ -32,7 +32,7 @@ async function mount() {
   // Sem coleta agendada: a limpeza do cache na saída ainda é a da aplicação; o timer de coleta prenderia o Jest.
   const queries = newQueryClient(Infinity);
   clients.push(queries);
-  const manager = new SessionManager(fake.auth, createVault(store), () => queries.clear());
+  const manager = new SessionManager(fake.auth, createVault(store), () => queries.clear(), fake.revoke);
   const calls: string[] = [];
   let reject401 = false;
   const api = createApi({ baseUrl: 'https://api.example.invalid', tokens: manager, fetch: async (_url, init) => {

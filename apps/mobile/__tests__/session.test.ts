@@ -14,7 +14,7 @@ function setup() {
     'gestao@example.invalid': { id: B, password: 'SYNTHETIC-PASSWORD-B', totp: '123456' },
   });
   const clears = { count: 0 };
-  const manager = new SessionManager(fake.auth, vault, () => { clears.count += 1; });
+  const manager = new SessionManager(fake.auth, vault, () => { clears.count += 1; }, fake.revoke);
   return { store, vault, fake, clears, manager };
 }
 
@@ -32,7 +32,9 @@ describe('sessão nativa', () => {
     expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'signedOut' });
     expect(store.items.size).toBe(0);
     expect(clears.count).toBeGreaterThan(before);
+    await manager.revoking;
     expect(fake.state.signOuts).toBe(1);
+    expect(fake.state.revoked[0]).toMatch(/^synthetic-access-/);
     expect(await manager.accessToken()).toBeNull();
   });
 
@@ -107,45 +109,51 @@ describe('sessão nativa', () => {
     await manager.start();
     await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
     await vault.setItem('cp-auth', 'sessao');
-    fake.auth.signOut = async () => { throw new TypeError('rede'); };
+    fake.state.revokeImpl = async () => { throw new TypeError('rede'); };
     await manager.signOut();
     expect(store.items.size).toBe(0);
     expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'signedOut' });
   });
 
-  it('saída bloqueia a sessão na hora, mesmo com a revogação remota lenta, e o novo login espera a limpeza', async () => {
+  it('saída bloqueia na hora e uma revogação remota tardia não derruba o novo login', async () => {
     const { store, vault, fake, manager } = setup();
     await manager.start();
     await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    const oldToken = await manager.accessToken();
     await vault.setItem('cp-auth', 'sessao');
     let release!: () => void;
-    fake.auth.signOut = () => new Promise((resolve) => { release = () => resolve({ error: null }); });
+    fake.state.revokeImpl = (token) => new Promise((resolve) => { release = () => { fake.state.revoked.push(token); resolve(); }; });
     const leaving = manager.signOut();
     expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'signedOut' });
     expect(await manager.accessToken()).toBeNull();
     expect(await manager.refresh()).toBeNull();
-    const next = manager.signIn('gestao@example.invalid', 'SYNTHETIC-PASSWORD-B');
-    await flush();
-    expect(manager.getState().status).toBe('signedOut');
-    release();
     await leaving;
     expect(store.items.size).toBe(0);
-    await next;
-    expect(manager.getState()).toMatchObject({ status: 'mfaRequired', accountId: B });
+    // Novo login sem esperar a revogação remota.
+    await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    expect(manager.getState()).toMatchObject({ status: 'signedIn', accountId: A });
+    release();
+    await manager.revoking;
+    await flush();
+    expect(fake.state.revoked).toEqual([oldToken]);
+    expect(manager.getState()).toMatchObject({ status: 'signedIn', accountId: A });
+    expect(await manager.accessToken()).not.toBe(oldToken);
   });
 
-  it('revogação remota que não responde não impede apagar o aparelho', async () => {
+  it('revogação remota que não responde é cancelada no prazo', async () => {
     jest.useFakeTimers();
     try {
       const { store, vault, fake, manager } = setup();
       await manager.start();
       await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
       await vault.setItem('cp-auth', 'sessao');
-      fake.auth.signOut = () => new Promise(() => undefined);
-      const leaving = manager.signOut();
-      await jest.advanceTimersByTimeAsync(5_000);
-      await leaving;
+      let aborted = false;
+      fake.state.revokeImpl = (_token, signal) => new Promise((_, reject) => { signal.addEventListener('abort', () => { aborted = true; reject(new Error('abortado')); }); });
+      await manager.signOut();
       expect(store.items.size).toBe(0);
+      await jest.advanceTimersByTimeAsync(5_000);
+      await manager.revoking;
+      expect(aborted).toBe(true);
     } finally { jest.useRealTimers(); }
   });
 });

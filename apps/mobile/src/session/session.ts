@@ -12,7 +12,6 @@ export interface AuthPort {
   getSession(): Promise<Result<{ session: AuthSession | null }>>;
   signInWithPassword(credentials: { email: string; password: string }): Promise<Result<{ session: AuthSession | null }>>;
   refreshSession(): Promise<Result<{ session: AuthSession | null }>>;
-  signOut(options: { scope: 'local' }): Promise<{ error: unknown }>;
   onAuthStateChange(callback: (event: string, session: AuthSession | null) => void): { data: { subscription: { unsubscribe(): void } } };
   mfa: {
     getAuthenticatorAssuranceLevel(): Promise<Result<{ currentLevel: string | null; nextLevel: string | null } | null>>;
@@ -46,11 +45,11 @@ function failure(error: { status?: number; code?: string } | null, fallback: 'IN
   return new SessionError(code, messages[code]);
 }
 export const SIGN_OUT_TIMEOUT = 5_000;
-function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([promise, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error('TIMEOUT')), milliseconds); })])
-    .finally(() => clearTimeout(timer));
-}
+/**
+ * Revogação remota da sessão encerrada, pelo access token dela (POST /auth/v1/logout?scope=local), cancelável. Não usa
+ * o cliente do Auth: uma resposta tardia nunca toca no armazenamento nem numa sessão nova aberta depois.
+ */
+export type Revoke = (accessToken: string, signal: AbortSignal) => Promise<void>;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
 export class SessionManager {
@@ -58,9 +57,12 @@ export class SessionManager {
   private readonly listeners = new Set<(state: SessionState) => void>();
   private lastAccount: string | null = null;
   private ending: Promise<void> | null = null;
+  /** Última revogação remota em andamento (só para acompanhamento e testes). */
+  revoking: Promise<void> = Promise.resolve();
   private subscription: { unsubscribe(): void } | null = null;
 
-  constructor(private readonly auth: AuthPort, private readonly vault: Vault, private readonly clearData: () => void) {}
+  constructor(private readonly auth: AuthPort, private readonly vault: Vault, private readonly clearData: () => void,
+    private readonly revoke: Revoke) {}
 
   getState(): SessionState { return this.state; }
   subscribe(listener: (state: SessionState) => void): () => void {
@@ -105,7 +107,7 @@ export class SessionManager {
     const normalized = email.trim().toLowerCase();
     if (!EMAIL.test(normalized) || password.length < 1 || password.length > 128)
       throw new SessionError('INVALID_CREDENTIALS', 'Informe seu e-mail e sua senha.');
-    // Uma saída em andamento termina antes (senão a limpeza dela apagaria a sessão nova).
+    // Uma limpeza local em andamento termina antes (senão ela apagaria a sessão nova); a revogação remota não é esperada.
     if (this.ending) await this.ending;
     // Qualquer resto de outra sessão sai antes do novo login.
     this.clearData();
@@ -160,11 +162,25 @@ export class SessionManager {
     this.set({ status: 'signedOut', reason });
     this.ending = (async () => {
       try {
-        // A revogação remota é tentativa, com prazo; o apagamento do aparelho acontece de qualquer forma.
-        try { await withTimeout(this.auth.signOut({ scope: 'local' }), SIGN_OUT_TIMEOUT); } catch { /* sem rede */ }
+        let token: string | null = null;
+        try {
+          const current = await this.auth.getSession();
+          token = current.error ? null : current.data.session?.access_token ?? null;
+        } catch { token = null; }
+        // Primeiro o aparelho: o cliente do Auth lê a sessão do cofre, então apagar o cofre encerra a sessão local.
         await this.vault.wipe();
+        // Depois a revogação remota, em segundo plano e com prazo real (a requisição é cancelada, não só ignorada).
+        // Ela só usa o token antigo; um novo login não espera por ela nem pode ser afetado por uma resposta tardia.
+        if (token) this.revoking = this.revokeWithDeadline(token);
       } finally { this.ending = null; }
     })();
     return this.ending;
+  }
+
+  private async revokeWithDeadline(token: string): Promise<void> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SIGN_OUT_TIMEOUT);
+    try { await this.revoke(token, controller.signal); } catch { /* sem rede ou prazo: a sessão local já acabou */ }
+    finally { clearTimeout(timer); }
   }
 }

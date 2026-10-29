@@ -28,7 +28,12 @@ export async function createRuntime(config: AppConfig, clearData: () => void): P
     if (state === 'active') void supabase.auth.startAutoRefresh();
     else void supabase.auth.stopAutoRefresh();
   });
-  const manager = new SessionManager(supabase.auth as unknown as AuthPort, vault, clearData);
+  const revoke = async (accessToken: string, signal: AbortSignal) => {
+    const response = await fetch(`${config.supabaseUrl}/auth/v1/logout?scope=local`, { method: 'POST', signal, redirect: 'error',
+      headers: { apikey: config.publishableKey, Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok && response.status !== 401 && response.status !== 404) throw new Error('REVOKE_FAILED');
+  };
+  const manager = new SessionManager(supabase.auth as unknown as AuthPort, vault, clearData, revoke);
   await manager.start();
   return manager;
 }
