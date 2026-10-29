@@ -24,6 +24,10 @@ push, e-mail e SMS nao existem. Nenhum worker continuo foi implantado: nao anunc
 notificacoes como operacionais. Caixa na API: CP_NOTIFICATIONS_ENABLED=false.
 Ver docs/NOTIFICACOES.md.
 
+Tempo real (CP-036): CP_REALTIME_ENABLED=false por padrao. Ajustes: CP_REALTIME_TICK_SECONDS (5),
+CP_REALTIME_LIFETIME_SECONDS (300, abaixo do tempo maximo de requisicao do hospedeiro),
+CP_REALTIME_MAX_STREAMS (40 por instancia) e CP_REALTIME_MAX_PER_ACCOUNT (3). Ver docs/TEMPO_REAL.md.
+
 BFF: CP_BFF_ENABLED=false por padrao. Para habilitar depois da homologacao:
 - CP_BFF_ORIGIN: origem HTTPS exata da web, sem caminho/barra final.
 - CP_SUPABASE_PUBLISHABLE_KEY: chave publica do proprio projeto/ambiente.

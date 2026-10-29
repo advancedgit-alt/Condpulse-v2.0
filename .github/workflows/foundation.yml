@@ -136,6 +136,21 @@ jobs:
           CP_ANNOUNCEMENTS_ENABLED: "true"
           CP_REQUESTS_ENABLED: "true"
         run: bash tests/runtime/homologation-flags-smoke.sh
+      - name: HTTP readiness with realtime channel enabled
+        # BFF e chaves sintéticas geradas no script; prova que o canal sobe e exige sessão.
+        env:
+          SPRING_PROFILES_ACTIVE: api
+          PORT: "8083"
+          DATABASE_URL: jdbc:postgresql://localhost:5432/condpulse_ci
+          DATABASE_USER: cp_ci_login
+          DATABASE_PASSWORD: synthetic_ci_runtime_only
+          CP_JWT_ISSUER: https://auth.example.invalid/auth/v1
+          CP_JWT_JWK_SET_URI: https://auth.example.invalid/auth/v1/.well-known/jwks.json
+          CP_BFF_ORIGIN: https://condpulse.example.invalid
+          CP_SUPABASE_PUBLISHABLE_KEY: sb_publishable_SYNTHETIC_TEST_ONLY_1234567890
+          CP_BFF_ENABLED: "true"
+          CP_REALTIME_ENABLED: "true"
+        run: bash tests/runtime/realtime-flag-smoke.sh
       - name: HTTP readiness with private attachments enabled
         # Emissor no formato do Supabase e chave de serviço sintética; nenhuma chamada ao Storage.
         env:
@@ -162,7 +177,7 @@ jobs:
         run: |
           set +e
           psql -X -v ON_ERROR_STOP=1 -c "CREATE ROLE cp_ci_worker LOGIN PASSWORD 'synthetic_ci_worker_only' IN ROLE cp_worker" || exit 1
-          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest,MembershipInvitationJdbcTest,ReservationDecisionJdbcTest,RecoveryStoreJdbcTest,PlatformAdministrationJdbcTest,BillingJdbcTest,ParcelJdbcTest,VisitJdbcTest,AccessJdbcTest,OutboxWorkerJdbcTest,DatabaseRoleGuardJdbcTest,AnnouncementJdbcTest,RequestJdbcTest,UnitImportJdbcTest,AttachmentJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
+          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest,MembershipInvitationJdbcTest,ReservationDecisionJdbcTest,RecoveryStoreJdbcTest,PlatformAdministrationJdbcTest,BillingJdbcTest,ParcelJdbcTest,VisitJdbcTest,AccessJdbcTest,OutboxWorkerJdbcTest,DatabaseRoleGuardJdbcTest,AnnouncementJdbcTest,RequestJdbcTest,UnitImportJdbcTest,AttachmentJdbcTest,RealtimeJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
           status=${PIPESTATUS[0]}
           [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/maven-jdbc.log" "JDBC tests" 80
           exit "$status"
