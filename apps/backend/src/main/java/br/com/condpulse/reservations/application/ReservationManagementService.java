@@ -69,13 +69,15 @@ public class ReservationManagementService {
    var row=store.lock(tenant,reservationId);
    if(row==null || !"BOOKING".equals(row.kind())) throw notFound();
    if(target.equals(row.status())) return new Outcome(required(store.reservation(tenant,reservationId)),false);
-   if(!"PENDING_APPROVAL".equals(row.status()) || row.version()!=expected) throw changed();
-   if(row.deadlinePassed()) {
-    var expired=store.expire(tenant,reservationId,expected);
-    if(expired==null) throw changed();
-    reservations.event(tenant,"RESERVATION_EXPIRED",expired);
-    return new Outcome(null,true);
-   }
+   if("EXPIRED".equals(row.status())) return new Outcome(null,true);
+   if(!"PENDING_APPROVAL".equals(row.status())) throw changed();
+   // Prazo antes da versão: pedido vencido é expirado e gravado mesmo quando o cliente leu versão antiga (AC-013).
+   if(row.deadlinePassed()) return expire(tenant,reservationId,row.version());
+   if(row.version()!=expected) throw changed();
+   // Segregação de funções: quem decide não decide o próprio pedido; a retirada continua no fluxo residencial.
+   if(actor.equals(row.createdBy()))
+    throw new BusinessProblem("RESERVATION_SELF_DECISION_DENIED",409,
+     "Você não pode decidir o próprio pedido. Outra pessoa da gestão precisa decidir ou o pedido pode ser retirado.");
    if(approve) {
     if(!row.amenityActive())
      throw new BusinessProblem("AMENITY_INACTIVE",409,"A área está inativa. Rejeite o pedido informando o motivo.");
@@ -85,15 +87,14 @@ public class ReservationManagementService {
      throw new BusinessProblem("RESERVATION_REQUESTER_INACTIVE",409,"O solicitante não tem mais vínculo ativo para reservar por esta unidade.");
    }
    var decided=store.decide(tenant,reservationId,expected,target,reason);
-   if(decided==null) throw changed();
+   // Sob a trava da linha só o relógio muda: o prazo venceu entre a leitura e a gravação. Expira e recusa.
+   if(decided==null) return expire(tenant,reservationId,expected);
    audit.record(tenant,actor,approve?"RESERVATION_APPROVED":"RESERVATION_REJECTED","RESERVATION",reservationId,reason);
    reservations.event(tenant,approve?"RESERVATION_CONFIRMED":"RESERVATION_REJECTED",decided);
    return new Outcome(required(store.reservation(tenant,reservationId)),false);
   });
   // A expiração já foi gravada pelo commit acima; somente então a decisão tardia é recusada (AC-013).
-  if(outcome.expired())
-   throw new BusinessProblem("RESERVATION_DECISION_EXPIRED",409,
-    "O prazo de decisão terminou. O pedido expirou e a unidade precisa solicitar novamente.");
+  if(outcome.expired()) throw decisionExpired();
   return outcome.reservation();
  }
 
@@ -102,26 +103,34 @@ public class ReservationManagementService {
   if(reservationId==null || request==null || request.expectedVersion()==null || request.expectedVersion()<0) throw versionRequired();
   String reason=reason(request.reason(),true);
   long expected=request.expectedVersion();
-  return execute(actor,tenant,assurance,context->{
+  var outcome=execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.DECIDE_RESERVATIONS);
    var row=store.lock(tenant,reservationId);
    if(row==null) throw notFound();
    boolean block="BLOCK".equals(row.kind());
    if(block) context.requireCapability(StaffCapability.MANAGE_AMENITIES);
-   if("CANCELLED".equals(row.status())) return required(store.reservation(tenant,reservationId));
-   if(row.version()!=expected || row.deadlinePassed()
-      || !("CONFIRMED".equals(row.status()) || "PENDING_APPROVAL".equals(row.status())))
+   if("CANCELLED".equals(row.status())) return new Outcome(required(store.reservation(tenant,reservationId)),false);
+   // Pedido vencido encontrado sob trava é expirado e gravado; o cancelamento é recusado depois do commit.
+   if(row.deadlinePassed()) return expire(tenant,reservationId,row.version());
+   if(row.version()!=expected || !("CONFIRMED".equals(row.status()) || "PENDING_APPROVAL".equals(row.status())))
     throw changed();
    if(!reservations.currentTime().isBefore(row.endsAt()))
     throw new BusinessProblem("RESERVATION_CANCELLATION_CLOSED",409,"O período desta reserva já terminou.");
    var cancelled=store.cancel(tenant,reservationId,expected,reason);
-   if(cancelled==null) throw changed();
+   if(cancelled==null) {
+    // Mesmo raciocínio da decisão: sob a trava, somente o prazo de um pedido pode ter vencido no intervalo.
+    if("PENDING_APPROVAL".equals(row.status())) return expire(tenant,reservationId,expected);
+    throw changed();
+   }
    audit.record(tenant,actor,block?"AMENITY_BLOCK_CANCELLED":"RESERVATION_CANCELLED_BY_MANAGEMENT","RESERVATION",
     reservationId,reason);
-   // Avisos e a revogação de convites vinculados (módulo de visitantes, ainda não implementado) partem deste evento.
+   // Pendência CP-023/CP-038: a revogação dos convites vinculados deve ocorrer nesta mesma transação quando o
+   // módulo de visitantes existir (PRD §10). O evento abaixo serve a avisos e não substitui essa revogação.
    reservations.event(tenant,block?"AMENITY_BLOCK_CANCELLED":"RESERVATION_CANCELLED",cancelled);
-   return required(store.reservation(tenant,reservationId));
+   return new Outcome(required(store.reservation(tenant,reservationId)),false);
   });
+  if(outcome.expired()) throw decisionExpired();
+  return outcome.reservation();
  }
 
  public ReservationManagementModels.BlockMutation createBlock(UUID actor,UUID tenant,AssuranceLevel assurance,UUID amenityId,
@@ -159,6 +168,13 @@ public class ReservationManagementService {
  }
 
  private record Outcome(ReservationManagementModels.ManagedReservation reservation,boolean expired) {}
+ /** Grava a expiração (sem auditoria de ator) para que o commit preceda a recusa da decisão tardia. */
+ private Outcome expire(UUID tenant,UUID reservationId,long version) {
+  var expired=store.expire(tenant,reservationId,version);
+  if(expired==null) throw changed();
+  reservations.event(tenant,"RESERVATION_EXPIRED",expired);
+  return new Outcome(null,true);
+ }
  static String reason(String value,boolean required) {
   String reason=value==null?null:value.strip();
   if(reason!=null && reason.isEmpty()) reason=null;
@@ -189,6 +205,10 @@ public class ReservationManagementService {
  }
  private static BusinessProblem changed() {
   return new BusinessProblem("RESERVATION_CHANGED",409,"A reserva foi alterada. Atualize os dados antes de decidir.");
+ }
+ private static BusinessProblem decisionExpired() {
+  return new BusinessProblem("RESERVATION_DECISION_EXPIRED",409,
+   "O prazo de decisão terminou. O pedido expirou e a unidade precisa solicitar novamente.");
  }
  private static BusinessProblem blockInvalid() {
   return new BusinessProblem("AMENITY_BLOCK_WINDOW_INVALID",400,

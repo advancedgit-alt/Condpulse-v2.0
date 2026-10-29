@@ -104,15 +104,18 @@ operação de portaria. A lista de convites mostra os 500 mais recentes.
 | Rota | Capacidade | Observação |
 | --- | --- | --- |
 | `GET .../management/reservations?status=&from=&until=` | `reservations.decide` | Sem período: ainda não encerradas; com período: até 366 dias; até 200 itens. Pedido com prazo vencido aparece como `EXPIRED` |
-| `POST .../reservations/{id}/decision` | `reservations.decide` | `APPROVE`/`REJECT` (motivo obrigatório na rejeição) pela versão lida. Repetição devolve o estado atual sem novo evento; decisão oposta recebe 409. Prazo vencido grava `EXPIRED` e responde 409 `RESERVATION_DECISION_EXPIRED` |
-| `POST .../reservations/{id}/cancel` | `reservations.decide` (+ `amenities.manage` para bloqueio) | Motivo obrigatório; reserva confirmada, pedido pendente ou bloqueio ainda não encerrado; repetição sem novo evento |
+| `POST .../reservations/{id}/decision` | `reservations.decide` | `APPROVE`/`REJECT` (motivo obrigatório na rejeição) pela versão lida. Repetição devolve o estado atual sem novo evento; decisão oposta recebe 409. Prazo vencido grava `EXPIRED` e responde 409 `RESERVATION_DECISION_EXPIRED`, inclusive com versão antiga ou quando o prazo vence durante a própria decisão. Quem pediu não decide o próprio pedido: 409 `RESERVATION_SELF_DECISION_DENIED` |
+| `POST .../reservations/{id}/cancel` | `reservations.decide` (+ `amenities.manage` para bloqueio) | Motivo obrigatório; reserva confirmada, pedido pendente ou bloqueio ainda não encerrado; repetição sem novo evento. Pedido vencido é gravado como `EXPIRED` e o cancelamento recebe 409 `RESERVATION_DECISION_EXPIRED` |
 | `POST .../amenities/{id}/maintenance-blocks` | `amenities.manage` | `Idempotency-Key`; período de até 366 dias a partir de agora; 409 `AMENITY_BLOCK_CONFLICT` enquanto houver pedido ou reserva válida no período |
 
 Fluxo do morador: área com aprovação gera `PENDING_APPROVAL` com prazo de decisão
 de até 24 horas, nunca depois do início (prazo fixo; configuração por condomínio
 pendente). O pedido ocupa o período e conta na cota, mas não é confirmação. O
 autor pode retirá-lo até o início; o prazo de cancelamento aceito continua valendo
-para reservas confirmadas. A criação expira, sob a trava da unidade, os pedidos
+para reservas confirmadas. Outra pessoa da unidade vê a reserva, mas recebe 403
+`RESERVATION_AUTHOR_REQUIRED` ao tentar cancelá-la. Se a gestão já cancelou, o
+pedido de cancelamento do autor recebe 409 `RESERVATION_CHANGED` (não é apresentado
+como cancelamento próprio) e a agenda mostra o motivo da gestão. A criação expira, sob a trava da unidade, os pedidos
 vencidos da própria unidade e os que ocupam o período pedido; pedido vencido não
 aparece como ocupação nem como pendente (AC-013). A aprovação exige área ativa,
 unidade ativa e solicitante ainda apto a reservar pela unidade. Toda decisão grava
@@ -122,11 +125,26 @@ unidade.
 No banco (V008), políticas restritivas: confirmar ou rejeitar exige
 `reservations.decide`; área que exige aprovação nunca recebe `BOOKING` já
 `CONFIRMED` por `INSERT`; inserir ou alterar bloqueio exige `amenities.manage`;
-motivo com até 500 caracteres.
+`INSERT` pela aplicação só cria `BOOKING` `PENDING_APPROVAL`/`CONFIRMED` e `BLOCK`
+`CONFIRMED` (sem `HELD` enquanto a fila de espera não existir); motivo com até 500
+caracteres. Um gatilho `BEFORE UPDATE OF status`, válido para qualquer papel,
+mantém a máquina de estados: `HELD` → `PENDING_APPROVAL`/`CONFIRMED`/`CANCELLED`/
+`EXPIRED`; `PENDING_APPROVAL` → `CONFIRMED`/`REJECTED`/`CANCELLED`/`EXPIRED`;
+`CONFIRMED` → `CANCELLED`. Estados encerrados não voltam (SQLSTATE 23514); correção
+operacional exige migration revisada.
+
+Limites conhecidos: a elegibilidade do solicitante na aprovação lê vínculos da
+unidade; se a leitura não encontrar vínculo ativo (inclusive por falta de
+visibilidade), a aprovação é recusada (falha fechada) e o pedido pode ser
+rejeitado com motivo. Expiração automática não gera auditoria de ator, somente
+evento `RESERVATION_EXPIRED`. Gestor único que também é morador não aprova o
+próprio pedido: outro gestor decide ou o autor retira o pedido. A lista da gestão
+devolve até 200 itens por consulta (`truncated` indica corte).
 
 Pendências deste fluxo: revogar convites de visitantes vinculados na mesma
-transação do cancelamento (o módulo de visitantes ainda não existe; o evento
-`RESERVATION_CANCELLED` já é gravado junto); retenções `HELD` e fila de espera;
+transação do cancelamento, da rejeição e da expiração (o módulo de visitantes ainda
+não existe; o evento gravado junto serve a avisos e não substitui a revogação
+transacional, por isso o aceite de CP-023 continua pendente); retenções `HELD` e fila de espera;
 prazo de decisão configurável; worker de expiração (hoje a expiração acontece na
 criação seguinte e na decisão tardia); notificações.
 

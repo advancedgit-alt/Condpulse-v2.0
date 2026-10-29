@@ -22,7 +22,8 @@ export const scopeKey = (scope: Pick<Scope, 'accountId' | 'tenantId' | 'unitId'>
 /** O título segue o estado devolvido pelo servidor: pedido pendente nunca aparece como reserva confirmada. */
 function successTitle(operation: Operation): string {
   if (operation.intent.kind === 'cancel') return operation.intent.pendingRequest ? 'Pedido retirado.' : 'Reserva cancelada.';
-  return operation.result?.status === 'PENDING_APPROVAL' ? 'Pedido enviado para aprovação.' : 'Reserva confirmada.';
+  if (operation.result?.status === 'PENDING_APPROVAL') return 'Pedido enviado para aprovação.';
+  return operation.result?.status === 'CONFIRMED' ? 'Reserva confirmada.' : 'Solicitação registrada.';
 }
 
 export function OperationsProvider({ children }: { children: ReactNode }) {
@@ -96,7 +97,7 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
             : <><p>A próxima tentativa usa a mesma solicitação, sem criar um novo pedido.</p><button className="button button-secondary" onClick={() => void perform(operation.intent)}>Tentar confirmar novamente</button></>}
             <p>Se sair, a referência local deste pedido será apagada. Confira a agenda no próximo acesso.</p><button className="text-button" onClick={() => void auth.logout()}>Sair com pendência</button></Notice>
             : isOriginalContext && operation.status === 'failed' ? <Notice tone="error"><p>{errorMessage(operation.error)}</p><button className="text-button" onClick={() => update(null)}>Fechar aviso</button></Notice>
-              : isOriginalContext && operation.status === 'success' ? <Notice tone="success"><strong>{successTitle(operation)}</strong><p>{operation.intent.kind === 'create' && operation.result?.status === 'PENDING_APPROVAL' ? 'O servidor registrou o pedido, que ainda depende da decisão da gestão. Acompanhe o estado na agenda.' : 'O servidor confirmou o pedido. Consulte a lista para verificar o estado atual.'}</p><button className="text-button" onClick={() => update(null)}>Fechar aviso</button></Notice> : null}
+              : isOriginalContext && operation.status === 'success' ? <Notice tone="success"><strong>{successTitle(operation)}</strong><p>{operation.intent.kind === 'create' && operation.result?.status === 'PENDING_APPROVAL' ? 'O servidor registrou o pedido, que ainda depende da decisão da gestão. Acompanhe o estado na agenda.' : 'O servidor registrou a operação. Consulte a lista para verificar o estado atual.'}</p><button className="text-button" onClick={() => update(null)}>Fechar aviso</button></Notice> : null}
     </div> : null}
     {children}
   </OperationsContext.Provider>;

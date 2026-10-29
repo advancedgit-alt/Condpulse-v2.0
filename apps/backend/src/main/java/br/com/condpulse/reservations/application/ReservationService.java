@@ -91,9 +91,16 @@ public class ReservationService {
    if(!previous.fresh()) return new ReservationModels.Mutation(previous.reservation(),true,previous.responseStatus());
    // Mesma ordem global da criação: idempotência -> unidade -> linha da reserva.
    store.lockUnit(tenant,request.unitId());
-   var stored=store.ownForUpdate(tenant,request.unitId(),actor,reservationId);
+   var stored=store.unitReservationForUpdate(tenant,request.unitId(),reservationId);
+   // Cancelamento residencial é do autor. Outra pessoa da unidade vê a reserva, então a recusa é explícita.
+   if(!actor.equals(stored.createdBy()))
+    throw new BusinessProblem("RESERVATION_AUTHOR_REQUIRED",403,"Somente quem fez a reserva pode cancelá-la pelo aplicativo.");
    var current=stored.view();
    if("CANCELLED".equals(current.status())) {
+    // Repetição do próprio cancelamento devolve o estado. Cancelamento feito pela gestão não vira sucesso do autor:
+    // a unidade precisa atualizar a agenda e ver o motivo informado.
+    if(!ReservationStore.AUTHOR_CANCELLED_REASON.equals(current.decisionReason()))
+     throw new BusinessProblem("RESERVATION_CHANGED",409,"A reserva foi alterada. Atualize os dados.");
     store.finish(tenant,actor,route,key,current,200);
     return new ReservationModels.Mutation(current,false,200);
    }

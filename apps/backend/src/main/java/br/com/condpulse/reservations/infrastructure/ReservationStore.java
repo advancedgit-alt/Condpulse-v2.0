@@ -53,7 +53,7 @@ public class ReservationStore {
    case when status='PENDING_APPROVAL' and expires_at<=clock_timestamp() then 'Prazo de decisão encerrado sem confirmação.'
     else decision_reason end as decision_reason,
    rule_snapshot->'policy'->>'schemaVersion' as snapshot_schema,
-   rule_snapshot->'policy'->>'cancellationLeadMinutes' as snapshot_cancel_lead
+   rule_snapshot->'policy'->>'cancellationLeadMinutes' as snapshot_cancel_lead,created_by
   from cp.reservations
   """;
 
@@ -65,7 +65,7 @@ public class ReservationStore {
      state,policy==null?null:ReservationModels.Policy.from(policy));
   }
  }
- public record StoredReservation(ReservationModels.View view,Integer cancellationLeadMinutes) {}
+ public record StoredReservation(ReservationModels.View view,Integer cancellationLeadMinutes,UUID createdBy) {}
  public record IdempotentReply(boolean fresh,ReservationModels.View reservation,int responseStatus) {}
 
  public List<AmenityData> amenities(UUID tenant) {
@@ -230,9 +230,13 @@ public class ReservationStore {
    """,tenant,eventType,reservation.reservationId(),reservation.version(),reservation.reservationId(),reservation.unitId(),
     reservation.amenityId(),reservation.status(),reservation.version());
  }
- public StoredReservation ownForUpdate(UUID tenant,UUID unit,UUID actor,UUID reservation) {
+ /**
+  * Reserva da unidade travada para cancelamento residencial. Não filtra o autor: o serviço compara o autor e
+  * responde de forma explícita, porque a reserva já é visível a quem tem vínculo com a unidade.
+  */
+ public StoredReservation unitReservationForUpdate(UUID tenant,UUID unit,UUID reservation) {
   var rows=jdbc.query(RESERVATION_COLUMNS+"""
-   where tenant_id=? and unit_id=? and created_by=? and id=? and kind='BOOKING' for update
+   where tenant_id=? and unit_id=? and id=? and kind='BOOKING' for update
    """,(r,n)->{
     Integer lead=null;
     try {
@@ -241,8 +245,8 @@ public class ReservationStore {
       if(value>=0 && value<=525600) lead=value;
      }
     } catch(NumberFormatException ignored) { /* Snapshot anterior/inválido exige revisão, não default permissivo. */ }
-    return new StoredReservation(view(r),lead);
-   },tenant,unit,actor,reservation);
+    return new StoredReservation(view(r),lead,r.getObject("created_by",UUID.class));
+   },tenant,unit,reservation);
   if(rows.size()!=1) throw unavailable();
   return rows.getFirst();
  }
