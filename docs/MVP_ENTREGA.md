@@ -108,9 +108,10 @@ explícita. Não conceder o papel de gestor por conveniência técnica. Regras d
 área incluem capacidade, taxa informativa, limpeza, versão, dias/horários,
 antecedência, duração, cota e cancelamento; não há padrão permissivo silencioso.
 
-Também faltam o principal restrito `cp_onboarding_*`, credencial Auth Admin apenas
-no cofre/job isolado e novos Secrets operacionais. O wrapper protegido foi preparado,
-mas não houve execução gerenciada. Ver [EXECUTOR_ONBOARDING.md](EXECUTOR_ONBOARDING.md).
+O principal restrito `cp_onboarding_hml`, a credencial Auth Admin no Environment
+protegido e os Secrets operacionais foram providos na homologação, e o wrapper
+protegido executou o onboarding aprovado em 29/10/2026 (apply 40917560570). Ver
+[EXECUTOR_ONBOARDING.md](EXECUTOR_ONBOARDING.md). Produção ainda não tem esse principal.
 A chave publicável BFF já
 preparada não substitui Auth Admin. O fluxo operacional não cria ou altera
 usuários Auth e não recebe credenciais na API/web/worker. Ver
