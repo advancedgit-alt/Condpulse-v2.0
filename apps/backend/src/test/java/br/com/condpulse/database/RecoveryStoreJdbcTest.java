@@ -108,6 +108,18 @@ class RecoveryStoreJdbcTest {
   assertEquals("RECOVERY_SESSION_EXPIRED",assertThrows(BusinessProblem.class,()->recovery.claim(expired,UUID.randomUUID())).code());
   assertEquals(0,db.recoveryCount(expired)); db.assertEmptyContext();
  }
+ @Test void suspendedAccountIsSeenBeforeCompletionAndExpiredLeaseCannotElevate() throws Exception {
+  String hash=attempt(db.accountA,true);
+  UUID lease=UUID.randomUUID();
+  recovery.claim(hash,lease);
+  assertTrue(recovery.accountActive(db.accountA)); db.assertEmptyContext();
+  db.adminUpdate("update platform.accounts set status='SUSPENDED' where id=?",db.accountA);
+  assertFalse(recovery.accountActive(db.accountA),"Suspensão depois do link é vista antes da troca"); db.assertEmptyContext();
+  db.adminUpdate("update platform.recovery_attempts set lease_until=clock_timestamp()-interval '1 second' where token_hash=?",hash);
+  assertEquals("RECOVERY_SESSION_EXPIRED",assertThrows(BusinessProblem.class,()->recovery.elevate(hash,lease,
+   cipher.seal("SYNTHETIC_AAL2",RecoveryStore.Attempt.contextFor(db.accountA,hash)))).code(),"Reserva vencida não guarda acesso elevado");
+  db.assertEmptyContext();
+ }
  @Test void purgeRemovesEveryWebSessionOfTheAccountOnlyInsideRecovery() throws Exception {
   var first=session(db.accountA); var second=session(db.accountA); var other=session(db.accountB);
   // Fora da recuperação, nem o próprio ator lê ou remove sessões por conta.

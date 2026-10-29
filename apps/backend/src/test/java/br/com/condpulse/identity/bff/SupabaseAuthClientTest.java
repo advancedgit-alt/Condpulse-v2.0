@@ -181,7 +181,7 @@ class SupabaseAuthClientTest {
   server.expect(requestTo("https://auth.example.invalid/auth/v1/user")).andExpect(method(HttpMethod.PUT))
    .andExpect(header("Authorization","Bearer synthetic-recovery")).andExpect(jsonPath("$.password").value("Senha-sintetica-longa"))
    .andRespond(withSuccess("{\"id\":\"11111111-1111-4111-8111-111111111111\"}",MediaType.APPLICATION_JSON));
-  new SupabaseAuthClient(builder.build(),settings()).updatePassword("synthetic-recovery","Senha-sintetica-longa");
+  new SupabaseAuthClient(builder.build(),settings()).updatePassword("synthetic-recovery","Senha-sintetica-longa",UUID.fromString("11111111-1111-4111-8111-111111111111"));
   server.verify();
   var statuses=new Object[][]{{422,"PASSWORD_REJECTED"},{401,"RECOVERY_SESSION_EXPIRED"},{403,"RECOVERY_NOT_ALLOWED"},
    {429,"AUTH_RATE_LIMITED"},{502,"AUTH_PROVIDER_UNAVAILABLE"}};
@@ -190,9 +190,52 @@ class SupabaseAuthClientTest {
    MockRestServiceServer.bindTo(failing).build().expect(requestTo("https://auth.example.invalid/auth/v1/user"))
     .andRespond(withStatus(org.springframework.http.HttpStatusCode.valueOf((Integer)item[0])).body("{\"msg\":\"sensitive-provider-detail\"}"));
    var error=assertThrows(BusinessProblem.class,()->new SupabaseAuthClient(failing.build(),settings())
-    .updatePassword("synthetic-recovery","Senha-sintetica-longa"));
+    .updatePassword("synthetic-recovery","Senha-sintetica-longa",UUID.fromString("11111111-1111-4111-8111-111111111111")));
    assertEquals(item[1],error.code()); assertFalse(error.getMessage().contains("sensitive-provider-detail"));
   }
+ }
+ @Test void passwordChangeIsConfirmedOnlyBy200ForTheSameAccount() {
+  UUID account=UUID.fromString("11111111-1111-4111-8111-111111111111");
+  var answers=new java.util.ArrayList<org.springframework.test.web.client.ResponseCreator>();
+  answers.add(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON).body("{\"id\":\"11111111-1111-4111-8111-111111111111\"}"));
+  answers.add(withStatus(HttpStatus.FOUND).header("Location","https://elsewhere.example.invalid/"));
+  answers.add(withSuccess("{\"id\":\"22222222-2222-4222-8222-222222222222\"}",MediaType.APPLICATION_JSON));
+  answers.add(withSuccess("{}",MediaType.APPLICATION_JSON));
+  answers.add(withStatus(HttpStatus.NO_CONTENT));
+  for(var answer:answers) {
+   var builder=RestClient.builder();
+   MockRestServiceServer.bindTo(builder).build().expect(requestTo("https://auth.example.invalid/auth/v1/user")).andRespond(answer);
+   var error=assertThrows(BusinessProblem.class,()->new SupabaseAuthClient(builder.build(),settings())
+    .updatePassword("synthetic-recovery","Senha-sintetica-longa",account));
+   assertEquals("AUTH_PROVIDER_UNAVAILABLE",error.code(),"Resposta sem confirmação vira resultado incerto");
+  }
+ }
+ @Test void recoveryFactorsSeparateVerifiedTotpFromOtherVerifiedTypes() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/user")).andExpect(method(HttpMethod.GET))
+   .andExpect(header("Authorization","Bearer synthetic-recovery"))
+   .andRespond(withSuccess("""
+    {"id":"11111111-1111-4111-8111-111111111111","factors":[
+     {"id":"%s","factor_type":"totp","status":"unverified"},
+     {"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","factor_type":"totp","status":"verified"},
+     {"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","factor_type":"phone","status":"verified"}]}
+    """.formatted(FACTOR),MediaType.APPLICATION_JSON));
+  var factors=new SupabaseAuthClient(builder.build(),settings()).recoveryFactors("synthetic-recovery");
+  assertEquals(UUID.fromString("11111111-1111-4111-8111-111111111111"),factors.accountId());
+  assertEquals(UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),factors.verifiedTotp());
+  assertTrue(factors.otherVerified());
+  server.verify();
+  var plain=RestClient.builder();
+  MockRestServiceServer.bindTo(plain).build().expect(requestTo("https://auth.example.invalid/auth/v1/user"))
+   .andRespond(withSuccess("{\"id\":\"11111111-1111-4111-8111-111111111111\",\"factors\":null}",MediaType.APPLICATION_JSON));
+  var none=new SupabaseAuthClient(plain.build(),settings()).recoveryFactors("synthetic-recovery");
+  assertNull(none.verifiedTotp()); assertFalse(none.otherVerified());
+  var anonymous=RestClient.builder();
+  MockRestServiceServer.bindTo(anonymous).build().expect(requestTo("https://auth.example.invalid/auth/v1/user"))
+   .andRespond(withSuccess("{\"factors\":[]}",MediaType.APPLICATION_JSON));
+  assertEquals("AUTH_PROVIDER_UNAVAILABLE",assertThrows(BusinessProblem.class,
+   ()->new SupabaseAuthClient(anonymous.build(),settings()).recoveryFactors("synthetic-recovery")).code());
  }
  @Test void globalSignOutReportsWhetherProviderConfirmed() {
   var builder=RestClient.builder();
@@ -205,6 +248,11 @@ class SupabaseAuthClientTest {
   MockRestServiceServer.bindTo(failing).build().expect(requestTo("https://auth.example.invalid/auth/v1/logout?scope=global"))
    .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
   assertFalse(new SupabaseAuthClient(failing.build(),settings()).signOutGlobal("synthetic-recovery"));
+  var redirected=RestClient.builder();
+  MockRestServiceServer.bindTo(redirected).build().expect(requestTo("https://auth.example.invalid/auth/v1/logout?scope=global"))
+   .andRespond(withStatus(HttpStatus.FOUND).header("Location","https://elsewhere.example.invalid/"));
+  assertFalse(new SupabaseAuthClient(redirected.build(),settings()).signOutGlobal("synthetic-recovery"),
+   "Redirecionamento não confirma o encerramento");
  }
  @Test void rejectedCodeIsStableAndHidesProviderDetail() {
   var builder=RestClient.builder();

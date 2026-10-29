@@ -83,6 +83,18 @@ public final class RecoveryStore {
   if(claimed==null) throw expired();
   return claimed;
  }
+ /** Conta ainda ativa: suspensão depois de abrir o link encerra a tentativa antes de qualquer troca. */
+ public boolean accountActive(UUID account) {
+  Boolean active=tx.execute(status->{
+   jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,account.toString());
+   jdbc.queryForObject("select set_config('app.recovery_hash','',true)",String.class);
+   jdbc.queryForObject("select set_config('app.session_hash','',true)",String.class);
+   jdbc.queryForObject("select set_config('app.tenant_id','',true)",String.class);
+   Integer count=jdbc.queryForObject("select count(*) from platform.accounts where id=? and status='ACTIVE'",Integer.class,account);
+   return count!=null && count==1;
+  });
+  return Boolean.TRUE.equals(active);
+ }
  /** Guarda o acesso elevado (AAL2) depois do segundo fator; tentativas seguintes não pedem o código de novo. */
  public void elevate(String hash,UUID lease,String encryptedAccess) {
   boolean updated=context(hash,null,()->jdbc.update("""

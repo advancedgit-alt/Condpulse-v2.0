@@ -9,8 +9,9 @@ import { useCooldown } from './cooldown';
 const LINK_KEY = 'condpulse:recovery-link';
 const STAGE_KEY = 'condpulse:recovery-stage';
 /** Respostas que encerram a tentativa: o link ou o cookie de recuperação não servem mais. */
-const TERMINAL = new Set(['RECOVERY_LINK_INVALID', 'RECOVERY_SESSION_EXPIRED', 'RECOVERY_NOT_ALLOWED', 'RECOVERY_OUTCOME_UNKNOWN',
-  'COMMAND_OUTCOME_UNKNOWN', 'ACCOUNT_INACTIVE', 'MFA_FACTOR_NOT_FOUND', 'MFA_OPERATION_REJECTED', 'AUTH_PROVIDER_UNAVAILABLE']);
+const TERMINAL = new Set(['RECOVERY_LINK_INVALID', 'RECOVERY_LINK_UNCERTAIN', 'RECOVERY_SESSION_EXPIRED', 'RECOVERY_NOT_ALLOWED',
+  'RECOVERY_OUTCOME_UNKNOWN', 'RECOVERY_ATTEMPTS_EXHAUSTED', 'RECOVERY_FACTOR_UNSUPPORTED', 'COMMAND_OUTCOME_UNKNOWN', 'ACCOUNT_INACTIVE',
+  'MFA_FACTOR_NOT_FOUND', 'MFA_OPERATION_REJECTED', 'AUTH_PROVIDER_UNAVAILABLE', 'SESSION_REFRESH_REQUIRED']);
 
 interface PasswordStage { mfaRequired: boolean; expiresAt: string }
 type Stage = { kind: 'request' } | { kind: 'requested' } | { kind: 'link'; token: string } | ({ kind: 'password' } & PasswordStage)
@@ -187,7 +188,7 @@ function Done({ otherSessionsEnded }: { otherSessionsEnded: boolean }) {
   }, [auth, queries]);
   return <SessionPage><span className="eyebrow">RECUPERAÇÃO DE ACESSO</span><h1>Senha alterada.</h1>
     <p>Entre novamente com a nova senha.</p>
-    {otherSessionsEnded ? <Notice tone="success">As sessões abertas da sua conta foram encerradas.</Notice>
+    {otherSessionsEnded ? <Notice tone="success">As sessões do CondPulse abertas com a senha anterior foram encerradas. Um acesso já emitido não é mais renovado e expira no prazo dele.</Notice>
       : <Notice tone="warning">Não foi possível confirmar o encerramento de todas as sessões abertas. Elas expiram sozinhas; se notar acesso estranho, procure a gestão.</Notice>}
     <button className="button" type="button" onClick={() => navigate('/entrar', { replace: true })}>Entrar com a nova senha<Icon name="arrow" /></button>
   </SessionPage>;

@@ -25,7 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class BffRecoveryController {
  /** Erros que encerram a tentativa: o cookie de recuperação deixa de servir e é apagado. */
  private static final Set<String> TERMINAL=Set.of("RECOVERY_SESSION_EXPIRED","RECOVERY_OUTCOME_UNKNOWN",
-  "RECOVERY_NOT_ALLOWED","MFA_FACTOR_NOT_FOUND","MFA_OPERATION_REJECTED","SESSION_REFRESH_REQUIRED","AUTH_PROVIDER_UNAVAILABLE");
+  "RECOVERY_NOT_ALLOWED","RECOVERY_ATTEMPTS_EXHAUSTED","ACCOUNT_INACTIVE","MFA_FACTOR_NOT_FOUND","MFA_OPERATION_REJECTED",
+  "SESSION_REFRESH_REQUIRED","AUTH_PROVIDER_UNAVAILABLE");
  private final RecoveryService recovery;
  private final AuthRateLimiter limits;
  private final CsrfTokenRepository csrf;
@@ -55,7 +56,9 @@ public class BffRecoveryController {
   if(raw==null)
    throw new BusinessProblem("RECOVERY_SESSION_EXPIRED",401,"O prazo para definir a nova senha terminou. Solicite um novo link.");
   try {
-   var result=recovery.complete(raw,body==null?null:body.password(),body==null?null:body.code());
+   // Código TOTP usa o mesmo limite por conta do /auth/mfa/verify, com Retry-After.
+   var result=recovery.complete(raw,body==null?null:body.password(),body==null?null:body.code(),
+    account->BffController.requireAdmission(limits.mfaVerify(account),response));
    // Todas as sessões da conta foram encerradas: o navegador também perde sessão e CSRF e entra de novo.
    BffCookies.clearRecovery(response); BffCookies.clear(response); csrf.saveToken(null,request,response);
    return new CompletedBody("PASSWORD_CHANGED",result.otherSessionsEnded());

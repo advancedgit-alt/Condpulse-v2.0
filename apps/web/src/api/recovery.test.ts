@@ -64,4 +64,24 @@ describe('recuperação de acesso no cliente', () => {
     expect(expired).not.toHaveBeenCalled();
     expect(fetcher.mock.calls.filter(([path]) => String(path) === '/auth/refresh')).toHaveLength(0);
   });
+
+  it('resultado incerto da troca ou do link vira código terminal próprio da recuperação', async () => {
+    const fetcher = vi.fn<typeof globalThis.fetch>();
+    let mode: 'invalid' | 'offline' = 'invalid';
+    fetcher.mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === '/auth/csrf') return csrf('synthetic-csrf');
+      if (mode === 'offline') throw new TypeError('rede sintética indisponível');
+      return json({ status: 'OK' });
+    });
+    const api = new CondPulseApi({ fetch: fetcher });
+    const invalid = await api.completeRecovery('Frase-sintetica-2030', null).catch((error: unknown) => error);
+    expect(invalid).toMatchObject({ code: 'RECOVERY_OUTCOME_UNKNOWN', uncertain: true });
+    expect((invalid as ApiError).message).toMatch(/nova senha/);
+    expect((invalid as ApiError).message).not.toMatch(/agenda/);
+    await expect(api.verifyRecovery('SYNTHETIC_link_hash_0123456789')).rejects.toMatchObject({ code: 'RECOVERY_LINK_UNCERTAIN' });
+    mode = 'offline';
+    await expect(api.completeRecovery('Frase-sintetica-2030', null)).rejects.toMatchObject({ code: 'RECOVERY_OUTCOME_UNKNOWN' });
+    await expect(api.verifyRecovery('SYNTHETIC_link_hash_0123456789')).rejects.toMatchObject({ code: 'RECOVERY_LINK_UNCERTAIN' });
+  });
 });

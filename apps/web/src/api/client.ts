@@ -19,6 +19,10 @@ const messages: Record<string, string> = {
   RECOVERY_IN_PROGRESS: 'A troca de senha já está em andamento. Aguarde alguns segundos.',
   RECOVERY_NOT_ALLOWED: 'A troca de senha por este link não foi permitida. Solicite um novo link ou procure a gestão.',
   RECOVERY_OUTCOME_UNKNOWN: 'Não foi possível confirmar a troca da senha. Tente entrar com a nova senha; se não funcionar, solicite um novo link.',
+  RECOVERY_ATTEMPTS_EXHAUSTED: 'Tentativas esgotadas para este link. Solicite um novo link.',
+  RECOVERY_FACTOR_UNSUPPORTED: 'A recuperação pela web não está disponível para esta conta. Procure a gestão do condomínio.',
+  RECOVERY_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Tente novamente em instantes.',
+  RECOVERY_LINK_UNCERTAIN: 'Não foi possível confirmar a validação do link. Solicite um novo link.',
   PASSWORD_INVALID: 'Use de 12 a 72 caracteres (letras acentuadas contam em dobro), com pelo menos 4 caracteres diferentes.',
   PASSWORD_REJECTED: 'A senha não foi aceita. Use uma senha diferente da anterior e mais difícil de adivinhar.',
   MFA_CODE_REQUIRED: 'Informe o código de 6 dígitos do aplicativo autenticador.',
@@ -601,17 +605,32 @@ export class CondPulseApi {
   }
   async verifyRecovery(tokenHash: string, signal?: AbortSignal): Promise<RecoveryVerified> {
     if (!RECOVERY_LINK.test(tokenHash)) throw new ApiError(400, 'RECOVERY_LINK_INVALID', messages.RECOVERY_LINK_INVALID!);
-    const reply = await this.send('/auth/recovery/verify', { method: 'POST', body: JSON.stringify({ tokenHash }),
-      ...(signal ? { signal } : {}) }, this.generation);
-    return recoveryVerified(reply.value);
+    // O link é de uso único no provedor: resposta perdida ou inválida encerra a tentativa nesta tela.
+    try {
+      const reply = await this.send('/auth/recovery/verify', { method: 'POST', body: JSON.stringify({ tokenHash }),
+        ...(signal ? { signal } : {}) }, this.generation);
+      return recoveryVerified(reply.value);
+    } catch (error) {
+      if (error instanceof ApiError && (error.uncertain || error.code === 'INVALID_API_RESPONSE'))
+        throw new ApiError(error.status, 'RECOVERY_LINK_UNCERTAIN', messages.RECOVERY_LINK_UNCERTAIN!, true);
+      throw error;
+    }
   }
   async completeRecovery(password: string, code: string | null, signal?: AbortSignal): Promise<RecoveryCompleted> {
     const problem = passwordProblem(password);
     if (problem) throw new ApiError(400, 'PASSWORD_INVALID', problem);
     if (code !== null && !/^[0-9]{6}$/.test(code)) throw new ApiError(400, 'MFA_CODE_FORMAT', 'Digite os 6 números exibidos no aplicativo autenticador.');
-    const reply = await this.send('/auth/recovery/complete', { method: 'POST', body: JSON.stringify({ password, code }),
-      ...(signal ? { signal } : {}) }, this.generation);
-    const result = recoveryCompleted(reply.value);
+    // Sem confirmação explícita a troca pode ou não ter ocorrido: orientar a entrar com a nova senha, sem repetir.
+    let result: RecoveryCompleted;
+    try {
+      const reply = await this.send('/auth/recovery/complete', { method: 'POST', body: JSON.stringify({ password, code }),
+        ...(signal ? { signal } : {}) }, this.generation);
+      result = recoveryCompleted(reply.value);
+    } catch (error) {
+      if (error instanceof ApiError && (error.uncertain || error.code === 'INVALID_API_RESPONSE'))
+        throw new ApiError(error.status, 'RECOVERY_OUTCOME_UNKNOWN', messages.RECOVERY_OUTCOME_UNKNOWN!, true);
+      throw error;
+    }
     this.clearSession();
     return result;
   }

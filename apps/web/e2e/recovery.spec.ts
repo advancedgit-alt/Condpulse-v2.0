@@ -92,7 +92,7 @@ test('link sai da barra, exige clique e código do autenticador e só confirma d
   await page.getByLabel('Código de 6 dígitos do autenticador').fill('654321');
   await save.click();
   await expect(page.getByRole('heading', { name: 'Senha alterada.' })).toBeVisible();
-  await expect(page.getByText('As sessões abertas da sua conta foram encerradas.')).toBeVisible();
+  await expect(page.getByText('As sessões do CondPulse abertas com a senha anterior foram encerradas.', { exact: false })).toBeVisible();
   expect(recovery.completes).toEqual([{ password: PASSWORD, code: '123456' }, { password: PASSWORD, code: '654321' }]);
   await page.getByRole('button', { name: 'Entrar com a nova senha' }).click();
   await expect(page.getByRole('heading', { name: 'Entre para continuar.' })).toBeVisible();
