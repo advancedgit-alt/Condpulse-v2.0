@@ -503,7 +503,7 @@
         "operationId": "requestRecovery",
         "security": [],
         "x-feature-flag": "CP_BFF_RECOVERY_ENABLED",
-        "description": "Pede o e-mail de recuperação. Resposta sempre neutra (202) e com duração mínima, exista ou não a conta; o resultado do provedor nunca é revelado. Exige CP_BFF_ENABLED e CP_BFF_RECOVERY_ENABLED.",
+        "description": "Pede o e-mail de recuperação. Resposta sempre neutra (202) em prazo fixo que não espera o provedor, exista ou não a conta; o resultado do provedor nunca é revelado. Exige CP_BFF_ENABLED e CP_BFF_RECOVERY_ENABLED.",
         "parameters": [
           {
             "name": "Origin",
@@ -619,7 +619,7 @@
             "description": "RECOVERY_LINK_INVALID: link inválido, expirado ou já utilizado"
           },
           "403": {
-            "description": "Origem ou CSRF inválido; ACCOUNT_INACTIVE"
+            "description": "Origem ou CSRF inválido; ACCOUNT_INACTIVE; RECOVERY_FACTOR_UNSUPPORTED (fator verificado que a web não exige)"
           },
           "429": {
             "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
@@ -690,16 +690,16 @@
             "description": "PASSWORD_INVALID: política local (12 a 72 caracteres, ao menos 4 diferentes)"
           },
           "401": {
-            "description": "RECOVERY_SESSION_EXPIRED: cookie ausente, vencido ou tentativas esgotadas"
+            "description": "RECOVERY_SESSION_EXPIRED: cookie ausente, duplicado ou vencido"
           },
           "403": {
-            "description": "Origem ou CSRF inválido; RECOVERY_NOT_ALLOWED"
+            "description": "Origem ou CSRF inválido; RECOVERY_NOT_ALLOWED; ACCOUNT_INACTIVE (conta suspensa depois do link)"
           },
           "409": {
             "description": "RECOVERY_IN_PROGRESS: conclusão concorrente da mesma tentativa"
           },
           "422": {
-            "description": "MFA_CODE_REQUIRED, MFA_CODE_REJECTED ou PASSWORD_REJECTED"
+            "description": "MFA_CODE_REQUIRED, MFA_CODE_REJECTED ou PASSWORD_REJECTED; RECOVERY_ATTEMPTS_EXHAUSTED encerra a tentativa e o cookie"
           },
           "429": {
             "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
@@ -715,7 +715,7 @@
             }
           },
           "503": {
-            "description": "RECOVERY_OUTCOME_UNKNOWN (troca não confirmada; sessões encerradas) ou dependência indisponível"
+            "description": "RECOVERY_OUTCOME_UNKNOWN (troca não confirmada; sessões encerradas) ou RECOVERY_DEPENDENCY_UNAVAILABLE (tentativa mantida)"
           }
         }
       }

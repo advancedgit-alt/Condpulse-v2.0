@@ -32,10 +32,31 @@ CREATE POLICY recovery_update ON platform.recovery_attempts FOR UPDATE TO cp_api
 CREATE POLICY recovery_delete ON platform.recovery_attempts FOR DELETE TO cp_api
  USING(token_hash = nullif(current_setting('app.recovery_hash',true),''));
 REVOKE ALL ON platform.recovery_attempts FROM PUBLIC;
-GRANT SELECT,INSERT,DELETE ON platform.recovery_attempts TO cp_api;
+GRANT SELECT,DELETE ON platform.recovery_attempts TO cp_api;
+-- Criação, falhas, reserva e versão vêm dos defaults: a role runtime não escolhe created_at (o prazo máximo de
+-- 15 minutos é medido a partir dele) nem começa uma tentativa com falhas zeradas de outra.
+GRANT INSERT(id,token_hash,account_id,encrypted_access_token,factor_id,mfa_required,expires_at)
+ ON platform.recovery_attempts TO cp_api;
 -- Conta, hash, fator e prazo são imutáveis para a role runtime.
 GRANT UPDATE(encrypted_access_token,mfa_required,failures,lease_id,lease_until,version)
  ON platform.recovery_attempts TO cp_api;
+-- Falhas só aumentam; a exigência do segundo fator só cai junto com a troca do token (acesso elevado AAL2,
+-- conferido pela API) e nunca volta. Defesa adicional: o banco não verifica o AAL, a API verifica.
+CREATE FUNCTION platform.recovery_attempt_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.failures < OLD.failures THEN
+  RAISE EXCEPTION 'Falhas da tentativa de recuperação não diminuem.' USING ERRCODE='42501';
+ END IF;
+ IF NEW.mfa_required IS DISTINCT FROM OLD.mfa_required
+    AND (NEW.mfa_required OR NEW.encrypted_access_token IS NOT DISTINCT FROM OLD.encrypted_access_token) THEN
+  RAISE EXCEPTION 'Segundo fator da recuperação só é dispensado com novo acesso elevado.' USING ERRCODE='42501';
+ END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION platform.recovery_attempt_guard() FROM PUBLIC;
+CREATE TRIGGER recovery_attempt_guard BEFORE UPDATE ON platform.recovery_attempts
+ FOR EACH ROW EXECUTE FUNCTION platform.recovery_attempt_guard();
 
 -- Troca de senha encerra todas as sessões web da conta. Leitura e remoção por conta exigem o marcador local da
 -- transação de recuperação, nunca presente no fluxo comum de sessão.

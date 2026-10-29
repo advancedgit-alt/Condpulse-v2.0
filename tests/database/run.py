@@ -336,6 +336,28 @@ def recovery_checks():
            "tentativa dura no maximo 15 minutos")
     expect(error(with_hash(h2, insert.replace("false", "true").replace(h1, h2)), "23514", role="cp_api"),
            "segundo fator exigido sempre aponta o fator")
+    forged = ("INSERT INTO platform.recovery_attempts(id,token_hash,account_id,encrypted_access_token,mfa_required,created_at,expires_at) "
+              f"VALUES(gen_random_uuid(),'{h2}','{AA}','v1.ficticio',false,clock_timestamp()+interval '30 days',"
+              "clock_timestamp()+interval '30 days 10 minutes')")
+    expect(error(with_hash(h2, forged), "42501", role="cp_api"), "aplicacao nao escolhe created_at para estender o prazo")
+    expect(error(with_hash(h2, insert.replace("mfa_required,", "mfa_required,failures,").replace("false,", "false,0,").replace(h1, h2)),
+                 "42501", role="cp_api"), "aplicacao nao define falhas na criacao")
+    other = with_hash(h2, f"WITH u AS (UPDATE platform.recovery_attempts SET failures=failures+1 WHERE token_hash='{h1}' RETURNING 1) "
+                          "SELECT count(*) FROM u")
+    expect(value(other, role="cp_api") == "0", "outro hash nao altera a tentativa")
+    removed = with_hash(h2, f"WITH d AS (DELETE FROM platform.recovery_attempts WHERE token_hash='{h1}' RETURNING 1) SELECT count(*) FROM d")
+    expect(value(removed, role="cp_api") == "0", "outro hash nao remove a tentativa")
+    query(with_hash(h1, "UPDATE platform.recovery_attempts SET failures=2"), role="cp_api")
+    expect(error(with_hash(h1, "UPDATE platform.recovery_attempts SET failures=1"), "42501", role="cp_api"),
+           "falhas da tentativa nao diminuem")
+    mfa = ("INSERT INTO platform.recovery_attempts(id,token_hash,account_id,encrypted_access_token,factor_id,mfa_required,expires_at) "
+           f"VALUES(gen_random_uuid(),'{h2}','{AA}','v1.aal1',gen_random_uuid(),true,clock_timestamp()+interval '10 minutes')")
+    query(with_hash(h2, mfa), role="cp_api")
+    expect(error(with_hash(h2, "UPDATE platform.recovery_attempts SET mfa_required=false"), "42501", role="cp_api"),
+           "segundo fator nao e dispensado sem novo acesso elevado")
+    query(with_hash(h2, "UPDATE platform.recovery_attempts SET mfa_required=false,encrypted_access_token='v1.aal2'"), role="cp_api")
+    expect(error(with_hash(h2, "UPDATE platform.recovery_attempts SET mfa_required=true,encrypted_access_token='v1.outro'"), "42501",
+                 role="cp_api"), "exigencia do segundo fator nao volta depois de dispensada")
     sessions = ("INSERT INTO platform.web_sessions(token_hash,account_id,encrypted_access_token,encrypted_refresh_token,"
                 "access_expires_at,expires_at) VALUES"
                 + ",".join(f"('{h}','{account}','v1.ficticio','v1.ficticio',now()+interval '5 minutes',now()+interval '1 hour')"

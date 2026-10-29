@@ -114,7 +114,7 @@ class BffRecoverySecurityTest {
  @Test void completeClearsRecoverySessionAndCsrfCookiesAfterConfirmedChange() throws Exception {
   start(true);
   String raw=SessionSecrets.newToken();
-  when(recovery().complete(raw,"Senha-sintetica-longa","123456")).thenReturn(new RecoveryService.Completion(true));
+  when(recovery().complete(eq(raw),eq("Senha-sintetica-longa"),eq("123456"),any())).thenReturn(new RecoveryService.Completion(true));
   var response=mvc.perform(mutation("/auth/recovery/complete",csrf()).cookie(new Cookie(BffCookies.RECOVERY,raw))
    .content("{\"password\":\"Senha-sintetica-longa\",\"code\":\"123456\"}")).andReturn().getResponse();
   assertEquals(200,response.getStatus());
@@ -135,7 +135,7 @@ class BffRecoverySecurityTest {
  @Test void retryableRefusalKeepsRecoveryCookieAndTerminalOutcomeClearsIt() throws Exception {
   start(true);
   String raw=SessionSecrets.newToken();
-  when(recovery().complete(eq(raw),anyString(),any()))
+  when(recovery().complete(eq(raw),anyString(),any(),any()))
    .thenThrow(new BusinessProblem("PASSWORD_REJECTED",422,"Recusada."))
    .thenThrow(new BusinessProblem("RECOVERY_OUTCOME_UNKNOWN",503,"Incerto."));
   var rejected=mvc.perform(mutation("/auth/recovery/complete",csrf()).cookie(new Cookie(BffCookies.RECOVERY,raw))
@@ -146,6 +146,38 @@ class BffRecoverySecurityTest {
    .content("{\"password\":\"Senha-sintetica-longa\"}")).andReturn().getResponse();
   assertEquals(503,uncertain.getStatus()); assertTrue(uncertain.getContentAsString().contains("RECOVERY_OUTCOME_UNKNOWN"));
   assertTrue(uncertain.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_recovery=;") && h.contains("Max-Age=0")));
+ }
+ @Test void secondFactorLimitPerAccountAnswers429WithRetryAfterAndKeepsTheAttempt() throws Exception {
+  start(true);
+  String raw=SessionSecrets.newToken();
+  var account=java.util.UUID.fromString("11111111-1111-4111-8111-111111111111");
+  when(limits().mfaVerify(account)).thenReturn(new AuthRateLimiter.Admission(false,300));
+  when(recovery().complete(eq(raw),anyString(),any(),any())).thenAnswer(invocation->{
+   RecoveryService.SecondFactorGate gate=invocation.getArgument(3);
+   gate.admit(account);
+   return new RecoveryService.Completion(true);
+  });
+  var response=mvc.perform(mutation("/auth/recovery/complete",csrf()).cookie(new Cookie(BffCookies.RECOVERY,raw))
+   .content("{\"password\":\"Senha-sintetica-longa\",\"code\":\"123456\"}")).andReturn().getResponse();
+  assertEquals(429,response.getStatus()); assertEquals("300",response.getHeader("Retry-After"));
+  assertTrue(response.getContentAsString().contains("AUTH_RATE_LIMITED"));
+  assertFalse(response.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_recovery=")));
+  verify(limits()).mfaVerify(account);
+ }
+ @Test void exhaustedAttemptsClearTheCookieAndDuplicateRecoveryCookieIsRefused() throws Exception {
+  start(true);
+  String raw=SessionSecrets.newToken();
+  when(recovery().complete(eq(raw),anyString(),any(),any()))
+   .thenThrow(new BusinessProblem("RECOVERY_ATTEMPTS_EXHAUSTED",422,"Esgotadas."));
+  var exhausted=mvc.perform(mutation("/auth/recovery/complete",csrf()).cookie(new Cookie(BffCookies.RECOVERY,raw))
+   .content("{\"password\":\"Senha-sintetica-longa\"}")).andReturn().getResponse();
+  assertEquals(422,exhausted.getStatus());
+  assertTrue(exhausted.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_recovery=;") && h.contains("Max-Age=0")));
+  var duplicate=mvc.perform(mutation("/auth/recovery/complete",csrf())
+   .cookie(new Cookie(BffCookies.RECOVERY,raw),new Cookie(BffCookies.RECOVERY,SessionSecrets.newToken()))
+   .content("{\"password\":\"Senha-sintetica-longa\"}")).andReturn().getResponse();
+  assertEquals(401,duplicate.getStatus()); assertTrue(duplicate.getContentAsString().contains("RECOVERY_SESSION_EXPIRED"));
+  verify(recovery(),times(1)).complete(any(),any(),any(),any());
  }
  @Test void recoveryCookieNeverAuthenticatesTheApi() throws Exception {
   start(true);
