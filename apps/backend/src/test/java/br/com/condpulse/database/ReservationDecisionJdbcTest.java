@@ -191,14 +191,14 @@ class ReservationDecisionJdbcTest {
    second.reservationId(),"jdbc-decision:"+UUID.randomUUID(),new ReservationModels.Cancel(db.unitA,cancelled.version()))).code(),
    "Cancelamento da gestão não é devolvido ao autor como cancelamento próprio");
   assertEquals(1,events(second.reservationId(),"RESERVATION_CANCELLED"));
-  var own=request(db.accountC,db.otherUnitA,area.amenityId(),start);
-  assertEquals("PENDING_APPROVAL",own.status(),"Cancelamento libera o período");
+  var mine=request(db.accountC,db.otherUnitA,area.amenityId(),start);
+  assertEquals("PENDING_APPROVAL",mine.status(),"Cancelamento libera o período");
   assertEquals("RESERVATION_SELF_DECISION_DENIED",assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,
-   own.reservationId(),approve(0))).code(),"Gestor não decide o próprio pedido");
+   mine.reservationId(),approve(0))).code(),"Gestor não decide o próprio pedido");
   assertEquals("RESERVATION_SELF_DECISION_DENIED",assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,
-   own.reservationId(),new ReservationManagementModels.Decision("REJECT",0L,"Desisti"))).code());
-  assertEquals("PENDING_APPROVAL",status(own.reservationId()));
-  assertEquals(0,events(own.reservationId(),"RESERVATION_CONFIRMED")+events(own.reservationId(),"RESERVATION_REJECTED"));
+   mine.reservationId(),new ReservationManagementModels.Decision("REJECT",0L,"Desisti"))).code());
+  assertEquals("PENDING_APPROVAL",status(mine.reservationId()));
+  assertEquals(0,events(mine.reservationId(),"RESERVATION_CONFIRMED")+events(mine.reservationId(),"RESERVATION_REJECTED"));
   db.assertEmptyContext();
  }
 
