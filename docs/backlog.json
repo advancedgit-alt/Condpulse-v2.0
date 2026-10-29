@@ -317,6 +317,13 @@
             "node --test tests/foundation.test.mjs tests/spec-package.test.mjs"
           ],
           "scope": "Capacidades de equipe por papel (MANAGER/CONCIERGE; SUPPORT sem capacidade) exigem AAL2 no backend: AAL1 recebe MFA_REQUIRED sem alteração e app.capabilities só é publicado no banco após vínculo vigente e AAL2 (JDBC real). BFF /auth/mfa, /auth/mfa/enroll e /auth/mfa/verify com CSRF/Origin, limite por sessão e rotação da sessão após verificação. Três jobs verdes; contagens por teste não lidas porque os logs do Actions são inacessíveis desta sessão. Sem Supabase Auth real, sem telas web de MFA e sem códigos de recuperação; não constitui aceite integral."
+        },
+        {
+          "commit": "9a46a546a6fdd6b426c7acc1fc85133ce7827b14",
+          "branch": "feat/mfa-aal2-capabilities",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Auth sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40805244326",
+          "scope": "Correções da revisão independente: verificação TOTP com reserva da sessão, falha fechada em resultado incerto, troca atômica para AAL2 (WebSessionStoreJdbcTest em PostgreSQL real) e limites por conta. Primeiro cadastro com AAL1 permanece risco operacional mitigado por procedimento; não constitui aceite integral."
         }
       ]
     },
