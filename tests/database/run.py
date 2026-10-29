@@ -1569,6 +1569,87 @@ def attachment_checks():
     expect(error(audit.format(actor=OTHER), "42501", tenant=TA, actor=OTHER, role="cp_api"), "trilha exige anexo visivel")
     query(audit.format(actor=AA), tenant=TA, role="cp_api")
 
+def permit_link_checks():
+    """V020: link de convite por hash; quem abre ve so aquele convite em vigor; criar outro revoga o anterior."""
+    DEPL, RESL, ULB = ("10000000-0000-4000-8000-0000000000f1", "10000000-0000-4000-8000-0000000000f2",
+                       "20000000-0000-4000-8000-0000000000f3")
+    VL1, VL2, VL3 = ("70000000-0000-4000-8000-0000000000f1", "70000000-0000-4000-8000-0000000000f2", "70000000-0000-4000-8000-0000000000f3")
+    PL1, PL2, PL3 = ("71000000-0000-4000-8000-0000000000f1", "71000000-0000-4000-8000-0000000000f2", "71000000-0000-4000-8000-0000000000f3")
+    L1, L2, L3, L4 = ("73000000-0000-4000-8000-0000000000f1", "73000000-0000-4000-8000-0000000000f2",
+                      "73000000-0000-4000-8000-0000000000f3", "73000000-0000-4000-8000-0000000000f4")
+    H1, H2, H3, H4 = ("1" * 64, "2" * 64, "3" * 64, "4" * 64)
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{DEPL}','ACTIVE'),('{RESL}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{ULB}','{TA}','FICTICIA LINK');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions)
+          VALUES('{TA}','{DEPL}','{UA}','DEPENDENTE LINK','DEPENDENT','ACTIVE','{{"visits":{{"create":true}}}}'),
+                ('{TA}','{RESL}','{ULB}','MORADOR LINK','RESIDENT','ACTIVE','{{}}');
+    """)
+    def permit(visitor_id, permit_id, actor=AA, end="clock_timestamp()+interval '2 hours'"):
+        return (f"INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{visitor_id}','{TA}','CONVIDADA LINK SOBRENOME','{actor}'); "
+                f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until) "
+                f"VALUES('{permit_id}','{TA}','{visitor_id}','{UA}','VISITA LINK','{actor}',clock_timestamp(),{end})")
+    def link(identifier, permit_id, token, actor=AA, unit=UA):
+        return (f"INSERT INTO cp.permit_links(id,tenant_id,permit_id,unit_id,token_hash,created_by) "
+                f"VALUES('{identifier}','{TA}','{permit_id}','{unit}','{token}','{actor}')")
+    query(permit(VL1, PL1), tenant=TA, role="cp_api")
+    query(permit(VL2, PL2, actor=DEPL), tenant=TA, actor=DEPL, role="cp_api")
+    query(link(L1, PL1, H1, unit=ULB), tenant=TA, role="cp_api")
+    expect(value(f"select unit_id||'|'||(revoked_at is null) from cp.permit_links where id='{L1}'") == f"{UA}|true",
+           "unidade do link vem do convite, nao do pedido")
+    expect(error(link(L2, PL1, H2), "23505", tenant=TA, role="cp_api"), "um link em vigor por convite")
+    expect(error(link(L2, PL1, H2, actor=RESL), "42501", tenant=TA, actor=RESL, role="cp_api"), "outra unidade nao cria link")
+    expect(error(link(L2, PL1, H2, actor=DEPL), "42501", tenant=TA, actor=DEPL, role="cp_api"),
+           "dependente nao compartilha convite que nao criou")
+    query(link(L2, PL2, H2, actor=DEPL), tenant=TA, actor=DEPL, role="cp_api")
+    expect(value(f"select count(*) from cp.permit_links where id in ('{L1}','{L2}')", tenant=TA, actor=DEPL, role="cp_api") == "1",
+           "dependente ve so o link do convite que criou")
+    expect(value(f"select count(*) from cp.permit_links where id in ('{L1}','{L2}')", tenant=TA, actor=RESL, role="cp_api") == "0",
+           "outra unidade nao ve links")
+    expect(value(f"select count(*) from cp.permit_links", tenant=TB, actor=AB, role="cp_api") == "0", "outro condominio nao ve links")
+    expect(value("SET LOCAL app.capabilities='concierge.operate'; select count(*) from cp.permit_links", tenant=TA, role="cp_api") == "2",
+           "morador da unidade ve os links da unidade")
+    # Quem abre o link: sem conta, so com o hash.
+    # Sem app.tenant_id: o fluxo publico nunca define condominio.
+    public = lambda token, statement: value(f"SET LOCAL app.permit_link_hash='{token}'; {statement}", actor="", role="cp_api")
+    expect(public(H1, "select tenant_id||'|'||permit_id from cp.permit_links") == f"{TA}|{PL1}", "hash apresentado acha so o proprio link")
+    expect(public(H1, "select count(*) from platform.tenants") == "1", "quem abre o link ve o condominio do convite")
+    expect(public(H1, "select string_agg(id::text,',') from cp.visit_permits") == PL1, "quem abre o link ve so aquele convite")
+    expect(public(H1, "select full_name from cp.visitors") == "CONVIDADA LINK SOBRENOME", "e so a pessoa daquele convite")
+    expect(public(H3, "select count(*) from cp.permit_links") == "0", "hash desconhecido nao acha nada")
+    expect(public(H1, "select count(*) from cp.units") == "0", "link nao abre unidades")
+    expect(public(H1, "select count(*) from cp.arrival_requests") == "0", "link nao abre chegadas")
+    expect(value("select count(*) from cp.permit_links", actor="", role="cp_api") == "0", "sem hash nem contexto nao ha links")
+    expect(error(f"SET LOCAL app.permit_link_hash='{H1}'; UPDATE cp.permit_links SET revoked_by='{AA}' WHERE id='{L1}'",
+                 "42501", tenant=TA, actor="", role="cp_api") or
+           value(f"SET LOCAL app.permit_link_hash='{H1}'; WITH u AS (UPDATE cp.permit_links SET revoked_by='{AA}' WHERE id='{L1}' RETURNING 1) "
+                 "SELECT count(*) FROM u", tenant=TA, actor="", role="cp_api") == "0", "quem abre o link nao o revoga")
+    # Revogar: uma vez, com horario do banco; outro link pode nascer depois.
+    expect(value(f"WITH u AS (UPDATE cp.permit_links SET revoked_by='{RESL}' WHERE id='{L1}' RETURNING 1) SELECT count(*) FROM u",
+                 tenant=TA, actor=RESL, role="cp_api") == "0", "outra unidade nao revoga link")
+    expect(error(f"UPDATE cp.permit_links SET revoked_by='{DEPL}' WHERE id='{L1}'", "42501", tenant=TA, role="cp_api"),
+           "revogacao registra a propria conta")
+    query(f"UPDATE cp.permit_links SET revoked_by='{AA}' WHERE id='{L1}'", tenant=TA, role="cp_api")
+    expect(value(f"select (revoked_at is not null)::text from cp.permit_links where id='{L1}'") == "true", "revogacao grava horario do banco")
+    expect(error(f"UPDATE cp.permit_links SET revoked_by='{AA}' WHERE id='{L1}'", "23514", tenant=TA, role="cp_api"), "link revogado nao muda de novo")
+    expect(error(f"UPDATE cp.permit_links SET token_hash='{H4}' WHERE id='{L1}'", "42501", tenant=TA, role="cp_api"), "hash nao muda")
+    expect(public(H1, "select count(*) from cp.visit_permits") == "0", "link revogado nao abre mais o convite")
+    expect(public(H1, "select count(*) from platform.tenants") == "0", "nem o condominio")
+    query(link(L3, PL1, H3), tenant=TA, role="cp_api")
+    expect(public(H3, "select count(*) from cp.visit_permits") == "1", "novo link vale depois da revogacao do anterior")
+    query(f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Fim',version=version+1 WHERE id='{PL1}'",
+          tenant=TA, role="cp_api")
+    expect(error(link(L4, PL1, H4), "23514", tenant=TA, role="cp_api"), "convite revogado nao ganha link")
+    query(permit(VL3, PL3, end="clock_timestamp()+interval '2 hours'"), tenant=TA, role="cp_api")
+    query("SET session_replication_role=replica; UPDATE cp.visit_permits SET valid_from=clock_timestamp()-interval '3 hours', "
+          f"valid_until=clock_timestamp()-interval '1 hour' WHERE id='{PL3}'; SET session_replication_role=origin")
+    expect(error(link(L4, PL3, H4), "23514", tenant=TA, role="cp_api"), "convite vencido nao ganha link")
+    expect(error(f"DELETE FROM cp.permit_links WHERE id='{L1}'", "42501", tenant=TA, role="cp_api"), "aplicacao nao apaga link")
+    expect(error(f"INSERT INTO cp.permit_links(id,tenant_id,permit_id,unit_id,token_hash,created_by,revoked_at) "
+                 f"VALUES('{L4}','{TA}','{PL2}','{UA}','{H4}','{AA}',now())", "42501", tenant=TA, role="cp_api"),
+           "link nao nasce revogado nem com horario escolhido")
+    expect(error(link(L4, PL2, "ABC", actor=DEPL), "23514", tenant=TA, actor=DEPL, role="cp_api"), "hash so em hexadecimal de 64")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1677,6 +1758,7 @@ def main():
     request_checks()
     import_checks()
     attachment_checks()
+    permit_link_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

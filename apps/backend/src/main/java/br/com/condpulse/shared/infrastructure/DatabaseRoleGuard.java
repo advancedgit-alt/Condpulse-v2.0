@@ -23,7 +23,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // não muda; a gestão altera só andamento, responsável, prazo, resolução e versão; nomes e horários vêm do banco.
   // Importação (V018): lote e linhas nunca apagados; o lote só muda de estado, parcial, contagens e versão, com autoria e
   // horários do banco; a linha só recebe a unidade aplicada. Anexos (V019): nunca apagados; só estado, motivo e hash
-  // mudam, e o banco escolhe estado inicial, prazos e horários.
+  // mudam, e o banco escolhe estado inicial, prazos e horários. Links de convite (V020): nunca apagados; só a revogação
+  // muda, e o banco grava os horários.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -85,6 +86,12 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
         and c.attname not in ('applied','unit_id')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.import_rows') and c.attname in ('applied','unit_id')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.permit_links'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.permit_links') and c.attname in ('created_at','revoked_by','revoked_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.permit_links') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('revoked_by','revoked_at')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.attachments'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.attachments') and c.attname in ('state','rejection','sha256','created_at',

@@ -63,3 +63,5 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 .import-actions{display:grid;gap:10px}
 .hash{overflow-wrap:anywhere}
 @media (max-width:560px){.import-row{grid-template-columns:1fr}}
+.share-link{display:grid;gap:8px;margin-top:10px}
+.share-link input{width:100%;min-height:40px;padding:8px 10px;border:1px solid #cdd6e0;border-radius:8px;font:inherit;font-size:14px}

@@ -182,6 +182,9 @@ const messages: Record<string, string> = {
   VISIT_PURPOSE_INVALID: 'Use até 200 caracteres na finalidade.',
   VISIT_PERIOD_INVALID: 'O convite começa a partir de agora (até 90 dias à frente), termina depois do início e vale por até 7 dias.',
   VISIT_PERMIT_NOT_FOUND: 'Convite não encontrado.',
+  VISIT_PERMIT_LINK_UNAVAILABLE: 'Só convites em vigor ou agendados podem ser compartilhados.',
+  PERMIT_LINK_UNAVAILABLE: 'Este link de convite não está disponível. Peça um novo link a quem convidou.',
+  PERMIT_LINK_DEPENDENCY_UNAVAILABLE: 'Não foi possível abrir o convite agora. Tente novamente.',
   VISIT_VERSION_REQUIRED: 'Atualize os convites antes de revogar.',
   VISIT_REVOKE_REASON_REQUIRED: 'Informe o motivo da revogação, com até 500 caracteres.',
   VISIT_PERMIT_REVOKED: 'Este convite foi revogado.',
@@ -374,6 +377,21 @@ export function passwordProblem(password: string): string | null {
   return null;
 }
 export const RECOVERY_LINK = /^[A-Za-z0-9_-]{16,512}$/;
+export const PERMIT_LINK = /^[A-Za-z0-9_-]{43}$/;
+/** O que quem abre o link de visita vê: sem unidade nem identificadores, só o primeiro nome. */
+export interface PublicPermit {
+  tenantName: string; visitorFirstName: string; purpose: string | null; validFrom: string; validUntil: string; timeZone: string;
+  state: 'SCHEDULED' | 'ACTIVE';
+}
+export function publicPermit(value: unknown): PublicPermit {
+  if (!record(value) || !isString(value.tenantName) || !value.tenantName || !isString(value.visitorFirstName) || !value.visitorFirstName
+      || !(value.purpose === null || isString(value.purpose)) || !isDate(value.validFrom) || !isDate(value.validUntil)
+      || !isString(value.timeZone) || !oneOf(value.state, ['SCHEDULED', 'ACTIVE']) || Date.parse(value.validUntil) <= Date.parse(value.validFrom)
+      || Object.keys(value).some((key) => !['tenantName', 'visitorFirstName', 'purpose', 'validFrom', 'validUntil', 'timeZone', 'state'].includes(key)))
+    throw invalidResponse();
+  return { tenantName: value.tenantName, visitorFirstName: value.visitorFirstName, purpose: value.purpose as string | null,
+    validFrom: value.validFrom, validUntil: value.validUntil, timeZone: value.timeZone, state: value.state };
+}
 
 function invitationAccepted(value: unknown): InvitationAccepted {
   if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== 'PENDING') throw invalidResponse(true);
@@ -818,6 +836,16 @@ export class CondPulseApi {
     }
     this.clearSession();
     return result;
+  }
+  /**
+   * Link de convite de visita (CP-037), sem conta: o token vai no corpo com CSRF, nunca na URL do servidor. Resposta
+   * neutra para link desconhecido, revogado ou vencido.
+   */
+  async viewPermitLink(token: string, signal?: AbortSignal): Promise<PublicPermit> {
+    if (!PERMIT_LINK.test(token)) throw new ApiError(404, 'PERMIT_LINK_UNAVAILABLE', messages.PERMIT_LINK_UNAVAILABLE!);
+    const reply = await this.send('/auth/permit-links/view', { method: 'POST', body: JSON.stringify({ token }), ...(signal ? { signal } : {}) },
+      this.generation);
+    return publicPermit(reply.value);
   }
   /**
    * Primeiro acesso por convite: entra com a senha do provedor e aceita o convite na mesma chamada, para quem ainda

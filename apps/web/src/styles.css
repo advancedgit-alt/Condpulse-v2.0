@@ -14,3 +14,6 @@
 .eyebrow,.text-button:not(.danger-text){color:#006b72}
 .rate-limit-copy{font-size:.875rem;display:flex;align-items:flex-start;gap:8px}
 .status-pending{background:#fdf3e1;color:#7a4b00}.reservation-info .reservation-pending,.reservation-info .reservation-reason{font-size:.74rem;margin:8px 0 0;color:#4b6274}.reservation-info .reservation-pending{color:#7a4b00}
+.visit-link-details{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:14px 0}
+.visit-link-details dt{font-weight:700}
+.visit-link-details dd{margin:0}

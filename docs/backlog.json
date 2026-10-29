@@ -1191,7 +1191,7 @@
       "id": "CP-037",
       "delivery": "Convites compartilháveis de uso controlado. Token opaco com validade, hash no banco e limites de tentativas.",
       "acceptance": "Token bruto não aparece em logs, analytics nem URL persistida.",
-      "status": "PLANEJADO",
+      "status": "EM_IMPLEMENTACAO",
       "evidence": []
     },
     {

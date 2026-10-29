@@ -15,7 +15,8 @@ public final class VisitModels {
   * agora), REVOKED ou EXPIRED (vigência encerrada). Fora do período o convite não autoriza a entrada.
   */
  public record Permit(UUID permitId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,String purpose,
-   Instant validFrom,Instant validUntil,String state,boolean createdByMe,Instant revokedAt,String revokeReason,long version,Instant createdAt) {}
+   Instant validFrom,Instant validUntil,String state,boolean createdByMe,Instant revokedAt,String revokeReason,long version,Instant createdAt,
+   boolean shareLinkActive) {}
  public record PermitPage(List<Permit> permits,boolean truncated) {
   public PermitPage { permits=List.copyOf(permits); }
  }
@@ -38,5 +39,18 @@ public final class VisitModels {
  public record AssistedDecision(String decision,String source,String note) {}
  public record CancelArrival(String reason) {}
  public record PermitMutation(Permit permit,boolean replayed,int status) {}
+ /**
+  * Link compartilhável (CP-037): o token bruto sai somente nesta resposta e nunca é guardado; o banco tem só o hash.
+  * Vale até a revogação do link ou do convite, ou até o fim da vigência do convite.
+  */
+ public record PermitLink(String token,Instant validUntil) {
+  @Override public String toString() { return "PermitLink[token=REDACTED]"; }
+ }
+ public record PermitLinkView(String token) {
+  @Override public String toString() { return "PermitLinkView[token=REDACTED]"; }
+ }
+ /** O que quem abre o link vê: sem unidade, sem identificadores e só o primeiro nome da pessoa convidada. */
+ public record PublicPermit(String tenantName,String visitorFirstName,String purpose,Instant validFrom,Instant validUntil,String timeZone,
+   String state) {}
  public record ArrivalMutation(Arrival arrival,boolean replayed,int status) {}
 }

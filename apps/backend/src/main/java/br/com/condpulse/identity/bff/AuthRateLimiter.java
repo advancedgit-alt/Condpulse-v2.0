@@ -68,6 +68,11 @@ public final class AuthRateLimiter {
   String principal=opaqueRecovery!=null && opaqueRecovery.matches("[A-Za-z0-9_-]{43}") ? opaqueRecovery : "anonymous";
   return admit("recovery-complete",principal,120,10,900);
  }
+ /** Link de convite aberto sem conta (CP-037): limite global e por hash do token (nunca o token). */
+ public Admission permitLinkView(String tokenHash) {
+  String principal=tokenHash!=null && tokenHash.matches("[0-9a-f]{64}") ? tokenHash : "invalid";
+  return admit("permit-link-view",principal,120,20,900);
+ }
  private static String accountPrincipal(java.util.UUID account) {
   if(account==null) throw new IllegalArgumentException("Conta obrigatoria para limite de segundo fator.");
   return account.toString();
