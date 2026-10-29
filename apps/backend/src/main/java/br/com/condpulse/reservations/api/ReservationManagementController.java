@@ -36,8 +36,10 @@ public class ReservationManagementController {
  @PostMapping("/v1/tenants/{tenantId}/management/reservations/{reservationId}/decision")
  public ResponseEntity<ReservationManagementModels.ManagedReservation> decide(@AuthenticationPrincipal Jwt jwt,
      @PathVariable UUID tenantId,@PathVariable UUID reservationId,@RequestBody ReservationManagementModels.Decision request) {
+  var outcome=service.decideOutcome(account(jwt),tenantId,assurance(jwt),reservationId,request);
+  // Aplicada por esta chamada ou estado já existente (decisão anterior): a tela não infere autoria pela versão.
   return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-   .body(service.decide(account(jwt),tenantId,assurance(jwt),reservationId,request));
+   .header("Reservation-Decision-Applied",Boolean.toString(outcome.applied())).body(outcome.reservation());
  }
  @PostMapping("/v1/tenants/{tenantId}/management/reservations/{reservationId}/cancel")
  public ResponseEntity<ReservationManagementModels.ManagedReservation> cancel(@AuthenticationPrincipal Jwt jwt,

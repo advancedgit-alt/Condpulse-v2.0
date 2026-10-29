@@ -131,14 +131,21 @@ describe('regras locais de formulário', () => {
 
 describe('resultado mostrado após decisão ou cancelamento', () => {
   const pending = managedReservation(reservation);
-  it('só confirma sucesso quando a versão avançou pela própria ação', () => {
-    expect(decisionOutcome({ ...pending, status: 'CONFIRMED', version: 1 }, 'APPROVE', 0)).toEqual({ tone: 'success', text: 'Pedido aprovado. A reserva está confirmada.' });
-    expect(decisionOutcome({ ...pending, status: 'REJECTED', version: 1 }, 'REJECT', 0)).toEqual({ tone: 'success', text: 'Pedido rejeitado. O período foi liberado.' });
+  it('sem a indicação do servidor, só confirma sucesso quando a versão avançou pela própria ação', () => {
+    expect(decisionOutcome({ reservation: { ...pending, status: 'CONFIRMED', version: 1 }, applied: null }, 'APPROVE', 0)).toEqual({ tone: 'success', text: 'Pedido aprovado. A reserva está confirmada.' });
+    expect(decisionOutcome({ reservation: { ...pending, status: 'REJECTED', version: 1 }, applied: null }, 'REJECT', 0)).toEqual({ tone: 'success', text: 'Pedido rejeitado. O período foi liberado.' });
     // Repetição natural: outra pessoa já decidiu (versão não avançou a partir da lida) ou o resultado diverge do pedido.
-    const replay = decisionOutcome({ ...pending, status: 'CONFIRMED', version: 1 }, 'APPROVE', 1);
+    const replay = decisionOutcome({ reservation: { ...pending, status: 'CONFIRMED', version: 1 }, applied: null }, 'APPROVE', 1);
     expect(replay.tone).toBe('info'); expect(replay.text).toMatch(/já estava confirmada/); expect(replay.text).toMatch(/não foi registrado/);
-    expect(decisionOutcome({ ...pending, status: 'REJECTED', version: 1 }, 'APPROVE', 0).tone).toBe('info');
-    expect(decisionOutcome({ ...pending, status: 'EXPIRED', version: 1 }, 'APPROVE', 0).text).toMatch(/já estava expirada/);
+    expect(decisionOutcome({ reservation: { ...pending, status: 'REJECTED', version: 1 }, applied: null }, 'APPROVE', 0).tone).toBe('info');
+    expect(decisionOutcome({ reservation: { ...pending, status: 'EXPIRED', version: 1 }, applied: null }, 'APPROVE', 0).text).toMatch(/já estava expirada/);
+  });
+  it('com a indicação do servidor, a segunda decisão igual de outro gestor não aparece como sucesso', () => {
+    // Dois gestores leram a versão 0: o primeiro gravou (versão 1); o segundo recebe o mesmo estado sem aplicar nada.
+    const first = decisionOutcome({ reservation: { ...pending, status: 'CONFIRMED', version: 1 }, applied: true }, 'APPROVE', 0);
+    expect(first.tone).toBe('success');
+    const second = decisionOutcome({ reservation: { ...pending, status: 'CONFIRMED', version: 1 }, applied: false }, 'APPROVE', 0);
+    expect(second.tone).toBe('info'); expect(second.text).toMatch(/não foi registrado/);
   });
   it('cancelamento repetido ou feito por outra pessoa não aparece como sucesso desta ação', () => {
     const confirmed = { ...pending, status: 'CONFIRMED' as const, version: 1 };

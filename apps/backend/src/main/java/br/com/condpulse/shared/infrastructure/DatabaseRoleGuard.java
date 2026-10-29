@@ -1,15 +1,20 @@
 package br.com.condpulse.shared.infrastructure;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+/**
+ * Confere a role de execução durante a criação do contexto, antes de o servidor web abrir a porta. Como ApplicationRunner,
+ * a conferência rodava com a porta já aberta e a prontidão ainda REFUSING_TRAFFIC: a primeira requisição depois de um
+ * início a frio na Vercel recebia 503 OUT_OF_SERVICE (e podia ser atendida antes de a role ser conferida).
+ */
 @Component @Profile({"api","worker"})
-public class DatabaseRoleGuard implements ApplicationRunner {
+public class DatabaseRoleGuard implements SmartInitializingSingleton {
  private final JdbcTemplate jdbc;
  public DatabaseRoleGuard(JdbcTemplate jdbc) { this.jdbc=jdbc; }
- @Override public void run(ApplicationArguments args) {
+ @Override public void afterSingletonsInstantiated() { verify(); }
+ public void verify() {
   // Trilhas e papéis de plataforma (V010), financeiro (V011), registros de acesso (V014), outbox/caixa interna (V015) e
   // avisos (V016) conferidos por to_regclass: banco ainda sem a migration não falha aqui. O financeiro nunca apaga: estorno e
   // cancelamento mantêm a linha; o registro de acesso nunca muda: correção é um evento adicional, e unidade, pessoa,

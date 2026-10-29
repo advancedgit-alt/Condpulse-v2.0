@@ -46,6 +46,8 @@ export interface ManagedReservation {
 }
 export interface ManagedReservationPage { reservations: ManagedReservation[]; truncated: boolean }
 export interface BlockResult { reservation: ManagedReservation; replayed: boolean }
+/** Decisão de pedido: `applied` vem do servidor (false = estado já existente, motivo não registrado; null = sem a indicação). */
+export interface DecisionResult { reservation: ManagedReservation; applied: boolean | null }
 export interface AuditEvent {
   eventId: UUID; actorId: UUID; action: string; resourceType: string; resourceId: UUID; reason: string | null; createdAt: ISODateTime;
 }
@@ -177,7 +179,10 @@ export function createManagementApi(client: CondPulseApi = api) {
         signal ? { signal } : {}) as Promise<ManagedReservationPage>;
     },
     decideReservation: async (tenantId: string, reservationId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
-      client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/decision`, mutationOf(managedReservation), { method: 'POST', body }),
+      client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/decision`, (value, response): DecisionResult => {
+        const header = response.headers.get('Reservation-Decision-Applied');
+        return { reservation: managedReservation(value, true), applied: header === 'true' ? true : header === 'false' ? false : null };
+      }, { method: 'POST', body }),
     cancelReservation: async (tenantId: string, reservationId: string, body: { expectedVersion: number; reason: string }) =>
       client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/cancel`, mutationOf(managedReservation), { method: 'POST', body }),
     createMaintenanceBlock: async (tenantId: string, amenityId: string, key: string, body: { startsAt: string; endsAt: string; reason: string }) =>

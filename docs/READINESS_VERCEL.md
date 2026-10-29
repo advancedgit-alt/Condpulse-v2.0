@@ -49,3 +49,19 @@ HTML continua sendo web. Não usá-los como alternativa ao probe exato.
 
 Validação local: `node --test tests/vercel-config.test.mjs`. O teste de preflight
 Java requer JDK e deve ser registrado como não executado quando indisponível.
+
+## 503 inicial depois de início a frio (29/10/2026)
+
+Os smokes públicos registraram `503`/`OUT_OF_SERVICE` na primeira consulta e
+`200`/`UP` na repetição. `OUT_OF_SERVICE` é o estado `REFUSING_TRAFFIC` da
+prontidão, não falha do `db` (que daria `DOWN`). Causa no código: a
+`DatabaseRoleGuard` era um `ApplicationRunner`, que o Spring Boot executa depois
+de o servidor web abrir a porta e antes de publicar `ACCEPTING_TRAFFIC`; durante a
+conexão TLS ao banco e as duas consultas da guarda, a porta já respondia com a
+prontidão recusada (e outra rota podia ser atendida antes da conferência da role).
+A guarda passou a rodar em `afterSingletonsInstantiated`, durante a criação do
+contexto e antes de qualquer componente com ciclo de vida, entre eles o servidor
+web. `DatabaseRoleGuardStartupTest` comprova a ordem. Continua possível um 503 se a
+Vercel encaminhar a requisição no intervalo curto entre abrir a porta e publicar a
+prontidão; o smoke mantém a repetição. A confirmação no ambiente vem do próximo
+smoke público depois do deployment.
