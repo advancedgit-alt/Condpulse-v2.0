@@ -2,8 +2,14 @@ package br.com.condpulse.database;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.requests.application.RequestModels;
 import br.com.condpulse.requests.application.RequestService;
@@ -20,7 +26,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * V017 com PostgreSQL real: a conversa fica no pedido certo, pedido de outra unidade ou condomínio é "não encontrado"
- * mesmo com o ID conhecido, comentário interno nunca chega à unidade e a resolução permanece na conversa.
+ * mesmo com o ID conhecido, comentário interno nunca chega à unidade, a resolução permanece na conversa e mensagens
+ * visíveis seguidas (ou simultâneas) no mesmo pedido são todas gravadas, cada uma com o próprio evento.
  */
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class RequestJdbcTest {
@@ -30,7 +37,7 @@ class RequestJdbcTest {
  private static UUID manager,concierge,responsible;
 
  @BeforeAll static void setup() throws Exception {
-  db=new JdbcDisposableDatabase(1);
+  db=new JdbcDisposableDatabase(2);
   requests=new RequestService(new TenantTransactionExecutor(db.jdbc,db.manager),new RequestStore(db.jdbc),new AuditRecorder(db.jdbc));
   manager=UUID.randomUUID(); concierge=UUID.randomUUID(); responsible=UUID.randomUUID();
   for(UUID account:List.of(manager,concierge,responsible)) db.extraAccounts.add(account);
@@ -180,6 +187,64 @@ class RequestJdbcTest {
   assertEquals("1",db.adminString("select count(*) from cp.request_messages where request_id=?",request.requestId()));
   assertEquals("SERVICE_REQUEST_VISIBILITY_INVALID",code(()->staffSays(request.requestId(),"Sem visibilidade.","PUBLIC")));
   assertEquals("SERVICE_REQUEST_MESSAGE_INVALID",code(()->unitSays(db.accountA,request.requestId(),"   ")));
+  db.assertEmptyContext();
+ }
+
+ /** Regressão: a segunda mensagem visível na mesma versão do pedido falhava com 503 (identidade repetida no outbox). */
+ @Test void visibleMessagesInARowWithoutAProgressChangeAreAllRecordedWithTheirOwnEvent() throws Exception {
+  UUID id=open(db.accountA,"Infiltração na parede da sala").requestId();
+  // Versão 0 do pedido: mensagens seguidas da unidade, do outro adulto da unidade e da equipe.
+  var said=new ArrayList<RequestModels.Message>();
+  said.add(unitSays(db.accountA,id,"Começou ontem à noite."));
+  said.add(unitSays(db.accountA,id,"Hoje a mancha aumentou."));
+  said.add(unitSays(responsible,id,"Estou em casa à tarde."));
+  var internal=staffSays(id,"Ver com a construtora.","INTERNAL");
+  said.add(staffSays(id,"Vamos verificar amanhã.","RESIDENT"));
+  said.add(staffSays(id,"Confirmado para as 14h.","RESIDENT"));
+  // Depois da triagem (versão 1), a conversa continua do mesmo jeito.
+  assertEquals(1,update(id,"TRIAGED",null,null,null,0).version());
+  said.add(unitSays(db.accountA,id,"Obrigado."));
+  said.add(staffSays(id,"Equipe a caminho.","RESIDENT"));
+  var visible=said.stream().map(RequestModels.Message::messageId).toList();
+  assertEquals(visible,requests.unitRequest(db.accountA,db.tenantA,id).messages().stream().map(RequestModels.Message::messageId).toList());
+  assertEquals(8,requests.managedRequest(manager,db.tenantA,AAL2,id).messages().size(),"Sete mensagens visíveis e um comentário interno");
+  // Um evento por mensagem visível, cada um com identidade própria; o comentário interno não gera evento.
+  assertEquals(visible.stream().map(UUID::toString).collect(Collectors.joining(",")),db.adminString("""
+   select string_agg(payload->>'messageId',',' order by aggregate_version) from cp.outbox
+   where tenant_id=? and aggregate_id=? and event_type='REQUEST_MESSAGE_ADDED'
+   """,db.tenantA,id));
+  assertEquals("1:0,2:0,3:0,4:0,5:0,6:1,7:1",db.adminString("""
+   select string_agg(aggregate_version::text||':'||(payload->>'version'),',' order by aggregate_version) from cp.outbox
+   where tenant_id=? and aggregate_id=? and event_type='REQUEST_MESSAGE_ADDED'
+   """,db.tenantA,id),"Número da mensagem visível na identidade do evento; versão do pedido no payload");
+  assertEquals("7",db.adminString("""
+   select count(*) from cp.outbox where tenant_id=? and aggregate_id=? and event_type='REQUEST_MESSAGE_ADDED'
+    and payload->>'id'=?::text and payload->>'unitId'=?::text
+   """,db.tenantA,id,id,db.unitA));
+  assertEquals("0",db.adminString("select count(*) from cp.outbox where payload->>'messageId'=?",internal.messageId().toString()));
+  db.assertEmptyContext();
+ }
+
+ /** Duas mensagens visíveis ao mesmo tempo no mesmo pedido: a trava do pedido ordena as duas e nenhuma falha. */
+ @Test void simultaneousVisibleMessagesOnTheSameRequestAreBothRecorded() throws Exception {
+  UUID id=open(db.accountA,"Barulho de obra no andar de cima").requestId();
+  var start=new CountDownLatch(1);
+  var pool=Executors.newFixedThreadPool(2);
+  try {
+   List<Callable<String>> tasks=List.<Callable<String>>of(
+    ()->{ start.await(); try { unitSays(db.accountA,id,"Começou às 7h."); return "OK"; } catch(BusinessProblem problem) { return problem.code(); } },
+    ()->{ start.await(); try { staffSays(id,"Vamos falar com a obra.","RESIDENT"); return "OK"; } catch(BusinessProblem problem) { return problem.code(); } });
+   var futures=tasks.stream().map(pool::submit).toList();
+   start.countDown();
+   var results=new ArrayList<String>();
+   for(var future:futures) results.add(future.get(20,TimeUnit.SECONDS));
+   assertEquals(List.of("OK","OK"),results,"Nenhuma das duas mensagens simultâneas falha");
+  } finally { pool.shutdownNow(); }
+  assertEquals("2",db.adminString("select count(*) from cp.request_messages where tenant_id=? and request_id=?",db.tenantA,id));
+  assertEquals("1,2",db.adminString("""
+   select string_agg(aggregate_version::text,',' order by aggregate_version) from cp.outbox
+   where tenant_id=? and aggregate_id=? and event_type='REQUEST_MESSAGE_ADDED'
+   """,db.tenantA,id));
   db.assertEmptyContext();
  }
 }
