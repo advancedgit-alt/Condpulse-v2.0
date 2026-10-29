@@ -60,6 +60,8 @@ test('Vercel conserva CSP/no-store e nao grava credenciais ou origem de outro si
   // Envio de anexo vai direto ao Storage privado da homologação; nenhum curinga nem outra origem.
   assert.match(headers['content-security-policy'], /connect-src 'self' https:\/\/rpnrqfrfwywglvyykgrg\.supabase\.co;/);
   assert.doesNotMatch(headers['content-security-policy'], /\*|tkxcujckpsuawnzkvpjg/);
+  const nginx = read('infra/nginx/condpulse.conf').match(/Content-Security-Policy "([^"]+)"/)[1];
+  assert.equal(nginx, headers['content-security-policy'], 'imagem nginx e Vercel com a mesma CSP');
   assert.match(headers['content-security-policy'], /frame-ancestors 'none'/);
   assert.doesNotMatch(JSON.stringify(config), /DATABASE_PASSWORD|ENCRYPTION_KEY|sb_secret_|service_role|sindicoadvanced/i);
 });

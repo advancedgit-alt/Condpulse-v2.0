@@ -5,7 +5,8 @@ import { installManagementApi } from './management-fixtures';
 test.use({ timezoneId: 'UTC' });
 
 const REQUEST = '96000000-0000-4000-8000-000000000011';
-const STORAGE = 'https://abcdefghijklmnopqrst.supabase.co';
+// Mesmo host liberado na CSP (Vercel e imagem nginx); o Playwright intercepta, nada sai para a rede.
+const STORAGE = 'https://rpnrqfrfwywglvyykgrg.supabase.co';
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 const PDF = Buffer.from('%PDF-1.7 conteudo ficticio');
 const now = () => new Date().toISOString();
