@@ -15,8 +15,16 @@ nao repetir baseline nem apagar historico para reproduzi-la.
 O workflow `.github/workflows/database-operations.yml` oferece tres operacoes
 independentes. `inspect` e o padrao e nao escreve. `baseline` chama exclusivamente o
 CLI existente `BootstrapBaseline`, com o ACK fornecido pelo operador. `migrate` exige
-o marcador oficial BASELINE2 e valida/aplica somente V003/V004/V005 pelo Flyway.
+o marcador oficial BASELINE2 e valida/aplica pelo Flyway somente a faixa reconhecida
+no ACK `rpnrqfrfwywglvyykgrg:DE-ATE:SHA_REVISADO`: tudo antes de DE ja aplicado, sem
+lacuna, e ATE igual a ultima migration do JAR revisado (nada fica acima do alvo).
 Nao existe transicao automatica inspect -> baseline -> migrate.
+
+Faixa generalizada em 29/10/2026 para levar a homologacao da V005 a ultima versao
+revisada (primeira execucao: 006-015). O ensaio JDBC descartavel do CI cobre migracao
+completa a partir do baseline, repeticao com zero migrations, faixa com lacuna, faixa
+que nao chega a ultima migration, historico acima do JAR, checksum divergente e banco
+sem baseline.
 
 ## Preparar o cofre e a revisao
 
@@ -67,11 +75,13 @@ provisiona as credenciais runtime ou operacionais da aplicacao.
    pre-bootstrap deixa de ser elegivel apos esse marcador, por desenho. Nao apagar
    historico nem tentar reutilizar inspect como validador pos-migracao.
 6. Somente depois do baseline aceito, executar `migrate`, com maintenance_confirmed=true,
-   baseline_ack vazio e migration_ack `rpnrqfrfwywglvyykgrg:003-005:SHA_REVISADO`.
-   O guard exige BASELINE2 unico, sucesso, ownership postgres e apenas as versoes SQL
-   3/4/5 contiguas, com checksums, ou sua ausencia como migrations pendentes. Qualquer
-   erro diferente de RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED para essas versoes
-   bloqueia antes de migrate. A validacao estrita continua habilitada na migracao.
+   baseline_ack vazio e migration_ack `rpnrqfrfwywglvyykgrg:DE-ATE:SHA_REVISADO`
+   (historico: 003-005 em 28/10/2026). O guard exige BASELINE2 unico, sucesso,
+   ownership postgres e versoes SQL contiguas a partir de 3, com checksums; antes de DE
+   tudo aplicado, dentro da faixa so um prefixo (repeticao ou retomada) e ATE igual a
+   ultima migration do JAR. Qualquer erro diferente de RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED
+   para as versoes pendentes da faixa bloqueia antes de migrate. A validacao estrita
+   continua habilitada na migracao.
 7. Registrar saida, migrationsExecutadas, validacao final, commit, JAR e aprovador.
    Baseline ou migrate nao habilitam BFF/reservas nem configuram usuarios/vinculos.
 
@@ -110,7 +120,7 @@ Erro apos iniciar uma escrita pode significar resultado desconhecido, especialme
 se houver timeout/perda de conexao perto do commit. Suspender a promocao e conferir
 o historico por leitura autorizada; nao repetir cegamente, fabricar linhas, usar
 repair, alterar marcador, afrouxar RLS ou resetar senha. Guard e Flyway rejeitam divergencias de historico/checksums,
-falhas, gaps e versoes acima de005. Esse guard nao atesta alteracoes estruturais ou de RLS feitas fora das migrations depois do baseline. Replay de migrate validado pode resultar em zero
+falhas, gaps e versoes acima do ATE reconhecido. Esse guard nao atesta alteracoes estruturais ou de RLS feitas fora das migrations depois do baseline. Replay de migrate validado pode resultar em zero
 migrations; isso nao autoriza repeticao apos erro sem conferir o estado.
 
 O pacote nao comprova que GitHub tenha rota/permissao de rede ate o banco. Firewall,
