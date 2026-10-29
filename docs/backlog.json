@@ -615,6 +615,20 @@
             "python3 tests/database/run.py"
           ],
           "scope": "Correções da revisão independente: revogação entre gestores serializada por condomínio (revogação cruzada não deixa o condomínio sem gestor, teste JDBC concorrente), unicidade de vínculo só entre não revogados (reconvite após rejeição ou revogação), convite de uso único também no banco, conclusão presa ao vínculo do próprio convidado, valid_from fora do grant, account_self só leitura, validade pelo relógio do banco, aceite recusa unidade inativa e gestor não decide o próprio vínculo. 7 verificações SQL novas. Pendentes registrados: endurecimento do aceite com SECURITY DEFINER, email_verified, HMAC do e-mail e MFA supervisionado de CONCIERGE."
+        },
+        {
+          "commit": "015079c9253385eaa04ba0542c7a5b78f7ae815b",
+          "branch": "feat/access-recovery",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética e provedor Auth simulado",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40819926798",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,RecoveryStoreJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Recuperação de acesso pela web atrás de CP_BFF_RECOVERY_ENABLED=false: pedido neutro em prazo fixo, link pelo fragmento, tentativa V009 com cookie próprio, segundo fator com limite por conta, troca confirmada pelo provedor e encerramento de sessões. Provedor simulado; Auth real, e-mail/SMTP e a pré-condição do provedor (recusa de troca AAL1 com TOTP) pendentes: não constitui aceite de CP-020."
         }
       ]
     },
