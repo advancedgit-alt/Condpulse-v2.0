@@ -16,7 +16,11 @@ test('rastreabilidade preserva 68 tickets e 60 cenarios sem marcar aceite fictic
 test('contrato publica somente a superficie implementada da fundacao',()=>{
  const spec=json('contracts/openapi.json');
  assert.equal(spec.openapi,'3.1.0');
- assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout','/auth/mfa','/auth/mfa/enroll','/auth/mfa/verify','/v1/tenants/{tenantId}/units','/v1/tenants/{tenantId}/amenities','/v1/tenants/{tenantId}/amenities/{amenityId}/availability','/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel']);
+ assert.deepEqual(Object.keys(spec.paths),['/v1/me','/auth/csrf','/auth/login','/auth/refresh','/auth/logout','/auth/mfa','/auth/mfa/enroll','/auth/mfa/verify','/v1/tenants/{tenantId}/units','/v1/tenants/{tenantId}/amenities','/v1/tenants/{tenantId}/amenities/{amenityId}/availability','/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel','/v1/tenants/{tenantId}/management/blocks','/v1/tenants/{tenantId}/management/units','/v1/tenants/{tenantId}/management/units/{unitId}','/v1/tenants/{tenantId}/management/amenities','/v1/tenants/{tenantId}/management/amenities/{amenityId}','/v1/tenants/{tenantId}/management/audit-events']);
+ for(const [path,item] of Object.entries(spec.paths).filter(([p])=>p.includes('/management/'))) for(const operation of Object.values(item)) {
+  assert.equal(operation['x-feature-flag'],'CP_MANAGEMENT_ENABLED',path);
+  assert.match(operation.responses['403'].description,/MFA_REQUIRED/,path);
+ }
  for(const op of ['login','refresh','logout','mfa/enroll','mfa/verify']) {const route=spec.paths['/auth/'+op].post; assert.equal(route['x-feature-flag'],'CP_BFF_ENABLED'); assert.ok(route.parameters.some(p=>p.name==='X-CSRF-Token' && p.required));}
  for(const path of ['/v1/tenants/{tenantId}/reservations','/v1/tenants/{tenantId}/reservations/{reservationId}/cancel']) {
   const route=spec.paths[path].post;

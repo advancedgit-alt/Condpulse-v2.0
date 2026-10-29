@@ -59,6 +59,12 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units","/v1/tenants/*/amenities",
       "/v1/tenants/*/amenities/*/availability","/v1/tenants/*/reservations").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/reservations","/v1/tenants/*/reservations/*/cancel").authenticated()
+    // Gestão local: autenticação aqui; papel, vínculo vigente e AAL2 são exigidos no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/blocks","/v1/tenants/*/management/units",
+      "/v1/tenants/*/management/amenities","/v1/tenants/*/management/audit-events").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/blocks","/v1/tenants/*/management/units",
+      "/v1/tenants/*/management/amenities").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/units/*","/v1/tenants/*/management/amenities/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify").permitAll()
     .anyRequest().denyAll())

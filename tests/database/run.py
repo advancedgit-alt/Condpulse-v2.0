@@ -109,14 +109,49 @@ def reservation(tenant=TA, area=RA, unit=UA, actor=AA,
         vals += f",'{identifier}'"
     return f"INSERT INTO cp.reservations({columns}) VALUES({vals}) RETURNING id"
 
+def capable(capabilities, statement):
+    return f"SET LOCAL app.capabilities='{capabilities}'; {statement}"
+
+def manage_checks():
+    """V006: escrita de gestao exige capacidade publicada no contexto local."""
+    unit = f"INSERT INTO cp.units(tenant_id,label) VALUES('{TA}','FICTICIA GESTAO')"
+    expect(error(unit, "42501", tenant=TA, role="cp_api"), "unidade nao e criada sem capacidade de gestao")
+    expect(error(capable("amenities.manage", unit), "42501", tenant=TA, role="cp_api"),
+           "capacidade de areas nao cria unidade")
+    expect(error(capable("units.manage,units.manager", unit.replace(f"'{TA}'", f"'{TB}'")), "42501", tenant=TA, role="cp_api"),
+           "capacidade nao atravessa tenant no WITH CHECK")
+    query(capable("units.manage", unit), tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.units where tenant_id='{TA}' and label='FICTICIA GESTAO'") == "1",
+           "gestor com capacidade cria unidade no proprio tenant")
+    rename = f"WITH u AS (UPDATE cp.units SET label='FICTICIA RENOMEADA',version=version+1 WHERE id='{UA}' RETURNING id) SELECT count(*) FROM u"
+    expect(value(rename, tenant=TA, role="cp_api") == "0", "sem capacidade a atualizacao nao alcanca a unidade")
+    expect(value(capable("units.manage", rename), tenant=TA, role="cp_api") == "1", "com capacidade a unidade e atualizada")
+    query(f"UPDATE cp.units SET label='FICTICIA 101' WHERE id='{UA}'")
+    expect(error(f"DELETE FROM cp.units WHERE label='FICTICIA GESTAO'", "42501", tenant=TA, role="cp_api"),
+           "aplicacao nao apaga unidades")
+    expect(value("select platform.has_capability('units.manage')", tenant=TA, role="cp_api") == "f",
+           "contexto sem capacidade nega a funcao")
+    expect(value(capable("units.manage.extra,units", "select platform.has_capability('units.manage')"), tenant=TA, role="cp_api") == "f",
+           "capacidade exige correspondencia exata")
+    area = f"INSERT INTO cp.amenities(tenant_id,name,capacity) VALUES('{TA}','  area ficticia a  ',5)"
+    expect(error(capable("amenities.manage", area), "23505", tenant=TA, role="cp_api"),
+           "nome de area e unico por tenant sem diferenciar caixa e espacos")
+    expect(value("select count(*) from cp.audit_log", tenant=TA, role="cp_api") == "0",
+           "auditoria nao e lida sem capacidade")
+    expect(int(value(capable("audit.read", "select count(*) from cp.audit_log"), tenant=TA, role="cp_api")) >= 1,
+           "auditoria e lida somente com capacidade e dentro do tenant")
+    expect(value(capable("audit.read", "select count(*) from cp.audit_log"), tenant=TB, actor=AB, role="cp_api") == "0",
+           "auditoria de outro tenant permanece invisivel")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
         for migration in sorted((ROOT / "db/migrations").glob("V*.sql")):
             subprocess.run(["psql", "-X", "-v", "ON_ERROR_STOP=1", "-f", str(migration)], check=True)
     else:
-        expect(value("select count(*) from platform.flyway_schema_history where success and version is not null") == "5",
-               "Flyway executou fundação, sessão BFF, limites e preparação operacional")
+        expected = len(list((ROOT / "db/migrations").glob("V*.sql")))
+        expect(value("select count(*) from platform.flyway_schema_history where success and version is not null") == str(expected),
+               f"Flyway executou as {expected} migrations versionadas")
     query(f"""
         INSERT INTO platform.accounts(id,status) VALUES('{AA}','ACTIVE'),('{AB}','ACTIVE');
         INSERT INTO platform.tenants(id,name,active) VALUES('{TA}','FICTICIO A',true),('{TB}','FICTICIO B',true);
@@ -197,6 +232,7 @@ def main():
     query(f"insert into cp.idempotency_keys(tenant_id,actor_id,request_key,method,route,body_hash,expires_at) values('{TA}','{AA}','synthetic-test-key-0001','POST','/fixture',repeat('a',64),now()+interval '24 hours')",tenant=TA,role="cp_api")
     expect(value("select count(*) from cp.idempotency_keys",tenant=TA,actor=AB,role="cp_api")=="0",
            "resposta idempotente nao atravessa ator no mesmo tenant")
+    manage_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

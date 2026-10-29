@@ -120,6 +120,12 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    try(var result=statement.executeQuery()) { result.next(); return result.getLong(1); }
   }
  }
+ String adminString(String sql,Object...args) throws SQLException {
+  try(Connection connection=admin();PreparedStatement statement=connection.prepareStatement(sql)) {
+   for(int i=0;i<args.length;i++) statement.setObject(i+1,args[i]);
+   try(var result=statement.executeQuery()) { return result.next()?result.getString(1):null; }
+  }
+ }
  <T> T context(UUID actor,UUID tenant,String hash,Supplier<T> action) {
   return tx.execute(status->{
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,actor==null?"":actor.toString());
@@ -143,6 +149,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.units where tenant_id in (?,?)",tenantA,tenantB);
+   update(connection,"delete from cp.blocks where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.tenants where id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.accounts where id in (?,?,?)",accountA,accountB,accountC);
    connection.commit();

@@ -110,7 +110,7 @@ jobs:
           CP_JDBC_TEST_OK: DISPOSABLE
           CP_TEST_DB_USER: cp_ci_login
           CP_TEST_DB_PASSWORD: synthetic_ci_runtime_only
-        run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test
+        run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest test
       - name: Build real web assets for integrated HTTPS smoke
         working-directory: apps/web
         run: |
