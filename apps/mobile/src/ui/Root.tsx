@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { CondPulseApi, Membership } from '../api/client';
 import { SessionError, type SessionManager } from '../session/session';
 import { colors, touch } from './theme';
+import { Reservations, type KeyFactory } from './Reservations';
 
 const roleLabels: Record<Membership['role'], string> = {
   RESIDENT: 'Morador', RESPONSIBLE: 'Responsável pela unidade', DEPENDENT: 'Dependente', OWNER: 'Proprietário',
@@ -11,12 +12,12 @@ const roleLabels: Record<Membership['role'], string> = {
 };
 const message = (error: unknown) => error instanceof Error && error.name !== 'Error' ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 
-export function Root({ manager, api }: { manager: SessionManager; api: CondPulseApi }) {
+export function Root({ manager, api, newKey }: { manager: SessionManager; api: CondPulseApi; newKey: KeyFactory }) {
   const state = useSyncExternalStore((listener) => manager.subscribe(listener), () => manager.getState());
   if (state.status === 'loading') return <ActivityIndicator accessibilityLabel="Abrindo" style={styles.spinner} />;
   if (state.status === 'signedOut') return <Login manager={manager} expired={state.reason === 'expired'} />;
   if (state.status === 'mfaRequired') return <Mfa manager={manager} />;
-  return <Home key={state.accountId} manager={manager} api={api} accountId={state.accountId} />;
+  return <Home key={state.accountId} manager={manager} api={api} accountId={state.accountId} newKey={newKey} />;
 }
 
 function Button({ label, onPress, disabled, secondary }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean }) {
@@ -77,7 +78,7 @@ function Mfa({ manager }: { manager: SessionManager }) {
   </ScrollView>;
 }
 
-function Home({ manager, api, accountId }: { manager: SessionManager; api: CondPulseApi; accountId: string }) {
+function Home({ manager, api, accountId, newKey }: { manager: SessionManager; api: CondPulseApi; accountId: string; newKey: KeyFactory }) {
   const identity = useQuery({ queryKey: ['private', accountId, 'identity'], queryFn: ({ signal }) => api.me(signal) });
   const [selected, setSelected] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -98,7 +99,10 @@ function Home({ manager, api, accountId }: { manager: SessionManager; api: CondP
               <Text style={styles.cardTitle}>{item.tenantName}</Text>
               <Text style={styles.body}>{roleLabels[item.role]}{item.unitId ? ' · unidade vinculada' : ''}</Text>
             </Pressable>)}</View>}
-    {active ? <Notice tone="info">{`Contexto: ${active.tenantName} (${roleLabels[active.role]}). As funções do aplicativo chegam nas próximas entregas.`}</Notice> : null}
+    {active ? <Notice tone="info">{`Contexto: ${active.tenantName} (${roleLabels[active.role]}).`}</Notice> : null}
+    {active && active.unitId ? <Reservations key={active.membershipId} api={api} accountId={accountId}
+      membership={{ ...active, unitId: active.unitId }} newKey={newKey} />
+      : active ? <Text style={styles.body}>Este vínculo não tem unidade: as reservas ficam com os moradores e com a gestão na web.</Text> : null}
     <Button label={leaving ? 'Saindo…' : 'Sair'} secondary disabled={leaving}
       onPress={() => { setLeaving(true); void manager.signOut().finally(() => setLeaving(false)); }} />
   </ScrollView>;

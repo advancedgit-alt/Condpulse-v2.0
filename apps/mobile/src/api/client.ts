@@ -1,3 +1,4 @@
+import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
 /**
  * Chamadas à API do CondPulse com o access token do Auth no cabeçalho Bearer (o aplicativo não usa o BFF de cookies).
  * Um 401 tenta uma renovação e repete uma vez; recusa de novo encerra a sessão. Respostas são validadas antes da tela.
@@ -10,7 +11,7 @@ export interface Membership {
 export interface Identity { accountId: string; memberships: Membership[] }
 
 export class ApiError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); this.name = 'ApiError'; }
+  constructor(readonly status: number, readonly code: string, message: string, readonly uncertain = false) { super(message); this.name = 'ApiError'; }
 }
 export interface TokenSource {
   accessToken(): Promise<string | null>;
@@ -21,7 +22,9 @@ export interface TokenSource {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLES = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MANAGER', 'SUPPORT'] as const;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const invalid = () => new ApiError(502, 'INVALID_API_RESPONSE', 'O sistema retornou uma resposta que não pôde ser validada. Tente novamente mais tarde.');
+const invalid = (uncertain = false) => new ApiError(502, 'INVALID_API_RESPONSE', uncertain
+  ? 'Não foi possível confirmar o resultado. Atualize e confira antes de tentar de novo.'
+  : 'O sistema retornou uma resposta que não pôde ser validada. Tente novamente mais tarde.', uncertain);
 
 export function identity(value: unknown): Identity {
   if (!record(value) || typeof value.accountId !== 'string' || !UUID.test(value.accountId) || !Array.isArray(value.memberships)
@@ -38,6 +41,21 @@ export function identity(value: unknown): Identity {
 
 const messages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: 'Entre novamente para continuar.',
+  COMMAND_OUTCOME_UNKNOWN: 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.',
+  RESERVATION_ACCESS_DENIED: 'Seu vínculo não permite acessar as reservas.',
+  RESERVATION_RESOURCE_UNAVAILABLE: 'A reserva ou a área não está disponível para esta operação.',
+  AMENITY_POLICY_NOT_CONFIGURED: 'As regras desta área ainda precisam ser configuradas.',
+  AMENITY_POLICY_CHANGED: 'As regras da área mudaram. Confira as condições atualizadas antes de reservar.',
+  RESERVATION_CONFLICT: 'Este horário acabou de ser ocupado. A disponibilidade foi atualizada: escolha outro horário.',
+  UNIT_RESERVATION_QUOTA_REACHED: 'A unidade atingiu o limite de reservas previsto para esta área.',
+  RESERVATION_CHANGED: 'A reserva foi alterada. Atualize antes de continuar.',
+  RESERVATION_CANCELLATION_CLOSED: 'O prazo para cancelar esta reserva terminou.',
+  RESERVATION_AUTHOR_REQUIRED: 'Somente quem fez a reserva pode cancelá-la.',
+  RESERVATION_WINDOW_INVALID: 'O horário escolhido não atende às regras da área. Atualize e escolha outro.',
+  RESERVATION_RANGE_INVALID: 'Período de consulta inválido.',
+  AMENITY_AVAILABILITY_UNAVAILABLE: 'Não foi possível consultar a ocupação da área agora. Tente novamente.',
+  RESERVATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Confira suas reservas antes de repetir.',
+  IDEMPOTENCY_KEY_REUSED: 'Este envio já foi usado para outro pedido. Comece de novo.',
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
   TENANT_ACCESS_DENIED: 'Condomínio não disponível para este acesso.',
 };
@@ -49,22 +67,30 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(base.hostname)))
     throw new Error('API_URL_INVALID');
   const fetcher: Fetcher = options.fetch ?? ((url, init) => globalThis.fetch(url, init));
-  async function send(path: string, token: string, signal?: AbortSignal): Promise<Response> {
+  interface Call { method?: 'GET' | 'POST'; body?: unknown; key?: string; signal?: AbortSignal }
+  async function send(path: string, token: string, call: Call): Promise<Response> {
+    const mutation = call.method === 'POST';
+    const headers: Record<string, string> = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+    if (call.body !== undefined) headers['Content-Type'] = 'application/json';
+    if (call.key !== undefined) headers['Idempotency-Key'] = call.key;
     try {
-      return await fetcher(new URL(path, base).toString(), { method: 'GET', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-        cache: 'no-store', redirect: 'error', ...(signal ? { signal } : {}) });
+      return await fetcher(new URL(path, base).toString(), { method: call.method ?? 'GET', headers, cache: 'no-store', redirect: 'error',
+        ...(call.body !== undefined ? { body: JSON.stringify(call.body) } : {}), ...(call.signal ? { signal: call.signal } : {}) });
     } catch {
+      // Envio sem resposta: o servidor pode ter gravado; repetir com a mesma chave só confirma.
+      if (mutation) throw new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', messages.COMMAND_OUTCOME_UNKNOWN!, true);
       throw new ApiError(0, 'NETWORK_UNAVAILABLE', 'Não foi possível conectar ao sistema. Confira sua conexão e tente novamente.');
     }
   }
-  async function get<T>(path: string, parse: (value: unknown) => T, signal?: AbortSignal): Promise<T> {
+  async function request<T>(path: string, parse: (value: unknown, response: Response) => T, call: Call = {}): Promise<T> {
+    const mutation = call.method === 'POST';
     const token = await options.tokens.accessToken();
     if (!token) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', messages.AUTHENTICATION_REQUIRED!);
-    let response = await send(path, token, signal);
+    let response = await send(path, token, call);
     if (response.status === 401) {
       const renewed = await options.tokens.refresh();
       if (!renewed) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', messages.AUTHENTICATION_REQUIRED!);
-      response = await send(path, renewed, signal);
+      response = await send(path, renewed, call);
       if (response.status === 401) {
         await options.tokens.expire();
         throw new ApiError(401, 'AUTHENTICATION_REQUIRED', messages.AUTHENTICATION_REQUIRED!);
@@ -72,14 +98,44 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
     }
     let value: unknown = undefined;
     if ((response.headers.get('Content-Type') ?? '').match(/application\/(problem\+)?json/)) {
-      try { value = await response.json(); } catch { if (response.ok) throw invalid(); }
-    } else if (response.ok) throw invalid();
+      try { value = await response.json(); } catch { if (response.ok) throw invalid(mutation); }
+    } else if (response.ok) throw invalid(mutation);
     if (!response.ok) {
-      const code = record(value) && typeof value.code === 'string' && Object.hasOwn(messages, value.code) ? value.code : 'HTTP_ERROR';
-      throw new ApiError(response.status, code, messages[code] ?? 'Não foi possível concluir agora. Tente novamente mais tarde.');
+      const code = record(value) && typeof value.code === 'string' && Object.hasOwn(messages, value.code) ? value.code
+        : mutation && response.status >= 500 ? 'COMMAND_OUTCOME_UNKNOWN' : 'HTTP_ERROR';
+      throw new ApiError(response.status, code, messages[code] ?? 'Não foi possível concluir agora. Tente novamente mais tarde.',
+        mutation && response.status >= 500);
     }
-    return parse(value);
+    try { return parse(value, response); }
+    catch (error) {
+      if (error instanceof ContractError || error instanceof ApiError) throw invalid(mutation);
+      throw error;
+    }
   }
-  return { me: (signal?: AbortSignal) => get('/v1/me', identity, signal) };
+  const tenant = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}`;
+  const replayed = (response: Response) => response.headers.get('Idempotency-Replayed') === 'true';
+  return {
+    me: (signal?: AbortSignal) => request('/v1/me', identity, signal ? { signal } : {}),
+    amenities: (tenantId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/amenities`, (value) => list(value, amenity, 100), signal ? { signal } : {}),
+    availability: (tenantId: string, unitId: string, amenityId: string, range: { from: string; until: string }, signal?: AbortSignal) => {
+      const query = new URLSearchParams({ unitId: identifier(unitId), from: range.from, until: range.until });
+      return request(`${tenant(tenantId)}/amenities/${identifier(amenityId)}/availability?${query}`,
+        (value) => availability(value, { tenantId, unitId, amenityId, ...range }), signal ? { signal } : {});
+    },
+    reservations: (tenantId: string, unitId: string, range: { from: string; until: string }, signal?: AbortSignal) => {
+      const query = new URLSearchParams({ unitId: identifier(unitId), from: range.from, until: range.until });
+      return request(`${tenant(tenantId)}/reservations?${query}`, (value) => {
+        if (!record(value) || typeof value.truncated !== 'boolean') throw invalid();
+        return { reservations: list(value.reservations, reservation, 500), truncated: value.truncated };
+      }, signal ? { signal } : {});
+    },
+    createReservation: (tenantId: string, body: CreateReservation, key: string) =>
+      request(`${tenant(tenantId)}/reservations`, (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }),
+        { method: 'POST', body, key: operationKey(key) }),
+    cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
+      request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
+        (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),
+  };
 }
 export type CondPulseApi = ReturnType<typeof createApi>;
