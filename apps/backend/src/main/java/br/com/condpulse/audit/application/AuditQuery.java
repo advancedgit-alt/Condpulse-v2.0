@@ -56,15 +56,16 @@ public class AuditQuery {
  public record Page(List<Event> events,String nextCursor) {
   public Page { events=List.copyOf(events); }
  }
- record Cursor(Instant createdAt,UUID id) {
-  Timestamp timestamp() { return Timestamp.from(createdAt); }
-  String encode() {
+ /** Cursor opaco (instante em microssegundos e id), reaproveitado pela auditoria da plataforma. */
+ public record Cursor(Instant createdAt,UUID id) {
+  public Timestamp timestamp() { return Timestamp.from(createdAt); }
+  public String encode() {
    long micros=Math.addExact(Math.multiplyExact(createdAt.getEpochSecond(),1_000_000L),createdAt.getNano()/1000);
    return Base64.getUrlEncoder().withoutPadding().encodeToString((micros+":"+id).getBytes(StandardCharsets.US_ASCII));
   }
   /** Faixa aceita para o instante do cursor; fora dela o pedido é inválido (400), nunca erro do banco (503). */
   static final Instant MINIMUM=Instant.parse("2000-01-01T00:00:00Z"),MAXIMUM=Instant.parse("9999-12-31T23:59:59Z");
-  static Cursor parse(String value) {
+  public static Cursor parse(String value) {
    if(value==null || value.isBlank()) return null;
    try {
     if(value.length()>120) throw new IllegalArgumentException();
