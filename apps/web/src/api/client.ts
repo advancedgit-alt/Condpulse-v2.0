@@ -29,6 +29,7 @@ const messages: Record<string, string> = {
   UNIT_RESERVATION_QUOTA_REACHED: 'A unidade atingiu o limite de reservas previsto para esta área.',
   RESERVATION_CHANGED: 'A reserva foi alterada. Atualize os dados antes de continuar.',
   RESERVATION_CANCELLATION_CLOSED: 'O prazo para cancelar esta reserva terminou.',
+  RESERVATION_AUTHOR_REQUIRED: 'Somente quem fez a reserva pode cancelá-la pelo aplicativo.',
   RESERVATION_RULE_SNAPSHOT_INVALID: 'As regras aceitas desta reserva precisam ser conferidas pela gestão.',
   RESERVATION_WINDOW_INVALID: 'O período informado não atende às regras da área.',
   RESERVATION_RANGE_INVALID: 'Informe um período de consulta de até 31 dias.',

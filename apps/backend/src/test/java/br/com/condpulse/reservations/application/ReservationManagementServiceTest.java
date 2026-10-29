@@ -97,6 +97,42 @@ class ReservationManagementServiceTest {
   verify(reservations).event(tenant,"RESERVATION_EXPIRED",view("EXPIRED",1));
   verify(store,never()).decide(any(),any(),anyLong(),any(),any());
  }
+ @Test void deadlineIsCheckedBeforeVersionSoStaleClientsStillPersistExpiry() {
+  when(store.lock(tenant,reservation)).thenReturn(target("BOOKING","PENDING_APPROVAL",2,true));
+  when(store.expire(tenant,reservation,2)).thenReturn(view("EXPIRED",3));
+  assertEquals("RESERVATION_DECISION_EXPIRED",assertThrows(BusinessProblem.class,()->service.decide(actor,tenant,AssuranceLevel.AAL2,
+   reservation,new ReservationManagementModels.Decision("APPROVE",0L,null))).code());
+  assertTrue(committed);
+  verify(reservations).event(tenant,"RESERVATION_EXPIRED",view("EXPIRED",3));
+  verify(store,never()).decide(any(),any(),anyLong(),any(),any()); verifyNoInteractions(audit);
+ }
+ @Test void deadlineReachedBetweenLockAndUpdateExpiresInsteadOfReportingChange() {
+  when(store.lock(tenant,reservation)).thenReturn(target("BOOKING","PENDING_APPROVAL",0,false));
+  when(store.requesterEligible(tenant,requester,unit)).thenReturn(true);
+  when(store.decide(tenant,reservation,0,"CONFIRMED",null)).thenReturn(null);
+  when(store.expire(tenant,reservation,0)).thenReturn(view("EXPIRED",1));
+  assertEquals("RESERVATION_DECISION_EXPIRED",assertThrows(BusinessProblem.class,()->service.decide(actor,tenant,AssuranceLevel.AAL2,
+   reservation,new ReservationManagementModels.Decision("APPROVE",0L,null))).code());
+  assertTrue(committed,"A expiração é confirmada antes da recusa");
+  verify(reservations).event(tenant,"RESERVATION_EXPIRED",view("EXPIRED",1));
+  verifyNoInteractions(audit);
+ }
+ @Test void alreadyExpiredRequestRefusesDecisionWithoutWriting() {
+  when(store.lock(tenant,reservation)).thenReturn(target("BOOKING","EXPIRED",1,false));
+  assertEquals("RESERVATION_DECISION_EXPIRED",assertThrows(BusinessProblem.class,()->service.decide(actor,tenant,AssuranceLevel.AAL2,
+   reservation,new ReservationManagementModels.Decision("REJECT",1L,"Agenda"))).code());
+  verify(store,never()).expire(any(),any(),anyLong()); verify(store,never()).decide(any(),any(),anyLong(),any(),any());
+  verifyNoInteractions(audit); verify(reservations,never()).event(any(),any(),any());
+ }
+ @Test void managerCannotDecideOwnRequest() {
+  when(store.lock(tenant,reservation)).thenReturn(new ReservationManagementStore.Target(reservation,"BOOKING",unit,actor,
+   "PENDING_APPROVAL",0,start.plusSeconds(3600),false,true,"ACTIVE"));
+  for(var decision:List.of(new ReservationManagementModels.Decision("APPROVE",0L,null),
+    new ReservationManagementModels.Decision("REJECT",0L,"Desisti")))
+   assertEquals("RESERVATION_SELF_DECISION_DENIED",assertThrows(BusinessProblem.class,()->service.decide(actor,tenant,
+    AssuranceLevel.AAL2,reservation,decision)).code());
+  verify(store,never()).decide(any(),any(),anyLong(),any(),any()); verifyNoInteractions(audit);
+ }
  @Test void approvalRequiresEligibleRequesterActiveUnitAndArea() {
   when(store.lock(tenant,reservation)).thenReturn(target("BOOKING","PENDING_APPROVAL",0,false));
   when(store.requesterEligible(tenant,requester,unit)).thenReturn(false);

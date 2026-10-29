@@ -5,7 +5,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -63,11 +62,10 @@ public class InvitationService {
   if(days<1 || days>14) throw invalid("INVITATION_VALIDITY_INVALID","A validade deve ter entre 1 e 14 dias.");
   UUID id=UUID.randomUUID();
   String token=newToken();
-  Instant expires=Instant.now().plus(days,ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
   return staff(actor,tenant,assurance,context->{
    if(residential && !store.activeUnit(tenant,request.unitId()))
     throw new BusinessProblem("UNIT_NOT_FOUND",404,"Unidade ativa não encontrada neste condomínio.");
-   store.insertInvitation(id,tenant,request.unitId(),request.role(),name,emailHash(id,email),sha256(token),expires,actor);
+   Instant expires=store.insertInvitation(id,tenant,request.unitId(),request.role(),name,emailHash(id,email),sha256(token),days,actor);
    audit.record(tenant,actor,"INVITATION_CREATED","INVITATION",id,null);
    return new MembershipModels.InvitationCreated(id,token,expires);
   });
@@ -108,6 +106,8 @@ public class InvitationService {
        emailHash(invitation.id(),email).getBytes(StandardCharsets.US_ASCII)))
      throw notAvailable();
     jdbc.queryForObject("select set_config('app.tenant_id',?,true)",String.class,invitation.tenantId().toString());
+    // Unidade inativada depois do convite não recebe vínculo novo.
+    if(invitation.unitId()!=null && !store.activeUnit(invitation.tenantId(),invitation.unitId())) throw notAvailable();
     UUID membership=UUID.randomUUID();
     store.insertPendingMembership(membership,invitation,account);
     if(!store.completeInvitation(invitation.id(),account,membership)) throw notAvailable();

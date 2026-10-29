@@ -12,9 +12,30 @@ CREATE POLICY reservations_approval_insert ON cp.reservations AS RESTRICTIVE FOR
  ));
 CREATE POLICY reservations_block_insert ON cp.reservations AS RESTRICTIVE FOR INSERT TO cp_api
  WITH CHECK(kind<>'BLOCK' OR platform.has_capability('amenities.manage'));
+-- A API só cria pedido pendente ou reserva confirmada, e bloqueio sempre confirmado. HELD fica para a fila de
+-- espera (ainda inexistente); estados encerrados nunca nascem por INSERT.
+CREATE POLICY reservations_insert_states ON cp.reservations AS RESTRICTIVE FOR INSERT TO cp_api
+ WITH CHECK(CASE kind WHEN 'BLOCK' THEN status='CONFIRMED' ELSE status IN ('PENDING_APPROVAL','CONFIRMED') END);
 CREATE POLICY reservations_block_update ON cp.reservations AS RESTRICTIVE FOR UPDATE TO cp_api
  USING(kind<>'BLOCK' OR platform.has_capability('amenities.manage'))
  WITH CHECK(kind<>'BLOCK' OR platform.has_capability('amenities.manage'));
+-- Máquina de estados no banco, para qualquer papel: estados encerrados não voltam e nada retorna a HELD ou a
+-- PENDING_APPROVAL. Transições permitidas: HELD→PENDING_APPROVAL/CONFIRMED/CANCELLED/EXPIRED,
+-- PENDING_APPROVAL→CONFIRMED/REJECTED/CANCELLED/EXPIRED e CONFIRMED→CANCELLED.
+CREATE FUNCTION cp.reservation_transition_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.status IS DISTINCT FROM OLD.status AND NOT (
+     (OLD.status='HELD' AND NEW.status IN ('PENDING_APPROVAL','CONFIRMED','CANCELLED','EXPIRED'))
+  OR (OLD.status='PENDING_APPROVAL' AND NEW.status IN ('CONFIRMED','REJECTED','CANCELLED','EXPIRED'))
+  OR (OLD.status='CONFIRMED' AND NEW.status='CANCELLED')) THEN
+  RAISE EXCEPTION 'Transição de reserva não permitida.' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION cp.reservation_transition_guard() FROM PUBLIC;
+CREATE TRIGGER reservations_transition_guard BEFORE UPDATE OF status ON cp.reservations
+ FOR EACH ROW EXECUTE FUNCTION cp.reservation_transition_guard();
 -- Motivo da decisão é exibido ao solicitante e à gestão; limite evita texto livre sem fronteira.
 ALTER TABLE cp.reservations ADD CONSTRAINT reservations_decision_reason_length
  CHECK(decision_reason IS NULL OR char_length(decision_reason) BETWEEN 1 AND 500);

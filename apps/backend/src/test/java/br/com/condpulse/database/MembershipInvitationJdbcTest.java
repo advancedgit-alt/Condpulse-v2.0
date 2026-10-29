@@ -26,7 +26,8 @@ class MembershipInvitationJdbcTest {
  private static final AssuranceLevel AAL2=AssuranceLevel.AAL2;
 
  @BeforeAll static void setup() throws Exception {
-  db=new JdbcDisposableDatabase();
+  // Duas conexões: a revogação cruzada entre gestores precisa de transações concorrentes reais.
+  db=new JdbcDisposableDatabase(2);
   transactions=new TenantTransactionExecutor(db.jdbc,db.manager);
   var store=new MembershipStore(db.jdbc); var audit=new AuditRecorder(db.jdbc);
   memberships=new MembershipManagementService(transactions,store,audit);
@@ -128,10 +129,87 @@ class MembershipInvitationJdbcTest {
    self.membershipId(),new MembershipModels.Revocation(self.version(),"Teste"))).code());
   assertEquals("MEMBERSHIP_REASON_REQUIRED",assertThrows(BusinessProblem.class,()->memberships.decide(db.accountC,db.tenantA,AAL2,
    self.membershipId(),new MembershipModels.Decision("REJECT",self.version(),null))).code());
-  assertTrue(memberships.memberships(db.accountC,db.tenantA,AAL2,null).memberships().stream()
-   .noneMatch(m->m.membershipId().equals(UUID.fromString("00000000-0000-0000-0000-000000000000"))));
+  var all=memberships.memberships(db.accountC,db.tenantA,AAL2,null).memberships();
+  assertTrue(all.stream().anyMatch(m->db.unitA.equals(m.unitId())),"Lista os vínculos do próprio condomínio");
+  assertTrue(all.stream().noneMatch(m->db.unitB.equals(m.unitId())),"Nunca lista vínculo de outro condomínio");
   assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
    ()->memberships.memberships(db.accountC,db.tenantB,AAL2,null)).code());
   db.assertEmptyContext();
+ }
+
+ @Test void revokedOrRejectedMembershipCanBeInvitedAgainWithoutDatabaseIntervention() throws Exception {
+  String email="reconvite."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
+  UUID person=newcomer();
+  var first=invitations.accept(person,email,new MembershipModels.AcceptInvitation(invite(email).token()));
+  assertEquals("MEMBERSHIP_ALREADY_EXISTS",assertThrows(BusinessProblem.class,
+   ()->invitations.accept(person,email,new MembershipModels.AcceptInvitation(invite(email).token()))).code(),
+   "Enquanto houver vínculo não revogado, novo aceite não duplica");
+  var pending=memberships.memberships(db.accountC,db.tenantA,AAL2,"PENDING").memberships().stream()
+   .filter(m->m.membershipId().equals(first.membershipId())).findFirst().orElseThrow();
+  memberships.decide(db.accountC,db.tenantA,AAL2,pending.membershipId(),new MembershipModels.Decision("REJECT",pending.version(),"Unidade errada"));
+  var second=invitations.accept(person,email,new MembershipModels.AcceptInvitation(invite(email).token()));
+  assertNotEquals(first.membershipId(),second.membershipId());
+  var current=memberships.memberships(db.accountC,db.tenantA,AAL2,"PENDING").memberships().stream()
+   .filter(m->m.membershipId().equals(second.membershipId())).findFirst().orElseThrow();
+  var active=memberships.decide(db.accountC,db.tenantA,AAL2,current.membershipId(),new MembershipModels.Decision("APPROVE",current.version(),null));
+  memberships.revoke(db.accountC,db.tenantA,AAL2,active.membershipId(),new MembershipModels.Revocation(active.version(),"Mudou-se"));
+  var third=invitations.accept(person,email,new MembershipModels.AcceptInvitation(invite(email).token()));
+  assertEquals("PENDING",third.status(),"Revogação também permite novo convite");
+  assertEquals("2",db.adminString("select count(*) from cp.memberships where account_id=? and status='REVOKED'",person));
+  db.assertEmptyContext();
+ }
+
+ @Test void crossRevocationBetweenManagersKeepsAnActiveManager() throws Exception {
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'SEGUNDO GESTOR FICTICIO','MANAGER','ACTIVE')",
+   db.tenantA,db.accountA);
+  try {
+   var managers=memberships.memberships(db.accountC,db.tenantA,AAL2,"ACTIVE").memberships().stream()
+    .filter(m->"MANAGER".equals(m.role())).toList();
+   assertEquals(2,managers.size());
+   UUID managerA=UUID.fromString(db.adminString("select id::text from cp.memberships where tenant_id=? and account_id=? and role='MANAGER'",db.tenantA,db.accountA));
+   UUID managerC=UUID.fromString(db.adminString("select id::text from cp.memberships where tenant_id=? and account_id=? and role='MANAGER'",db.tenantA,db.accountC));
+   var start=new java.util.concurrent.CountDownLatch(1);
+   java.util.List<String> results;
+   try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+    var byC=pool.submit(()->{ start.await(); return outcome(()->memberships.revoke(db.accountC,db.tenantA,AAL2,managerA,
+     new MembershipModels.Revocation(0L,"Teste concorrente"))); });
+    var byA=pool.submit(()->{ start.await(); return outcome(()->memberships.revoke(db.accountA,db.tenantA,AAL2,managerC,
+     new MembershipModels.Revocation(0L,"Teste concorrente"))); });
+    start.countDown();
+    results=java.util.List.of(byC.get(30,java.util.concurrent.TimeUnit.SECONDS),byA.get(30,java.util.concurrent.TimeUnit.SECONDS));
+   }
+   assertEquals(1,results.stream().filter("OK"::equals).count(),results.toString());
+   assertEquals("1",db.adminString("select count(*) from cp.memberships where tenant_id=? and role='MANAGER' and status='ACTIVE'",db.tenantA),
+    "Revogação cruzada nunca deixa o condomínio sem gestor");
+   assertEquals("1",db.adminString("select count(*) from cp.outbox where tenant_id=? and event_type='MEMBERSHIP_REVOKED' and aggregate_id in (?,?)",
+    db.tenantA,managerA,managerC));
+  } finally {
+   db.adminUpdate("delete from cp.memberships where tenant_id=? and account_id=? and role='MANAGER'",db.tenantA,db.accountA);
+   db.adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id=? and account_id=? and role='MANAGER'",db.tenantA,db.accountC);
+  }
+  db.assertEmptyContext();
+ }
+
+ @Test void managerCannotDecideOwnPendingMembershipAndInactiveUnitBlocksAcceptance() throws Exception {
+  UUID own=UUID.randomUUID();
+  db.adminUpdate("insert into cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) values(?,?,?,?,'GESTOR COMO MORADOR','RESIDENT','PENDING')",
+   own,db.tenantA,db.accountC,db.unitA);
+  try {
+   assertEquals("MEMBERSHIP_SELF_DECISION_DENIED",assertThrows(BusinessProblem.class,()->memberships.decide(db.accountC,db.tenantA,AAL2,own,
+    new MembershipModels.Decision("APPROVE",0L,null))).code());
+   assertEquals("PENDING",db.adminString("select status from cp.memberships where id=?",own));
+  } finally { db.adminUpdate("delete from cp.memberships where id=?",own); }
+  String email="unidade.inativa."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
+  var created=invite(email); UUID person=newcomer();
+  db.adminUpdate("update cp.units set status='INACTIVE' where id=?",db.unitA);
+  assertEquals("INVITATION_NOT_AVAILABLE",assertThrows(BusinessProblem.class,
+   ()->invitations.accept(person,email,new MembershipModels.AcceptInvitation(created.token()))).code());
+  assertEquals("0",db.adminString("select count(*) from cp.memberships where account_id=?",person));
+  db.restoreActiveFixtures();
+  db.assertEmptyContext();
+ }
+
+ private static String outcome(java.util.function.Supplier<MembershipModels.Membership> action) {
+  try { action.get(); return "OK"; } catch(BusinessProblem problem) { return problem.code(); }
  }
 }

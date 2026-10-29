@@ -1033,7 +1033,7 @@
             "description": "Dependência ou configuração indisponível"
           }
         },
-        "description": "Reserva confirmada respeita o prazo de cancelamento aceito. Pedido PENDING_APPROVAL pode ser retirado pelo autor até o início."
+        "description": "Somente o autor cancela (403 RESERVATION_AUTHOR_REQUIRED para outra pessoa da unidade). Reserva confirmada respeita o prazo de cancelamento aceito. Pedido PENDING_APPROVAL pode ser retirado pelo autor até o início. Reserva já cancelada pela gestão responde 409 RESERVATION_CHANGED."
       }
     },
     "/v1/tenants/{tenantId}/management/blocks": {
@@ -2446,7 +2446,7 @@
             }
           }
         ],
-        "description": "Confirma ou rejeita (motivo obrigatório) pedido PENDING_APPROVAL pela versão lida. Decisão repetida devolve o estado atual sem novo evento; decisão oposta recebe 409. Prazo vencido grava EXPIRED e responde 409 RESERVATION_DECISION_EXPIRED.",
+        "description": "Confirma ou rejeita (motivo obrigatório) pedido PENDING_APPROVAL pela versão lida. Decisão repetida devolve o estado atual sem novo evento; decisão oposta recebe 409. Prazo vencido grava EXPIRED e responde 409 RESERVATION_DECISION_EXPIRED, mesmo com versão antiga. Quem pediu não decide o próprio pedido (409 RESERVATION_SELF_DECISION_DENIED).",
         "requestBody": {
           "required": true,
           "content": {
@@ -2538,7 +2538,7 @@
             }
           }
         ],
-        "description": "Cancela reserva confirmada, pedido pendente ou bloqueio (amenities.manage) com motivo obrigatório. Repetição devolve o estado atual sem novo evento.",
+        "description": "Cancela reserva confirmada, pedido pendente ou bloqueio (amenities.manage) com motivo obrigatório. Repetição devolve o estado atual sem novo evento. Pedido vencido é gravado como EXPIRED e responde 409 RESERVATION_DECISION_EXPIRED.",
         "requestBody": {
           "required": true,
           "content": {

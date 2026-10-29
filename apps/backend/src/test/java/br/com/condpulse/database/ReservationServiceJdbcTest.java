@@ -175,7 +175,9 @@ class ReservationServiceJdbcTest {
    var original=create(key()).reservation();
    var denied=assertThrows(BusinessProblem.class,()->service.cancel(db.accountC,db.tenantA,
     original.reservationId(),key(),new ReservationModels.Cancel(db.unitA,original.version())));
-   assertEquals(404,denied.status()); assertCommittedCounts(1,1,1,1);
+   assertEquals(403,denied.status()); assertEquals("RESERVATION_AUTHOR_REQUIRED",denied.code());
+   assertCommittedCounts(1,1,1,1);
+   assertEquals("CONFIRMED",db.adminString("select status from cp.reservations where id=?",original.reservationId()));
   } finally {
    db.adminUpdate("delete from cp.memberships where id=? and tenant_id=? and account_id=?",membership,db.tenantA,db.accountC);
   }

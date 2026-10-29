@@ -42,6 +42,8 @@ public class MembershipManagementService {
   return execute(actor,tenant,assurance,context->{
    var current=store.membership(tenant,membershipId);
    if(current==null) throw notFound();
+   if(actor.equals(store.accountOf(tenant,membershipId)))
+    throw new BusinessProblem("MEMBERSHIP_SELF_DECISION_DENIED",409,"Outro gestor precisa decidir sobre o seu próprio vínculo.");
    if(!"PENDING".equals(current.status()) || current.version()!=expected
       || !store.transition(tenant,membershipId,expected,"PENDING",approve?"ACTIVE":"REVOKED"))
     throw changed();
@@ -61,8 +63,16 @@ public class MembershipManagementService {
    if(current==null) throw notFound();
    if(actor.equals(store.accountOf(tenant,membershipId)) && "MANAGER".equals(current.role()))
     throw new BusinessProblem("MEMBERSHIP_SELF_REVOCATION_DENIED",409,"Outro gestor precisa revogar o seu vínculo de gestão.");
-   if("MANAGER".equals(current.role()) && "ACTIVE".equals(current.status()) && store.otherActiveManagers(tenant,membershipId)==0)
-    throw new BusinessProblem("LAST_MANAGER_REQUIRED",409,"O condomínio precisa manter ao menos um gestor ativo.");
+   if("MANAGER".equals(current.role())) {
+    // Revogações cruzadas entre gestores são serializadas; depois da trava o ator precisa continuar gestor ativo.
+    store.lockManagers(tenant);
+    if(!store.activeManager(tenant,actor))
+     throw new BusinessProblem("STAFF_ACCESS_DENIED",403,"Esta ação não está disponível para o seu vínculo.");
+    current=store.membership(tenant,membershipId);
+    if(current==null) throw notFound();
+    if("ACTIVE".equals(current.status()) && store.otherActiveManagers(tenant,membershipId)==0)
+     throw new BusinessProblem("LAST_MANAGER_REQUIRED",409,"O condomínio precisa manter ao menos um gestor ativo.");
+   }
    if(current.version()!=expected || !store.revoke(tenant,membershipId,expected)) throw changed();
    audit.record(tenant,actor,"MEMBERSHIP_REVOKED","MEMBERSHIP",membershipId,reason);
    // Revogação de credenciais físicas e sessões derivadas é processada a partir deste evento.

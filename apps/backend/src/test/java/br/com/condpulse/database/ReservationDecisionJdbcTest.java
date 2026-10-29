@@ -173,7 +173,7 @@ class ReservationDecisionJdbcTest {
   var own=reservations.reservations(db.accountA,db.tenantA,db.unitA,start.minusSeconds(3600),start.plusSeconds(7200)).reservations();
   assertEquals("Manutencao da area",own.stream().filter(r->r.reservationId().equals(first.reservationId())).findFirst()
    .orElseThrow().decisionReason(),"Motivo da decisão é visível à unidade");
-  var second=request(db.accountC,db.otherUnitA,area.amenityId(),start);
+  var second=request(db.accountA,db.unitA,area.amenityId(),start);
   assertEquals("PENDING_APPROVAL",second.status(),"Rejeição libera o período");
   var confirmed=management.decide(db.accountC,db.tenantA,AAL2,second.reservationId(),
    new ReservationManagementModels.Decision("APPROVE",0L,"Liberado"));
@@ -187,7 +187,18 @@ class ReservationDecisionJdbcTest {
   assertEquals(1,events(second.reservationId(),"RESERVATION_CANCELLED"));
   assertEquals("1",db.adminString("select count(*) from cp.audit_log where resource_id=? and action='RESERVATION_CANCELLED_BY_MANAGEMENT' and reason='Vazamento no salao'",
    second.reservationId()));
-  assertEquals("PENDING_APPROVAL",request(db.accountA,db.unitA,area.amenityId(),start).status(),"Cancelamento libera o período");
+  assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,()->reservations.cancel(db.accountA,db.tenantA,
+   second.reservationId(),"jdbc-decision:"+UUID.randomUUID(),new ReservationModels.Cancel(db.unitA,cancelled.version()))).code(),
+   "Cancelamento da gestão não é devolvido ao autor como cancelamento próprio");
+  assertEquals(1,events(second.reservationId(),"RESERVATION_CANCELLED"));
+  var own=request(db.accountC,db.otherUnitA,area.amenityId(),start);
+  assertEquals("PENDING_APPROVAL",own.status(),"Cancelamento libera o período");
+  assertEquals("RESERVATION_SELF_DECISION_DENIED",assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,
+   own.reservationId(),approve(0))).code(),"Gestor não decide o próprio pedido");
+  assertEquals("RESERVATION_SELF_DECISION_DENIED",assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,
+   own.reservationId(),new ReservationManagementModels.Decision("REJECT",0L,"Desisti"))).code());
+  assertEquals("PENDING_APPROVAL",status(own.reservationId()));
+  assertEquals(0,events(own.reservationId(),"RESERVATION_CONFIRMED")+events(own.reservationId(),"RESERVATION_REJECTED"));
   db.assertEmptyContext();
  }
 
@@ -200,9 +211,12 @@ class ReservationDecisionJdbcTest {
   assertEquals("EXPIRED",own.getFirst().status(),"Prazo vencido não aparece como pendente");
   assertTrue(reservations.availability(db.accountA,db.tenantA,db.unitA,area.amenityId(),start.minusSeconds(3600),
    start.plusSeconds(7200)).blockedIntervals().isEmpty(),"Pedido vencido não é ocupação fantasma");
-  var late=assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,stale.reservationId(),approve(0)));
+  // Versão antiga no cliente: o prazo é conferido antes da versão e a expiração é gravada mesmo assim.
+  var late=assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,stale.reservationId(),approve(3)));
   assertEquals("RESERVATION_DECISION_EXPIRED",late.code()); assertEquals(409,late.status());
   assertEquals("EXPIRED",status(stale.reservationId()),"Expiração persiste mesmo com a decisão recusada");
+  assertEquals("RESERVATION_DECISION_EXPIRED",assertThrows(BusinessProblem.class,()->management.decide(db.accountC,db.tenantA,AAL2,
+   stale.reservationId(),approve(1))).code(),"Pedido já expirado continua recusando decisão");
   assertEquals(1,events(stale.reservationId(),"RESERVATION_EXPIRED"));
   assertEquals(0,events(stale.reservationId(),"RESERVATION_CONFIRMED"));
   var second=request(db.accountA,db.unitA,area.amenityId(),start);
@@ -211,6 +225,15 @@ class ReservationDecisionJdbcTest {
   assertEquals("PENDING_APPROVAL",third.status());
   assertEquals("EXPIRED",status(second.reservationId()));
   assertEquals(1,events(second.reservationId(),"RESERVATION_EXPIRED"));
+  // Cancelamento pela gestão de pedido vencido também grava a expiração antes de recusar.
+  var fourth=request(db.accountA,db.unitA,area.amenityId(),slot(7,15));
+  db.adminUpdate("update cp.reservations set expires_at=clock_timestamp()-interval '1 minute' where id=?",fourth.reservationId());
+  assertEquals("RESERVATION_DECISION_EXPIRED",assertThrows(BusinessProblem.class,()->management.cancel(db.accountC,db.tenantA,AAL2,
+   fourth.reservationId(),new ReservationManagementModels.Cancellation(0L,"Agenda"))).code());
+  assertEquals("EXPIRED",status(fourth.reservationId()));
+  assertEquals(1,events(fourth.reservationId(),"RESERVATION_EXPIRED"));
+  assertEquals("0",db.adminString("select count(*) from cp.audit_log where resource_id=? and action='RESERVATION_CANCELLED_BY_MANAGEMENT'",
+   fourth.reservationId()));
   db.assertEmptyContext();
  }
 

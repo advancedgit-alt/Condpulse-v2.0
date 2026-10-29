@@ -135,24 +135,24 @@ class ReservationServiceTest {
  @Test void authorWithdrawsPendingRequestInsideCancellationLeadButNotAfterStart() {
   var pending=view("PENDING_APPROVAL",0); var withdrawn=view("CANCELLED",1);
   // Prazo de cancelamento de 2 dias já passou para a confirmada, mas pedido pendente pode ser retirado até o início.
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(pending,2880));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(pending,2880,actor));
   when(store.cancel(tenant,actor,pending)).thenReturn(withdrawn);
   assertEquals("CANCELLED",service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0)).reservation().status());
   verify(store).record(eq(tenant),eq(actor),eq(withdrawn),eq("RESERVATION_CANCELLED"),any());
   when(store.currentTime()).thenReturn(start);
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(pending,null));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(pending,null,actor));
   assertEquals("RESERVATION_CANCELLATION_CLOSED",assertThrows(BusinessProblem.class,
    ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
  }
  @Test void confirmedReservationStillRespectsAcceptedCancellationLead() {
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",0),2880));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",0),2880,actor));
   assertEquals("RESERVATION_CANCELLATION_CLOSED",assertThrows(BusinessProblem.class,
    ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
   verify(store,never()).cancel(any(),any(),any());
  }
  @Test void expiredOrDecidedRequestCannotBeWithdrawn() {
   for(String status:List.of("EXPIRED","REJECTED")) {
-   when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(view(status,1),0));
+   when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view(status,1),0,actor));
    assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
     ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,1))).code(),status);
   }
@@ -181,16 +181,33 @@ class ReservationServiceTest {
   assertFalse(error.getMessage().contains("SQL")); verifyNoInteractions(store);
  }
  @Test void repeatedCancellationWithNewKeyDoesNotWriteEventOrAdvanceVersion() {
-  var cancelled=view("CANCELLED",1);
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0));
+  var cancelled=new ReservationModels.View(reservation,unit,area,"CANCELLED",start,end,start,end.plusSeconds(600),1,5000,1,
+   ReservationStore.AUTHOR_CANCELLED_REASON);
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0,actor));
   var result=service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0));
   assertEquals(200,result.responseStatus()); assertEquals(1,result.reservation().version());
   verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
   verify(store).finish(eq(tenant),eq(actor),anyString(),eq(key),eq(cancelled),eq(200));
  }
+ @Test void managementCancellationIsNotReportedAsTheAuthorsOwnCancellation() {
+  var cancelled=new ReservationModels.View(reservation,unit,area,"CANCELLED",start,end,start,end.plusSeconds(600),1,5000,1,
+   "Vazamento no salão");
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0,actor));
+  assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
+   ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
+  verify(store,never()).finish(any(),any(),anyString(),anyString(),any(),anyInt());
+ }
+ @Test void anotherPersonOfTheUnitReceivesExplicitAuthorRequirementAndNothingChanges() {
+  var other=UUID.fromString("77777777-7777-4777-8777-777777777777");
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",0),0,other));
+  var denied=assertThrows(BusinessProblem.class,()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0)));
+  assertEquals("RESERVATION_AUTHOR_REQUIRED",denied.code()); assertEquals(403,denied.status());
+  verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
+  verify(store,never()).finish(any(),any(),anyString(),anyString(),any(),anyInt());
+ }
  @Test void cancellationUsesAcceptedSnapshotRatherThanCurrentAmenityRules() {
   var current=view("CONFIRMED",0); var cancelled=view("CANCELLED",1);
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(current,0));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(current,0,actor));
   when(store.cancel(tenant,actor,current)).thenReturn(cancelled);
   var result=service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0));
   assertEquals(cancelled,result.reservation());
@@ -198,7 +215,7 @@ class ReservationServiceTest {
   verify(store).record(eq(tenant),eq(actor),eq(cancelled),eq("RESERVATION_CANCELLED"),any());
  }
  @Test void staleVersionCannotCancelConfirmedReservation() {
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",1),0));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",1),0,actor));
   assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
    ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
   verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
