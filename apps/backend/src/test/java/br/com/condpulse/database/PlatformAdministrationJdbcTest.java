@@ -59,7 +59,7 @@ class PlatformAdministrationJdbcTest {
  @Test void platformAdminRenamesSuspendsAndReactivatesByVersionWithOneAuditEventPerChange() throws Exception {
   db.grantPlatformAdmin(db.accountA);
   var session=platform.session(db.accountA,AAL2);
-  assertEquals(List.of("platform.audit.read","tenants.manage","tenants.read"),session.capabilities()); assertFalse(session.mfaRequired());
+  assertEquals(List.of("billing.manage","billing.read","platform.audit.read","tenants.manage","tenants.read"),session.capabilities()); assertFalse(session.mfaRequired());
   var before=listed(db.tenantB);
   assertTrue(before.active()); assertEquals(0,before.version()); assertNull(before.onboarding());
   var renamed=platform.updateTenant(db.accountA,AAL2,db.tenantB,

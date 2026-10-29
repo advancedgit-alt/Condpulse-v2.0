@@ -10,7 +10,10 @@ import java.util.Set;
 public enum PlatformCapability {
  READ_TENANTS("tenants.read"),
  MANAGE_TENANTS("tenants.manage"),
- READ_AUDIT("platform.audit.read");
+ READ_AUDIT("platform.audit.read"),
+ /** Financeiro da assinatura CondPulse (fase 5): planos, assinaturas, cobranças e pagamentos manuais. */
+ READ_BILLING("billing.read"),
+ MANAGE_BILLING("billing.manage");
 
  private final String key;
  PlatformCapability(String key) { this.key=key; }
