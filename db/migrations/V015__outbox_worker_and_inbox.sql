@@ -21,8 +21,8 @@ GRANT INSERT(tenant_id,event_type,aggregate_id,aggregate_version,payload) ON cp.
 REVOKE UPDATE ON cp.outbox FROM cp_worker;
 GRANT UPDATE(state,attempts,available_at,lease_until,last_error,processed_at) ON cp.outbox TO cp_worker;
 
--- 2. Transições do processamento: PENDING -> LEASED (tentativa +1, prazo futuro de até 10 minutos); arrendamento
--- vencido pode ser arrendado de novo; LEASED -> DELIVERED/SKIPPED (concluída), PENDING (nova tentativa com horário
+-- 2. Transições do processamento: PENDING já disponível -> LEASED (tentativa +1, prazo futuro de até 10 minutos; a
+-- espera do backoff não é furada); arrendamento vencido pode ser arrendado de novo; LEASED -> DELIVERED/SKIPPED (concluída), PENDING (nova tentativa com horário
 -- futuro e erro) ou FAILED (erro). Concluídas e falhas são finais neste recorte: o reprocessamento seletivo pelo
 -- operador ainda não existe, e FAILED fica visível para tratamento. Horários de conclusão vêm do banco.
 CREATE FUNCTION cp.outbox_transition_guard() RETURNS trigger
@@ -32,7 +32,8 @@ BEGIN
     OR NEW.aggregate_version<>OLD.aggregate_version OR NEW.payload<>OLD.payload OR NEW.created_at<>OLD.created_at THEN
   RAISE EXCEPTION 'Tarefa do outbox não muda de conteúdo.' USING ERRCODE='23514';
  END IF;
- IF NEW.state='LEASED' AND (OLD.state='PENDING' OR (OLD.state='LEASED' AND OLD.lease_until<=clock_timestamp()))
+ IF NEW.state='LEASED' AND ((OLD.state='PENDING' AND OLD.available_at<=clock_timestamp())
+    OR (OLD.state='LEASED' AND OLD.lease_until<=clock_timestamp()))
     AND NEW.attempts=OLD.attempts+1 AND NEW.lease_until>clock_timestamp() AND NEW.lease_until<=clock_timestamp()+interval '10 minutes' THEN
   -- Tentativa nova começa sem erro: falha e nova tentativa precisam declarar o próprio erro.
   NEW.last_error := NULL;
@@ -108,7 +109,9 @@ CREATE TABLE cp.notifications (
 );
 CREATE INDEX notifications_inbox ON cp.notifications(tenant_id,account_id,unit_id,created_at DESC,id);
 REVOKE ALL ON cp.notifications FROM PUBLIC;
-GRANT SELECT ON cp.notifications TO cp_api,cp_worker;
+GRANT SELECT ON cp.notifications TO cp_api;
+-- O worker só confere a chave do aviso (repetição absorvida por ON CONFLICT); não lê tipo, registro nem leitura.
+GRANT SELECT(tenant_id,outbox_id,account_id,channel) ON cp.notifications TO cp_worker;
 GRANT UPDATE(state) ON cp.notifications TO cp_api;
 GRANT INSERT(tenant_id,account_id,unit_id,outbox_id,kind,resource_id) ON cp.notifications TO cp_worker;
 ALTER TABLE cp.notifications ENABLE ROW LEVEL SECURITY;
@@ -119,7 +122,8 @@ CREATE POLICY tenant_boundary ON cp.notifications TO cp_api,cp_worker
 CREATE POLICY notifications_owner_read ON cp.notifications AS RESTRICTIVE FOR SELECT TO cp_api
  USING(account_id=platform.current_actor_id() AND cp.notification_recipient(tenant_id,unit_id,account_id,kind));
 CREATE POLICY notifications_owner_open ON cp.notifications AS RESTRICTIVE FOR UPDATE TO cp_api
- USING(account_id=platform.current_actor_id()) WITH CHECK(account_id=platform.current_actor_id() AND state='READ_IN_APP');
+ USING(account_id=platform.current_actor_id() AND cp.notification_recipient(tenant_id,unit_id,account_id,kind))
+ WITH CHECK(account_id=platform.current_actor_id() AND state='READ_IN_APP');
 -- O worker grava somente o aviso da tarefa que arrendou, do tipo correspondente ao evento, para a unidade real do
 -- registro (a do payload precisa conferir com a da chegada ou da encomenda) e para destinatário apto.
 CREATE POLICY notifications_worker_insert ON cp.notifications AS RESTRICTIVE FOR INSERT TO cp_worker

@@ -1078,6 +1078,12 @@ def worker_checks():
     expect(error(notify(E1, AA), "42501", tenant=TA, role="cp_worker"), "aviso so para tarefa arrendada")
     query(lease(E1), tenant=TA, role="cp_worker")
     expect(value(f"select state||':'||attempts from cp.outbox where id='{E1}'") == "LEASED:1", "worker arrenda a tarefa com tentativa contada")
+    expect(value(f"select count(*) from (select id from cp.outbox where id='{E1}' and state='LEASED' and attempts=1 "
+                 "for no key update skip locked) h", tenant=TA, role="cp_worker") == "1",
+           "worker trava a propria tarefa arrendada antes do efeito")
+    expect(value(f"select count(*) from (select id from cp.outbox where id='{E1}' and state='LEASED' and attempts=0 "
+                 "for no key update skip locked) h", tenant=TA, role="cp_worker") == "0",
+           "tentativa antiga nao trava a tarefa arrendada de novo")
     expect(value(f"WITH u AS ({lease(E1)} RETURNING 1) SELECT count(*) FROM u", tenant=TB, role="cp_worker") == "0",
            "worker de outro condominio nao alcanca a tarefa")
     expect(error(lease(E1), "23514", tenant=TA, role="cp_worker"), "arrendamento vigente nao e tomado por outro worker")
@@ -1097,6 +1103,12 @@ def worker_checks():
     repeated = query(notify(E1, AA) + " ON CONFLICT (tenant_id,outbox_id,account_id,channel) DO NOTHING", tenant=TA, role="cp_worker")
     expect(repeated.returncode == 0 and value(f"select count(*) from cp.notifications where outbox_id='{E1}'") == "1",
            "repeticao do efeito nao duplica o aviso")
+    expect(value(f"WITH i AS ({notify(E1, AA)} ON CONFLICT (tenant_id,outbox_id,account_id,channel) DO NOTHING RETURNING 1) "
+                 "SELECT count(*) FROM i", tenant=TA, role="cp_worker") == "0",
+           "repeticao no formato do worker devolve zero avisos novos")
+    expect(error("select kind from cp.notifications", "42501", tenant=TA, role="cp_worker"), "worker nao le o tipo do aviso")
+    expect(error("select resource_id from cp.notifications", "42501", tenant=TA, role="cp_worker"), "worker nao le o registro do aviso")
+    expect(error("select read_at from cp.notifications", "42501", tenant=TA, role="cp_worker"), "worker nao le a leitura do aviso")
     query(f"UPDATE cp.outbox SET state='DELIVERED' WHERE id='{E1}'", tenant=TA, role="cp_worker")
     expect(value(f"select state||':'||(processed_at is not null)||':'||(lease_until is null) from cp.outbox where id='{E1}'") == "DELIVERED:true:true",
            "conclusao com horario do banco")
@@ -1112,6 +1124,7 @@ def worker_checks():
           tenant=TA, role="cp_worker")
     expect(value(f"select state||':'||attempts||':'||last_error from cp.outbox where id='{E2}'") == "PENDING:1:Falha temporaria",
            "falha volta para a fila com tentativa e erro")
+    expect(error(lease(E2), "23514", tenant=TA, role="cp_worker"), "tarefa em espera nao e arrendada antes do horario")
     query(f"SET session_replication_role=replica; UPDATE cp.outbox SET available_at=now()-interval '1 second' WHERE id='{E2}'")
     query(lease(E2), tenant=TA, role="cp_worker")
     expect(error(f"UPDATE cp.outbox SET state='FAILED' WHERE id='{E2}'", "23514", tenant=TA, role="cp_worker"), "falha exige erro saneado")
@@ -1145,6 +1158,9 @@ def worker_checks():
     query(f"UPDATE cp.memberships SET permissions='{{}}' WHERE account_id='{DEP}'")
     expect(value(f"select count(*) from cp.notifications where account_id='{DEP}'", tenant=TA, actor=DEP, role="cp_api") == "0",
            "sem a permissao o aviso deixa de aparecer")
+    query("UPDATE cp.notifications SET state='READ_IN_APP'", tenant=TA, actor=DEP, role="cp_api")
+    expect(value(f"select state from cp.notifications where account_id='{DEP}'") == "AVAILABLE",
+           "sem a permissao o aviso tambem nao e aberto")
     expect(value(f"select count(*) from cp.memberships where tenant_id='{TB}'", tenant=TA, role="cp_worker") == "0",
            "worker nao le vinculo de outro condominio")
     expect(error("select description from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le descricao da encomenda")

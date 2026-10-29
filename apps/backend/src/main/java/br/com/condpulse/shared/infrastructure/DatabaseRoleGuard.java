@@ -17,7 +17,8 @@ public class DatabaseRoleGuard implements ApplicationRunner {
   // estado, tentativa ou prazo da tarefa nem altera o aviso além da abertura. Pedidos (V017): nada apagado; mensagem
   // não muda; a gestão altera só andamento, responsável, prazo, resolução e versão; nomes e horários vêm do banco.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
-  // existem na tabela.
+  // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
+  // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
   Boolean unsafe=jdbc.queryForObject("""
     select rolsuper or rolbypassrls or rolcreatedb or rolcreaterole or rolreplication
      or has_schema_privilege(current_user,'cp','CREATE')
@@ -39,8 +40,9 @@ public class DatabaseRoleGuard implements ApplicationRunner {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.access_events') and c.attname in ('unit_id','visitor_id','occurred_at','received_at','source')),false)
      or has_table_privilege(current_user,'cp.outbox','DELETE,TRUNCATE')
-     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
-       where c.attrelid='cp.outbox'::regclass and c.attname in ('state','attempts','available_at','lease_until','last_error','processed_at')),false)
+     or coalesce(to_regclass('cp.notifications') is not null and (select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT'))
+       from pg_attribute c where c.attrelid='cp.outbox'::regclass
+        and c.attname in ('state','attempts','available_at','lease_until','last_error','processed_at')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.notifications'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.announcements'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT,UPDATE')) from pg_attribute c

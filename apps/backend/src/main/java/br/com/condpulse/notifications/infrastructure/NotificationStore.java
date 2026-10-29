@@ -17,15 +17,15 @@ import org.springframework.stereotype.Repository;
 @Repository @Profile("api")
 public class NotificationStore {
  static final int LIMIT=50;
- private static final String SELECT="""
+ private static final String COLUMNS="""
   select n.id,n.unit_id,n.kind,n.resource_id,n.state,n.created_at,n.read_at,
    case n.kind
     when 'ARRIVAL_WAITING' then(select case when a.state='WAITING' and a.expires_at<=now() then 'EXPIRED' else a.state end
      from cp.arrival_requests a where a.tenant_id=n.tenant_id and a.id=n.resource_id)
     when 'PARCEL_RECEIVED' then(select p.status from cp.parcels p where p.tenant_id=n.tenant_id and p.id=n.resource_id)
    end as resource_state
-  from cp.notifications n
   """;
+ private static final String SELECT=COLUMNS+" from cp.notifications n\n";
  private final JdbcTemplate jdbc;
  public NotificationStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
@@ -37,15 +37,20 @@ public class NotificationStore {
      and m.role in('RESIDENT','RESPONSIBLE','DEPENDENT') and m.valid_from<=now() and(m.valid_until is null or m.valid_until>now()))
    """,Boolean.class,tenant,unit));
  }
+ /**
+  * Página e contagem de não abertos na mesma instrução (mesmo instantâneo): abertura em outra aba entre duas consultas
+  * não deixa a contagem menor que os itens disponíveis da página. Sem itens não há aviso algum, então nada a abrir.
+  */
  public NotificationModels.Page page(UUID tenant,UUID unit) {
-  var items=jdbc.query(SELECT+"""
+  int[] unread={0};
+  var items=jdbc.query(COLUMNS+"""
+   ,(select count(*) from cp.notifications c where c.tenant_id=? and c.unit_id=? and c.account_id=platform.current_actor_id()
+     and c.state='AVAILABLE') as unread
+   from cp.notifications n
    where n.tenant_id=? and n.unit_id=? and n.account_id=platform.current_actor_id()
    order by n.created_at desc,n.id desc limit ?
-   """,(r,n)->notification(r),tenant,unit,LIMIT);
-  Integer unread=jdbc.queryForObject("""
-   select count(*) from cp.notifications where tenant_id=? and unit_id=? and account_id=platform.current_actor_id() and state='AVAILABLE'
-   """,Integer.class,tenant,unit);
-  return new NotificationModels.Page(items,unread==null?0:unread);
+   """,(r,n)->{ unread[0]=r.getInt("unread"); return notification(r); },tenant,unit,tenant,unit,LIMIT);
+  return new NotificationModels.Page(items,unread[0]);
  }
  /** Abertura pelo destinatário: AVAILABLE vira READ_IN_APP uma vez, com horário do banco; repetir devolve a leitura gravada. */
  public NotificationModels.Notification open(UUID tenant,UUID notification) {

@@ -48,6 +48,17 @@ public class OutboxStore {
     r.getObject("aggregate_id",UUID.class),r.getLong("aggregate_version"),uuid(r.getString("unit_id")),r.getInt("attempts")),
    tenant,maxAttempts,batch,(double)leaseSeconds,tenant);
  }
+ /**
+  * Antes do efeito, trava a linha da tarefa ainda arrendada nesta tentativa. Sem a linha (outra instância arrendou de
+  * novo, ou está arrendando agora), o efeito nem começa. Com a linha travada até o fim da transação, nenhuma outra
+  * instância arrenda a mesma tarefa enquanto o efeito roda (o arrendamento usa SKIP LOCKED); a trava não conflita com a
+  * referência do aviso à tarefa (FOR KEY SHARE).
+  */
+ public boolean hold(UUID tenant,OutboxModels.LeasedEvent event) {
+  return !jdbc.query("""
+   select id from cp.outbox where tenant_id=? and id=? and state='LEASED' and attempts=? for no key update skip locked
+   """,(r,n)->r.getObject("id",UUID.class),tenant,event.id(),event.attempts()).isEmpty();
+ }
  public boolean complete(UUID tenant,OutboxModels.LeasedEvent event,OutboxModels.Outcome outcome) {
   return jdbc.update("update cp.outbox set state=? where tenant_id=? and id=? and state='LEASED' and attempts=?",
    outcome.name(),tenant,event.id(),event.attempts())==1;

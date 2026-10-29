@@ -14,14 +14,19 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumidor do outbox (CP-034): por condomínio ativo, encerra arrendamentos que esgotaram as tentativas, arrenda um
- * lote e processa cada tarefa em transação própria — efeito e conclusão juntos, cercados pela tentativa arrendada. A
- * entrega é ao menos uma vez; os efeitos internos são idempotentes pela chave tarefa/destinatário/canal. Logs só com
- * identificadores técnicos, sem dados de moradores ou visitantes.
+ * Consumidor do outbox (CP-034): por condomínio ativo, numa transação curta encerra arrendamentos que esgotaram as
+ * tentativas e arrenda um lote; depois processa cada tarefa em transação própria — trava a linha ainda arrendada nesta
+ * tentativa, aplica o efeito e grava a conclusão juntos. O efeito é só interno ao banco (sem chamada externa dentro da
+ * transação): se a conclusão não puder ser gravada, ele volta junto. Falha de um condomínio não interrompe os outros.
+ * Logs só com identificadores técnicos, sem dados de moradores ou visitantes.
+ *
+ * <p>Lote e arrendamento: até 10 tarefas por condomínio e passada, arrendamento de 60 s. Cada transação tem limite de
+ * 10 s; se um lote lento passar do arrendamento, a tarefa seguinte só é processada se ninguém a arrendou de novo (a
+ * trava cercada pela tentativa recusa a tarefa perdida, sem efeito).
  */
 @Component @Profile("worker")
 public class OutboxWorker {
- static final int BATCH=20;
+ static final int BATCH=10;
  static final int LEASE_SECONDS=60;
  private static final Logger LOG=LoggerFactory.getLogger(OutboxWorker.class);
  private final WorkerTransactions transactions;
@@ -39,28 +44,42 @@ public class OutboxWorker {
  /** Uma passada por todos os condomínios ativos; devolve quantas tarefas foram processadas. */
  public int runOnce() {
   int processed=0;
-  for(UUID tenant:transactions.catalog(store::activeTenants)) processed+=runTenant(tenant);
+  for(UUID tenant:transactions.catalog(store::activeTenants)) {
+   try {
+    processed+=runTenant(tenant);
+   } catch(RuntimeException error) {
+    // Um condomínio com falha (banco, dado inesperado) não impede a passada dos outros.
+    LOG.warn("outbox tenant={} passada do condominio interrompida: {}",tenant,sanitize(error));
+   }
+  }
   return processed;
  }
  public int runTenant(UUID tenant) {
-  int exhausted=transactions.inTenant(tenant,()->store.failExhausted(tenant,RetryPolicy.MAX_ATTEMPTS));
-  if(exhausted>0) LOG.warn("outbox tenant={} tarefas com tentativas esgotadas={}",tenant,exhausted);
-  var leased=transactions.inTenant(tenant,()->store.lease(tenant,BATCH,LEASE_SECONDS,RetryPolicy.MAX_ATTEMPTS));
-  for(var event:leased) process(tenant,event);
-  return leased.size();
+  var pass=transactions.inTenant(tenant,()->{
+   int exhausted=store.failExhausted(tenant,RetryPolicy.MAX_ATTEMPTS);
+   return new Pass(exhausted,store.lease(tenant,BATCH,LEASE_SECONDS,RetryPolicy.MAX_ATTEMPTS));
+  });
+  if(pass.exhausted()>0) LOG.warn("outbox tenant={} tarefas com tentativas esgotadas={}",tenant,pass.exhausted());
+  for(var event:pass.leased()) process(tenant,event);
+  return pass.leased().size();
  }
- /** Uma tarefa já arrendada: efeito e conclusão na mesma transação; falha registra nova tentativa ou FAILED. */
+ private record Pass(int exhausted,List<OutboxModels.LeasedEvent> leased) {}
+ /**
+  * Uma tarefa já arrendada: trava a linha ainda arrendada nesta tentativa, aplica o efeito e grava a conclusão na mesma
+  * transação; falha registra nova tentativa ou FAILED. Arrendamento perdido antes do efeito: nada é aplicado.
+  */
  public void process(UUID tenant,OutboxModels.LeasedEvent event) {
   var effect=effects.stream().filter(candidate->candidate.handles(event.type())).findFirst().orElse(null);
   try {
    boolean completed=transactions.inTenant(tenant,()->{
+    if(!store.hold(tenant,event)) throw new LeaseLost();
     var outcome=effect==null?OutboxModels.Outcome.SKIPPED:effect.apply(tenant,event);
     if(!store.complete(tenant,event,outcome)) throw new LeaseLost();
     return true;
    });
    if(completed) LOG.debug("outbox tenant={} evento={} tipo={} concluido",tenant,event.id(),event.type());
   } catch(LeaseLost lost) {
-   LOG.warn("outbox tenant={} evento={} arrendamento perdido; efeito desfeito",tenant,event.id());
+   LOG.warn("outbox tenant={} evento={} arrendamento perdido; nada aplicado nesta tentativa",tenant,event.id());
   } catch(RuntimeException error) {
    var failure=error instanceof OutboxModels.PermanentFailure permanent
     ?new OutboxModels.Failure(false,java.time.Duration.ZERO,RetryPolicy.limit(permanent.getMessage()))
