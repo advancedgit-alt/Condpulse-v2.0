@@ -104,6 +104,8 @@ test('portaria registra recebimento uma única vez e entrega com documento confe
   await expect(page.getByText('Retirada registrada: Pessoa Fictícia retirou a encomenda de Bloco 1 · 101 — Sintética A', { exact: false })).toBeVisible();
   expect(state.deliveries.map((item) => item.body)).toEqual([{ recipientName: 'Pessoa Fictícia', identityChecked: true, expectedVersion: 0 }]);
   await expect(page.getByText('Não há encomenda aguardando retirada neste filtro.')).toBeVisible();
+  await page.setViewportSize({ width: 360, height: 780 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('segunda retirada recebe "já retirada" sem sucesso falso e a lista mostra o estado real', async ({ page }) => {
@@ -143,4 +145,10 @@ test('morador consulta encomendas da unidade com local e retirada', async ({ pag
   await expect(waiting.getByText('Caixa média')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Encomendas retiradas' }).getByText('Retirada por Pessoa Fictícia', { exact: false })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Encomendas' }).first()).toHaveAttribute('aria-current', 'page');
+  // Em tela estreita as três abas da unidade cabem sem rolagem horizontal nem rótulo cortado.
+  await page.setViewportSize({ width: 360, height: 780 });
+  const tabs = page.getByRole('navigation', { name: 'Navegação da unidade' });
+  await expect(tabs.getByRole('link')).toHaveCount(3);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth))).toBe(true);
 });
