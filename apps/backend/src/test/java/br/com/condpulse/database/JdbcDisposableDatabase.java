@@ -93,6 +93,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id in (?,?) and account_id in (?,?,?) and invitation_id is null",
    tenantA,tenantB,accountA,accountB,accountC);
   adminUpdate("update cp.units set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
+  adminUpdate("update platform.tenants set active=true where id in (?,?)",tenantA,tenantB);
  }
  void adminUpdate(String sql,Object...args) throws SQLException {
   try(Connection connection=admin()) { update(connection,sql,args); }
@@ -122,6 +123,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("delete from platform.platform_audit_log where actor_id in (?,?,?) or tenant_id in (?,?)",
    accountA,accountB,accountC,tenantA,tenantB);
   adminUpdate("delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
+  adminUpdate("delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
  }
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
@@ -170,6 +172,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    update(connection,"delete from platform.platform_audit_log where actor_id in (?,?,?) or tenant_id in (?,?)",
     accountA,accountB,accountC,tenantA,tenantB);
    update(connection,"delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
+   update(connection,"delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
    for(String table:new String[]{"outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.

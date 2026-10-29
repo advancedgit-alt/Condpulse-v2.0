@@ -380,12 +380,28 @@ def platform_checks():
                   f"VALUES('{AA}','PLATFORM_ADMIN','ACTIVE','ensaio ficticio')")
     expect(error(grant_role, "42501", role="cp_api"), "aplicacao nao concede papel de plataforma")
     query(grant_role)
+    history = "select string_agg(operation||':'||status||':'||coalesce(revoke_reason,'-'),',' order by id) from platform.platform_role_events"
+    expect(value(history) == "INSERT:ACTIVE:-", "concessao do papel fica na trilha operacional")
+    expect(value("select executed_by=session_user from platform.platform_role_events") == "t", "trilha registra a identidade que executou")
+    expect(error("UPDATE platform.platform_roles SET status='REVOKED',revoked_at=now()", "23514"),
+           "revogacao exige motivo proprio")
+    query("UPDATE platform.platform_roles SET status='REVOKED',revoked_at=now(),revoke_reason='revogacao ficticia'")
+    expect(value("select reason from platform.platform_roles") == "ensaio ficticio", "revogacao preserva o motivo da concessao")
+    query("UPDATE platform.platform_roles SET status='ACTIVE',revoked_at=NULL,revoke_reason=NULL,granted_at=clock_timestamp()")
+    expect(value(history) == "INSERT:ACTIVE:-,UPDATE:REVOKED:revogacao ficticia,UPDATE:ACTIVE:-", "revogacao e reativacao ficam na trilha")
+    for reader in ("cp_api", "cp_worker", "cp_onboarding"):
+        expect(error("select count(*) from platform.platform_role_events", "42501", role=reader), f"{reader} nao le a trilha de papeis")
+    expect(error(f"INSERT INTO platform.platform_role_events(operation,account_id,role,status,reason) VALUES('INSERT','{AB}','PLATFORM_ADMIN','ACTIVE','x')",
+                 "42501", role="cp_api"), "aplicacao nao forja a trilha de papeis")
     expect(value("select count(*) from platform.platform_roles", role="cp_api") == "1", "conta le o proprio papel de plataforma")
     expect(value("select count(*) from platform.platform_roles", role="cp_api", actor=AB) == "0",
            "papel de plataforma de outra conta nao e visivel")
     expect(error("UPDATE platform.platform_roles SET status='REVOKED',revoked_at=now()", "42501", role="cp_api"),
            "aplicacao nao altera papel de plataforma")
     expect(error("select count(*) from platform.platform_roles", "42501", role="cp_worker"), "worker nao le papeis de plataforma")
+    expect(error("DELETE FROM platform.platform_roles", "42501", role="cp_api"), "aplicacao nao apaga papel de plataforma")
+    for reader in ("cp_worker", "cp_onboarding"):
+        expect(error("select count(*) from platform.platform_audit_log", "42501", role=reader), f"{reader} nao le a trilha da plataforma")
     expect(value("select count(*) from platform.tenants", role="cp_api") == "1", "sem capacidade o catalogo segue o vinculo")
     expect(value(caps("tenants.read", "select count(*) from platform.tenants"), role="cp_api") == "2",
            "capacidade publicada le o catalogo global")
@@ -396,8 +412,13 @@ def platform_checks():
     rename = f"UPDATE platform.tenants SET name='RENOMEADO',version=version+1 WHERE id='{TA}'"
     expect(error(caps("tenants.read", rename), "42501", role="cp_api"), "leitura global nao altera condominio")
     local = (f"SET LOCAL app.capabilities='units.manage,memberships.manage,amenities.manage,audit.read'; "
-             f"UPDATE platform.tenants SET name='GESTOR LOCAL' WHERE id='{TB}'")
-    expect(error(local, "42501", role="cp_api", actor=AB, tenant=TB), "gestor local nao ganha poder de plataforma")
+             f"WITH u AS (UPDATE platform.tenants SET name='GESTOR LOCAL' WHERE id='{TB}' RETURNING 1) SELECT count(*) FROM u")
+    expect(value(local, role="cp_api", actor=AB, tenant=TB) == "0", "gestor local nao ganha poder de plataforma")
+    expect(error(f"SELECT id FROM platform.tenants WHERE id='{TB}' FOR UPDATE", "42501", role="cp_api", actor=AB, tenant=TB)
+           or value(f"SELECT count(*) FROM (SELECT id FROM platform.tenants WHERE id='{TB}' FOR UPDATE) l", role="cp_api", actor=AB, tenant=TB) == "0",
+           "membro do condominio nao bloqueia a linha do catalogo")
+    mass = "WITH u AS (UPDATE platform.tenants SET active=false RETURNING 1) SELECT count(*) FROM u"
+    expect(value(caps("tenants.manage", mass), role="cp_api") == "0", "alteracao sem leitura global nao alcanca o catalogo")
     expect(value(caps("tenants.read,tenants.manage", f"WITH u AS ({rename} RETURNING version) SELECT version FROM u"),
                  role="cp_api") == "1", "plataforma renomeia condominio pela capacidade")
     expect(error(caps("tenants.read,tenants.manage", f"UPDATE platform.tenants SET time_zone='UTC' WHERE id='{TA}'"),
@@ -407,6 +428,10 @@ def platform_checks():
     audit = (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) "
              f"VALUES('{AA}','TENANT_RENAMED','{TA}','ensaio','{{\"name\":\"RENOMEADO\"}}')")
     expect(error(audit, "42501", role="cp_api"), "auditoria da plataforma exige capacidade publicada")
+    expect(error(caps("tenants.read,platform.audit.read", audit), "42501", role="cp_api"), "leitura nao grava trilha da plataforma")
+    expect(error(caps("x", audit), "42501", role="cp_api"), "capacidade desconhecida nao grava trilha")
+    expect(error(caps("tenants.manage", audit.replace("(actor_id,", "(id,actor_id,").replace(f"VALUES('{AA}',", f"VALUES(gen_random_uuid(),'{AA}',")),
+                 "42501", role="cp_api"), "aplicacao nao escolhe o id da trilha")
     expect(error(caps("tenants.manage", audit), "42501", role="cp_api", actor=AB), "auditoria pertence ao ator publicado")
     query(caps("tenants.manage", audit), role="cp_api")
     expect(error(caps("tenants.manage", audit.replace("'ensaio'", "'ensaio'").replace("details)", "details,created_at)")
@@ -427,8 +452,24 @@ def platform_checks():
            "hash do manifesto fica fora do painel")
     expect(error(caps("tenants.read", "select database_actor from platform.onboarding_runs"), "42501", role="cp_api"),
            "principal do banco fica fora do painel")
+    suspended_token = "9" * 64
+    query(f"INSERT INTO cp.membership_invitations(id,tenant_id,unit_id,role,display_name,email_hash,token_hash,expires_at,created_by) "
+          f"VALUES('70000000-0000-4000-8000-000000000009','{TB}','{UB}','RESIDENT','CONVIDADO SUSPENSO','{'8'*64}','{suspended_token}',"
+          f"now()+interval '7 days','{AB}'); UPDATE platform.tenants SET active=false WHERE id='{TB}'")
+    expect(value(with_invitation(suspended_token, f"select count(*) from platform.tenants where id='{TB}'"), actor=NEWCOMER_3, role="cp_api") == "0",
+           "convite nao revela condominio suspenso")
+    suspended_member = (f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,invitation_id) "
+                        f"VALUES('{TB}','{NEWCOMER_3}','{UB}','CONVIDADO SUSPENSO','RESIDENT','PENDING','70000000-0000-4000-8000-000000000009')")
+    expect(error(with_invitation(suspended_token, suspended_member), "42501", tenant=TB, actor=NEWCOMER_3, role="cp_api"),
+           "convite de condominio suspenso nao cria vinculo")
+    query(f"UPDATE platform.tenants SET active=true WHERE id='{TB}'")
+    expect(value(with_invitation(suspended_token, f"select count(*) from platform.tenants where id='{TB}'"), actor=NEWCOMER_3, role="cp_api") == "1",
+           "convite pendente revela somente o proprio condominio ativo")
+    query("DELETE FROM cp.membership_invitations WHERE id='70000000-0000-4000-8000-000000000009'")
     query(f"DELETE FROM platform.onboarding_runs WHERE tenant_id='{TA}'; DELETE FROM platform.platform_audit_log; "
           f"DELETE FROM platform.platform_roles; UPDATE platform.tenants SET name='FICTICIO A' WHERE id='{TA}'")
+    expect(value(history).endswith(",DELETE:ACTIVE:-"), "remocao do papel tambem fica na trilha")
+    query("DELETE FROM platform.platform_role_events")
 
 def main():
     guard()

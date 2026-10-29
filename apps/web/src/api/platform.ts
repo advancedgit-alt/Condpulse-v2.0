@@ -1,4 +1,5 @@
 import { api, CondPulseApi, identifier, invalidResponse, isDate, isInteger, isString, isUUID, oneOf, record } from './client';
+import { codePoints } from './text';
 import type { ISODateTime, UUID } from './types';
 
 /** Painel master (OPS-01): somente dados da plataforma; nunca conteúdo dos moradores. */
@@ -13,7 +14,8 @@ export interface PlatformTenant {
   updatedAt: ISODateTime; onboarding: OnboardingReceipt | null;
 }
 export interface PlatformTenantPage { tenants: PlatformTenant[]; truncated: boolean }
-export interface PlatformTenantUpdate { name: string; active: boolean; expectedVersion: number; reason: string }
+/** name null mantém o nome atual: suspender ou reativar nunca renomeia por normalização. */
+export interface PlatformTenantUpdate { name: string | null; active: boolean; expectedVersion: number; reason: string }
 export interface PlatformTenantChange { tenant: PlatformTenant; applied: boolean }
 export interface PlatformAuditEvent {
   eventId: UUID; actorId: UUID; action: string; tenantId: UUID | null; reason: string | null; details: Record<string, string>;
@@ -39,7 +41,8 @@ function receipt(value: unknown): OnboardingReceipt | null {
     amenities: value.amenities, completedAt: value.completedAt };
 }
 export function platformTenant(value: unknown, uncertain = false): PlatformTenant {
-  if (!record(value) || !isUUID(value.tenantId) || !isString(value.name) || value.name.length < 1 || value.name.length > 160
+  // Comprimento em code points, como o banco: nome com emoji não derruba a lista inteira.
+  if (!record(value) || !isUUID(value.tenantId) || !isString(value.name) || value.name.length < 1 || codePoints(value.name) > 160
       || !isString(value.timeZone) || typeof value.active !== 'boolean' || !isInteger(value.version) || !isDate(value.createdAt)
       || !isDate(value.updatedAt) || !('onboarding' in value)) throw invalidResponse(uncertain);
   return { tenantId: value.tenantId, name: value.name, timeZone: value.timeZone, active: value.active, version: value.version,
@@ -69,7 +72,9 @@ function auditPage(value: unknown): PlatformAuditPage {
 export function createPlatformApi(client: CondPulseApi = api) {
   return {
     session: async (signal?: AbortSignal) => client.call('/v1/platform/session', platformSession, signal ? { signal } : {}),
-    tenants: async (signal?: AbortSignal) => client.call('/v1/platform/tenants', tenantPage, signal ? { signal } : {}),
+    /** Busca opcional por trecho do nome ou id exato (o servidor trata % e _ como texto). */
+    tenants: async (search: string | null, signal?: AbortSignal) =>
+      client.call(`/v1/platform/tenants${search ? `?${new URLSearchParams({ q: search })}` : ''}`, tenantPage, signal ? { signal } : {}),
     updateTenant: async (tenantId: string, body: PlatformTenantUpdate) =>
       client.call(`/v1/platform/tenants/${identifier(tenantId)}`, tenantChange, { method: 'PUT', body }),
     audit: async (cursor: string | null, signal?: AbortSignal) => {

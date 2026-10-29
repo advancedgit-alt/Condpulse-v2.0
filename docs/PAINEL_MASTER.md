@@ -9,7 +9,7 @@ continua fixado em V003–V005 e qualquer aplicação exige revisão e autoriza�
 | Operação | Rota | Capacidade |
 | --- | --- | --- |
 | Papel da própria conta (e se falta o segundo fator) | `GET /v1/platform/session` | papel vigente |
-| Catálogo de condomínios: nome, fuso, estado, versão, contagens do onboarding | `GET /v1/platform/tenants` | `tenants.read` |
+| Catálogo de condomínios: nome, fuso, estado, versão, contagens do onboarding; busca opcional `q` | `GET /v1/platform/tenants` | `tenants.read` |
 | Renomear, suspender ou reativar pela versão lida, com motivo | `PUT /v1/platform/tenants/{id}` | `tenants.manage` |
 | Auditoria da plataforma, por cursor | `GET /v1/platform/audit-events` | `platform.audit.read` |
 
@@ -19,11 +19,20 @@ continua fixado em V003–V005 e qualquer aplicação exige revisão e autoriza�
   de conta ativa, papel vigente e token `aal2`, e somente no contexto local da transação. Sem AAL2 a sessão
   informa `mfaRequired` e toda operação recebe `403 MFA_REQUIRED`; conta sem papel recebe
   `403 PLATFORM_ACCESS_DENIED`. O papel é relido em cada requisição: revogação vale na próxima.
-- **Banco (V010)**: `platform.tenants` ganha `version`/`updated_at`; leitura global e alteração de nome/estado
-  só com a capacidade publicada (UPDATE recusado com 42501, não "não encontrado"); o fuso fica fora do grant.
-  Do recibo de onboarding a role lê só `operation_id`, `tenant_id`, contagens e data — não o hash do manifesto
-  nem o principal do banco. `platform.platform_audit_log` é append-only para a role runtime: inserção exige o
-  próprio ator e capacidade de plataforma publicada; `created_at` vem do banco.
+- **Banco (V010)**: `platform.tenants` ganha `version`/`updated_at`; leitura global só com `tenants.read`; o
+  UPDATE só alcança linhas com `tenants.read` e grava só com `tenants.manage` (sem ela, 42501); membro do
+  condomínio não alcança nem trava a linha do catálogo; o fuso fica fora do grant. Do recibo de onboarding a
+  role lê só `operation_id`, `tenant_id`, contagens e data — não o hash do manifesto nem o principal do banco.
+  `platform.platform_audit_log` é append-only para a role runtime: inserção exige o próprio ator e
+  `tenants.manage`; `id` e `created_at` vêm do banco. A gravação da trilha a cada mudança é garantida pelo
+  serviço, na mesma transação da alteração (o banco não exige a linha de auditoria; risco residual registrado).
+- **Convite em condomínio suspenso**: o aceite devolve `404 INVITATION_NOT_AVAILABLE` e nada é gravado; o banco
+  também recusa o vínculo. O convidado sem vínculo só enxerga o condomínio ativo do convite pendente apresentado.
+- **Busca**: `q` procura trecho do nome sem diferenciar maiúsculas (acentos contam; `%` e `_` são texto) ou o id
+  exato; alcança condomínios além dos 200 primeiros da lista em ordem alfabética.
+- **Nome**: comprimento em code points (como o banco e o onboarding), qualquer espaço Unicode vira um espaço e
+  caracteres de controle ou de formatação invisível (U+200B, U+202E…) são recusados — a web aplica a mesma regra.
+  No `PUT`, `name` ausente ou `null` mantém o nome atual: suspender ou reativar nunca renomeia.
 - **Mudanças**: pedido igual ao estado atual devolve `applied=false` sem gravar (repetição natural); versão
   divergente com mudança real é `409 TENANT_CHANGED`. Cada mudança grava um evento: `TENANT_RENAMED` (com nome
   anterior e novo), `TENANT_SUSPENDED` ou `TENANT_REACTIVATED`, com o motivo.
@@ -58,16 +67,26 @@ operação aprovada — nunca pela role runtime. Modelo, com valores reais preen
 ```sql
 INSERT INTO platform.platform_roles(account_id,role,status,reason)
 VALUES('<uuid-da-conta-existente>','PLATFORM_ADMIN','ACTIVE','<motivo e referência da aprovação>');
--- Revogação:
-UPDATE platform.platform_roles SET status='REVOKED',revoked_at=now(),reason='<motivo>'
+-- Revogação (o motivo da concessão é preservado em reason):
+UPDATE platform.platform_roles SET status='REVOKED',revoked_at=clock_timestamp(),revoke_reason='<motivo e referência>'
 WHERE account_id='<uuid-da-conta>';
+-- Nova concessão depois de revogar:
+UPDATE platform.platform_roles SET status='ACTIVE',revoked_at=NULL,revoke_reason=NULL,granted_at=clock_timestamp(),
+ reason='<motivo e referência da nova aprovação>' WHERE account_id='<uuid-da-conta>';
 ```
 
-A conta precisa existir e estar ativa em `platform.accounts` e ter fator TOTP verificado para usar o painel.
-Registrar a execução (quem aprovou, quando, run) em `STATUS.md`. Nenhuma concessão foi feita.
+Cada INSERT, UPDATE ou DELETE em `platform_roles` grava, por gatilho e na mesma transação,
+`platform.platform_role_events` (operação, estado, motivos e `executed_by` = identidade do banco que executou).
+Nenhuma role de aplicação lê ou escreve essa trilha. As duas tabelas têm RLS forçado sem política para escrita:
+o SQL só funciona com identidade de migração/operação que ignore RLS (por exemplo, com `BYPASSRLS`) — conferir
+a identidade antes da execução revisada. A conta precisa existir e estar ativa em `platform.accounts` e ter fator
+TOTP verificado para usar o painel. Registrar a execução (quem aprovou, quando, run) em `STATUS.md`. Nenhuma
+concessão foi feita.
 
 ## Pendências
 
 - Aplicação remota da V010 e concessão do primeiro papel, com aprovação explícita.
 - Suporte temporário justificado (OPS-01), contratos/planos e situação financeira (fase 5).
 - Ensaio com Supabase Auth real (AAL2) e aceite do painel em navegador com dados reais.
+- Exigir no banco a linha de auditoria a cada mudança de `platform.tenants` (hoje garantida pelo serviço).
+- Teste de duas alterações simultâneas pelo HTTP e paginação por cursor do catálogo (hoje: 200 + busca).

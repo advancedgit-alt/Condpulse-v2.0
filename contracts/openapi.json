@@ -2951,23 +2951,17 @@
               }
             }
           },
-          "400": {
-            "description": "Pedido inválido"
-          },
           "401": {
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
-            "description": "Recurso não disponível ao ator"
-          },
-          "409": {
-            "description": "Conflito de versão, nome duplicado ou estado alterado"
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
           },
           "503": {
-            "description": "Dependência ou configuração indisponível"
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
           }
         }
       }
@@ -2984,7 +2978,18 @@
           }
         ],
         "x-feature-flag": "CP_PLATFORM_ENABLED",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Busca por trecho do nome (curingas % e _ são texto literal; sem diferenciar maiúsculas; acentos contam) ou pelo id exato. Espaços Unicode são normalizados; vazio lista o catálogo.",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
         "description": "Catálogo global dos condomínios (tenants.read): nome, fuso, estado, versão e contagens do onboarding. Sem dados de moradores. Criação de condomínio não existe na API: o cadastro segue pelo onboarding operacional.",
         "responses": {
           "200": {
@@ -3006,22 +3011,19 @@
             }
           },
           "400": {
-            "description": "Pedido inválido"
+            "description": "TENANT_SEARCH_INVALID: busca com mais de 160 caracteres ou caractere invisível"
           },
           "401": {
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
-            "description": "Recurso não disponível ao ator"
-          },
-          "409": {
-            "description": "Conflito de versão, nome duplicado ou estado alterado"
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
           },
           "503": {
-            "description": "Dependência ou configuração indisponível"
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
           }
         }
       }
@@ -3089,22 +3091,22 @@
             }
           },
           "400": {
-            "description": "Pedido inválido"
+            "description": "TENANT_VERSION_REQUIRED, TENANT_NAME_INVALID, TENANT_STATE_INVALID, AUDIT_REASON_REQUIRED ou PLATFORM_INPUT_INVALID"
           },
           "401": {
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
-            "description": "Recurso não disponível ao ator"
+            "description": "TENANT_NOT_FOUND, ou rota inexistente com CP_PLATFORM_ENABLED=false"
           },
           "409": {
-            "description": "Conflito de versão, nome duplicado ou estado alterado"
+            "description": "TENANT_CHANGED: o condomínio mudou depois da versão lida"
           },
           "503": {
-            "description": "Dependência ou configuração indisponível"
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
           }
         }
       }
@@ -3164,22 +3166,19 @@
             }
           },
           "400": {
-            "description": "Pedido inválido"
+            "description": "AUDIT_CURSOR_INVALID ou AUDIT_LIMIT_INVALID"
           },
           "401": {
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
           },
           "404": {
-            "description": "Recurso não disponível ao ator"
-          },
-          "409": {
-            "description": "Conflito de versão, nome duplicado ou estado alterado"
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
           },
           "503": {
-            "description": "Dependência ou configuração indisponível"
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
           }
         }
       }
@@ -4946,16 +4945,19 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "name",
           "active",
           "expectedVersion",
           "reason"
         ],
         "properties": {
           "name": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1,
-            "maxLength": 160
+            "maxLength": 160,
+            "description": "Ausente ou null mantém o nome atual (suspender/reativar não renomeia). Comprimento em code points; espaços Unicode viram um espaço; controles e caracteres invisíveis de formatação são recusados."
           },
           "active": {
             "type": "boolean"

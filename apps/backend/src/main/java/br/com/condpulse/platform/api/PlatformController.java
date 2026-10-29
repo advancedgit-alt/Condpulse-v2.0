@@ -29,8 +29,8 @@ public class PlatformController {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.session(account(jwt),assurance(jwt)));
  }
  @GetMapping("/v1/platform/tenants")
- public ResponseEntity<PlatformModels.TenantPage> tenants(@AuthenticationPrincipal Jwt jwt) {
-  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.tenants(account(jwt),assurance(jwt)));
+ public ResponseEntity<PlatformModels.TenantPage> tenants(@AuthenticationPrincipal Jwt jwt,@RequestParam(required=false) String q) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.tenants(account(jwt),assurance(jwt),q));
  }
  @PutMapping("/v1/platform/tenants/{tenantId}")
  public ResponseEntity<PlatformModels.TenantChange> updateTenant(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,

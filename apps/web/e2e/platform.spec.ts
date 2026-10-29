@@ -24,8 +24,9 @@ async function installPlatformApi(page: Page, management: ManagementState, role 
   ] };
   await page.route('**/v1/platform/**', async (route) => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
-    state.requests.push(`${request.method()} ${path}`);
+    const url = new URL(request.url());
+    const path = url.pathname;
+    state.requests.push(`${request.method()} ${path}${url.search}`);
     if (!state.role) { await problem(route, 403, 'PLATFORM_ACCESS_DENIED'); return; }
     const aal2 = management.assurance === 'AAL2';
     if (path === '/v1/platform/session') {
@@ -34,15 +35,21 @@ async function installPlatformApi(page: Page, management: ManagementState, role 
       return;
     }
     if (!aal2) { await problem(route, 403, 'MFA_REQUIRED'); return; }
-    if (request.method() === 'GET' && path === '/v1/platform/tenants') { await json(route, 200, { tenants: state.tenants, truncated: false }); return; }
+    if (request.method() === 'GET' && path === '/v1/platform/tenants') {
+      const search = url.searchParams.get('q')?.toLowerCase();
+      const tenants = search ? state.tenants.filter((item) => item.name.toLowerCase().includes(search) || item.tenantId === search) : state.tenants;
+      await json(route, 200, { tenants, truncated: false });
+      return;
+    }
     if (request.method() === 'PUT' && path.startsWith('/v1/platform/tenants/')) {
-      const body = request.postDataJSON() as { name: string; active: boolean; expectedVersion: number; reason: string };
+      const body = request.postDataJSON() as { name: string | null; active: boolean; expectedVersion: number; reason: string };
       state.updates.push(body);
       const tenant = state.tenants.find((item) => item.tenantId === path.split('/').pop())!;
-      if (tenant.name === body.name && tenant.active === body.active) { await json(route, 200, { tenant, applied: false }); return; }
+      const name = body.name ?? tenant.name;
+      if (tenant.name === name && tenant.active === body.active) { await json(route, 200, { tenant, applied: false }); return; }
       if (tenant.version !== body.expectedVersion) { await problem(route, 409, 'TENANT_CHANGED'); return; }
       const before = { ...tenant };
-      Object.assign(tenant, { name: body.name, active: body.active, version: tenant.version + 1, updatedAt: new Date().toISOString() });
+      Object.assign(tenant, { name, active: body.active, version: tenant.version + 1, updatedAt: new Date().toISOString() });
       if (before.active !== tenant.active) state.audit.unshift({ eventId: `80000000-0000-4000-8000-00000000000${state.audit.length + 1}`,
         actorId: ACCOUNT, action: tenant.active ? 'TENANT_REACTIVATED' : 'TENANT_SUSPENDED', tenantId: tenant.tenantId, reason: body.reason,
         details: {}, createdAt: new Date().toISOString() });
@@ -86,7 +93,8 @@ test('administrador confirma o segundo fator, suspende com motivo e a repetiçã
   await rowB.getByRole('button', { name: 'Salvar alteração' }).click();
   await expect(page.getByText('Condomínio suspenso: moradores e gestão local perdem o acesso', { exact: false })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético B' }).getByText('Suspenso', { exact: true })).toBeVisible();
-  expect(platform.updates).toEqual([{ name: 'Condomínio Sintético B', active: false, expectedVersion: 0, reason: 'Contrato encerrado' }]);
+  // Nome intocado vai como null: suspender não renomeia.
+  expect(platform.updates).toEqual([{ name: null, active: false, expectedVersion: 0, reason: 'Contrato encerrado' }]);
   // Outra pessoa já deixou o condomínio no estado pedido: resposta sem gravação aparece como informação.
   await page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético B' }).getByRole('button', { name: 'Alterar nome ou estado' }).click();
   const again = page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético B' });
@@ -96,6 +104,28 @@ test('administrador confirma o segundo fator, suspende com motivo e a repetiçã
   await page.getByRole('link', { name: 'Auditoria' }).first().click();
   await expect(page.getByText('Condomínio suspenso', { exact: true })).toBeVisible();
   await expect(page.getByText('Motivo: Contrato encerrado')).toBeVisible();
+  // Nome atual do condomínio, mesmo depois de trocar de aba (a lista é consultada de novo).
+  await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio suspenso' }).getByText('Condomínio Sintético B')).toBeVisible();
+});
+
+test('busca encontra condomínio por trecho do nome e limpa de volta para o catálogo', async ({ page }) => {
+  await installSyntheticApi(page);
+  const management = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const platform = await installPlatformApi(page, management);
+  await signIn(page);
+  await page.goto('/master/condominios');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' })).toBeVisible();
+  const search = page.getByRole('search', { name: 'Buscar condomínio' });
+  await search.getByLabel('Buscar por trecho do nome ou id').fill('  sintético\u00a0b ');
+  await search.getByRole('button', { name: 'Buscar' }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético B' })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' })).toHaveCount(0);
+  expect(platform.requests).toContain(`GET /v1/platform/tenants?q=${encodeURIComponent('sintético b').replace(/%20/g, '+')}`);
+  await search.getByLabel('Buscar por trecho do nome ou id').fill('\u200b');
+  await search.getByRole('button', { name: 'Buscar' }).click();
+  await expect(page.getByText('Use até 160 caracteres visíveis na busca.')).toBeVisible();
+  await search.getByRole('button', { name: 'Limpar busca' }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' })).toBeVisible();
 });
 
 test('versão alterada por outra pessoa recusa a gravação e pede recarga antes de salvar', async ({ page }) => {
