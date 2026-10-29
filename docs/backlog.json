@@ -693,6 +693,20 @@
           ],
           "scope": "Disponibilidade anonima por area/contexto, limites e isolamento, microsegundos, limpeza, consulta antiga, conflito sem retry POST e troca/revogacao.16 novos testes Java e6 jornadas incluidos nos144 unitarios/HTTP,44 JDBC runtime,8 JDBC baseline,70 Vitest e27 Chromium aprovados. Nao constitui aceite integral dos tickets, Auth real ou ativacao remota.",
           "webWorkingDirectory": "apps/web"
+        },
+        {
+          "commit": "87aeaa5c8bdc47666522e314bbb64d7b4118bef6",
+          "branch": "feat/reservation-approval",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40813563438",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,ReservationDecisionJdbcTest,ReservationServiceJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Pedido PENDING_APPROVAL com prazo de até 24 h, retirada pelo autor, decisão única pela gestão (AAL2, reservations.decide) com expiração gravada antes da recusa tardia, autodecisão negada, cancelamento com motivo, bloqueio de manutenção idempotente e máquina de estados no banco (V008). Revogação transacional de convites dependentes (CP-038) pendente: não constitui aceite integral de CP-023."
         }
       ]
     },
@@ -719,6 +733,20 @@
             "npm run test:e2e"
           ],
           "scope": "Confirmação de cancelamento pelo autor e falha sem sucesso visual; E2E de404 específico. Aprovação/rejeição/expiração e convites dependentes permanecem pendentes. Não constitui aceite integral do ticket."
+        },
+        {
+          "commit": "87aeaa5c8bdc47666522e314bbb64d7b4118bef6",
+          "branch": "feat/reservation-approval",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40813563438",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,ReservationDecisionJdbcTest,ReservationServiceJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Pedido PENDING_APPROVAL com prazo de até 24 h, retirada pelo autor, decisão única pela gestão (AAL2, reservations.decide) com expiração gravada antes da recusa tardia, autodecisão negada, cancelamento com motivo, bloqueio de manutenção idempotente e máquina de estados no banco (V008). Revogação transacional de convites dependentes (CP-038) pendente: não constitui aceite integral de CP-023."
         }
       ]
     },
