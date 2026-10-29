@@ -1,29 +1,35 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { management, type InvitationCreated, type InvitationRole, type ManagedMembership, type MembershipStatus } from '../../api/management';
-import { Empty, ErrorState, Loading, Notice } from '../primitives';
+import { Empty, ErrorState, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
-import { ActionFeedback, ReasonForm, handleAccessError, managementKey, membershipStatusLabels, roleLabels, statusTone, useAction, useManagement } from './shared';
+import { ActionFeedback, ReasonForm, managementKey, membershipStatusLabels, roleLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
 
 const invitationRoles: InvitationRole[] = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE'];
 const invitationStatus: Record<string, string> = { PENDING: 'Pendente', ACCEPTED: 'Aceito', REVOKED: 'Revogado', EXPIRED: 'Expirado' };
 
-function MembershipItem({ membership, onDone }: { membership: ManagedMembership; onDone(message: string): void }) {
+function MembershipItem({ membership, onDone }: { membership: ManagedMembership; onDone(result: ActionResult): void }) {
   const scope = useManagement();
   const queries = useQueryClient();
   const action = useAction();
   const [mode, setMode] = useState<'idle' | 'approve' | 'reject' | 'revoke'>('idle');
-  const refresh = (message: string) => async () => {
-    setMode('idle'); onDone(message);
+  // Versão lida ao abrir a decisão: uma nova consulta da lista não troca o alvo da confirmação em andamento.
+  const [readVersion, setReadVersion] = useState(membership.version);
+  const open = (next: 'approve' | 'reject' | 'revoke') => { action.clear(); setReadVersion(membership.version); setMode(next); };
+  const outcome = (result: ManagedMembership): ActionResult => ({ tone: 'success', text: result.status === 'ACTIVE'
+    ? `${result.displayName}: vínculo aprovado.` : mode === 'revoke'
+      ? `${result.displayName}: vínculo revogado. Novas operações deixam de ser autorizadas.` : `${result.displayName}: vínculo rejeitado.` });
+  const after = async (result: ManagedMembership) => {
+    setMode('idle'); onDone(outcome(result));
     await queries.invalidateQueries({ queryKey: managementKey(scope, 'memberships') });
   };
   const decide = (decision: 'APPROVE' | 'REJECT', reason: string | null) => void action.run(
-    () => management.decideMembership(scope.tenantId, membership.membershipId, { decision, expectedVersion: membership.version, reason }), '',
-    refresh(decision === 'APPROVE' ? `${membership.displayName}: vínculo aprovado.` : `${membership.displayName}: vínculo rejeitado.`));
+    () => management.decideMembership(scope.tenantId, membership.membershipId, { decision, expectedVersion: readVersion, reason }),
+    '', after);
   const revoke = (reason: string | null) => {
     if (!reason) return;
-    void action.run(() => management.revokeMembership(scope.tenantId, membership.membershipId, { expectedVersion: membership.version, reason }), '',
-      refresh(`${membership.displayName}: vínculo revogado. Novas operações deixam de ser autorizadas.`));
+    void action.run(() => management.revokeMembership(scope.tenantId, membership.membershipId, { expectedVersion: readVersion, reason }),
+      '', after);
   };
   const revocable = ['PENDING', 'ACTIVE', 'SUSPENDED'].includes(membership.status);
   return <li className="management-row">
@@ -31,10 +37,10 @@ function MembershipItem({ membership, onDone }: { membership: ManagedMembership;
       <span className={`status-pill ${statusTone(membership.status)}`}>{membershipStatusLabels[membership.status]}</span></div>
     {mode === 'idle' ? <div className="button-row">
       {membership.status === 'PENDING' ? <>
-        <button className="button button-compact" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('approve'); }} aria-label={`Aprovar vínculo de ${membership.displayName}`}>Aprovar</button>
-        <button className="button button-secondary button-compact" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('reject'); }} aria-label={`Rejeitar vínculo de ${membership.displayName}`}>Rejeitar</button>
+        <button className="button button-compact" type="button" disabled={action.state.pending} onClick={() => open('approve')} aria-label={`Aprovar vínculo de ${membership.displayName}`}>Aprovar</button>
+        <button className="button button-secondary button-compact" type="button" disabled={action.state.pending} onClick={() => open('reject')} aria-label={`Rejeitar vínculo de ${membership.displayName}`}>Rejeitar</button>
       </> : null}
-      {revocable && membership.status !== 'PENDING' ? <button className="text-button danger-text" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('revoke'); }} aria-label={`Revogar vínculo de ${membership.displayName}`}>Revogar</button> : null}
+      {revocable && membership.status !== 'PENDING' ? <button className="text-button danger-text" type="button" disabled={action.state.pending} onClick={() => open('revoke')} aria-label={`Revogar vínculo de ${membership.displayName}`}>Revogar</button> : null}
     </div> : null}
     {mode === 'approve' ? <ReasonForm id={`approve-membership-${membership.membershipId}`} label="Observação" required={false} pending={action.state.pending}
       confirmLabel="Confirmar aprovação" submit={(reason) => decide('APPROVE', reason)} cancel={() => setMode('idle')} /> : null}
@@ -48,13 +54,13 @@ function MembershipItem({ membership, onDone }: { membership: ManagedMembership;
 
 export function MembershipList({ status, empty }: { status: MembershipStatus | null; empty: string }) {
   const scope = useManagement();
-  const [done, setDone] = useState('');
+  const [done, setDone] = useState<ActionResult | null>(null);
   const list = useQuery({ queryKey: managementKey(scope, 'memberships', status), queryFn: ({ signal }) => management.memberships(scope.tenantId, status, signal) });
-  if (list.isError && handleAccessError(list.error, scope)) return null;
+  if (useAccessGuard(list.error)) return null;
   if (list.isPending) return <div className="panel"><Loading label="Consultando vínculos…" /></div>;
   if (list.isError) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
   return <>
-    {done ? <Notice tone="success">{done}</Notice> : null}
+    {done ? <Notice tone={done.tone}>{done.text}</Notice> : null}
     {list.data.memberships.length === 0 ? <div className="panel"><Empty title="Nada por aqui">{empty}</Empty></div>
       : <ul className="management-list" aria-label="Vínculos">{list.data.memberships.map((item) => <MembershipItem key={item.membershipId} membership={item} onDone={setDone} />)}</ul>}
     {list.data.truncated ? <Notice tone="warning">Há mais vínculos do que o limite desta consulta. Filtre por situação.</Notice> : null}
@@ -93,6 +99,7 @@ function InvitationForm() {
   }
   return <form className="panel management-form stack-form" onSubmit={(event) => void submit(event)} aria-label="Novo convite">
     <h3>Novo convite</h3>
+    {units.isError ? <Notice tone="error">Não foi possível carregar as unidades: {errorMessage(units.error)} <button className="text-button" type="button" onClick={() => void units.refetch()}>Tentar novamente</button></Notice> : null}
     <p className="field-help">A pessoa precisa entrar com uma conta já criada pela operação usando o mesmo e-mail. O vínculo fica pendente até a sua aprovação.</p>
     <div className="two-fields"><div><label htmlFor="invite-role">Papel</label>
       <select id="invite-role" value={role} onChange={(event) => setRole(event.target.value as InvitationRole)} disabled={action.state.pending}>
@@ -125,7 +132,7 @@ function InvitationList() {
   const queries = useQueryClient();
   const action = useAction();
   const list = useQuery({ queryKey: managementKey(scope, 'invitations'), queryFn: ({ signal }) => management.invitations(scope.tenantId, signal) });
-  if (list.isError && handleAccessError(list.error, scope)) return null;
+  if (useAccessGuard(list.error)) return null;
   if (list.isPending) return <div className="panel"><Loading label="Consultando convites…" /></div>;
   if (list.isError) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
   const revoke = (invitationId: string, name: string) => void action.run(() => management.revokeInvitation(scope.tenantId, invitationId),

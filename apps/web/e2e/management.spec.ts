@@ -88,3 +88,16 @@ test('morador sem vínculo de gestão não abre a gestão nem consulta a API', a
   await expect(page.getByText('Gestão indisponível')).toBeVisible();
   expect(state.managementRequests).toHaveLength(0);
 });
+
+test('conta só de gestão abre a gestão sem formulário de unidade residencial', async ({ page }) => {
+  await installSyntheticApi(page, { managerOnly: true });
+  await installManagementApi(page);
+  const unitRequests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/units')) unitRequests.push(request.url()); });
+  await signIn(page);
+  await expect(page.getByRole('link', { name: /Abrir gestão · Condomínio Sintético A/ })).toBeVisible();
+  await expect(page.getByText('Esta conta não tem unidade vinculada como morador. Use o acesso de gestão acima.')).toBeVisible();
+  await expect(page.getByLabel('Condomínio', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Nenhum vínculo disponível')).toHaveCount(0);
+  expect(unitRequests).toEqual([]);
+});

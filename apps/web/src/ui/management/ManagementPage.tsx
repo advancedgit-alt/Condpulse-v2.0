@@ -38,7 +38,10 @@ export function ManagementPage() {
 
 function StaffGate({ scope, section }: { scope: ManagementScope; section: ManagementSection }) {
   const queries = useQueryClient();
-  const status = useQuery({ queryKey: mfaStatusKey(scope.accountId), queryFn: ({ signal }) => api.mfaStatus(signal) });
+  // O nível de garantia só muda pela verificação nesta tela; o servidor confere AAL2 em cada ação. Sem nova consulta
+  // ao voltar à aba, uma falha momentânea não derruba formulários abertos nem o link único de convite.
+  const status = useQuery({ queryKey: mfaStatusKey(scope.accountId), queryFn: ({ signal }) => api.mfaStatus(signal),
+    refetchOnWindowFocus: false });
   const [demanded, setDemanded] = useState(false);
   const [denied, setDenied] = useState<unknown>(null);
   const requireMfa = useCallback(() => setDemanded(true), []);
@@ -52,12 +55,14 @@ function StaffGate({ scope, section }: { scope: ManagementScope; section: Manage
   if (denied) return <div className="panel"><Notice tone="error">A gestão deste condomínio não está mais disponível para o seu vínculo. Os dados exibidos foram removidos.</Notice>
     <Link className="button button-secondary" to="/contextos">Escolher outro acesso</Link></div>;
   if (status.isPending) return <div className="panel"><Loading label="Conferindo o segundo fator…" /></div>;
-  if (status.isError) return <ErrorState error={status.error} retry={() => void status.refetch()} />;
+  if (status.isError && !status.data) return <ErrorState error={status.error} retry={() => void status.refetch()} />;
+  if (!status.data) return null;
   if (status.data.assuranceLevel !== 'AAL2' || demanded) {
     return <MfaPanel accountId={scope.accountId} onVerified={() => {
       setDemanded(false);
       void queries.invalidateQueries({ queryKey: mfaStatusKey(scope.accountId) });
       void queries.invalidateQueries({ queryKey: ['private', scope.accountId, 'tenant', scope.tenantId, 'management'] });
+      void queries.invalidateQueries({ queryKey: ['identity'] });
     }} />;
   }
   return <ManagementProvider value={value}><ManagementConsole scope={scope} section={section} /></ManagementProvider>;

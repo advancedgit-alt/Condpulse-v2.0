@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client';
 import type { CurrentIdentity } from '../api/types';
 import { Brand, ErrorState, Icon, Loading, Notice, RateLimitNotice, errorMessage } from './primitives';
 import { useCooldown } from './cooldown';
+import { forgetInvitation } from './invitationStorage';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated' | 'blocked' | 'unavailable' | 'logoutPending' | 'logoutUnconfirmed';
 interface AuthValue {
@@ -78,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logout() {
     const epoch = ++authEpoch.current;
     setMode('logoutPending'); setModeError(null);
+    // Convite pendente pertence a quem abriu o link: a próxima conta desta aba não o herda.
+    forgetInvitation();
     await queries.cancelQueries(); queries.clear(); api.clearSession();
     try { await api.logout(); if (epoch === authEpoch.current) setMode('ready'); }
     catch (failure) { if (epoch === authEpoch.current) { setModeError(failure); setMode('logoutUnconfirmed'); } }

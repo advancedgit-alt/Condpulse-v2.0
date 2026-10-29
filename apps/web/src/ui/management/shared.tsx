@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError } from '../../api/client';
 import { Notice, errorMessage } from '../primitives';
 
@@ -18,32 +18,47 @@ export function useManagement(): ManagementValue {
 export const managementKey = (scope: Pick<ManagementScope, 'accountId' | 'tenantId'>, ...parts: unknown[]) =>
   ['private', scope.accountId, 'tenant', scope.tenantId, 'management', ...parts] as const;
 
-/** Exige novo segundo fator ou encerra a gestão quando o vínculo deixou de autorizar. */
-export function handleAccessError(error: unknown, scope: ManagementValue): boolean {
-  if (!(error instanceof ApiError)) return false;
-  if (error.code === 'MFA_REQUIRED') { scope.requireMfa(); return true; }
-  if (error.code === 'STAFF_ACCESS_DENIED' || error.code === 'TENANT_ACCESS_DENIED') { scope.denied(error); return true; }
-  return false;
+/** Erro que pede novo segundo fator ou encerra a gestão: a tela não deve exibir dados nem tentar de novo. */
+export function isAccessError(error: unknown): boolean {
+  return error instanceof ApiError && ['MFA_REQUIRED', 'STAFF_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'].includes(error.code);
+}
+function reactToAccessError(error: unknown, scope: ManagementValue): void {
+  if (!(error instanceof ApiError)) return;
+  if (error.code === 'MFA_REQUIRED') scope.requireMfa();
+  else if (error.code === 'STAFF_ACCESS_DENIED' || error.code === 'TENANT_ACCESS_DENIED') scope.denied(error);
+}
+/**
+ * Reage a erro de acesso de uma consulta depois da renderização (nunca durante o render). Devolve se o erro é de
+ * acesso, para a tela não mostrar conteúdo enquanto a porta de gestão troca de estado.
+ */
+export function useAccessGuard(error: unknown): boolean {
+  const scope = useManagement();
+  const access = isAccessError(error);
+  useEffect(() => { if (access) reactToAccessError(error, scope); }, [access, error, scope]);
+  return access;
 }
 
-export interface ActionState { pending: boolean; error: unknown; done: string | null }
+export interface ActionResult { text: string; tone: 'success' | 'warning' | 'info' }
+export interface ActionState { pending: boolean; error: unknown; done: ActionResult | null }
 /**
- * Uma ação por vez, sem repetição automática. Falha incerta (rede ou 5xx) pede para atualizar a lista antes de
- * repetir; decisões e cancelamentos já repetidos devolvem o estado atual no servidor.
+ * Uma ação por vez, sem repetição automática. Falha incerta (rede ou 5xx) pede para atualizar a lista e conferir o
+ * estado antes de repetir: nem toda ação é idempotente (decisão de vínculo repetida recebe "alterado"). A mensagem
+ * de resultado é derivada da resposta do servidor, não do pedido.
  */
 export function useAction() {
   const scope = useManagement();
   const [state, setState] = useState<ActionState>({ pending: false, error: null, done: null });
-  async function run<T>(action: () => Promise<T>, success: string, after?: (result: T) => Promise<void> | void): Promise<boolean> {
+  async function run<T>(action: () => Promise<T>, success: string | ((result: T) => ActionResult),
+    after?: (result: T) => Promise<void> | void): Promise<boolean> {
     if (state.pending) return false;
     setState({ pending: true, error: null, done: null });
     try {
       const result = await action();
       await after?.(result);
-      setState({ pending: false, error: null, done: success });
+      setState({ pending: false, error: null, done: typeof success === 'string' ? { text: success, tone: 'success' } : success(result) });
       return true;
     } catch (error) {
-      handleAccessError(error, scope);
+      reactToAccessError(error, scope);
       setState({ pending: false, error, done: null });
       return false;
     }
@@ -52,7 +67,7 @@ export function useAction() {
 }
 
 export function ActionFeedback({ state, success = true }: { state: ActionState; success?: boolean }) {
-  if (state.done) return success ? <Notice tone="success">{state.done}</Notice> : null;
+  if (state.done) return success && state.done.text ? <Notice tone={state.done.tone}>{state.done.text}</Notice> : null;
   if (!state.error) return null;
   const uncertain = !(state.error instanceof ApiError) || state.error.uncertain || state.error.status >= 500;
   return <Notice tone={uncertain ? 'warning' : 'error'}>{errorMessage(state.error)}{uncertain

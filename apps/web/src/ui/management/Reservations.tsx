@@ -4,41 +4,62 @@ import { newOperationKey } from '../../api/client';
 import { management, type ManagedReservation, type ReservationStatus } from '../../api/management';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { addDays, dateInZone, formatWhen, money, toInstant } from '../dateTime';
-import { ActionFeedback, ReasonForm, handleAccessError, managementKey, reservationStatusLabels, statusTone, useAction, useManagement } from './shared';
+import { ActionFeedback, ReasonForm, managementKey, reservationStatusLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
 
 type Mode = 'idle' | 'approve' | 'reject' | 'cancel';
 
-function ReservationItem({ reservation, onDone }: { reservation: ManagedReservation; onDone(message: string): void }) {
+/**
+ * Mensagem fiel ao estado devolvido: a repetição natural do servidor devolve o estado atual sem nova versão, então
+ * uma decisão ou cancelamento feito antes por outra pessoa não aparece como sucesso desta ação.
+ */
+export function decisionOutcome(result: ManagedReservation, decision: 'APPROVE' | 'REJECT', readVersion: number): ActionResult {
+  const applied = result.version === readVersion + 1;
+  if (applied && decision === 'APPROVE' && result.status === 'CONFIRMED') return { tone: 'success', text: 'Pedido aprovado. A reserva está confirmada.' };
+  if (applied && decision === 'REJECT' && result.status === 'REJECTED') return { tone: 'success', text: 'Pedido rejeitado. O período foi liberado.' };
+  return { tone: 'info', text: `Este pedido já estava ${(reservationStatusLabels[result.status] ?? result.status).toLowerCase()}. Nenhuma alteração foi feita e o seu motivo não foi registrado.` };
+}
+export function cancellationOutcome(result: ManagedReservation, reason: string, readVersion: number): ActionResult {
+  if (result.status === 'CANCELLED' && result.version === readVersion + 1 && result.decisionReason === reason)
+    return { tone: 'success', text: result.kind === 'BLOCK' ? 'Bloqueio encerrado. O período foi liberado.' : 'Reserva cancelada com motivo registrado.' };
+  return { tone: 'warning', text: `${result.kind === 'BLOCK' ? 'O bloqueio já estava encerrado' : 'A reserva já estava cancelada'}${result.decisionReason ? ` (motivo registrado: ${result.decisionReason})` : ''}. O seu motivo não foi registrado.` };
+}
+
+function ReservationItem({ reservation, onDone }: { reservation: ManagedReservation; onDone(result: ActionResult): void }) {
   const scope = useManagement();
   const queries = useQueryClient();
   const action = useAction();
   const [mode, setMode] = useState<Mode>('idle');
+  // Versão lida ao abrir a confirmação; nova consulta da lista não troca o alvo da decisão em andamento.
+  const [readVersion, setReadVersion] = useState(reservation.version);
   const block = reservation.kind === 'BLOCK';
   const pending = reservation.status === 'PENDING_APPROVAL';
   const open = new Date(reservation.endsAt).getTime() > Date.now();
   // Pedido pendente é decidido (aprovar/rejeitar); cancelamento pela gestão vale para reserva confirmada e bloqueio.
   const cancellable = open && reservation.status === 'CONFIRMED';
   const time = (value: string) => new Intl.DateTimeFormat('pt-BR', { timeZone: scope.timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(value));
-  const refresh = (message: string) => async () => {
-    setMode('idle'); onDone(message);
+  // Período de vários dias mostra a data do fim, não só o horário.
+  const end = dateInZone(scope.timeZone, new Date(reservation.startsAt)) === dateInZone(scope.timeZone, new Date(reservation.endsAt))
+    ? time(reservation.endsAt) : formatWhen(reservation.endsAt, scope.timeZone);
+  const start = (next: Mode) => { action.clear(); setReadVersion(reservation.version); setMode(next); };
+  const finish = async (result: ActionResult) => {
+    setMode('idle'); onDone(result);
     await queries.invalidateQueries({ queryKey: managementKey(scope, 'reservations') });
   };
   function decide(decision: 'APPROVE' | 'REJECT', reason: string | null) {
     void action.run(() => management.decideReservation(scope.tenantId, reservation.reservationId,
-      { decision, expectedVersion: reservation.version, reason }),
-    '', refresh(decision === 'APPROVE' ? 'Pedido aprovado. A reserva está confirmada.' : 'Pedido rejeitado. O período foi liberado.'));
+      { decision, expectedVersion: readVersion, reason }), '', (result) => finish(decisionOutcome(result, decision, readVersion)));
   }
   function cancel(reason: string | null) {
     if (!reason) return;
     void action.run(() => management.cancelReservation(scope.tenantId, reservation.reservationId,
-      { expectedVersion: reservation.version, reason }), '', refresh(block ? 'Bloqueio encerrado. O período foi liberado.' : 'Reserva cancelada com motivo registrado.'));
+      { expectedVersion: readVersion, reason }), '', (result) => finish(cancellationOutcome(result, reason, readVersion)));
   }
   const who = block ? 'Bloqueio de manutenção' : `${reservation.unitLabel ?? 'Unidade'}${reservation.requesterName ? ` · ${reservation.requesterName}` : ''}`;
   return <article className="reservation-card management-item">
     <div className="reservation-row">
       <div className="reservation-info">
         <h3>{reservation.amenityName}</h3>
-        <p>{formatWhen(reservation.startsAt, scope.timeZone)} — {time(reservation.endsAt)}</p>
+        <p>{formatWhen(reservation.startsAt, scope.timeZone)} — {end}</p>
         <small>{who}{!block ? ` · regulamento v${reservation.acceptedPolicyVersion} · taxa informativa ${money(reservation.feeCents)}` : ''}</small>
         {pending && reservation.expiresAt ? <p className="reservation-pending">Decidir até {formatWhen(reservation.expiresAt, scope.timeZone)}. Sem decisão, o pedido expira.</p> : null}
         {reservation.decisionReason ? <p className="reservation-reason">Motivo: {reservation.decisionReason}</p> : null}
@@ -47,10 +68,10 @@ function ReservationItem({ reservation, onDone }: { reservation: ManagedReservat
     </div>
     {mode === 'idle' && (pending || cancellable) ? <div className="reservation-actions">
       {pending ? <div className="button-row">
-        <button className="button button-compact" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('approve'); }}>Aprovar</button>
-        <button className="button button-secondary button-compact" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('reject'); }}>Rejeitar</button>
+        <button className="button button-compact" type="button" disabled={action.state.pending} onClick={() => start('approve')}>Aprovar</button>
+        <button className="button button-secondary button-compact" type="button" disabled={action.state.pending} onClick={() => start('reject')}>Rejeitar</button>
       </div> : <span>{block ? 'O bloqueio ocupa o período para todas as unidades.' : 'Cancelamento pela gestão exige motivo e avisa a unidade.'}</span>}
-      {cancellable ? <button className="text-button danger-text" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('cancel'); }}>{block ? 'Encerrar bloqueio' : 'Cancelar reserva'}</button> : null}
+      {cancellable ? <button className="text-button danger-text" type="button" disabled={action.state.pending} onClick={() => start('cancel')}>{block ? 'Encerrar bloqueio' : 'Cancelar reserva'}</button> : null}
     </div> : null}
     {mode === 'approve' ? <ReasonForm id={`approve-${reservation.reservationId}`} label="Observação para a unidade" required={false} pending={action.state.pending}
       confirmLabel="Confirmar aprovação" submit={(reason) => decide('APPROVE', reason)} cancel={() => setMode('idle')} /> : null}
@@ -64,14 +85,14 @@ function ReservationItem({ reservation, onDone }: { reservation: ManagedReservat
 
 function ReservationList({ status, from, until, empty }: { status: ReservationStatus | null; from: string | null; until: string | null; empty: string }) {
   const scope = useManagement();
-  const [done, setDone] = useState('');
+  const [done, setDone] = useState<ActionResult | null>(null);
   const list = useQuery({ queryKey: managementKey(scope, 'reservations', status, from, until),
     queryFn: ({ signal }) => management.reservations(scope.tenantId, { status, from, until }, signal) });
-  if (list.isError && handleAccessError(list.error, scope)) return null;
+  if (useAccessGuard(list.error)) return null;
   if (list.isPending) return <div className="panel"><Loading label="Consultando reservas…" /></div>;
   if (list.isError) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
   return <>
-    {done ? <Notice tone="success">{done}</Notice> : null}
+    {done ? <Notice tone={done.tone}>{done.text}</Notice> : null}
     {list.data.reservations.length === 0 ? <div className="panel"><Empty title="Nada por aqui">{empty}</Empty></div>
       : <div className="reservation-list">{list.data.reservations.map((item) => <ReservationItem key={item.reservationId} reservation={item} onDone={setDone} />)}</div>}
     {list.data.truncated ? <Notice tone="warning">Há mais registros do que o limite desta consulta. Reduza o período ou filtre a situação.</Notice> : null}
@@ -138,7 +159,9 @@ function MaintenanceBlockForm() {
     const key = intent?.fingerprint === fingerprint ? intent.key : newOperationKey();
     setIntent({ fingerprint, key });
     const ok = await action.run(() => management.createMaintenanceBlock(scope.tenantId, amenityId, key, body),
-      'Bloqueio registrado. O período aparece ocupado para todas as unidades.',
+      (result) => !result.replayed ? { tone: 'success', text: 'Bloqueio registrado. O período aparece ocupado para todas as unidades.' }
+        : result.reservation.status === 'CONFIRMED' ? { tone: 'info', text: 'Este bloqueio já estava registrado com os mesmos dados. Nada novo foi criado.' }
+          : { tone: 'warning', text: 'Este bloqueio já tinha sido registrado e depois foi encerrado. Nada novo foi criado; confira a agenda.' },
       async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'reservations') }); });
     if (ok) { setIntent(null); setStart(''); setEnd(''); setReason(''); }
   }

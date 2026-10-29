@@ -2,7 +2,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { management } from '../../api/management';
 import { Empty, ErrorState, Loading } from '../primitives';
 import { formatWhen } from '../dateTime';
-import { handleAccessError, managementKey, useManagement } from './shared';
+import { managementKey, useAccessGuard, useManagement } from './shared';
 
 const actionLabels: Record<string, string> = {
   BLOCK_CREATED: 'Bloco criado', UNIT_CREATED: 'Unidade criada', UNIT_UPDATED: 'Unidade alterada',
@@ -27,7 +27,7 @@ export function AuditSection() {
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
-  if (pages.isError && handleAccessError(pages.error, scope)) return null;
+  if (useAccessGuard(pages.error)) return null;
   const events = pages.data?.pages.flatMap((page) => page.events) ?? [];
   return <section className="management-section" aria-labelledby="audit-title">
     <div className="section-heading"><div><span className="section-index">AUDITORIA</span><h2 id="audit-title">Trilha de alterações</h2></div>

@@ -3237,8 +3237,9 @@
               "string",
               "null"
             ],
-            "pattern": "^data:image/svg\\+xml",
-            "maxLength": 65536
+            "description": "SVG do QR em data URI base64; nulo quando o provedor não devolve um SVG aceitável (o segredo continua disponível para cadastro manual).",
+            "pattern": "^data:image/svg\\+xml;base64,[A-Za-z0-9+/]+=*$",
+            "maxLength": 699078
           }
         }
       },

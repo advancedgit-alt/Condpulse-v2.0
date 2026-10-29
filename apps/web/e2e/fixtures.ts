@@ -53,6 +53,8 @@ export interface ApiState {
 interface FixtureOptions {
   /** Inclui vínculo MANAGER (sem unidade) no condomínio A. */
   manager?: boolean;
+  /** Conta só de gestão: apenas o vínculo MANAGER, sem unidade residencial. */
+  managerOnly?: boolean;
   /** Área A exige aprovação: o servidor sintético devolve PENDING_APPROVAL na criação. */
   approvalRequired?: boolean;
   delayAmenitiesA?: Promise<void>;
@@ -174,7 +176,8 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       return;
     }
     if (path === '/v1/me') {
-      await json(route, 200, options.manager ? { ...identity, memberships: [...identity.memberships, managerMembership] } : identity);
+      await json(route, 200, options.managerOnly ? { ...identity, memberships: [managerMembership] }
+        : options.manager ? { ...identity, memberships: [...identity.memberships, managerMembership] } : identity);
       return;
     }
     if (!path.startsWith(`/v1/tenants/${TENANT_A}/`) && !path.startsWith(`/v1/tenants/${TENANT_B}/`)) {
