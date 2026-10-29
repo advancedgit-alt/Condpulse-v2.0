@@ -24,7 +24,7 @@ interface VisitState {
   permits: SyntheticPermit[]; arrivals: SyntheticArrival[];
   permitPosts: { key: string; body: unknown }[]; arrivalPosts: { key: string; body: unknown }[];
   decisions: unknown[]; assisted: unknown[]; cancels: unknown[]; revokes: unknown[]; expectedSearches: string[]; queueSearches: string[];
-  loseNextRegister: boolean; decidedElsewhere: boolean;
+  loseNextRegister: boolean; decidedElsewhere: boolean; refuseLinked: string | null; loseNextPermit: boolean; permitFailure: string | null;
 }
 
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -43,7 +43,8 @@ const arrivalFixture = (overrides: Partial<SyntheticArrival> = {}): SyntheticArr
 /** API sintética de visitas, registrada por último (precedência); identidade com portaria quando pedido. */
 async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): Promise<VisitState> {
   const state: VisitState = { permits: [], arrivals: [], permitPosts: [], arrivalPosts: [], decisions: [], assisted: [], cancels: [], revokes: [],
-    expectedSearches: [], queueSearches: [], loseNextRegister: false, decidedElsewhere: false };
+    expectedSearches: [], queueSearches: [], loseNextRegister: false, decidedElsewhere: false, refuseLinked: null, loseNextPermit: false,
+    permitFailure: null };
   if (concierge) {
     await page.route('**/v1/me', async (route) => {
       if (!api.authenticated) { await route.fallback(); return; }
@@ -64,9 +65,17 @@ async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): 
       const key = request.headers()['idempotency-key']!;
       const body = request.postDataJSON() as { visitorName: string; documentLast4: string | null; purpose: string | null; validFrom: string; validUntil: string };
       state.permitPosts.push({ key, body });
+      if (state.permitFailure) { const code = state.permitFailure; state.permitFailure = null; await problem(route, 400, code); return; }
+      // Mesma chave e mesmos dados: devolve o convite já criado (repetição idempotente).
+      const previous = state.permitPosts.findIndex((item) => item.key === key);
+      if (previous < state.permitPosts.length - 1) {
+        const replay = state.permits.find((item) => item.permitId === `70000000-0000-4000-8000-${String(previous + 1).padStart(12, '0')}`);
+        if (replay) { await json(route, 201, replay, { 'Idempotency-Replayed': 'true' }); return; }
+      }
       const permit = permitFixture({ permitId: `70000000-0000-4000-8000-${String(state.permitPosts.length).padStart(12, '0')}`, ...body,
         state: Date.parse(body.validFrom) > Date.now() ? 'SCHEDULED' : 'ACTIVE', createdByMe: true, createdAt: new Date().toISOString() });
       state.permits.unshift(permit);
+      if (state.loseNextPermit) { state.loseNextPermit = false; await route.abort('connectionreset'); return; }
       await json(route, 201, permit, { 'Idempotency-Replayed': 'false' });
       return;
     }
@@ -106,6 +115,7 @@ async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): 
       const key = request.headers()['idempotency-key']!;
       const body = request.postDataJSON() as { unitId: string; visitorName: string; documentLast4: string | null; permitId: string | null };
       state.arrivalPosts.push({ key, body });
+      if (body.permitId && state.refuseLinked) { await problem(route, 409, state.refuseLinked); return; }
       const previous = state.arrivalPosts.filter((item) => item.key === key).length > 1;
       if (!previous) state.arrivals.unshift(arrivalFixture({ arrivalId: `80000000-0000-4000-8000-${String(state.arrivalPosts.length).padStart(12, '0')}`,
         ...body, createdAt: new Date().toISOString(), expiresAt: minutes(5) }));
@@ -210,16 +220,18 @@ test.describe('fonte larga', () => {
     // Fonte de fallback larga (como no runner do CI): o pior caso para "Encomendas".
     await page.addStyleTag({ content: '*{font-family:"DejaVu Sans",sans-serif!important}' });
     const tabs = page.getByRole('navigation', { name: 'Navegação da unidade' });
-    for (const width of [360, 390, 430, 480, 481, 560, 640, 720, 721, 800, 900]) {
+    for (const width of [320, 340, 360, 390, 430, 480, 481, 560, 640, 720, 721, 800, 900]) {
       await page.setViewportSize({ width, height: 780 });
       await expect(tabs.getByRole('link')).toHaveCount(4);
       await expect(tabs.getByRole('link', { name: 'Acessos' })).toHaveAttribute('aria-current', 'page');
-      expect(await noHorizontalOverflow(page), `sem rolagem horizontal em ${width}px`).toBe(true);
+      // Página inteira a partir de 360 px (PRD); abaixo disso, ao menos as abas continuam inteiras.
+      if (width >= 360) expect(await noHorizontalOverflow(page), `sem rolagem horizontal em ${width}px`).toBe(true);
       expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth)), `rótulos inteiros em ${width}px`).toBe(true);
+      expect(await tabs.evaluate((nav) => nav.scrollWidth <= nav.clientWidth), `abas sem rolagem em ${width}px`).toBe(true);
     }
     await page.getByRole('navigation', { name: 'Navegação da unidade' }).getByRole('link', { name: 'Encomendas' }).click();
     await expect(tabs.getByRole('link', { name: 'Encomendas' })).toHaveAttribute('aria-current', 'page');
-    for (const width of [360, 481, 721]) {
+    for (const width of [320, 360, 481, 721]) {
       await page.setViewportSize({ width, height: 780 });
       expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth)), `aba atual inteira em ${width}px`).toBe(true);
     }
@@ -347,4 +359,50 @@ test('visitas previstas mostram a vigência do servidor e pedem confirmação vi
   const row = page.getByRole('list', { name: 'Chegadas' }).getByRole('listitem').filter({ hasText: 'Visita Adiantada' });
   await expect(row.getByText('Vinculada a um convite da unidade.')).toBeVisible();
   await expect(row.getByText('Aguardando a unidade')).toBeVisible();
+});
+
+test('convite com resposta perdida trava na mesma chave e destrava quando a repetição é recusada', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const state = await installVisitsApi(page, api, false);
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.getByRole('button', { name: 'Convidar visitante' }).click();
+  const form = page.getByRole('form', { name: 'Convidar visitante' });
+  await form.getByLabel('Nome do visitante').fill('Visita Incerta');
+  state.loseNextPermit = true;
+  await form.getByRole('button', { name: 'Criar convite' }).click();
+  await expect(form.getByText('O resultado não foi confirmado e os dados ficaram travados.', { exact: false })).toBeVisible();
+  await expect(form.getByLabel('Nome do visitante')).toBeDisabled();
+  await form.getByRole('button', { name: 'Tentar confirmar o mesmo convite' }).click();
+  await expect(page.getByText('Este convite já estava criado para Visita Incerta', { exact: false })).toBeVisible();
+  expect(state.permitPosts).toHaveLength(2);
+  expect(state.permitPosts[1]!.key).toBe(state.permitPosts[0]!.key);
+  expect(state.permits.filter((item) => item.visitorName === 'Visita Incerta')).toHaveLength(1);
+  // Repetição recusada por regra prova que nada foi gravado: o formulário volta a ser editável.
+  await page.getByRole('button', { name: 'Convidar visitante' }).click();
+  const again = page.getByRole('form', { name: 'Convidar visitante' });
+  await again.getByLabel('Nome do visitante').fill('Visita Atrasada');
+  state.loseNextPermit = true;
+  await again.getByRole('button', { name: 'Criar convite' }).click();
+  await expect(again.getByText('O resultado não foi confirmado e os dados ficaram travados.', { exact: false })).toBeVisible();
+  await expect(again.getByLabel('Nome do visitante')).toBeDisabled();
+  expect(state.permits[0]!.visitorName).toBe('Visita Atrasada');
+  state.permits.shift();
+  state.permitFailure = 'VISIT_PERIOD_INVALID';
+  await again.getByRole('button', { name: 'Tentar confirmar o mesmo convite' }).click();
+  await expect(again.getByText('O convite começa a partir de agora', { exact: false })).toBeVisible();
+  await expect(again.getByLabel('Nome do visitante')).toBeEnabled();
+});
+
+test('convite revogado no servidor não vincula chegada e a portaria vê o motivo', async ({ page }) => {
+  const state = await openConcierge(page);
+  state.permits.push(permitFixture());
+  state.refuseLinked = 'VISIT_PERMIT_REVOKED';
+  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  const row = page.getByRole('list', { name: 'Visitas previstas' }).getByRole('listitem').filter({ hasText: 'Visita Prevista' });
+  await row.getByRole('button', { name: 'Pedir confirmação à unidade' }).click();
+  await page.getByRole('form', { name: 'Pedir confirmação para Visita Prevista' }).getByRole('button', { name: 'Registrar chegada e pedir confirmação' }).click();
+  await expect(page.getByText('Este convite foi revogado. Nada foi registrado.')).toBeVisible();
+  await expect(page.getByText('Chegada registrada:', { exact: false })).toHaveCount(0);
+  expect(state.arrivals).toHaveLength(0);
 });

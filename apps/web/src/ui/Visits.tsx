@@ -6,7 +6,7 @@ import { visits, type Arrival, type CreatePermitBody, type VisitPermit } from '.
 import { useAuth } from './Auth';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from './primitives';
 import { dateInZone, formatWhen, toInstant, wallTimeInZone } from './dateTime';
-import { codeOf, freshKeyCodes, repeatFailure, uncertain, useIntent } from './operationIntent';
+import { codeOf, repeatFailure, settleFailure, uncertain, useIntent } from './operationIntent';
 import './management/Management.css';
 
 /**
@@ -117,7 +117,10 @@ function WaitingArrival({ scope, arrival, answered }: { scope: Scope; arrival: A
     if (result) answered(result.arrivalId === arrival.arrivalId && result.state === (decision === 'APPROVE' ? 'APPROVED' : 'DENIED')
       ? { tone: 'success', text: decision === 'APPROVE' ? `Entrada de ${result.visitorName} autorizada. A portaria confere a pessoa antes de liberar.` : `Entrada de ${result.visitorName} recusada.` }
       : { tone: 'warning', text: 'A resposta não confirmou a sua decisão. Atualize e confira.' });
-    else if (closedArrivalCodes.includes(codeOf(error))) answered({ tone: 'warning', text: `${errorMessage(error)} A sua resposta não foi registrada.` });
+    // Prazo vencido: a resposta não vale. Já respondida ou encerrada: a lista mostra quem decidiu (pode ter sido a sua
+    // tentativa anterior, com resultado incerto).
+    else if (codeOf(error) === 'ARRIVAL_EXPIRED') answered({ tone: 'warning', text: `${errorMessage(error)} A sua resposta não foi registrada.` });
+    else if (closedArrivalCodes.includes(codeOf(error))) answered({ tone: 'warning', text: `${errorMessage(error)} Confira a decisão registrada na lista.` });
     await queries.invalidateQueries({ queryKey: unitKey(scope, 'arrivals') });
   }
   return <li className="management-row">
@@ -207,11 +210,7 @@ function PermitForm({ scope, close }: { scope: Scope; close(result: { tone: 'suc
       catch (failure) { throw repeatFailure(failure); }
     });
     await queries.invalidateQueries({ queryKey: unitKey(scope, 'permits') });
-    if (error !== undefined) {
-      if (freshKeyCodes.includes(codeOf(error))) intent.reset();
-      else if (uncertain(error)) setLocked(true);
-      return;
-    }
+    if (error !== undefined) { settleFailure(error, locked, intent, setLocked); return; }
     if (result) {
       close(result.permit.visitorName === body.visitorName && open(result.permit)
         ? { tone: result.replayed ? 'info' : 'success', text: `${result.replayed ? 'Este convite já estava criado' : 'Convite criado'} para ${result.permit.visitorName}, de ${formatWhen(result.permit.validFrom, scope.timeZone)} até ${formatWhen(result.permit.validUntil, scope.timeZone)}.` }
@@ -234,7 +233,9 @@ function PermitForm({ scope, close }: { scope: Scope; close(result: { tone: 'suc
     <input id="permit-until" type="datetime-local" required value={until} onChange={(event) => setUntil(event.target.value)} disabled={busy} />
     {periodError ? <span className="field-help" role="status">{periodError}</span> : null}
     {action.notice}
-    {locked ? <Notice tone="warning">O resultado não foi confirmado e os dados ficaram travados. Atualize a lista: se o convite já aparece, não crie de novo.</Notice> : null}
+    {locked ? <Notice tone="warning">O resultado não foi confirmado e os dados ficaram travados. Atualize a lista: se o convite já aparece, não crie de novo.
+      <span className="button-row"><button className="button button-secondary button-compact" type="button" disabled={action.pending}
+        onClick={() => { intent.reset(); setLocked(false); action.clear(); }}>Conferi a lista: criar outro convite</button></span></Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || action.pending}>{action.pending ? 'Criando…' : locked ? 'Tentar confirmar o mesmo convite' : 'Criar convite'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.pending}>Voltar</button>

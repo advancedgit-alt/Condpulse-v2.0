@@ -15,6 +15,20 @@ export const codeOf = (error: unknown) => error instanceof ApiError ? error.code
 /** Chave nova depois de prazo vencido ou dados diferentes: a anterior nunca mais confirma esta intenção. */
 export const freshKeyCodes = ['IDEMPOTENCY_KEY_EXPIRED', 'IDEMPOTENCY_KEY_REUSED'];
 
+/**
+ * Depois de uma falha com chave de operação. Resultado incerto trava o formulário na mesma chave. Chave vencida ou
+ * recusada só dá lugar a uma nova quando nada estava pendente: com o formulário travado a chave antiga continua, e a
+ * repetição recebe o mesmo erro em vez de criar um segundo registro (a pessoa confere a lista e começa outro).
+ * Recusa de validação ou de regra (400/409) na repetição prova que a tentativa anterior não gravou — a repetição com a
+ * mesma chave teria devolvido o registro — e destrava; erros de acesso, sessão ou segurança mantêm a trava.
+ */
+export function settleFailure(failure: unknown, locked: boolean, intent: { reset(): void }, setLocked: (value: boolean) => void): void {
+  const code = codeOf(failure);
+  if (freshKeyCodes.includes(code)) { if (!locked) intent.reset(); return; }
+  if (uncertain(failure)) { setLocked(true); return; }
+  if (failure instanceof ApiError && (failure.status === 400 || (failure.status === 409 && code !== 'REQUEST_IN_PROGRESS'))) setLocked(false);
+}
+
 /** Mesma intenção reaproveita a chave: repetir depois de resultado incerto não cria segundo registro. */
 export function useIntent() {
   const [intent, setIntent] = useState<{ fingerprint: string; key: string } | null>(null);

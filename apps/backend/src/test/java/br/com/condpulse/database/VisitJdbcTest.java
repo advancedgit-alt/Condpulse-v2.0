@@ -175,6 +175,40 @@ class VisitJdbcTest {
    new VisitModels.RegisterArrival(db.unitA,"Pessoa Fictícia",null,otherPermit.permitId()))).code());
   db.assertEmptyContext();
  }
+ @Test void linkedPermitMustStillBeValidAndBelongToTheSamePerson() throws Exception {
+  var permit=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),
+   new VisitModels.CreatePermit("Visita Vinculada","9Z",null,now().plus(Duration.ofHours(1)),now().plus(Duration.ofHours(3)))).permit();
+  assertEquals("SCHEDULED",permit.state());
+  assertEquals("ARRIVAL_PERMIT_INVALID",assertThrows(BusinessProblem.class,()->visits.register(concierge,db.tenantA,AAL2,key(),
+   new VisitModels.RegisterArrival(db.unitA,"Outra Pessoa","9Z",permit.permitId()))).code(),"Pessoa diferente da do convite");
+  var early=visits.register(concierge,db.tenantA,AAL2,key(),new VisitModels.RegisterArrival(db.unitA,"Visita Vinculada","9z",permit.permitId())).arrival();
+  assertEquals(permit.permitId(),early.permitId(),"Pessoa adiantada: a unidade confirma a chegada vinculada ao convite");
+  assertEquals("WAITING",early.state());
+  visits.revokePermit(db.accountA,db.tenantA,permit.permitId(),new VisitModels.RevokePermit("Visita cancelada",0L));
+  assertEquals("VISIT_PERMIT_REVOKED",assertThrows(BusinessProblem.class,()->visits.register(concierge,db.tenantA,AAL2,key(),
+   new VisitModels.RegisterArrival(db.unitA,"Visita Vinculada","9Z",permit.permitId()))).code(),"Revogado é recusado com o estado atual");
+  var ended=permit("Visita Encerrada");
+  db.adminUpdateWithoutTriggers("update cp.visit_permits set valid_from=now()-interval '3 hours',valid_until=now()-interval '1 hour' where id=?",
+   ended.permitId());
+  assertEquals("VISIT_PERMIT_EXPIRED",assertThrows(BusinessProblem.class,()->visits.register(concierge,db.tenantA,AAL2,key(),
+   new VisitModels.RegisterArrival(db.unitA,"Visita Encerrada",null,ended.permitId()))).code(),"Vencido é recusado e informa a expiração");
+  db.assertEmptyContext();
+ }
+ @Test void permitOfAnEndedMembershipOrInactiveUnitNoLongerCountsForTheConcierge() throws Exception {
+  var permit=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),permit("Visita Órfã")).permit();
+  assertEquals(List.of(permit.permitId()),visits.expected(concierge,db.tenantA,AAL2,db.unitA,null).permits().stream()
+   .map(VisitModels.Permit::permitId).toList());
+  db.adminUpdateWithoutTriggers("update cp.memberships set status='SUSPENDED' where account_id=? and unit_id=?",db.accountA,db.unitA);
+  assertTrue(visits.expected(concierge,db.tenantA,AAL2,db.unitA,null).permits().isEmpty(),"Vínculo de quem convidou encerrado");
+  assertEquals("VISIT_PERMIT_INACTIVE",assertThrows(BusinessProblem.class,()->visits.register(concierge,db.tenantA,AAL2,key(),
+   new VisitModels.RegisterArrival(db.unitA,"Visita Órfã",null,permit.permitId()))).code());
+  db.restoreActiveFixtures();
+  assertEquals(1,visits.expected(concierge,db.tenantA,AAL2,db.unitA,null).permits().size());
+  db.adminUpdate("update cp.units set status='INACTIVE' where id=?",db.unitA);
+  assertTrue(visits.expected(concierge,db.tenantA,AAL2,null,null).permits().isEmpty(),"Unidade inativa");
+  db.restoreActiveFixtures();
+  db.assertEmptyContext();
+ }
  @Test void simultaneousAnswersProduceOneDecision() throws Exception {
   var arrival=arrive(db.unitA,"Visita Disputada");
   var start=new CountDownLatch(1);

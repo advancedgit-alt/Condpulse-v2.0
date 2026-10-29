@@ -17,8 +17,9 @@ resposta não existe autorização automática**. Nenhuma tela marca a entrada d
 | Portaria (`CONCIERGE`, capacidade `concierge.operate` com AAL2) | Registrar chegada (com ou sem convite vinculado), ver a fila das últimas 24 horas, registrar a confirmação assistida pelo interfone ou presencial (com nota de quem confirmou), encerrar chegada aguardando ou vencida com motivo, ver as visitas previstas (em vigor ou que começam nas próximas 24 horas) | Responder pela unidade "pelo aplicativo"; criar ou revogar convite; marcar entrada; ver outro condomínio |
 | Proprietário sem vínculo residencial, gestão sem portaria, conta suspensa, unidade inativa | — | Ver ou responder convites e chegadas |
 
-As permissões do dependente seguem o modelo das reservas e das encomendas: hoje só são gravadas pelo cadastro
-operacional; ainda não há tela para concedê-las.
+As permissões do dependente seguem o modelo das reservas e das encomendas, mas **ainda não há como concedê-las**: nem
+a gestão nem o cadastro operacional gravam `permissions` (o cadastro exige vínculo sem permissões). Até existir essa
+concessão, dependentes não convidam nem respondem chegadas.
 
 ## Rotas
 
@@ -42,17 +43,25 @@ A rota de unidades existe com `CP_PARCELS_ENABLED` **ou** `CP_VISITS_ENABLED`.
 
 - **Identidade mínima**: nome (2 a 160 caracteres, espaços Unicode normalizados) e, quando o procedimento pedir, só os
   2 a 4 últimos caracteres do documento. Nenhum CPF ou documento completo é gravado; a URL e as respostas não trazem
-  documento inteiro. Cada convite e cada chegada gravam a própria pessoa (`cp.visitors`), sem cadastro reaproveitável.
-- **Convite**: período obrigatório de até 7 dias, começando no máximo 10 minutos antes de agora e até 90 dias à frente
-  (pelo relógio do banco). O estado é calculado pelo banco na leitura: `SCHEDULED` antes do início, `ACTIVE` dentro do
-  período, `EXPIRED` depois do fim, `REVOKED` depois da revogação. Fora do período o convite não autoriza a entrada; a
-  portaria vê "Vale agora" ou "Agendado" conforme o servidor, nunca pelo relógio do navegador.
+  documento inteiro. Cada convite e cada chegada gravam a própria pessoa (`cp.visitors`), registrada pela própria conta
+  e usada uma única vez (índices únicos e políticas conferem no banco): sem cadastro reaproveitável.
+- **Convite**: período obrigatório de até 7 dias, em segundos inteiros, começando no máximo 10 minutos antes de agora e
+  até 90 dias à frente (pelo relógio do banco). O estado é calculado pelo banco na leitura: `SCHEDULED` antes do
+  início, `ACTIVE` dentro do período, `EXPIRED` depois do fim, `REVOKED` depois da revogação. Fora do período o convite
+  não autoriza a entrada; a portaria vê "Vale agora" ou "Agendado" conforme o servidor, nunca pelo relógio do navegador.
+- **Quem convidou precisa continuar apto**: convite de quem perdeu o vínculo (encerrado, suspenso, vencido), teve a
+  conta suspensa ou de unidade inativa deixa de valer para a portaria — some das visitas previstas e não vincula
+  chegada (`VISIT_PERMIT_INACTIVE`). A tela de outro adulto da unidade ainda o lista até a revogação ou o fim do
+  período (o morador não enxerga o vínculo dos demais).
 - **Revogação**: pela versão lida e com motivo (até 500), de convite agendado ou em vigor; o convite sai das visitas
   previstas. Revogado e vencido não voltam (gatilho de transição).
-- **Chegada**: a portaria registra a pessoa e a unidade ativa, opcionalmente vinculada a um convite **da mesma unidade**
-  (pessoa adiantada ou procedimento que pede confirmação). O prazo de 5 minutos é gravado pelo banco; a lista mostra
-  "Sem resposta no prazo" (`EXPIRED`) depois dele. Auditoria `ARRIVAL_REQUESTED` e intenção de aviso no outbox na
-  mesma transação; repetir com a mesma chave devolve o mesmo registro.
+- **Chegada**: a portaria registra a pessoa e a unidade ativa, opcionalmente vinculada a um convite **da mesma unidade e
+  da mesma pessoa** (nome e final do documento), ainda agendado ou em vigor e de quem ainda pode convidar (pessoa
+  adiantada ou procedimento que pede confirmação). Convite revogado ou vencido é recusado com o estado atual
+  (`VISIT_PERMIT_REVOKED`/`VISIT_PERMIT_EXPIRED`, AC-019/AC-020) e a portaria segue a chegada sem convite. O vínculo ao
+  convite não autoriza nada: a chegada espera a resposta da unidade. O prazo de 5 minutos é gravado pelo banco; a lista
+  mostra "Sem resposta no prazo" (`EXPIRED`) depois dele. Auditoria `ARRIVAL_REQUESTED` e intenção de aviso no outbox
+  na mesma transação; repetir com a mesma chave devolve o mesmo registro.
 - **Primeira decisão válida**: mudança condicional `WAITING → APPROVED/DENIED/CANCELLED` com versão +1; a segunda
   recebe `409 ARRIVAL_ALREADY_DECIDED` (ou `ARRIVAL_CANCELLED`). Resposta pelo aplicativo só dentro do prazo — depois
   dele recebe `409 ARRIVAL_EXPIRED` e não decide (AC-021). Decisões simultâneas da unidade e da portaria produzem uma
@@ -60,12 +69,14 @@ A rota de unidades existe com `CP_PARCELS_ENABLED` **ou** `CP_VISITS_ENABLED`.
 - **Sem resposta**: nada é liberado. A portaria segue o interfone ou o procedimento presencial aprovado e registra a
   confirmação com a origem (`INTERCOM`/`IN_PERSON`) e a nota de quem confirmou — o que vale também depois do prazo do
   aplicativo, enquanto a chegada não foi decidida nem encerrada. Encerrar (pessoa foi embora, registro errado) não
-  autoriza nem recusa.
+  autoriza nem recusa; o motivo aparece para a unidade.
 - **Banco (V013)**: RLS por vínculo (`cp.visit_member` confere conta ativa, unidade ativa, papel adulto ou permissão do
   dependente, igual ao Java) e por capacidade da portaria; grants por coluna (a aplicação não escolhe estado inicial,
-  prazo, horários nem responsável de outra conta); gatilhos de inclusão (período do convite, prazo da chegada, convite
-  da mesma unidade) e de transição (estados finais, versão +1, horários do banco, resposta do aplicativo só no prazo);
-  eventos `VISIT_*`/`ARRIVAL_*` só para convite ou chegada visível e trilha sempre em nome da própria conta.
+  prazo, horários nem responsável de outra conta); pessoa registrada pela própria conta e usada uma vez; gatilhos de
+  inclusão (período do convite, prazo da chegada, convite vinculado válido, da mesma unidade e da mesma pessoa, de quem
+  ainda pode convidar — `cp.permit_issuer_active`) e de transição (estados finais, versão +1, horários do banco,
+  resposta do aplicativo só no prazo); eventos `VISIT_*`/`ARRIVAL_*` só para convite ou chegada visível e trilha sempre
+  em nome da própria conta. Índices pela pessoa sustentam a política de leitura de visitantes.
 - **Privacidade**: as respostas não trazem contas de quem criou, revogou ou decidiu; a tela só sabe se foi a própria
   conta (`createdByMe`, `decidedByMe`). Quem fez cada ação fica na auditoria do condomínio. O evento do outbox não leva
   o nome do visitante.
@@ -86,7 +97,9 @@ A rota de unidades existe com `CP_PARCELS_ENABLED` **ou** `CP_VISITS_ENABLED`.
 ## Pendências
 
 - Aplicação remota da V013 com aprovação; ensaio com Auth real, portaria nomeada e unidade real.
-- Tela para conceder `visits.create`/`visits.decide` ao dependente.
+- Concessão de `visits.create`/`visits.decide` ao dependente (tela e regra; hoje nenhum fluxo grava permissões).
+- Revogação dos convites pela gestão quando o vínculo de quem convidou termina (hoje só deixam de valer para a
+  portaria) e limite de convites em aberto por unidade (a lista da portaria mostra 100 e pede busca).
 - Prazo configurável por condomínio (hoje 5 minutos fixos no banco).
 - Aviso efetivo à unidade (CP-034/CP-035), tempo real (CP-036), registro de entrada/saída (CP-028), link de convite
   (CP-037) e retenção dos dados de visitantes.
