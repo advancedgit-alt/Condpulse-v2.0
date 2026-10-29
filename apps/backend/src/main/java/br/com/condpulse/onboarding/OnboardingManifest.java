@@ -122,6 +122,7 @@ public final class OnboardingManifest {
             require(coveredAccounts.equals(accountIds) && coveredUnits.equals(unitIds)
                 && memberships.stream().anyMatch(membership -> "MANAGER".equals(membership.role())));
             List<Amenity> amenities = new ArrayList<>(); Set<UUID> amenityIds = new HashSet<>();
+            Set<String> amenityNames = new HashSet<>();
             for (Object value : array(source.get("amenities"), 1, 100)) {
                 Map<String, Object> raw = object(value, Set.of("id", "name", "capacity", "bufferMinutes", "policyVersion",
                     "feeCents", "approvalRequired", "policy"));
@@ -129,9 +130,13 @@ public final class OnboardingManifest {
                 Map<String, Object> policy = object(raw.get("policy"), POLICY_FIELDS);
                 validatePolicy(policy);
                 require(raw.get("approvalRequired") instanceof Boolean);
-                amenities.add(new Amenity(id, text(raw.get("name"), 1, 160), integer(raw.get("capacity"), 1, Integer.MAX_VALUE),
+                // Mesmos limites da gestão local e da V006: nome 1..120 e único sem diferenciar maiúsculas,
+                // capacidade até 10000 e taxa informativa até R$ 100.000,00. Assim a área continua editável.
+                String name = text(raw.get("name"), 1, 120);
+                require(amenityNames.add(name.toLowerCase(java.util.Locale.ROOT)));
+                amenities.add(new Amenity(id, name, integer(raw.get("capacity"), 1, 10000),
                     integer(raw.get("bufferMinutes"), 0, 1440), integer(raw.get("policyVersion"), 1, Integer.MAX_VALUE),
-                    integral(raw.get("feeCents"), 0, Long.MAX_VALUE), (Boolean) raw.get("approvalRequired"), canonical(policy)));
+                    integral(raw.get("feeCents"), 0, 10_000_000L), (Boolean) raw.get("approvalRequired"), canonical(policy)));
             }
             return new OnboardingManifest(operation, tenant, accounts, units, memberships, amenities, sha256(canonical(source)));
         } catch (Exception ignored) {

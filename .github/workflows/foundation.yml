@@ -55,7 +55,12 @@ jobs:
       - name: Manual onboarding boundary without managed credentials
         run: node --test tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
       - name: Compile and unit tests
-        run: mvn -B -ntp -f apps/backend/pom.xml verify
+        run: |
+          set +e
+          mvn -B -ntp -f apps/backend/pom.xml verify 2>&1 | tee "$RUNNER_TEMP/maven-verify.log"
+          status=${PIPESTATUS[0]}
+          [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/maven-verify.log" "Maven verify" 80
+          exit "$status"
       - name: Real onboarding CLI protocol without managed credentials or network
         env:
           CP_ONBOARDING_JAVA_TEST_REQUIRED: "true"
@@ -77,8 +82,11 @@ jobs:
         env:
           CP_SCHEMA_ALREADY_MIGRATED: "true"
         run: |
-          python3 -m unittest discover -s tests/database -p 'test_reservation_race.py'
-          python3 tests/database/run.py
+          set +e
+          { python3 -m unittest discover -s tests/database -p 'test_reservation_race.py' && python3 tests/database/run.py; } 2>&1 | tee "$RUNNER_TEMP/sql-suite.log"
+          status=${PIPESTATUS[0]}
+          [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/sql-suite.log" "PostgreSQL suite" 40
+          exit "$status"
       - name: HTTP readiness and missing-token smoke
         # BFF exige origem/chave HTTPS reais; o teste de API abaixo permanece Bearer.
         env:
@@ -110,7 +118,12 @@ jobs:
           CP_JDBC_TEST_OK: DISPOSABLE
           CP_TEST_DB_USER: cp_ci_login
           CP_TEST_DB_PASSWORD: synthetic_ci_runtime_only
-        run: mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest test
+        run: |
+          set +e
+          mvn -B -ntp -f apps/backend/pom.xml -Dtest=JdbcPoolIsolationTest,WebSessionStoreJdbcTest,ReservationServiceJdbcTest,AuthRateLimiterJdbcTest,OperationalOnboardingJdbcTest,LocalManagementJdbcTest test 2>&1 | tee "$RUNNER_TEMP/maven-jdbc.log"
+          status=${PIPESTATUS[0]}
+          [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/maven-jdbc.log" "JDBC tests" 80
+          exit "$status"
       - name: Build real web assets for integrated HTTPS smoke
         working-directory: apps/web
         run: |

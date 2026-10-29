@@ -24,8 +24,9 @@ public class ReservationStore {
  private final JdbcTemplate jdbc;
  public ReservationStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
- private static final String AMENITY_COLUMNS="""
-  select id,name,capacity,approval_required,fee_cents,buffer_minutes,policy_version,policy::text,version,
+ /** Colunas e validação de regra compartilhadas com a gestão de áreas do mesmo módulo. */
+ public static final String AMENITY_FIELDS="""
+  select id,name,capacity,approval_required,fee_cents,buffer_minutes,policy_version,policy::text,version,active,
    policy->>'schemaVersion' as rule_schema_version,policy->>'weekDays' as rule_week_days,
    policy->>'opensAt' as rule_opens_at,policy->>'closesAt' as rule_closes_at,
    policy->>'minimumLeadMinutes' as rule_minimum_lead,policy->>'maximumAdvanceDays' as rule_maximum_advance,
@@ -38,8 +39,9 @@ public class ReservationStore {
     and jsonb_typeof(policy->'minimumLeadMinutes')='number' and jsonb_typeof(policy->'maximumAdvanceDays')='number'
     and jsonb_typeof(policy->'maximumDurationMinutes')='number' and jsonb_typeof(policy->'maximumActivePerUnit')='number'
     and jsonb_typeof(policy->'cancellationLeadMinutes')='number') as rule_types_valid
-  from cp.amenities where tenant_id=? and active
+  from cp.amenities
   """;
+ private static final String AMENITY_COLUMNS=AMENITY_FIELDS+" where tenant_id=? and active";
  private static final String RESERVATION_COLUMNS="""
   select id as reservation_id,unit_id,amenity_id,status,starts_at,ends_at,occupied_from,occupied_until,
    coalesce((rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,fee_cents,version,
@@ -67,7 +69,7 @@ public class ReservationStore {
   if(result.size()!=1) throw unavailable();
   return result.getFirst();
  }
- private static AmenityData amenity(ResultSet r) throws SQLException {
+ public static AmenityData amenity(ResultSet r) throws SQLException {
   return new AmenityData(r.getObject("id",UUID.class),r.getString("name"),r.getInt("capacity"),
    r.getBoolean("approval_required"),r.getLong("fee_cents"),r.getInt("buffer_minutes"),r.getInt("policy_version"),
    r.getString("policy"),r.getLong("version"),policy(r));

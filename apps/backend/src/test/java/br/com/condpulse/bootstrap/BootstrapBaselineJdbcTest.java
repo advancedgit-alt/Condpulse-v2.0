@@ -26,6 +26,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @EnabledIfEnvironmentVariable(named = "CP_JDBC_TEST_OK", matches = "DISPOSABLE")
 class BootstrapBaselineJdbcTest {
+    /** Migrations revisadas apos o baseline oficial 002; atualizar junto de cada nova migration. */
+    private static final List<Integer> POST_BASELINE_VERSIONS = List.of(3, 4, 5, 6);
     private static final String URL = "jdbc:postgresql://localhost:5432/condpulse_bootstrap_ci";
     private static final String USER = "postgres";
     private static final String PASSWORD = "condpulse_ci_only";
@@ -143,20 +145,21 @@ class BootstrapBaselineJdbcTest {
             .defaultSchema("platform").schemas("platform", "cp").createSchemas(false)
             .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true)
             .validateMigrationNaming(true).validateOnMigrate(true).load();
-        // Antes da primeira migracao, a validacao estrita deve apontar somente
-        // V003/V004/V005 pendentes. Nunca ignorar validacao ou drift aplicado.
+        // Antes da primeira migracao, a validacao estrita deve apontar somente as
+        // migrations revisadas posteriores ao baseline. Nunca ignorar validacao ou drift aplicado.
+        var expected = POST_BASELINE_VERSIONS.stream().map(BigInteger::valueOf).toList();
         var beforeMigration = flyway.validateWithResult();
         assertFalse(beforeMigration.validationSuccessful);
-        assertEquals(3, beforeMigration.invalidMigrations.size());
-        assertEquals(List.of(BigInteger.valueOf(3),BigInteger.valueOf(4),BigInteger.valueOf(5)),
+        assertEquals(expected.size(), beforeMigration.invalidMigrations.size());
+        assertEquals(expected,
             beforeMigration.invalidMigrations.stream().map(m->new BigInteger(m.version)).sorted().toList());
         for(var unapplied:beforeMigration.invalidMigrations)
             assertEquals(CoreErrorCode.RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED, unapplied.errorDetails.errorCode);
         var pending = flyway.info().pending();
-        assertEquals(3, pending.length);
-        assertEquals(List.of(BigInteger.valueOf(3),BigInteger.valueOf(4),BigInteger.valueOf(5)),
+        assertEquals(expected.size(), pending.length);
+        assertEquals(expected,
             java.util.Arrays.stream(pending).map(m->new BigInteger(m.getVersion().toString())).sorted().toList());
-        assertEquals(3, flyway.migrate().migrationsExecuted);
+        assertEquals(expected.size(), flyway.migrate().migrationsExecuted);
         flyway.validate();
         assertTrue(relationExists("platform.web_sessions"));
         assertTrue(relationExists("platform.auth_rate_limits"));
