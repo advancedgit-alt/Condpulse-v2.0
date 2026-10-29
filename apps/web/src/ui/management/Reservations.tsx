@@ -16,7 +16,8 @@ function ReservationItem({ reservation, onDone }: { reservation: ManagedReservat
   const block = reservation.kind === 'BLOCK';
   const pending = reservation.status === 'PENDING_APPROVAL';
   const open = new Date(reservation.endsAt).getTime() > Date.now();
-  const cancellable = open && (reservation.status === 'CONFIRMED' || pending);
+  // Pedido pendente é decidido (aprovar/rejeitar); cancelamento pela gestão vale para reserva confirmada e bloqueio.
+  const cancellable = open && reservation.status === 'CONFIRMED';
   const time = (value: string) => new Intl.DateTimeFormat('pt-BR', { timeZone: scope.timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(value));
   const refresh = (message: string) => async () => {
     setMode('idle'); onDone(message);
@@ -49,7 +50,7 @@ function ReservationItem({ reservation, onDone }: { reservation: ManagedReservat
         <button className="button button-compact" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('approve'); }}>Aprovar</button>
         <button className="button button-secondary button-compact" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('reject'); }}>Rejeitar</button>
       </div> : <span>{block ? 'O bloqueio ocupa o período para todas as unidades.' : 'Cancelamento pela gestão exige motivo e avisa a unidade.'}</span>}
-      {cancellable ? <button className="text-button danger-text" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('cancel'); }}>{block ? 'Encerrar bloqueio' : pending ? 'Cancelar pedido' : 'Cancelar reserva'}</button> : null}
+      {cancellable ? <button className="text-button danger-text" type="button" disabled={action.state.pending} onClick={() => { action.clear(); setMode('cancel'); }}>{block ? 'Encerrar bloqueio' : 'Cancelar reserva'}</button> : null}
     </div> : null}
     {mode === 'approve' ? <ReasonForm id={`approve-${reservation.reservationId}`} label="Observação para a unidade" required={false} pending={action.state.pending}
       confirmLabel="Confirmar aprovação" submit={(reason) => decide('APPROVE', reason)} cancel={() => setMode('idle')} /> : null}

@@ -5,6 +5,7 @@
 .management-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
 .management-columns>div{display:grid;gap:16px;min-width:0}
 .management-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.management-grid>.management-form{grid-column:1/-1}
 .management-form{display:grid;gap:9px}
 .management-form h3{margin-bottom:6px}
 .management-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
