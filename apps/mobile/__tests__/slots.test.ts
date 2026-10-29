@@ -57,4 +57,13 @@ describe('horários oferecidos no celular', () => {
       now: new Date('2030-03-01T00:00:00Z'), blocked: [] });
     expect(slots.map((slot) => slot.label)).toEqual(['03:00–04:00', '03:30–04:30', '04:00–05:00']);
   });
+
+  it('abertura e último início fora da grade de 30 minutos também são oferecidos', () => {
+    const odd: Policy = { ...policy, opensAt: '08:10', closesAt: '08:30', maximumDurationMinutes: 20 };
+    expect(daySlots({ policy: odd, bufferMinutes: 0, date: '2030-01-08', timeZone: zone, durationMinutes: 20, now, blocked: [] })
+      .map((slot) => slot.label)).toEqual(['08:10–08:30']);
+    const late: Policy = { ...policy, opensAt: '08:10', closesAt: '10:20' };
+    expect(daySlots({ policy: late, bufferMinutes: 10, date: '2030-01-08', timeZone: zone, durationMinutes: 60, now, blocked: [] })
+      .map((slot) => slot.label)).toEqual(['08:10–09:10', '08:30–09:30', '09:00–10:00', '09:10–10:10']);
+  });
 });

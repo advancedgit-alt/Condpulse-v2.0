@@ -56,7 +56,12 @@ export function daySlots(input: {
   const closes = minutes(policy.closesAt);
   const earliest = now.getTime() + policy.minimumLeadMinutes * 60_000;
   const slots: Slot[] = [];
-  for (let start = Math.ceil(opens / STEP_MINUTES) * STEP_MINUTES; start + durationMinutes + bufferMinutes <= closes; start += STEP_MINUTES) {
+  // Inícios: a própria abertura, a grade de 30 minutos e o último início que ainda cabe (regras fora da grade continuam
+  // reserváveis, ex.: abertura 08:10).
+  const latestStart = closes - durationMinutes - bufferMinutes;
+  const starts = new Set<number>([opens, latestStart]);
+  for (let start = Math.ceil(opens / STEP_MINUTES) * STEP_MINUTES; start <= latestStart; start += STEP_MINUTES) starts.add(start);
+  for (const start of [...starts].filter((value) => value >= opens && value <= latestStart).sort((a, b) => a - b)) {
     let startsAt: string; let endsAt: string; let occupiedUntil: number;
     try {
       startsAt = toInstant(wall(date, start), timeZone);
