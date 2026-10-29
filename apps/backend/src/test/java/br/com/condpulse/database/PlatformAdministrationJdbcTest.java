@@ -77,7 +77,8 @@ class PlatformAdministrationJdbcTest {
   var reactivated=platform.updateTenant(db.accountA,AAL2,db.tenantB,
    new PlatformModels.UpdateTenant("Condomínio Renomeado",true,2L,"Contrato renovado"));
   assertTrue(reactivated.tenant().active()); assertEquals(3,reactivated.tenant().version());
-  assertEquals(1,tenants.execute(db.accountB,db.tenantB,context->1));
+  int reopened=tenants.execute(db.accountB,db.tenantB,context->1);
+  assertEquals(1,reopened,"Reativação devolve o contexto aos moradores");
   var events=platform.audit(db.accountA,AAL2,null,10).events().stream().filter(e->db.tenantB.equals(e.tenantId())).toList();
   assertEquals(List.of("TENANT_REACTIVATED","TENANT_SUSPENDED","TENANT_RENAMED"),events.stream().map(PlatformModels.AuditEvent::action).toList());
   var rename=events.getLast();
