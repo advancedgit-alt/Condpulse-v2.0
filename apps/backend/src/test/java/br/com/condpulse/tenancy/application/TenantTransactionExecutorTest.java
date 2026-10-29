@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -59,6 +60,38 @@ class TenantTransactionExecutorTest {
   order.verify(jdbc).query(startsWith("select time_zone"),any(RowMapper.class),eq(tenant));
   order.verify(jdbc).queryForObject("select set_config('app.tenant_id',?,true)",String.class,tenant.toString());
   order.verify(jdbc).query(contains("from cp.memberships"),any(RowMapper.class),eq(tenant),eq(account));
+ }
+ private List<TenantContext.Membership> manager() {
+  return List.of(new TenantContext.Membership(UUID.randomUUID(),null,"MANAGER",false,false));
+ }
+ @Test void aal2ManagerPublishesSortedCapabilitiesOnlyAfterMembershipValidation() {
+  allow("America/Sao_Paulo",manager());
+  var executor=new TenantTransactionExecutor(jdbc,manager);
+  executor.execute(account,tenant,AssuranceLevel.AAL2,context->{
+   assertEquals(AssuranceLevel.AAL2,context.assurance());
+   context.requireCapability(StaffCapability.MANAGE_UNITS); return null;
+  });
+  var order=inOrder(jdbc);
+  order.verify(jdbc).queryForObject("select set_config('app.capabilities','',true)",String.class);
+  order.verify(jdbc).query(contains("from cp.memberships"),any(RowMapper.class),eq(tenant),eq(account));
+  order.verify(jdbc).queryForObject("select set_config('app.capabilities',?,true)",String.class,
+   "amenities.manage,audit.read,memberships.manage,reservations.decide,units.manage");
+  assertEquals(List.of("begin","commit"),events);
+ }
+ @Test void aal1ManagerNeverPublishesCapabilitiesToTheDatabaseContext() {
+  allow("America/Sao_Paulo",manager());
+  var error=assertThrows(BusinessProblem.class,()->new TenantTransactionExecutor(jdbc,manager)
+   .execute(account,tenant,AssuranceLevel.AAL1,context->{context.requireCapability(StaffCapability.MANAGE_UNITS);return null;}));
+  assertEquals("MFA_REQUIRED",error.code()); assertEquals(List.of("begin","rollback"),events);
+  verify(jdbc).queryForObject("select set_config('app.capabilities','',true)",String.class);
+  verify(jdbc,never()).queryForObject(eq("select set_config('app.capabilities',?,true)"),eq(String.class),any(Object[].class));
+ }
+ @Test void residentialCallsDefaultToAal1WithoutCapabilities() {
+  allow("America/Sao_Paulo",memberships());
+  new TenantTransactionExecutor(jdbc,manager).execute(account,tenant,context->{
+   assertEquals(AssuranceLevel.AAL1,context.assurance()); assertTrue(context.effectiveCapabilities().isEmpty()); return null;
+  });
+  verify(jdbc,never()).queryForObject(eq("select set_config('app.capabilities',?,true)"),eq(String.class),any(Object[].class));
  }
  @Test void inactiveAccountStopsBeforeTenantReadAndRollsBack() {
   when(jdbc.queryForObject(contains("count(*)"),eq(Integer.class),eq(account))).thenReturn(0);

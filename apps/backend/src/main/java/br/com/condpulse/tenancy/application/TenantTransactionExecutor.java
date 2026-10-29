@@ -5,6 +5,8 @@ import java.time.ZoneId;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,12 +29,18 @@ public class TenantTransactionExecutor {
  }
 
  public <T> T execute(UUID accountId,UUID tenantId,Function<TenantContext,T> action) {
+  return execute(accountId,tenantId,AssuranceLevel.AAL1,action);
+ }
+
+ /** Mesma validação, com o nível de garantia do token já validado para liberar capacidades de equipe. */
+ public <T> T execute(UUID accountId,UUID tenantId,AssuranceLevel assurance,Function<TenantContext,T> action) {
   if(accountId==null || tenantId==null)
    throw new BusinessProblem("TENANT_ACCESS_DENIED",404,"Condomínio não disponível para este acesso.");
-  Objects.requireNonNull(action);
+  Objects.requireNonNull(action); Objects.requireNonNull(assurance);
   return tx.execute(status->{
    // Nunca herdar contexto de outra requisição ou de uma sessão BFF nesta conexão.
    jdbc.queryForObject("select set_config('app.session_hash','',true)",String.class);
+   jdbc.queryForObject("select set_config('app.capabilities','',true)",String.class);
    jdbc.queryForObject("select set_config('app.tenant_id','',true)",String.class);
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());
    Integer active=jdbc.queryForObject(
@@ -62,7 +70,13 @@ public class TenantTransactionExecutor {
       r.getObject("unit_id",UUID.class),r.getString("role"),r.getBoolean("can_create"),r.getBoolean("can_cancel")),
       tenantId,accountId);
    if(memberships.isEmpty()) throw denied();
-   return action.apply(new TenantContext(accountId,tenantId,timeZone,memberships));
+   var context=new TenantContext(accountId,tenantId,timeZone,memberships,assurance);
+   // Capacidades de equipe entram no contexto local somente após vínculo vigente e AAL2.
+   String capabilities=context.effectiveCapabilities().stream().map(StaffCapability::key).sorted()
+    .collect(Collectors.joining(","));
+   if(!capabilities.isEmpty())
+    jdbc.queryForObject("select set_config('app.capabilities',?,true)",String.class,capabilities);
+   return action.apply(context);
   });
  }
  private BusinessProblem denied() {

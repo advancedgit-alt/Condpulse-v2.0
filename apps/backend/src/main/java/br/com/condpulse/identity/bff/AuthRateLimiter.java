@@ -48,6 +48,11 @@ public final class AuthRateLimiter {
   String principal=opaqueSession!=null && opaqueSession.matches("[A-Za-z0-9_-]{43}") ? opaqueSession : "anonymous";
   return admit("refresh",principal,600,30,60);
  }
+ /** Cadastro e verificacao de segundo fator: tentativas por sessao, sem identidade no banco. */
+ public Admission mfa(String opaqueSession) {
+  String principal=opaqueSession!=null && opaqueSession.matches("[A-Za-z0-9_-]{43}") ? opaqueSession : "anonymous";
+  return admit("mfa",principal,300,10,300);
+ }
  private Admission admit(String operation,String principal,int globalLimit,int subjectLimit,int subjectSeconds) {
   // O bucket global e sempre o primeiro: variacao do identificador nao cria linhas ilimitadas.
   List<Bucket> buckets=List.of(new Bucket(digest(operation+"|global"),globalLimit,60),

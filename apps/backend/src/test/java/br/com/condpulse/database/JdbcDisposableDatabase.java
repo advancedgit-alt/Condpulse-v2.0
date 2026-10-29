@@ -130,7 +130,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  int backendPid() { return jdbc.queryForObject("select pg_backend_pid()",Integer.class); }
  void assertEmptyContext() {
-  for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash"}) {
+  for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities"}) {
    String value=jdbc.queryForObject("select coalesce(current_setting(?,true),'')",String.class,setting);
    org.junit.jupiter.api.Assertions.assertEquals("",value,"Contexto não pode sobreviver à devolução ao pool: "+setting);
   }

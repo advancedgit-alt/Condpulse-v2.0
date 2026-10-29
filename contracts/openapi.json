@@ -297,6 +297,191 @@
         }
       }
     },
+    "/auth/mfa": {
+      "get": {
+        "operationId": "mfaStatus",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "description": "Nível de garantia da sessão BFF e fatores TOTP da própria conta. Não devolve tokens.",
+        "responses": {
+          "200": {
+            "description": "Estado do segundo fator",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "SESSION_EXPIRED ou SESSION_REFRESH_REQUIRED"
+          },
+          "503": {
+            "description": "AUTH_PROVIDER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/auth/mfa/enroll": {
+      "post": {
+        "operationId": "mfaEnrollTotp",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "description": "Inicia cadastro TOTP. O segredo é exibido uma vez, sem cache; o fator só vale após verificação.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Material de cadastro TOTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnrollment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessão ausente ou expirada"
+          },
+          "403": {
+            "description": "Origem/CSRF inválidos ou MFA_OPERATION_REJECTED"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_PROVIDER_UNAVAILABLE ou AUTH_RATE_LIMIT_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/auth/mfa/verify": {
+      "post": {
+        "operationId": "mfaVerifyTotp",
+        "security": [],
+        "x-feature-flag": "CP_BFF_ENABLED",
+        "description": "Desafia e verifica o fator. Sucesso substitui o cookie opaco por nova sessão AAL2 com o mesmo limite absoluto; código rejeitado preserva a sessão.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaVerification"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sessão AAL2; resposta sem tokens do provedor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accountId",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "accountId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessão ausente/expirada ou renovação necessária"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido"
+          },
+          "404": {
+            "description": "MFA_FACTOR_NOT_FOUND"
+          },
+          "422": {
+            "description": "MFA_CODE_REJECTED"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_PROVIDER_UNAVAILABLE"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/units": {
       "get": {
         "operationId": "ownTenantUnits",
@@ -1279,6 +1464,105 @@
           }
         },
         "description": "Contexto proprio, periodo consultado, horario do servidor e uniao ordenada de ocupacoes; uma lista vazia nao garante criacao da reserva."
+      },
+      "MfaStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assuranceLevel",
+          "factors"
+        ],
+        "properties": {
+          "assuranceLevel": {
+            "type": "string",
+            "enum": [
+              "AAL1",
+              "AAL2"
+            ]
+          },
+          "factors": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "factorId",
+                "status"
+              ],
+              "properties": {
+                "factorId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "VERIFIED",
+                    "UNVERIFIED"
+                  ]
+                },
+                "friendlyName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 80
+                }
+              }
+            }
+          }
+        }
+      },
+      "TotpEnrollment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "factorId",
+          "otpauthUri",
+          "secret"
+        ],
+        "properties": {
+          "factorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "otpauthUri": {
+            "type": "string",
+            "pattern": "^otpauth://totp/",
+            "maxLength": 2048
+          },
+          "secret": {
+            "type": "string",
+            "pattern": "^[A-Z2-7]{16,128}=*$"
+          },
+          "qrCodeDataUri": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^data:image/svg\\+xml",
+            "maxLength": 65536
+          }
+        }
+      },
+      "MfaVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "factorId",
+          "code"
+        ],
+        "properties": {
+          "factorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$"
+          }
+        }
       }
     }
   }

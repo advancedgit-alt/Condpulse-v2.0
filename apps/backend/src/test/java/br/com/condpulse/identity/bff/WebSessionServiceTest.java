@@ -4,7 +4,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
+import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -78,5 +80,77 @@ class WebSessionServiceTest {
   assertThrows(BusinessProblem.class,()->service().refresh(raw));
   verify(store,never()).completeRefresh(anyString(),any(),anyLong(),anyString(),anyString(),any());
   verify(store).remove(row.tokenHash());
+ }
+ private static final String FACTOR="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+ private Jwt jwt(UUID account,String token,String aal) {
+  return Jwt.withTokenValue(token).header("alg","ES256").subject(account.toString()).claim("aal",aal)
+   .issuedAt(now).expiresAt(now.plusSeconds(600)).build();
+ }
+ @Test void totpVerificationRotatesToNewAal2SessionKeepingAbsoluteExpiry() {
+  String raw=SessionSecrets.newToken(); var row=session(raw);
+  when(store.load(row.tokenHash())).thenReturn(row);
+  when(decoder.decode("synthetic-access")).thenReturn(jwt(row.accountId(),"synthetic-access","aal1"));
+  when(auth.verifyTotp("synthetic-access",UUID.fromString(FACTOR),"123456"))
+   .thenReturn(new SupabaseAuthClient.TokenResponse("synthetic-aal2","synthetic-refresh-2",600));
+  when(decoder.decode("synthetic-aal2")).thenReturn(jwt(row.accountId(),"synthetic-aal2","aal2"));
+  var ticket=service().verifyTotp(raw,FACTOR,"123456");
+  assertNotEquals(raw,ticket.opaqueToken()); assertEquals(row.expiresAt(),ticket.expiresAt());
+  var created=org.mockito.ArgumentCaptor.forClass(StoredWebSession.class);
+  var order=inOrder(store); order.verify(store).create(created.capture()); order.verify(store).remove(row.tokenHash());
+  var stored=created.getValue();
+  assertEquals(SessionSecrets.hash(ticket.opaqueToken()),stored.tokenHash());
+  assertEquals(row.accountId(),stored.accountId()); assertEquals(row.expiresAt(),stored.expiresAt());
+  assertEquals("synthetic-aal2",cipher.open(stored.encryptedAccessToken(),stored.cipherContext("access")));
+  assertEquals("synthetic-refresh-2",cipher.open(stored.encryptedRefreshToken(),stored.cipherContext("refresh")));
+  verify(auth,never()).signOutBestEffort(anyString());
+ }
+ @Test void malformedCodeOrFactorNeverCallsProviderOrTouchesSession() {
+  String raw=SessionSecrets.newToken();
+  for(String code:new String[]{null,"","12345","1234567","12a456"}) {
+   var error=assertThrows(BusinessProblem.class,()->service().verifyTotp(raw,FACTOR,code));
+   assertEquals("MFA_CODE_REJECTED",error.code());
+  }
+  var factor=assertThrows(BusinessProblem.class,()->service().verifyTotp(raw,"not-a-factor","123456"));
+  assertEquals("MFA_FACTOR_NOT_FOUND",factor.code());
+  verifyNoInteractions(auth,store);
+ }
+ @Test void rejectedCodePreservesTheCurrentSession() {
+  String raw=SessionSecrets.newToken(); var row=session(raw);
+  when(store.load(row.tokenHash())).thenReturn(row);
+  when(decoder.decode("synthetic-access")).thenReturn(jwt(row.accountId(),"synthetic-access","aal1"));
+  when(auth.verifyTotp(anyString(),any(),anyString()))
+   .thenThrow(new BusinessProblem("MFA_CODE_REJECTED",422,"Código inválido."));
+  var error=assertThrows(BusinessProblem.class,()->service().verifyTotp(raw,FACTOR,"000000"));
+  assertEquals(422,error.status());
+  verify(store,never()).remove(anyString()); verify(store,never()).create(any());
+ }
+ @Test void providerTokenWithoutAal2OrForAnotherAccountIsNeverStored() {
+  String raw=SessionSecrets.newToken(); var row=session(raw);
+  when(store.load(row.tokenHash())).thenReturn(row);
+  when(decoder.decode("synthetic-access")).thenReturn(jwt(row.accountId(),"synthetic-access","aal1"));
+  when(auth.verifyTotp(anyString(),any(),anyString()))
+   .thenReturn(new SupabaseAuthClient.TokenResponse("synthetic-weak","synthetic-refresh-2",600));
+  when(decoder.decode("synthetic-weak")).thenReturn(jwt(row.accountId(),"synthetic-weak","aal1"));
+  assertEquals(503,assertThrows(BusinessProblem.class,()->service().verifyTotp(raw,FACTOR,"123456")).status());
+  when(decoder.decode("synthetic-weak")).thenReturn(jwt(UUID.fromString("22222222-2222-4222-8222-222222222222"),"synthetic-weak","aal2"));
+  assertEquals(503,assertThrows(BusinessProblem.class,()->service().verifyTotp(raw,FACTOR,"123456")).status());
+  verify(store,never()).create(any()); verify(store,never()).remove(anyString());
+ }
+ @Test void expiredAccessTokenAsksForRefreshBeforeMfa() {
+  String raw=SessionSecrets.newToken(); var row=session(raw);
+  when(store.load(row.tokenHash())).thenReturn(row);
+  when(decoder.decode("synthetic-access")).thenThrow(new org.springframework.security.oauth2.jwt.BadJwtException("expired"));
+  var error=assertThrows(BusinessProblem.class,()->service().mfaStatus(raw));
+  assertEquals("SESSION_REFRESH_REQUIRED",error.code()); assertEquals(401,error.status());
+  verifyNoInteractions(auth); verify(store,never()).remove(anyString());
+ }
+ @Test void mfaStatusReportsAssuranceFromTheValidatedSessionToken() {
+  String raw=SessionSecrets.newToken(); var row=session(raw);
+  when(store.load(row.tokenHash())).thenReturn(row);
+  when(decoder.decode("synthetic-access")).thenReturn(jwt(row.accountId(),"synthetic-access","aal2"));
+  var factor=new SupabaseAuthClient.Factor(UUID.fromString(FACTOR),"VERIFIED","CondPulse 1");
+  when(auth.totpFactors("synthetic-access")).thenReturn(List.of(factor));
+  var status=service().mfaStatus(raw);
+  assertEquals(AssuranceLevel.AAL2,status.assuranceLevel()); assertEquals(List.of(factor),status.factors());
  }
 }

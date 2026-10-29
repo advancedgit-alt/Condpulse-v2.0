@@ -3,6 +3,7 @@ package br.com.condpulse.identity.bff;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -62,6 +63,28 @@ public class BffController {
   }
   response.setStatus(204);
  }
+ @GetMapping("/auth/mfa") public MfaBody mfa(HttpServletRequest request,HttpServletResponse response) {
+  response.setHeader("Cache-Control","no-store");
+  var status=sessions.mfaStatus(BffCookies.read(request));
+  return new MfaBody(status.assuranceLevel().name(),status.factors());
+ }
+ @PostMapping("/auth/mfa/enroll") public EnrollmentBody enroll(HttpServletRequest request,HttpServletResponse response) {
+  String raw=BffCookies.read(request);
+  requireAdmission(limits.mfa(raw),response);
+  response.setHeader("Cache-Control","no-store");
+  var enrollment=sessions.enrollTotp(raw);
+  return new EnrollmentBody(enrollment.factorId(),enrollment.otpauthUri(),enrollment.secret(),enrollment.qrCodeDataUri());
+ }
+ @PostMapping("/auth/mfa/verify") public SessionBody verify(@RequestBody MfaVerifyBody body,
+    HttpServletRequest request,HttpServletResponse response) {
+  String raw=BffCookies.read(request);
+  requireAdmission(limits.mfa(raw),response);
+  var result=sessions.verifyTotp(raw,body.factorId(),body.code());
+  // Elevação AAL2 troca o cookie opaco e o CSRF; a sessão anterior deixa de existir.
+  BffCookies.set(response,result.opaqueToken(),Duration.between(clock.instant(),result.expiresAt()));
+  rotateCsrf(request,response);
+  return body(result);
+ }
  private void rotateCsrf(HttpServletRequest request,HttpServletResponse response) {
   var token=csrf.generateToken(request); csrf.saveToken(token,request,response);
  }
@@ -77,6 +100,13 @@ public class BffController {
  }
  public record LoginBody(String email,String password) {
   @Override public String toString() { return "LoginBody[credentials=REDACTED]"; }
+ }
+ public record MfaVerifyBody(String factorId,String code) {
+  @Override public String toString() { return "MfaVerifyBody[factorId="+factorId+",code=REDACTED]"; }
+ }
+ public record MfaBody(String assuranceLevel,List<SupabaseAuthClient.Factor> factors) {}
+ public record EnrollmentBody(UUID factorId,String otpauthUri,String secret,String qrCodeDataUri) {
+  @Override public String toString() { return "EnrollmentBody[factorId="+factorId+",secret=REDACTED]"; }
  }
  public record CsrfBody(String headerName,String token) {}
  public record SessionBody(UUID accountId,Instant expiresAt) {}
