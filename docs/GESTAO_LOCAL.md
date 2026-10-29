@@ -73,8 +73,31 @@ hash do e-mail ligado ao convite. O aceite cria o espelho local da conta Auth j�
 existente, nunca usuário no provedor: o cadastro no Supabase Auth continua sendo
 operação administrativa (cadastro público desligado). O vínculo só opera após
 aprovação da gestão. No banco, o `INSERT` do convidado exige convite válido no
-contexto local (`app.invitation_hash`), mesmo papel/unidade/nome e status
-`PENDING`.
+contexto local (`app.invitation_hash`), mesmo papel/unidade/nome, status
+`PENDING` e o identificador do próprio convite (`invitation_id` único: cada convite
+gera no máximo um vínculo, mesmo antes de concluído). A conclusão do convite só
+aceita o vínculo do próprio convidado; o início da vigência é definido pelo banco.
+
+Regras adicionais:
+
+- Há no máximo um vínculo não revogado por conta, unidade e papel. Vínculo
+  revogado ou rejeitado não impede novo convite para a mesma unidade e papel.
+- Revogações que envolvem gestores são serializadas por condomínio; depois da
+  trava, quem revoga precisa continuar gestor ativo. Assim a revogação cruzada
+  entre dois gestores nunca deixa o condomínio sem gestor.
+- Ninguém decide sobre o próprio vínculo; outro gestor precisa aprovar ou rejeitar.
+- Unidade inativada depois da emissão bloqueia o aceite com a mesma resposta
+  neutra.
+- A validade do convite é calculada pelo relógio do banco.
+
+Limites conhecidos: o aceite publica `app.tenant_id` para quem ainda não é membro,
+apenas depois de travar um convite válido e somente para as instruções fixas do
+aceite (endurecimento com função `SECURITY DEFINER` pendente). O claim `email` é
+usado sem checar `email_verified`; a proteção depende de cadastro público
+desligado e contas criadas pela operação. `email_hash` é SHA-256 sem chave secreta
+(HMAC pendente). Convite de `CONCIERGE` aprovado ainda exige o cadastro
+supervisionado do segundo fator descrito em OPERACAO_MFA.md antes de qualquer
+operação de portaria. A lista de convites mostra os 500 mais recentes.
 
 ## Pedidos, decisões e bloqueios de reserva (V008)
 
