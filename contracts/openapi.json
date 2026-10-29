@@ -5738,6 +5738,455 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/access-events": {
+      "get": {
+        "operationId": "listAccessRecords",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Registros da portaria (AAL2): entradas das últimas 24 horas com saída e correção, da mais recente.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRecordPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "ACCESS_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/access-events/entries": {
+      "post": {
+        "operationId": "recordAccessEntry",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Entrada manual pela portaria somente com autorização vigente; uma entrada válida por chegada. Nunca rotulada como passagem de equipamento.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessEntry"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ACCESS_BASIS_REQUIRED, ACCESS_EVIDENCE_INVALID, ACCESS_NOTE_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ARRIVAL_NOT_FOUND ou VISIT_PERMIT_NOT_FOUND"
+          },
+          "409": {
+            "description": "ACCESS_ARRIVAL_NOT_AUTHORIZED, ACCESS_AUTHORIZATION_EXPIRED, ACCESS_PERMIT_NOT_CURRENT, ACCESS_ENTRY_ALREADY_RECORDED, ACCESS_STATE_CHANGED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "ACCESS_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/access-events/{eventId}/exit": {
+      "post": {
+        "operationId": "recordAccessExit",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Saída de uma entrada registrada e não corrigida; uma saída válida por vez.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessExitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ACCESS_NOTE_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ACCESS_EVENT_NOT_FOUND"
+          },
+          "409": {
+            "description": "ACCESS_ENTRY_CORRECTED, ACCESS_EXIT_ALREADY_RECORDED, ACCESS_STATE_CHANGED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "ACCESS_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/access-events/{eventId}/correction": {
+      "post": {
+        "operationId": "correctAccessEvent",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Correção humana de entrada ou saída: evento adicional com motivo; nada é alterado nem apagado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessCorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ACCESS_CORRECTION_REASON_REQUIRED ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ACCESS_EVENT_NOT_FOUND"
+          },
+          "409": {
+            "description": "ACCESS_ALREADY_CORRECTED, ACCESS_CORRECTION_INVALID, ACCESS_STATE_CHANGED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "ACCESS_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/access-events": {
+      "get": {
+        "operationId": "listUnitAccessRecords",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Entradas e saídas registradas pela portaria para a unidade nos últimos 7 dias (adulto ou dependente com permissions.visits.decide).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRecordPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "ACCESS_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8896,6 +9345,279 @@
         }
       },
       "ArrivalCancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      },
+      "AccessCorrection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "correctedAt",
+          "reason",
+          "recordedByMe"
+        ],
+        "description": "Correção humana (evento adicional CORRECTION) com motivo; o registro corrigido continua guardado.",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correctedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "recordedByMe": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AccessExit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "exitedAt",
+          "note",
+          "recordedByMe",
+          "correction"
+        ],
+        "description": "Saída registrada pela portaria (MANUAL_OUT); a mais recente da entrada.",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "exitedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "recordedByMe": {
+            "type": "boolean"
+          },
+          "correction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessCorrection"
+              }
+            ]
+          }
+        }
+      },
+      "AccessRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entryId",
+          "unitId",
+          "unitLabel",
+          "blockName",
+          "visitorName",
+          "documentLast4",
+          "arrivalId",
+          "permitId",
+          "eventType",
+          "source",
+          "evidence",
+          "note",
+          "enteredAt",
+          "recordedByMe",
+          "correction",
+          "exit"
+        ],
+        "description": "Entrada registrada manualmente pela portaria — nunca passagem detectada por equipamento — com a correção e a saída mais recente.",
+        "properties": {
+          "entryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Z]{2,4}$"
+          },
+          "arrivalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "permitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "MANUAL_IN"
+          },
+          "source": {
+            "type": "string",
+            "const": "CONCIERGE"
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "DOCUMENT_CHECKED",
+              "RECOGNIZED_BY_UNIT"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "enteredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedByMe": {
+            "type": "boolean"
+          },
+          "correction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessCorrection"
+              }
+            ]
+          },
+          "exit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessExit"
+              }
+            ]
+          }
+        }
+      },
+      "AccessRecordPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "records",
+          "truncated"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/AccessRecord"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AccessEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence"
+        ],
+        "description": "Exatamente uma base: chegada autorizada pela unidade nas últimas 24 horas (arrivalId) ou convite em vigor agora (permitId).",
+        "properties": {
+          "arrivalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "permitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "DOCUMENT_CHECKED",
+              "RECOGNIZED_BY_UNIT"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          }
+        }
+      },
+      "AccessExitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          }
+        }
+      },
+      "AccessCorrectionRequest": {
         "type": "object",
         "additionalProperties": false,
         "required": [

@@ -10,8 +10,9 @@ public class DatabaseRoleGuard implements ApplicationRunner {
  private final JdbcTemplate jdbc;
  public DatabaseRoleGuard(JdbcTemplate jdbc) { this.jdbc=jdbc; }
  @Override public void run(ApplicationArguments args) {
-  // Trilhas e papéis de plataforma (V010) e financeiro (V011) conferidos por to_regclass: banco ainda sem a migration
-  // não falha aqui. O financeiro nunca apaga: estorno e cancelamento mantêm a linha.
+  // Trilhas e papéis de plataforma (V010), financeiro (V011) e registros de acesso (V014) conferidos por to_regclass:
+  // banco ainda sem a migration não falha aqui. O financeiro nunca apaga: estorno e cancelamento mantêm a linha; o
+  // registro de acesso nunca muda: correção é um evento adicional.
   Boolean unsafe=jdbc.queryForObject("""
     select rolsuper or rolbypassrls or rolcreatedb or rolcreaterole or rolreplication
      or has_schema_privilege(current_user,'cp','CREATE')
@@ -26,6 +27,7 @@ public class DatabaseRoleGuard implements ApplicationRunner {
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_subscriptions'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_charges'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.billing_payments'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_events'),'UPDATE,DELETE,TRUNCATE'),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

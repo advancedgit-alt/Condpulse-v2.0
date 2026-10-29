@@ -20,7 +20,16 @@ interface SyntheticArrival {
   permitId: string | null; state: 'WAITING' | 'APPROVED' | 'DENIED' | 'EXPIRED' | 'CANCELLED'; expiresAt: string; decidedAt: string | null;
   decisionSource: 'APP' | 'INTERCOM' | 'IN_PERSON' | 'CONCIERGE' | null; decisionNote: string | null; decidedByMe: boolean; version: number; createdAt: string;
 }
+interface SyntheticCorrection { eventId: string; correctedAt: string; reason: string; recordedByMe: boolean }
+interface SyntheticRecord {
+  entryId: string; unitId: string; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
+  arrivalId: string | null; permitId: string | null; eventType: 'MANUAL_IN'; source: 'CONCIERGE'; evidence: string; note: string | null;
+  enteredAt: string; recordedByMe: boolean; correction: SyntheticCorrection | null;
+  exit: null | { eventId: string; exitedAt: string; note: string | null; recordedByMe: boolean; correction: SyntheticCorrection | null };
+}
 interface VisitState {
+  records: SyntheticRecord[]; entryPosts: { key: string; body: unknown }[]; exitPosts: { key: string; body: unknown }[];
+  correctionPosts: { key: string; body: unknown }[]; refuseEntry: string | null;
   permits: SyntheticPermit[]; arrivals: SyntheticArrival[];
   permitPosts: { key: string; body: unknown }[]; arrivalPosts: { key: string; body: unknown }[];
   decisions: unknown[]; assisted: unknown[]; cancels: unknown[]; revokes: unknown[]; expectedSearches: string[]; queueSearches: string[];
@@ -42,7 +51,7 @@ const arrivalFixture = (overrides: Partial<SyntheticArrival> = {}): SyntheticArr
 
 /** API sintética de visitas, registrada por último (precedência); identidade com portaria quando pedido. */
 async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): Promise<VisitState> {
-  const state: VisitState = { permits: [], arrivals: [], permitPosts: [], arrivalPosts: [], decisions: [], assisted: [], cancels: [], revokes: [],
+  const state: VisitState = { records: [], entryPosts: [], exitPosts: [], correctionPosts: [], refuseEntry: null, permits: [], arrivals: [], permitPosts: [], arrivalPosts: [], decisions: [], assisted: [], cancels: [], revokes: [],
     expectedSearches: [], queueSearches: [], loseNextRegister: false, decidedElsewhere: false };
   if (concierge) {
     await page.route('**/v1/me', async (route) => {
@@ -126,6 +135,46 @@ async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): 
       }
       decide(arrival, { state: body.decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decisionSource: body.source, decisionNote: body.note, decidedByMe: true });
       await json(route, 200, arrival);
+      return;
+    }
+    if (path === '/access-events' && method === 'GET') { await json(route, 200, { records: state.records, truncated: false }); return; }
+    if (path === `/units/${UNIT_A}/access-events` && method === 'GET') {
+      await json(route, 200, { records: state.records.filter((item) => item.unitId === UNIT_A), truncated: false });
+      return;
+    }
+    if (path === '/access-events/entries' && method === 'POST') {
+      const key = request.headers()['idempotency-key']!;
+      const body = request.postDataJSON() as { arrivalId: string | null; permitId: string | null; evidence: string; note: string | null };
+      state.entryPosts.push({ key, body });
+      if (state.refuseEntry) { await problem(route, 409, state.refuseEntry); return; }
+      const basis = body.arrivalId ? state.arrivals.find((item) => item.arrivalId === body.arrivalId)! : state.permits.find((item) => item.permitId === body.permitId)!;
+      const record: SyntheticRecord = { entryId: `90000000-0000-4000-8000-${String(state.entryPosts.length).padStart(12, '0')}`, unitId: basis.unitId,
+        unitLabel: basis.unitLabel, blockName: basis.blockName, visitorName: basis.visitorName, documentLast4: basis.documentLast4, arrivalId: body.arrivalId,
+        permitId: body.permitId, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: body.evidence, note: body.note, enteredAt: new Date().toISOString(),
+        recordedByMe: true, correction: null, exit: null };
+      state.records.unshift(record);
+      await json(route, 201, record, { 'Idempotency-Replayed': 'false' });
+      return;
+    }
+    const accessExit = path.match(/^\/access-events\/([^/]+)\/exit$/);
+    if (accessExit && method === 'POST') {
+      const body = request.postDataJSON() as { note: string | null };
+      state.exitPosts.push({ key: request.headers()['idempotency-key']!, body });
+      const record = state.records.find((item) => item.entryId === accessExit[1])!;
+      record.exit = { eventId: `91000000-0000-4000-8000-${String(state.exitPosts.length).padStart(12, '0')}`, exitedAt: new Date().toISOString(),
+        note: body.note, recordedByMe: true, correction: null };
+      await json(route, 201, record, { 'Idempotency-Replayed': 'false' });
+      return;
+    }
+    const accessCorrection = path.match(/^\/access-events\/([^/]+)\/correction$/);
+    if (accessCorrection && method === 'POST') {
+      const body = request.postDataJSON() as { reason: string };
+      state.correctionPosts.push({ key: request.headers()['idempotency-key']!, body });
+      const correction = { eventId: `92000000-0000-4000-8000-${String(state.correctionPosts.length).padStart(12, '0')}`, correctedAt: new Date().toISOString(),
+        reason: body.reason, recordedByMe: true };
+      const record = state.records.find((item) => item.entryId === accessCorrection[1] || item.exit?.eventId === accessCorrection[1])!;
+      if (record.entryId === accessCorrection[1]) record.correction = correction; else record.exit!.correction = correction;
+      await json(route, 201, record, { 'Idempotency-Replayed': 'false' });
       return;
     }
     const cancel = path.match(/^\/arrivals\/([^/]+)\/cancel$/);
@@ -347,4 +396,97 @@ test('visitas previstas mostram a vigência do servidor e pedem confirmação vi
   const row = page.getByRole('list', { name: 'Chegadas' }).getByRole('listitem').filter({ hasText: 'Visita Adiantada' });
   await expect(row.getByText('Vinculada a um convite da unidade.')).toBeVisible();
   await expect(row.getByText('Aguardando a unidade')).toBeVisible();
+});
+
+test('portaria registra entrada só de quem está autorizado e corrige a saída sem apagar o registro', async ({ page }) => {
+  const state = await openConcierge(page);
+  state.arrivals.push(arrivalFixture({ visitorName: 'Pessoa Autorizada', state: 'APPROVED', decidedAt: minutes(-1), decisionSource: 'APP', version: 1 }),
+    arrivalFixture({ arrivalId: OTHER_ARRIVAL, visitorName: 'Pessoa Aguardando', createdAt: minutes(-2) }));
+  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  const queue = page.getByRole('list', { name: 'Chegadas' });
+  const waitingRow = queue.getByRole('listitem').filter({ hasText: 'Pessoa Aguardando' });
+  await expect(waitingRow.getByText('Aguardando a unidade')).toBeVisible();
+  await expect(waitingRow.getByRole('button', { name: 'Registrar entrada' })).toHaveCount(0);
+  const approvedRow = queue.getByRole('listitem').filter({ hasText: 'Pessoa Autorizada' });
+  await approvedRow.getByRole('button', { name: 'Registrar entrada' }).click();
+  const form = page.getByRole('form', { name: 'Registrar entrada de Pessoa Autorizada' });
+  await expect(form.getByText('Não representa passagem detectada por equipamento.', { exact: false })).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Registrar entrada' })).toBeDisabled();
+  await form.getByRole('radio', { name: 'Conferi o documento' }).check();
+  await form.getByRole('button', { name: 'Registrar entrada' }).click();
+  await expect(page.getByText('Entrada registrada: Pessoa Autorizada em Bloco 1 · 101 — Sintética A', { exact: false })).toBeVisible();
+  expect(state.entryPosts.map((item) => item.body)).toEqual([{ arrivalId: ARRIVAL, permitId: null, evidence: 'DOCUMENT_CHECKED', note: null }]);
+  await expect(approvedRow.getByText('Entrada registrada pela portaria em', { exact: false })).toBeVisible();
+  await expect(approvedRow.getByRole('button', { name: 'Registrar entrada' })).toHaveCount(0);
+
+  const log = page.getByRole('list', { name: 'Registros de entrada e saída' });
+  const row = log.getByRole('listitem').filter({ hasText: 'Pessoa Autorizada' });
+  await expect(row.getByText('Sem registro de saída')).toBeVisible();
+  await expect(row.getByText('chegada autorizada pela unidade', { exact: false })).toBeVisible();
+  await row.getByRole('button', { name: 'Registrar saída' }).click();
+  await page.getByRole('form', { name: 'Registrar saída de Pessoa Autorizada' }).getByRole('button', { name: 'Registrar saída' }).click();
+  await expect(page.getByText('Saída registrada: Pessoa Autorizada', { exact: false })).toBeVisible();
+  await expect(row.getByText('Saída registrada', { exact: true })).toBeVisible();
+  await row.getByRole('button', { name: 'Corrigir saída' }).click();
+  const correction = page.getByRole('form', { name: 'Corrigir saída de Pessoa Autorizada' });
+  await expect(correction.getByRole('button', { name: 'Registrar correção' })).toBeDisabled();
+  await correction.getByLabel('Motivo da correção').fill('Saída de outra pessoa');
+  await correction.getByRole('button', { name: 'Registrar correção' }).click();
+  await expect(page.getByText('Correção registrada: saída de Pessoa Autorizada. O registro original continua guardado.')).toBeVisible();
+  expect(state.correctionPosts.map((item) => item.body)).toEqual([{ reason: 'Saída de outra pessoa' }]);
+  await expect(row.getByText('Saída corrigida em', { exact: false })).toContainText('Saída de outra pessoa');
+  await expect(row.getByText('Sem registro de saída')).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Registrar saída' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /liberar|marcar entrada/i })).toHaveCount(0);
+});
+
+test('convite em vigor permite registrar entrada; agendado não; recusa do servidor não vira sucesso', async ({ page }) => {
+  const state = await openConcierge(page);
+  state.permits.push(permitFixture(), permitFixture({ permitId: SCHEDULED, visitorName: 'Visita Adiantada', documentLast4: null, purpose: null,
+    validFrom: minutes(180), validUntil: minutes(300), state: 'SCHEDULED' }));
+  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  const expected = page.getByRole('list', { name: 'Visitas previstas' });
+  const early = expected.getByRole('listitem').filter({ hasText: 'Visita Adiantada' });
+  await expect(early.getByRole('button', { name: 'Pedir confirmação à unidade' })).toBeVisible();
+  await expect(early.getByRole('button', { name: 'Registrar entrada' })).toHaveCount(0);
+  const current = expected.getByRole('listitem').filter({ hasText: 'Visita Prevista' });
+  state.refuseEntry = 'ACCESS_PERMIT_NOT_CURRENT';
+  await current.getByRole('button', { name: 'Registrar entrada' }).click();
+  let form = page.getByRole('form', { name: 'Registrar entrada de Visita Prevista' });
+  await form.getByRole('radio', { name: 'Reconhecida por quem autorizou, na portaria' }).check();
+  await form.getByRole('button', { name: 'Registrar entrada' }).click();
+  await expect(page.getByText('O convite não vale agora (antes do início, vencido ou revogado) e não autoriza a entrada. Nada novo foi registrado.')).toBeVisible();
+  await expect(page.getByText('Entrada registrada:', { exact: false })).toHaveCount(0);
+  state.refuseEntry = null;
+  await current.getByRole('button', { name: 'Registrar entrada' }).click();
+  form = page.getByRole('form', { name: 'Registrar entrada de Visita Prevista' });
+  await form.getByRole('radio', { name: 'Reconhecida por quem autorizou, na portaria' }).check();
+  await form.getByLabel('Observação (opcional)').fill('  Chegou com a moradora ');
+  await form.getByRole('button', { name: 'Registrar entrada' }).click();
+  await expect(page.getByText('Entrada registrada: Visita Prevista', { exact: false })).toBeVisible();
+  expect(state.entryPosts.at(-1)!.body).toEqual({ arrivalId: null, permitId: PERMIT, evidence: 'RECOGNIZED_BY_UNIT', note: 'Chegou com a moradora' });
+  expect(state.entryPosts.at(-1)!.key).not.toBe(state.entryPosts.at(-2)!.key);
+  await expect(current.getByText('Última entrada registrada em', { exact: false })).toBeVisible();
+});
+
+test('morador vê o histórico registrado pela portaria, com saída e correção', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const state = await installVisitsApi(page, api, false);
+  const base = { unitId: UNIT_A, unitLabel: '101 — Sintética A', blockName: 'Bloco 1', documentLast4: null, permitId: null, eventType: 'MANUAL_IN' as const,
+    source: 'CONCIERGE' as const, evidence: 'DOCUMENT_CHECKED', note: null, recordedByMe: false };
+  state.records.push(
+    { ...base, entryId: '90000000-0000-4000-8000-0000000000c1', visitorName: 'Visita com Saída', arrivalId: ARRIVAL, enteredAt: minutes(-120), correction: null,
+      exit: { eventId: '91000000-0000-4000-8000-0000000000c1', exitedAt: minutes(-60), note: null, recordedByMe: false, correction: null } },
+    { ...base, entryId: '90000000-0000-4000-8000-0000000000c2', visitorName: 'Visita Corrigida', arrivalId: null, permitId: PERMIT, enteredAt: minutes(-30),
+      correction: { eventId: '92000000-0000-4000-8000-0000000000c2', correctedAt: minutes(-20), reason: 'Pessoa não entrou', recordedByMe: false }, exit: null },
+    { ...base, entryId: '90000000-0000-4000-8000-0000000000c3', visitorName: 'Visita sem Saída', arrivalId: OTHER_ARRIVAL, enteredAt: minutes(-10), correction: null, exit: null });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  const history = page.getByRole('list', { name: 'Entradas e saídas registradas' });
+  await expect(history.getByRole('listitem').filter({ hasText: 'Visita com Saída' }).getByText('Saída registrada', { exact: true })).toBeVisible();
+  await expect(history.getByRole('listitem').filter({ hasText: 'Visita com Saída' }).getByText('Saída registrada pela portaria em', { exact: false })).toBeVisible();
+  await expect(history.getByRole('listitem').filter({ hasText: 'Visita Corrigida' }).getByText('Corrigido pela portaria: Pessoa não entrou')).toBeVisible();
+  await expect(history.getByRole('listitem').filter({ hasText: 'Visita sem Saída' }).getByText('Sem registro de saída')).toBeVisible();
+  await expect(history.getByText('Entrada registrada pela portaria em', { exact: false })).toHaveCount(3);
+  await expect(page.getByText(/equipamento|sensor/i)).toHaveCount(0);
 });
