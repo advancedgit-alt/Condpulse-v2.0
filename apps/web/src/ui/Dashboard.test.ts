@@ -6,7 +6,8 @@ const unit = '11111111-1111-4111-8111-111111111111';
 const now = Date.parse('2030-01-10T12:00:00Z');
 function reservation(id: string, status: Reservation['status'], start: string, end: string, unitId = unit): Reservation {
   return { reservationId: id, unitId, amenityId: '22222222-2222-4222-8222-222222222222', status,
-    startsAt: start, endsAt: end, occupiedFrom: start, occupiedUntil: end, acceptedPolicyVersion: 1, feeCents: 0, version: 0 };
+    startsAt: start, endsAt: end, occupiedFrom: start, occupiedUntil: end, acceptedPolicyVersion: 1, feeCents: 0, version: 0,
+    decisionReason: null };
 }
 
 describe('resumo das próximas reservas da própria unidade', () => {

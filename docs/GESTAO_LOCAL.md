@@ -1,6 +1,6 @@
 # Gestão local do condomínio — API
 
-Referências: PRD cap. 8, 10, 17, 18; CP-014, CP-018, CP-021; MVP fase 3.
+Referências: PRD cap. 8, 10, 17, 18; CP-014, CP-018, CP-020, CP-021, CP-023; MVP fase 3.
 Flag: `CP_MANAGEMENT_ENABLED` (padrão `false`, inclusive na Vercel).
 
 ## Autorização em duas barreiras
@@ -76,9 +76,40 @@ aprovação da gestão. No banco, o `INSERT` do convidado exige convite válido 
 contexto local (`app.invitation_hash`), mesmo papel/unidade/nome e status
 `PENDING`.
 
+## Pedidos, decisões e bloqueios de reserva (V008)
+
+| Rota | Capacidade | Observação |
+| --- | --- | --- |
+| `GET .../management/reservations?status=&from=&until=` | `reservations.decide` | Sem período: ainda não encerradas; com período: até 366 dias; até 200 itens. Pedido com prazo vencido aparece como `EXPIRED` |
+| `POST .../reservations/{id}/decision` | `reservations.decide` | `APPROVE`/`REJECT` (motivo obrigatório na rejeição) pela versão lida. Repetição devolve o estado atual sem novo evento; decisão oposta recebe 409. Prazo vencido grava `EXPIRED` e responde 409 `RESERVATION_DECISION_EXPIRED` |
+| `POST .../reservations/{id}/cancel` | `reservations.decide` (+ `amenities.manage` para bloqueio) | Motivo obrigatório; reserva confirmada, pedido pendente ou bloqueio ainda não encerrado; repetição sem novo evento |
+| `POST .../amenities/{id}/maintenance-blocks` | `amenities.manage` | `Idempotency-Key`; período de até 366 dias a partir de agora; 409 `AMENITY_BLOCK_CONFLICT` enquanto houver pedido ou reserva válida no período |
+
+Fluxo do morador: área com aprovação gera `PENDING_APPROVAL` com prazo de decisão
+de até 24 horas, nunca depois do início (prazo fixo; configuração por condomínio
+pendente). O pedido ocupa o período e conta na cota, mas não é confirmação. O
+autor pode retirá-lo até o início; o prazo de cancelamento aceito continua valendo
+para reservas confirmadas. A criação expira, sob a trava da unidade, os pedidos
+vencidos da própria unidade e os que ocupam o período pedido; pedido vencido não
+aparece como ocupação nem como pendente (AC-013). A aprovação exige área ativa,
+unidade ativa e solicitante ainda apto a reservar pela unidade. Toda decisão grava
+auditoria (ator e motivo) e evento na mesma transação; o motivo aparece para a
+unidade.
+
+No banco (V008), políticas restritivas: confirmar ou rejeitar exige
+`reservations.decide`; área que exige aprovação nunca recebe `BOOKING` já
+`CONFIRMED` por `INSERT`; inserir ou alterar bloqueio exige `amenities.manage`;
+motivo com até 500 caracteres.
+
+Pendências deste fluxo: revogar convites de visitantes vinculados na mesma
+transação do cancelamento (o módulo de visitantes ainda não existe; o evento
+`RESERVATION_CANCELLED` já é gravado junto); retenções `HELD` e fila de espera;
+prazo de decisão configurável; worker de expiração (hoje a expiração acontece na
+criação seguinte e na decisão tardia); notificações.
+
 ## Pendências
 
-Decisões de reserva pela gestão e telas web ficam nas próximas PRs. V006/V007
-ainda não foram aplicadas ao banco remoto: o executor de migrations está fixado
-em V003–V005 e exige revisão e autorização próprias. Envio automático do convite
-por e-mail depende de SMTP e de credencial administrativa fora da API.
+Telas web de gestão ficam nas próximas PRs. V006–V008 ainda não foram aplicadas
+ao banco remoto: o executor de migrations está fixado em V003–V005 e exige
+revisão e autorização próprias. Envio automático do convite por e-mail depende de
+SMTP e de credencial administrativa fora da API.
