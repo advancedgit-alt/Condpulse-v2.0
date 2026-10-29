@@ -99,15 +99,35 @@ class SupabaseAuthClientTest {
   assertFalse(enrollment.toString().contains("JBSWY3DP"));
   server.verify();
  }
- @Test void enrollmentWithUnexpectedQrOrUriFailsClosed() {
+ @Test void enrollmentWithUnexpectedUriFailsClosed() {
   var builder=RestClient.builder();
   var server=MockRestServiceServer.bindTo(builder).build();
   server.expect(requestTo("https://auth.example.invalid/auth/v1/factors"))
    .andRespond(withSuccess("""
-    {"id":"%s","type":"totp","totp":{"qr_code":"javascript:alert(1)","secret":"JBSWY3DPEHPK3PXP","uri":"https://phishing.example.invalid"}}
+    {"id":"%s","type":"totp","totp":{"qr_code":"data:image/svg+xml;utf-8,<svg></svg>","secret":"JBSWY3DPEHPK3PXP","uri":"https://phishing.example.invalid"}}
     """.formatted(FACTOR),MediaType.APPLICATION_JSON));
   var error=assertThrows(BusinessProblem.class,()->new SupabaseAuthClient(builder.build(),settings()).enrollTotp("synthetic-access"));
   assertEquals(503,error.status());
+ }
+ @Test void unexpectedQrIsDroppedSoOnlyTheValidatedUriAndSecretAreShown() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/factors"))
+   .andRespond(withSuccess("""
+    {"id":"%s","type":"totp","totp":{"qr_code":"javascript:alert(1)","secret":"JBSWY3DPEHPK3PXP","uri":"otpauth://totp/CondPulse:synthetic?secret=JBSWY3DPEHPK3PXP"}}
+    """.formatted(FACTOR),MediaType.APPLICATION_JSON));
+  var enrollment=new SupabaseAuthClient(builder.build(),settings()).enrollTotp("synthetic-access");
+  assertNull(enrollment.qrCodeDataUri()); assertTrue(enrollment.otpauthUri().startsWith("otpauth://totp/"));
+ }
+ @Test void enrollmentWithMalformedSecretFailsClosed() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/factors"))
+   .andRespond(withSuccess("""
+    {"id":"%s","type":"totp","totp":{"secret":"not base32!","uri":"otpauth://totp/CondPulse:synthetic"}}
+    """.formatted(FACTOR),MediaType.APPLICATION_JSON));
+  assertEquals(503,assertThrows(BusinessProblem.class,
+   ()->new SupabaseAuthClient(builder.build(),settings()).enrollTotp("synthetic-access")).status());
  }
  @Test void verifyChallengesThenVerifiesWithTheChallengeId() {
   var builder=RestClient.builder();

@@ -101,4 +101,45 @@ class WebSessionStoreJdbcTest {
   db.assertEmptyContext(); assertEquals(db.accountB,sessions.load(b.tokenHash()).accountId());
   db.assertEmptyContext(); assertEquals(pid,db.backendPid());
  }
+ private StoredWebSession next(UUID account,java.time.Instant expiresAt) {
+  String hash=SessionSecrets.hash(SessionSecrets.newToken());
+  return new StoredWebSession(UUID.randomUUID(),hash,account,
+   cipher.seal("SYNTHETIC_AAL2_ACCESS",account+"/"+hash+"/access"),cipher.seal("SYNTHETIC_AAL2_REFRESH",account+"/"+hash+"/refresh"),
+   Instant.now().plusSeconds(300),expiresAt,0);
+ }
+ @Test void replaceSwapsLeasedSessionAtomicallyAndRejectsLostLease() {
+  var a=create(db.accountA); UUID lease=UUID.randomUUID();
+  sessions.claimRefresh(a.tokenHash(),lease); db.assertEmptyContext();
+  var elevated=next(db.accountA,a.expiresAt());
+  var lost=assertThrows(BusinessProblem.class,()->sessions.replace(a.tokenHash(),UUID.randomUUID(),elevated));
+  assertEquals("SESSION_EXPIRED",lost.code()); db.assertEmptyContext();
+  assertEquals("SESSION_EXPIRED",assertThrows(BusinessProblem.class,()->sessions.load(elevated.tokenHash())).code());
+  assertEquals(db.accountA,sessions.load(a.tokenHash()).accountId());
+  sessions.replace(a.tokenHash(),lease,elevated); db.assertEmptyContext();
+  assertEquals("SESSION_EXPIRED",assertThrows(BusinessProblem.class,()->sessions.load(a.tokenHash())).code());
+  var loaded=sessions.load(elevated.tokenHash());
+  assertEquals(db.accountA,loaded.accountId()); assertEquals(a.expiresAt().getEpochSecond(),loaded.expiresAt().getEpochSecond());
+  db.assertEmptyContext();
+ }
+ @Test void failedInsertDuringReplaceRollsBackRemovalOfTheLeasedSession() {
+  var a=create(db.accountA); var other=create(db.accountA); UUID lease=UUID.randomUUID();
+  sessions.claimRefresh(a.tokenHash(),lease);
+  // Hash repetido viola UNIQUE depois do DELETE; a transação inteira precisa ser desfeita.
+  var clash=new StoredWebSession(UUID.randomUUID(),other.tokenHash(),db.accountA,other.encryptedAccessToken(),
+   other.encryptedRefreshToken(),other.accessExpiresAt(),other.expiresAt(),0);
+  assertThrows(RuntimeException.class,()->sessions.replace(a.tokenHash(),lease,clash)); db.assertEmptyContext();
+  assertEquals(db.accountA,sessions.load(a.tokenHash()).accountId());
+  assertEquals(409,assertThrows(BusinessProblem.class,()->sessions.claimRefresh(a.tokenHash(),UUID.randomUUID())).status());
+  db.assertEmptyContext();
+ }
+ @Test void releaseRequiresTheOwnLeaseAndKeepsTokensUntouched() {
+  var a=create(db.accountA); UUID lease=UUID.randomUUID();
+  sessions.claimRefresh(a.tokenHash(),lease);
+  sessions.releaseRefresh(a.tokenHash(),UUID.randomUUID()); db.assertEmptyContext();
+  assertEquals(409,assertThrows(BusinessProblem.class,()->sessions.claimRefresh(a.tokenHash(),UUID.randomUUID())).status());
+  sessions.releaseRefresh(a.tokenHash(),lease); db.assertEmptyContext();
+  var again=sessions.claimRefresh(a.tokenHash(),UUID.randomUUID());
+  assertEquals(a.encryptedAccessToken(),again.encryptedAccessToken()); assertEquals(0,again.version());
+  db.assertEmptyContext();
+ }
 }

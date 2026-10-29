@@ -81,6 +81,35 @@ public final class WebSessionStore {
    where token_hash=? and refresh_lease_id=? and refresh_lease_until>now() and version=? and expires_at>now()
    """,access,refresh,java.sql.Timestamp.from(accessExpiry),hash,lease,expectedVersion)==1);
  }
+ /** Libera a reserva sem alterar tokens; somente quando o provedor recusou de forma definitiva. */
+ public void releaseRefresh(String hash,UUID lease) {
+  context(hash,null,()->{
+   jdbc.update("update platform.web_sessions set refresh_lease_id=null,refresh_lease_until=null where token_hash=? and refresh_lease_id=?",
+    hash,lease);
+   return null;
+  });
+ }
+ /**
+  * Troca atômica após elevação de garantia: a linha reservada sai e a nova sessão entra na mesma transação.
+  * Reserva perdida ou expirada não cria sessão nova; qualquer falha desfaz as duas operações.
+  */
+ public void replace(String hash,UUID lease,StoredWebSession next) {
+  context(hash,null,()->{
+   int removed=jdbc.update("""
+    delete from platform.web_sessions
+    where token_hash=? and refresh_lease_id=? and refresh_lease_until>now() and expires_at>now()
+    """,hash,lease);
+   if(removed!=1) throw absent();
+   jdbc.queryForObject("select set_config('app.session_hash',?,true)",String.class,next.tokenHash());
+   requireActive(next.accountId());
+   jdbc.update("""
+    insert into platform.web_sessions(id,token_hash,account_id,encrypted_access_token,encrypted_refresh_token,access_expires_at,expires_at)
+    values(?,?,?,?,?,?,?)
+    """,next.id(),next.tokenHash(),next.accountId(),next.encryptedAccessToken(),next.encryptedRefreshToken(),
+    java.sql.Timestamp.from(next.accessExpiresAt()),java.sql.Timestamp.from(next.expiresAt()));
+   return null;
+  });
+ }
  public void remove(String hash) {
   context(hash,null,()->{jdbc.update("delete from platform.web_sessions where token_hash=?",hash);return null;});
  }

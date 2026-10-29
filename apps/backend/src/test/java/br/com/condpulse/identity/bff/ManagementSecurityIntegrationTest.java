@@ -196,7 +196,9 @@ class ManagementSecurityIntegrationTest {
    var limits=mock(AuthRateLimiter.class);
    when(limits.login(any())).thenReturn(AuthRateLimiter.Admission.permitted());
    when(limits.refresh(any())).thenReturn(AuthRateLimiter.Admission.permitted());
-   when(limits.mfa(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.mfaVerify(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.mfaEnroll(any())).thenReturn(AuthRateLimiter.Admission.permitted());
+   when(limits.mfaStatus(any())).thenReturn(AuthRateLimiter.Admission.permitted());
    return new BffController(sessions,csrf,Clock.fixed(NOW,ZoneOffset.UTC),limits);
   }
  }
