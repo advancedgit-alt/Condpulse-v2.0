@@ -625,6 +625,7 @@ test('morador compartilha o link do convite: token só no fragmento, copiar, ger
   await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
   const share = page.getByLabel('Link do convite de Visita Link');
   await share.getByRole('button', { name: 'Compartilhar link' }).click();
+  await expect.poll(() => state.tokens.length).toBe(1);
   const field = share.getByRole('textbox', { name: /Link para enviar a/ });
   await expect(field).toHaveValue(new RegExp(`/visita#${state.tokens[0]}$`));
   expect(new URL(await field.inputValue()).pathname).toBe('/visita');
