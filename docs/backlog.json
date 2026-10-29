@@ -69,6 +69,20 @@
           "project_url": "https://vercel.com/sindicoadvanced/condpulse",
           "deployment_id": "dpl_7NBrikhozHriUpTWymxr7KmwgJmA",
           "observed_alias": "https://project-rhvdq.vercel.app"
+        },
+        {
+          "batch": "onboarding-hml-20261029",
+          "commit": "519d895c455523021c67a399a5355055f9113475",
+          "branch": "ccr-5e725112-3x8hyg",
+          "environment": "Supabase homologação rpnrqfrfwywglvyykgrg pelo executor protegido de onboarding",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40917560570",
+          "commands": [
+            "onboarding-operations inspect (run 40917252737)",
+            "onboarding-operations apply com ACK e manutenção confirmada (run 40917560570)",
+            "leitura SQL de platform.tenants, cp.units, cp.memberships, cp.amenities, platform.onboarding_runs e platform.platform_roles"
+          ],
+          "result": "APPLIED_AND_VERIFIED_IN_DATABASE",
+          "scope": "Com aprovação explícita do responsável: um condomínio de teste, unidade 101, gestão e morador da mesma conta aprovada (29/10 a 28/11/2026), salão de festas com a política aprovada e recibo do login cp_onboarding_hml; fingerprint recalculado confere com o da inspeção. Sem papel de plataforma. Não comprova login, MFA nem aceite."
         }
       ]
     },
