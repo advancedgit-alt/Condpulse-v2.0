@@ -1,5 +1,13 @@
 # Estado verificável - 29/10/2026
 
+## Pedidos, decisões e bloqueios de reserva — CP-022/CP-023
+
+- V008: políticas restritivas (confirmar/rejeitar só com `reservations.decide`; área com aprovação não recebe `BOOKING` já `CONFIRMED`; bloqueio só com `amenities.manage`; `INSERT` da aplicação só cria `BOOKING` `PENDING_APPROVAL`/`CONFIRMED` e `BLOCK` `CONFIRMED`, sem `HELD`) e gatilho de transição válido para qualquer papel: estados encerrados não voltam. Motivo até 500 caracteres.
+- Morador: área com aprovação gera `PENDING_APPROVAL` com prazo de até 24 h, nunca após o início; o pedido ocupa período e cota sem ser confirmação, pode ser retirado pelo autor até o início e expira sob a trava da unidade antes de cota e intervalo (AC-013). Somente o autor cancela; outra pessoa da unidade recebe 403 `RESERVATION_AUTHOR_REQUIRED`.
+- Gestão (atrás de `CP_MANAGEMENT_ENABLED=false`): lista, decisão pela versão lida com repetição sem novo evento, expiração gravada antes da recusa tardia (409 `RESERVATION_DECISION_EXPIRED`), autodecisão negada, cancelamento com motivo e bloqueio de manutenção idempotente com conflito explícito. Auditoria e evento na mesma transação. Web do morador mostra pedido pendente, retirada e motivo.
+- CI 40809828784 verde (head `5659f54`) antes da revisão. Revisão independente (sem falha crítica) comprovou em PostgreSQL local que o prazo podia vencer entre a leitura e a gravação da decisão sem gravar `EXPIRED`, e que o papel da aplicação podia criar `HELD` ou reabrir estados encerrados. Corrigidos com testes: prazo conferido antes da versão e nova tentativa de expiração quando a decisão não grava; máquina de estados no banco; autodecisão negada; cancelamento da gestão não volta ao autor como sucesso; título "Reserva confirmada." só para `CONFIRMED`. A suíte SQL ganhou 13 verificações da V008 e mais 13 da revisão (99 no total, conferidas localmente em PostgreSQL 16). CI 40813563438 verde (head `87aeaa5`).
+- Pendências: revogação de convites de visitantes na mesma transação do cancelamento (módulo de visitantes, CP-038) — por isso o aceite de CP-023 continua pendente; fila de espera/`HELD`; prazo configurável; worker de expiração; notificações; aplicação remota da V008.
+
 ## Vínculos e convites pela gestão — CP-014/CP-018/CP-020
 
 - V007 cria `cp.membership_invitations` (guarda só o hash do token e o hash do e-mail ligado ao convite) e políticas para a gestão (`memberships.manage`) e para o convidado: o `INSERT` do vínculo exige convite válido no contexto local (`app.invitation_hash`), mesmo papel/unidade/nome e status `PENDING`. Espelho local da conta Auth limitado ao próprio ator.
