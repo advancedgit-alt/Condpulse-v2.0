@@ -21,7 +21,9 @@ lacuna, e ATE igual a ultima migration do JAR revisado (nada fica acima do alvo)
 Nao existe transicao automatica inspect -> baseline -> migrate.
 
 Faixa generalizada em 29/10/2026 para levar a homologacao da V005 a ultima versao
-revisada (primeira execucao: 006-015). O ensaio JDBC descartavel do CI cobre migracao
+revisada. Primeira execucao no commit 8aa5ec691959427866adbee072236cd5d124ecc8, com OK do
+responsavel: migrate40861754667 (006-015) aplicou V006 a V015 e a repeticao40862234364 nao
+gravou linha nova; registro em evidence/database-operations-20261029.json. O ensaio JDBC descartavel do CI cobre migracao
 completa a partir do baseline, repeticao com zero migrations, faixa com lacuna, faixa
 que nao chega a ultima migration, historico acima do JAR, checksum divergente e banco
 sem baseline.
@@ -126,9 +128,9 @@ migrations; isso nao autoriza repeticao apos erro sem conferir o estado.
 O pacote nao comprova que GitHub tenha rota/permissao de rede ate o banco. Firewall,
 restricoes de acesso do Supabase, limites de conexao e o cofre precisam ser conferidos
 no ambiente. Nao abrir o banco para toda a internet para fazer o job passar.
-O Environment esta vazio; a senha ainda precisa ser fornecida no cofre pelo
-responsavel. Nenhum segredo foi preenchido, nenhum job foi disparado e nenhum
-recurso de banco ou credencial foi criado por esta entrega.
+A senha do Environment foi cadastrada pelo responsavel; o agente nunca leu nem copiou
+o valor. Os jobs so rodam por disparo manual com ACK revisado e nao criam login,
+credencial ou recurso de banco fora das migrations.
 
 Validacao inerte: `node --test tests/database-operations.test.mjs`. Os testes exercitam
 o guard de dispatch e a allowlist do subprocesso com dados sinteticos, alem de conferir
