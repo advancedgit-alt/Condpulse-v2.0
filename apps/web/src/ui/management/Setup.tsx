@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { management, type AmenityInput, type ManagedAmenity, type ManagedUnit } from '../../api/management';
-import { Empty, ErrorState, Loading, Notice } from '../primitives';
+import { Empty, ErrorState, Loading, Notice, errorMessage } from '../primitives';
 import { money } from '../dateTime';
-import { ActionFeedback, handleAccessError, managementKey, useAction, useManagement } from './shared';
+import { ActionFeedback, managementKey, useAccessGuard, useAction, useManagement } from './shared';
 
 const weekDayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
@@ -26,11 +26,18 @@ function draftOf(area: ManagedAmenity): AmenityDraft {
     maximumDuration: policy ? String(policy.maximumDurationMinutes) : '', maximumActive: policy ? String(policy.maximumActivePerUnit) : '',
     cancellationLead: policy ? String(policy.cancellationLeadMinutes) : '', reason: '' };
 }
-/** Converte "1.234,56" em centavos sem arredondamento de ponto flutuante. */
+/**
+ * Converte reais em centavos sem ponto flutuante. Aceita "1234,56", "1.234,56" (ponto só como milhar, em grupos de
+ * 3) e "50.00" (ponto como decimal quando não há vírgula e há até 2 casas). Formatos ambíguos são recusados.
+ */
 export function cents(value: string): number | null {
-  const normalized = value.trim().replace(/\./g, '').replace(',', '.');
-  if (!/^\d{1,9}(\.\d{1,2})?$/.test(normalized)) return null;
-  const [units = '0', fraction = ''] = normalized.split('.');
+  const text = value.trim();
+  let units: string; let fraction = '';
+  let match = /^(\d{1,3}(?:\.\d{3})+|\d{1,9})(?:,(\d{1,2}))?$/.exec(text);
+  if (match) { units = match[1]!.replace(/\./g, ''); fraction = match[2] ?? ''; }
+  else if ((match = /^(\d{1,9})\.(\d{1,2})$/.exec(text))) { units = match[1]!; fraction = match[2]!; }
+  else return null;
+  if (units.length > 9) return null;
   return Number(units) * 100 + Number(fraction.padEnd(2, '0'));
 }
 const whole = (value: string): number | null => (/^\d{1,9}$/.test(value.trim()) ? Number(value.trim()) : null);
@@ -48,6 +55,11 @@ export function amenityInput(draft: AmenityDraft, expectedVersion: number | null
   const numbers = [whole(draft.minimumLead), whole(draft.maximumAdvance), whole(draft.maximumDuration), whole(draft.maximumActive), whole(draft.cancellationLead)];
   if (numbers.some((value) => value === null)) return 'Preencha antecedência, janela, duração, limite por unidade e prazo de cancelamento com números inteiros.';
   const [minimumLeadMinutes, maximumAdvanceDays, maximumDurationMinutes, maximumActivePerUnit, cancellationLeadMinutes] = numbers as number[];
+  if (minimumLeadMinutes! > 525600) return 'A antecedência mínima deve ter até 525600 minutos (1 ano).';
+  if (maximumAdvanceDays! < 1 || maximumAdvanceDays! > 366) return 'A janela máxima deve ter entre 1 e 366 dias.';
+  if (maximumDurationMinutes! < 1 || maximumDurationMinutes! > 1440) return 'A duração máxima deve ter entre 1 e 1440 minutos.';
+  if (maximumActivePerUnit! < 1 || maximumActivePerUnit! > 100) return 'O limite de reservas ativas por unidade deve ficar entre 1 e 100.';
+  if (cancellationLeadMinutes! > 525600) return 'O prazo de cancelamento deve ter até 525600 minutos (1 ano).';
   const reason = draft.reason.trim();
   return { name, capacity, approvalRequired: draft.approvalRequired, feeCents, bufferMinutes, active: expectedVersion === null ? true : draft.active,
     policy: { schemaVersion: 1, weekDays: [...draft.weekDays].sort((a, b) => a - b), opensAt: draft.opensAt, closesAt: draft.closesAt,
@@ -61,17 +73,24 @@ function AmenityForm({ area, onClose }: { area: ManagedAmenity | null; onClose()
   const queries = useQueryClient();
   const action = useAction();
   const [draft, setDraft] = useState<AmenityDraft>(() => (area ? draftOf(area) : emptyDraft));
+  // A versão lida acompanha o rascunho: se a lista for consultada de novo, os dados exibidos não mudam sozinhos.
+  const [readVersion, setReadVersion] = useState<number | null>(area ? area.version : null);
   const [validation, setValidation] = useState('');
   const set = <K extends keyof AmenityDraft>(key: K, value: AmenityDraft[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const prefix = area ? `edit-${area.amenityId}` : 'new-area';
+  const stale = area !== null && readVersion !== area.version;
+  const preview = cents(draft.fee);
+  function reload() { if (area) { setDraft(draftOf(area)); setReadVersion(area.version); setValidation(''); action.clear(); } }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const input = amenityInput(draft, area ? area.version : null);
+    if (stale) return;
+    const input = amenityInput(draft, readVersion);
     if (typeof input === 'string') { setValidation(input); return; }
     setValidation('');
     const ok = await action.run(() => (area ? management.updateAmenity(scope.tenantId, area.amenityId, input) : management.createAmenity(scope.tenantId, input)),
       area ? 'Área atualizada.' : 'Área criada.', async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'amenities') }); });
     if (ok) onClose();
+    else if (area) await queries.invalidateQueries({ queryKey: managementKey(scope, 'amenities') });
   }
   const field = (key: keyof AmenityDraft, label: string, help?: string) => <div><label htmlFor={`${prefix}-${key}`}>{label}</label>
     <input id={`${prefix}-${key}`} inputMode="numeric" required value={draft[key] as string} onChange={(event) => set(key, event.target.value as never)} disabled={action.state.pending} />
@@ -84,7 +103,7 @@ function AmenityForm({ area, onClose }: { area: ManagedAmenity | null; onClose()
     <div className="two-fields">{field('capacity', 'Capacidade (pessoas)')}{field('buffer', 'Limpeza após o uso (min)')}</div>
     <div className="two-fields"><div><label htmlFor={`${prefix}-fee`}>Taxa informativa (R$)</label>
       <input id={`${prefix}-fee`} inputMode="decimal" required value={draft.fee} onChange={(event) => set('fee', event.target.value)} disabled={action.state.pending} />
-      <small className="field-help">Somente informativa: nenhum pagamento é feito pelo sistema.</small></div>
+      <small className="field-help">{preview === null ? 'Use o formato 1.234,56.' : `Será exibida como ${money(preview)}.`} Somente informativa: nenhum pagamento é feito pelo sistema.</small></div>
       <div className="checkbox-stack"><label className="checkbox-label"><input type="checkbox" checked={draft.approvalRequired} onChange={(event) => set('approvalRequired', event.target.checked)} disabled={action.state.pending} /><span>Pedidos exigem aprovação da gestão</span></label>
         {area ? <label className="checkbox-label"><input type="checkbox" checked={draft.active} onChange={(event) => set('active', event.target.checked)} disabled={action.state.pending} /><span>Área ativa para novos pedidos</span></label> : null}</div></div>
     <fieldset className="weekday-fieldset" disabled={action.state.pending}><legend>Dias permitidos</legend>
@@ -99,7 +118,8 @@ function AmenityForm({ area, onClose }: { area: ManagedAmenity | null; onClose()
     {area ? <><label htmlFor={`${prefix}-reason`}>Motivo da alteração (opcional)</label>
       <textarea id={`${prefix}-reason`} maxLength={500} rows={2} value={draft.reason} onChange={(event) => set('reason', event.target.value)} disabled={action.state.pending} /></> : null}
     {validation ? <Notice tone="error">{validation}</Notice> : null}
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending}>{action.state.pending ? 'Salvando…' : area ? 'Salvar alterações' : 'Criar área'}</button>
+    {stale ? <Notice tone="warning">Esta área foi alterada por outra pessoa enquanto você editava. <button className="text-button" type="button" onClick={reload}>Recarregar os dados atuais</button> e refaça as mudanças.</Notice> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending || stale}>{action.state.pending ? 'Salvando…' : area ? 'Salvar alterações' : 'Criar área'}</button>
       <button className="button button-secondary" type="button" onClick={onClose} disabled={action.state.pending}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -109,7 +129,7 @@ export function AmenitySection() {
   const scope = useManagement();
   const areas = useQuery({ queryKey: managementKey(scope, 'amenities'), queryFn: ({ signal }) => management.amenities(scope.tenantId, signal) });
   const [editing, setEditing] = useState<string | null>(null);
-  if (areas.isError && handleAccessError(areas.error, scope)) return null;
+  if (useAccessGuard(areas.error)) return null;
   return <section className="management-section" aria-labelledby="areas-title">
     <div className="section-heading"><div><span className="section-index">ÁREAS E REGRAS</span><h2 id="areas-title">Áreas do condomínio</h2></div>
       <button className="button button-secondary button-compact" type="button" onClick={() => setEditing('new')} disabled={editing !== null}>Nova área</button></div>
@@ -138,12 +158,18 @@ function UnitEditor({ unit, blocks, onClose }: { unit: ManagedUnit; blocks: { bl
   const [blockId, setBlockId] = useState(unit.blockId ?? '');
   const [status, setStatus] = useState(unit.status);
   const [reason, setReason] = useState('');
+  // Versão lida congelada junto do formulário: alteração alheia exige recarregar antes de enviar.
+  const [read, setRead] = useState({ version: unit.version, status: unit.status });
+  const stale = read.version !== unit.version;
+  function reload() { setLabel(unit.label); setBlockId(unit.blockId ?? ''); setStatus(unit.status); setRead({ version: unit.version, status: unit.status }); action.clear(); }
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (stale) return;
     const ok = await action.run(() => management.updateUnit(scope.tenantId, unit.unitId, { label: label.trim(), blockId: blockId || null,
-      status, expectedVersion: unit.version, reason: reason.trim() ? reason.trim() : null }), 'Unidade atualizada.',
+      status, expectedVersion: read.version, reason: reason.trim() ? reason.trim() : null }), 'Unidade atualizada.',
     async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'units') }); });
     if (ok) onClose();
+    else await queries.invalidateQueries({ queryKey: managementKey(scope, 'units') });
   }
   return <form className="reason-form unit-editor" onSubmit={(event) => void submit(event)} aria-label={`Editar unidade ${unit.label}`}>
     <div className="two-fields"><div><label htmlFor={`unit-label-${unit.unitId}`}>Identificação</label>
@@ -153,10 +179,12 @@ function UnitEditor({ unit, blocks, onClose }: { unit: ManagedUnit; blocks: { bl
     <label htmlFor={`unit-status-${unit.unitId}`}>Situação</label>
     <select id={`unit-status-${unit.unitId}`} value={status} onChange={(event) => setStatus(event.target.value as ManagedUnit['status'])} disabled={action.state.pending}>
       <option value="ACTIVE">Ativa</option><option value="INACTIVE">Inativa</option></select>
-    {status === 'INACTIVE' && unit.status === 'ACTIVE' ? <Notice tone="warning">Inativar bloqueia na hora o acesso dos moradores desta unidade.</Notice> : null}
+    {status === 'INACTIVE' && read.status === 'ACTIVE' ? <Notice tone="warning">Inativar bloqueia na hora o acesso dos moradores desta unidade.</Notice> : null}
+    {status === 'ACTIVE' && read.status === 'INACTIVE' ? <Notice tone="warning">Reativar devolve na hora o acesso dos moradores com vínculo nesta unidade.</Notice> : null}
+    {stale ? <Notice tone="warning">Esta unidade foi alterada por outra pessoa enquanto você editava. <button className="text-button" type="button" onClick={reload}>Recarregar os dados atuais</button> e confira antes de salvar.</Notice> : null}
     <label htmlFor={`unit-reason-${unit.unitId}`}>Motivo (opcional)</label>
     <textarea id={`unit-reason-${unit.unitId}`} maxLength={500} rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={action.state.pending} />
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending || !label.trim()}>{action.state.pending ? 'Salvando…' : 'Salvar unidade'}</button>
+    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending || !label.trim() || stale}>{action.state.pending ? 'Salvando…' : 'Salvar unidade'}</button>
       <button className="button button-secondary" type="button" onClick={onClose} disabled={action.state.pending}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -174,7 +202,7 @@ export function UnitSection() {
   const [unitBlock, setUnitBlock] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const failure = [blocks.error, units.error].find(Boolean);
-  if (failure && handleAccessError(failure, scope)) return null;
+  if (useAccessGuard(failure)) return null;
   async function createBlock(event: FormEvent) {
     event.preventDefault();
     const ok = await blockAction.run(() => management.createBlock(scope.tenantId, blockName.trim()), 'Bloco criado.',
@@ -199,6 +227,7 @@ export function UnitSection() {
       </form>
       <form className="panel management-form stack-form" onSubmit={(event) => void createUnit(event)} aria-label="Nova unidade">
         <h3>Nova unidade</h3>
+        {blocks.isError ? <Notice tone="error">Não foi possível carregar os blocos: {errorMessage(blocks.error)} <button className="text-button" type="button" onClick={() => void blocks.refetch()}>Tentar novamente</button></Notice> : null}
         <label htmlFor="unit-label">Identificação</label>
         <input id="unit-label" required maxLength={40} value={unitLabel} onChange={(event) => setUnitLabel(event.target.value)} disabled={unitAction.state.pending} />
         <label htmlFor="unit-block">Bloco</label>

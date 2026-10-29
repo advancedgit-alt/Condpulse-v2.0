@@ -165,10 +165,23 @@ inativar), Pessoas (vínculos por situação, convite com link exibido uma vez e
 revogação) e Auditoria (paginação por cursor). Ações nunca repetem sozinhas; falha
 incerta pede para atualizar a lista antes de repetir.
 
+Edições e decisões usam a versão lida ao abrir o formulário. Se a lista atualizada
+trouxer versão mais nova, a tela avisa e oferece recarregar os dados atuais em vez
+de enviar sobre o que outra pessoa mudou; `409` mantém o formulário e pede revisão.
+Repetição natural do servidor (decisão, cancelamento ou bloqueio já feitos) aparece
+como informação ou aviso com o estado atual, nunca como sucesso desta ação. Conta só
+de gestão (sem unidade) vê apenas o acesso à gestão na escolha de contexto.
+
+O QR do autenticador vem do GoTrue como SVG cru; o BFF aceita SVG cru ou em data URI
+e o devolve em `data:image/svg+xml;base64,` (até 512 KiB de SVG). Fora disso o QR é
+omitido e a chave continua disponível para cadastro manual. O formato real do
+provedor ainda não foi conferido em homologação de Auth.
+
 O convite é aberto em `/convite#token=…`: o token fica no fragmento (não vai ao
 servidor nem aos registros de acesso), é guardado só na aba atual e removido da
 barra de endereço. Quem ainda não entrou é orientado a entrar com a conta do
-e-mail convidado; a tela de acessos mostra o convite em aberto.
+e-mail convidado; a tela de acessos mostra o convite em aberto. Sair da conta
+descarta o convite guardado na aba.
 
 ## Pendências
 
@@ -176,3 +189,8 @@ V006–V008 ainda não foram aplicadas
 ao banco remoto: o executor de migrations está fixado em V003–V005 e exige
 revisão e autorização próprias. Envio automático do convite por e-mail depende de
 SMTP e de credencial administrativa fora da API.
+
+Primeiro acesso por convite: o login do BFF exige conta local ativa, então quem
+ainda não tem conta local não consegue entrar para aceitar o convite pela tela. O
+aceite com credenciais (login no provedor, espelho local e vínculo `PENDING` na
+mesma operação) é pendência própria.
