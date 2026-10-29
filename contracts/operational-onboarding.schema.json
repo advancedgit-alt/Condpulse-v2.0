@@ -54,7 +54,7 @@
       "maxItems": 100,
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/amenity" },
-      "description": "IDs devem ser únicos. A política completa é explícita e validada pelo domínio de reservas. Áreas com aprovação exigida permanecem sujeitas às capacidades efetivamente implementadas."
+      "description": "IDs devem ser únicos e nomes também, sem diferenciar maiúsculas de minúsculas (índice amenities_tenant_name). Limites iguais aos da gestão local: nome até 120 caracteres, capacidade até 10000 e taxa até 10000000 centavos. A política completa é explícita e validada pelo domínio de reservas. Áreas com aprovação exigida permanecem sujeitas às capacidades efetivamente implementadas."
     }
   },
   "$defs": {
@@ -129,11 +129,11 @@
       "required": ["id", "name", "capacity", "bufferMinutes", "policyVersion", "feeCents", "approvalRequired", "policy"],
       "properties": {
         "id": { "$ref": "#/$defs/uuid" },
-        "name": { "$ref": "#/$defs/cleanText", "minLength": 1, "maxLength": 160 },
-        "capacity": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "name": { "$ref": "#/$defs/cleanText", "minLength": 1, "maxLength": 120 },
+        "capacity": { "type": "integer", "minimum": 1, "maximum": 10000 },
         "bufferMinutes": { "type": "integer", "minimum": 0, "maximum": 1440 },
         "policyVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
-        "feeCents": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 },
+        "feeCents": { "type": "integer", "minimum": 0, "maximum": 10000000 },
         "approvalRequired": { "type": "boolean" },
         "policy": { "$ref": "#/$defs/reservationPolicy" }
       }

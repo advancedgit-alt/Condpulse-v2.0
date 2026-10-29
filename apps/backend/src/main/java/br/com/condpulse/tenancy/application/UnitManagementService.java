@@ -66,9 +66,13 @@ public class UnitManagementService {
    if(current.version()!=request.expectedVersion()
       || !store.updateUnit(tenant,unitId,label,request.blockId(),request.status(),request.expectedVersion()))
     throw new BusinessProblem("UNIT_CHANGED",409,"A unidade foi alterada. Atualize os dados antes de salvar.");
-   String action=!current.status().equals(request.status())
-    ?("INACTIVE".equals(request.status())?"UNIT_DEACTIVATED":"UNIT_REACTIVATED"):"UNIT_UPDATED";
-   audit.record(tenant,actor,action,"UNIT",unitId,reason);
+   // Uma ação por mudança: inativar e renomear na mesma gravação deixam os dois registros.
+   var actions=new java.util.ArrayList<String>();
+   if(!current.status().equals(request.status()))
+    actions.add("INACTIVE".equals(request.status())?"UNIT_DEACTIVATED":"UNIT_REACTIVATED");
+   if(!current.label().equals(label) || !java.util.Objects.equals(current.blockId(),request.blockId()) || actions.isEmpty())
+    actions.add("UNIT_UPDATED");
+   for(String action:actions) audit.record(tenant,actor,action,"UNIT",unitId,reason);
    return store.find(tenant,unitId);
   });
  }

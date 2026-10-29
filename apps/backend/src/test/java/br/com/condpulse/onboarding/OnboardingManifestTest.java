@@ -131,6 +131,23 @@ class OnboardingManifestTest {
         rejected(missingManager);
     }
 
+    @Test void amenityLimitsMatchLocalManagementAndDatabaseConstraints() {
+        Map<String, Object> longest = source(); first(longest, "amenities").put("name", "A".repeat(120));
+        assertEquals(1, parse(JSON.writeValueAsString(longest)).amenities().size());
+        Map<String, Object> tooLong = source(); first(tooLong, "amenities").put("name", "A".repeat(121)); rejected(tooLong);
+        Map<String, Object> capacity = source(); first(capacity, "amenities").put("capacity", 10001); rejected(capacity);
+        Map<String, Object> fee = source(); first(fee, "amenities").put("feeCents", 10_000_001L); rejected(fee);
+        Map<String, Object> maximum = source(); first(maximum, "amenities").put("capacity", 10000);
+        first(maximum, "amenities").put("feeCents", 10_000_000L);
+        assertEquals(10000, parse(JSON.writeValueAsString(maximum)).amenities().getFirst().capacity());
+        Map<String, Object> sameName = source();
+        Map<String, Object> copy = new LinkedHashMap<>(first(sameName, "amenities"));
+        copy.put("id", "55000000-0000-4000-8000-000000000002"); copy.put("name", "area sintetica manifesto");
+        sameName.put("amenities", List.of(first(sameName, "amenities"), copy)); rejected(sameName);
+        copy.put("name", "OUTRA AREA SINTETICA");
+        assertEquals(2, parse(JSON.writeValueAsString(sameName)).amenities().size());
+    }
+
     @Test void duplicatesAndBoundedCollectionsAreRejected() {
         Map<String, Object> accounts = source(); accounts.put("accounts", List.of(ACCOUNT, ACCOUNT)); rejected(accounts);
         Map<String, Object> units = source(); units.put("units", List.of(first(units, "units"), first(units, "units"))); rejected(units);

@@ -14,7 +14,12 @@ class AuditCursorTest {
   assertNull(AuditQuery.Cursor.parse(null)); assertNull(AuditQuery.Cursor.parse(" "));
  }
  @Test void malformedCursorIsAStableClientError() {
-  for(String value:new String[]{"***","bm90LWEtY3Vyc29y","MTIzOm5vdC1hLXV1aWQ","x".repeat(121)}) {
+  var encoder=java.util.Base64.getUrlEncoder().withoutPadding();
+  String id=UUID.randomUUID().toString();
+  String extreme=encoder.encodeToString((Long.MIN_VALUE+":"+id).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+  String beforeRange=encoder.encodeToString(("-1:"+id).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+  String nonCanonical=encoder.encodeToString("1700000000000000:1-1-1-1-1".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+  for(String value:new String[]{"***","bm90LWEtY3Vyc29y","MTIzOm5vdC1hLXV1aWQ","x".repeat(121),extreme,beforeRange,nonCanonical}) {
    var error=assertThrows(BusinessProblem.class,()->AuditQuery.Cursor.parse(value));
    assertEquals("AUDIT_CURSOR_INVALID",error.code()); assertEquals(400,error.status());
   }

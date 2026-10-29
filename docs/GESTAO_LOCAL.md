@@ -25,7 +25,36 @@ Flag: `CP_MANAGEMENT_ENABLED` (padrão `false`, inclusive na Vercel).
 | `GET .../management/audit-events` | `audit.read` | Cursor opaco, 30 por página (máx. 100) |
 
 Toda alteração grava `cp.audit_log` na mesma transação (ator, ação, recurso,
-motivo opcional). A web usa sessão BFF com CSRF; aplicativos usam Bearer.
+motivo opcional), com uma ação por mudança: nova regra, inativação e renomeação
+na mesma gravação geram três registros. Valores anteriores e novos ainda não são
+gravados na auditoria. A web usa sessão BFF com CSRF; aplicativos usam Bearer.
+
+No banco, `UPDATE` sem a capacidade é recusado com `42501` (403 na API) em vez de
+não encontrar linhas. Blocos não têm `UPDATE` concedido. O `cp_api` ainda pode
+gravar qualquer valor em `version`/`policy_version`: o incremento é garantido pela
+API, não por gatilho no banco (pendência registrada).
+
+## Antes de aplicar a V006 em banco com dados
+
+A V006 cria `amenities_tenant_name` (nome único sem diferenciar maiúsculas) e
+limita nomes de áreas (1–120) e blocos (1–60). O manifesto de onboarding foi
+alinhado a esses limites e aos da gestão (capacidade até 10000, taxa até
+10000000 centavos). Antes do Flyway remoto, rodar a consulta somente leitura
+abaixo; qualquer linha retornada exige correção aprovada antes da migration:
+
+```sql
+select 'amenity_duplicate' as problem,tenant_id::text,lower(btrim(name)) as value,count(*)::text as detail
+from cp.amenities group by tenant_id,lower(btrim(name)) having count(*)>1
+union all
+select 'amenity_name_length',tenant_id::text,id::text,length(btrim(name))::text
+from cp.amenities where length(btrim(name)) not between 1 and 120
+union all
+select 'block_name_length',tenant_id::text,id::text,length(btrim(name))::text
+from cp.blocks where length(btrim(name)) not between 1 and 60
+union all
+select 'amenity_limits',tenant_id::text,id::text,capacity::text||'/'||fee_cents::text
+from cp.amenities where capacity>10000 or fee_cents>10000000;
+```
 
 ## Pendências
 

@@ -29,14 +29,20 @@ public class AuditQuery {
   try {
    return transactions.execute(actor,tenant,assurance,context->{
     context.requireCapability(StaffCapability.READ_AUDIT);
-    var rows=jdbc.query("""
-     select id,actor_id,action,resource_type,resource_id,reason,created_at from cp.audit_log
-     where tenant_id=? and (?::timestamptz is null or (created_at,id)<(?::timestamptz,?::uuid))
-     order by created_at desc,id desc limit ?
-     """,(r,n)->new Event(r.getObject("id",UUID.class),r.getObject("actor_id",UUID.class),r.getString("action"),
-      r.getString("resource_type"),r.getObject("resource_id",UUID.class),r.getString("reason"),
-      r.getTimestamp("created_at").toInstant()),
-     tenant,after==null?null:after.timestamp(),after==null?null:after.timestamp(),after==null?null:after.id(),limit+1);
+    // Duas formas fixas (sem "? is null or ..."), para o plano genérico manter o índice audit_log_tenant_recent.
+    org.springframework.jdbc.core.RowMapper<Event> mapper=(r,n)->new Event(r.getObject("id",UUID.class),
+     r.getObject("actor_id",UUID.class),r.getString("action"),r.getString("resource_type"),
+     r.getObject("resource_id",UUID.class),r.getString("reason"),r.getTimestamp("created_at").toInstant());
+    var rows=after==null
+     ?jdbc.query("""
+       select id,actor_id,action,resource_type,resource_id,reason,created_at from cp.audit_log
+       where tenant_id=? order by created_at desc,id desc limit ?
+       """,mapper,tenant,limit+1)
+     :jdbc.query("""
+       select id,actor_id,action,resource_type,resource_id,reason,created_at from cp.audit_log
+       where tenant_id=? and (created_at,id)<(?::timestamptz,?::uuid)
+       order by created_at desc,id desc limit ?
+       """,mapper,tenant,after.timestamp(),after.id(),limit+1);
     boolean more=rows.size()>limit;
     var events=rows.stream().limit(limit).toList();
     String next=more?new Cursor(events.getLast().createdAt(),events.getLast().eventId()).encode():null;
@@ -56,6 +62,8 @@ public class AuditQuery {
    long micros=Math.addExact(Math.multiplyExact(createdAt.getEpochSecond(),1_000_000L),createdAt.getNano()/1000);
    return Base64.getUrlEncoder().withoutPadding().encodeToString((micros+":"+id).getBytes(StandardCharsets.US_ASCII));
   }
+  /** Faixa aceita para o instante do cursor; fora dela o pedido é inválido (400), nunca erro do banco (503). */
+  static final Instant MINIMUM=Instant.parse("2000-01-01T00:00:00Z"),MAXIMUM=Instant.parse("9999-12-31T23:59:59Z");
   static Cursor parse(String value) {
    if(value==null || value.isBlank()) return null;
    try {
@@ -63,8 +71,12 @@ public class AuditQuery {
     String decoded=new String(Base64.getUrlDecoder().decode(value),StandardCharsets.US_ASCII);
     int split=decoded.indexOf(':');
     long micros=Long.parseLong(decoded.substring(0,split));
-    UUID id=UUID.fromString(decoded.substring(split+1));
-    return new Cursor(Instant.ofEpochSecond(Math.floorDiv(micros,1_000_000L),Math.floorMod(micros,1_000_000L)*1000L),id);
+    String text=decoded.substring(split+1);
+    UUID id=UUID.fromString(text);
+    if(!id.toString().equals(text)) throw new IllegalArgumentException();
+    var instant=Instant.ofEpochSecond(Math.floorDiv(micros,1_000_000L),Math.floorMod(micros,1_000_000L)*1000L);
+    if(instant.isBefore(MINIMUM) || instant.isAfter(MAXIMUM)) throw new IllegalArgumentException();
+    return new Cursor(instant,id);
    } catch(RuntimeException invalid) {
     throw new BusinessProblem("AUDIT_CURSOR_INVALID",400,"Cursor de paginação inválido.");
    }
