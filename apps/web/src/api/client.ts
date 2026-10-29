@@ -1,6 +1,6 @@
 import type {
-  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, Membership,
-  MutationResult, Reservation, ReservationPage, ReservationPolicy, Session, Unit,
+  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, Membership,
+  MfaStatus, MutationResult, Reservation, ReservationPage, ReservationPolicy, Session, TotpEnrollment, Unit,
 } from './types';
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 import { instantMicros } from './instant';
@@ -40,6 +40,76 @@ const messages: Record<string, string> = {
   DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar o sistema agora. Tente novamente mais tarde.',
   RESERVATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação agora. Confira a agenda antes de repetir.',
   TENANT_CONFIGURATION_INVALID: 'A configuração do condomínio precisa ser conferida pela gestão.',
+  // Segundo fator e gestão local: textos próprios do cliente, sem repetir o corpo do servidor.
+  MFA_REQUIRED: 'Confirme o segundo fator de autenticação para continuar.',
+  MFA_CODE_REJECTED: 'Código não aceito. Confira o aplicativo autenticador e digite o código atual.',
+  MFA_FACTOR_NOT_FOUND: 'O autenticador não foi encontrado. Atualize a página e cadastre novamente.',
+  MFA_OPERATION_REJECTED: 'A operação de segundo fator foi recusada. Entre novamente para continuar.',
+  STAFF_ACCESS_DENIED: 'Esta ação não está disponível para o seu vínculo.',
+  MANAGEMENT_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação agora. Atualize os dados antes de tentar novamente.',
+  MANAGEMENT_INPUT_INVALID: 'Os dados informados não atendem às regras do cadastro.',
+  AUDIT_REASON_INVALID: 'O motivo deve ter até 500 caracteres.',
+  BLOCK_NAME_INVALID: 'Informe o nome do bloco com até 60 caracteres.',
+  BLOCK_NAME_TAKEN: 'Já existe um bloco com este nome.',
+  BLOCK_NOT_FOUND: 'Bloco não encontrado neste condomínio.',
+  UNIT_LABEL_INVALID: 'Informe a identificação da unidade com até 40 caracteres.',
+  UNIT_LABEL_TAKEN: 'Já existe uma unidade com esta identificação no bloco.',
+  UNIT_NOT_FOUND: 'Unidade não encontrada neste condomínio.',
+  UNIT_CHANGED: 'A unidade foi alterada. Atualize os dados antes de salvar.',
+  UNIT_STATUS_INVALID: 'Situação da unidade inválida.',
+  UNIT_VERSION_REQUIRED: 'Atualize os dados da unidade antes de salvar.',
+  AMENITY_NAME_INVALID: 'Informe o nome da área com até 120 caracteres.',
+  AMENITY_NAME_TAKEN: 'Já existe uma área com este nome.',
+  AMENITY_CAPACITY_INVALID: 'A capacidade deve estar entre 1 e 10000 pessoas.',
+  AMENITY_FEE_INVALID: 'A taxa informativa deve estar entre R$ 0,00 e R$ 100.000,00.',
+  AMENITY_BUFFER_INVALID: 'O intervalo de limpeza deve ter entre 0 e 1440 minutos.',
+  AMENITY_APPROVAL_REQUIRED: 'Informe se a área exige aprovação da gestão.',
+  AMENITY_ACTIVE_REQUIRED: 'Informe se a área está ativa.',
+  AMENITY_POLICY_REQUIRED: 'Configure as regras de reserva da área.',
+  AMENITY_POLICY_INVALID: 'As regras informadas estão fora dos limites permitidos.',
+  AMENITY_INPUT_INVALID: 'Os dados informados não atendem às regras da área.',
+  AMENITY_NOT_FOUND: 'Área não encontrada neste condomínio.',
+  AMENITY_CHANGED: 'A área foi alterada. Atualize os dados antes de salvar.',
+  AMENITY_VERSION_REQUIRED: 'Atualize os dados da área antes de salvar.',
+  AMENITY_INACTIVE: 'A área está inativa.',
+  AMENITY_BLOCK_CONFLICT: 'Há reservas ou pedidos no período. Decida ou cancele cada um com motivo antes de bloquear.',
+  AMENITY_BLOCK_WINDOW_INVALID: 'Informe início a partir de agora e fim posterior, em período de até 366 dias.',
+  MEMBERSHIP_NOT_FOUND: 'Vínculo não encontrado neste condomínio.',
+  MEMBERSHIP_CHANGED: 'O vínculo foi alterado. Atualize os dados antes de decidir.',
+  MEMBERSHIP_REASON_REQUIRED: 'Informe o motivo.',
+  MEMBERSHIP_SELF_REVOCATION_DENIED: 'Outro gestor precisa revogar o seu vínculo de gestão.',
+  MEMBERSHIP_SELF_DECISION_DENIED: 'Outro gestor precisa decidir sobre o seu próprio vínculo.',
+  MEMBERSHIP_DECISION_INVALID: 'Escolha aprovar ou rejeitar o vínculo.',
+  MEMBERSHIP_STATUS_INVALID: 'Situação de vínculo inválida.',
+  MEMBERSHIP_VERSION_REQUIRED: 'Atualize os dados do vínculo antes de decidir.',
+  MEMBERSHIP_ALREADY_EXISTS: 'Você já possui este vínculo no condomínio.',
+  LAST_MANAGER_REQUIRED: 'O condomínio precisa manter ao menos um gestor ativo.',
+  INVITATION_EMAIL_INVALID: 'Informe um e-mail válido.',
+  INVITATION_INPUT_INVALID: 'Os dados do convite não atendem às regras.',
+  INVITATION_NAME_INVALID: 'Informe o nome com até 160 caracteres.',
+  INVITATION_ROLE_INVALID: 'Papel não disponível para convite.',
+  INVITATION_UNIT_INVALID: 'Equipe não é vinculada a unidade.',
+  INVITATION_UNIT_REQUIRED: 'Informe a unidade do convite.',
+  INVITATION_VALIDITY_INVALID: 'A validade deve ter entre 1 e 14 dias.',
+  INVITATION_NOT_PENDING: 'O convite não está mais pendente.',
+  INVITATION_NOT_AVAILABLE: 'Convite inválido, expirado, já utilizado ou emitido para outro e-mail.',
+  INVITATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir o convite. Tente novamente.',
+  RESERVATION_NOT_FOUND: 'Reserva não encontrada neste condomínio.',
+  RESERVATION_DECISION_EXPIRED: 'O prazo de decisão terminou. O pedido expirou e a unidade precisa solicitar novamente.',
+  RESERVATION_DECISION_INVALID: 'Escolha aprovar ou rejeitar o pedido.',
+  RESERVATION_REQUEST_INVALID: 'Revise os dados da reserva.',
+  IDEMPOTENCY_KEY_INVALID: 'Não foi possível identificar esta operação. Recarregue a página e tente novamente.',
+  RESERVATION_SELF_DECISION_DENIED: 'Você não pode decidir o próprio pedido. Outra pessoa da gestão precisa decidir ou o pedido pode ser retirado.',
+  RESERVATION_REASON_REQUIRED: 'Informe o motivo.',
+  RESERVATION_REASON_INVALID: 'O motivo deve ter até 500 caracteres.',
+  RESERVATION_REQUESTER_INACTIVE: 'O solicitante não tem mais vínculo ativo para reservar por esta unidade.',
+  RESERVATION_UNIT_INACTIVE: 'A unidade do pedido está inativa. Rejeite o pedido informando o motivo.',
+  RESERVATION_STATUS_INVALID: 'Situação de reserva inválida.',
+  RESERVATION_VERSION_REQUIRED: 'Atualize os dados da reserva antes de decidir.',
+  RESERVATION_INPUT_INVALID: 'Os dados informados não atendem às regras.',
+  AUDIT_CURSOR_INVALID: 'A página da auditoria expirou. Recarregue a lista.',
+  AUDIT_LIMIT_INVALID: 'Use um limite entre 1 e 100.',
+  AUDIT_DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar a auditoria. Tente novamente.',
 };
 
 export class ApiError extends Error {
@@ -56,30 +126,54 @@ export class ApiError extends Error {
   }
 }
 
-const record = (value: unknown): value is Record<string, unknown> =>
+export const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isUUID = (value: unknown): value is string => typeof value === 'string' && uuidPattern.test(value);
-const isString = (value: unknown): value is string => typeof value === 'string';
-const isDate = (value: unknown): value is string => isString(value) && Number.isFinite(Date.parse(value));
-const isInteger = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
-const oneOf = <T extends string>(value: unknown, values: readonly T[]): value is T =>
+export const isUUID = (value: unknown): value is string => typeof value === 'string' && uuidPattern.test(value);
+export const isString = (value: unknown): value is string => typeof value === 'string';
+export const isDate = (value: unknown): value is string => isString(value) && Number.isFinite(Date.parse(value));
+export const isInteger = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+export const oneOf = <T extends string>(value: unknown, values: readonly T[]): value is T =>
   typeof value === 'string' && values.some((candidate) => candidate === value);
 
-function invalidResponse(uncertain = false): ApiError {
+export function invalidResponse(uncertain = false): ApiError {
   return new ApiError(502, 'INVALID_API_RESPONSE',
-    uncertain ? 'Não foi possível confirmar o resultado. Confira a agenda antes de tentar novamente.'
+    uncertain ? 'Não foi possível confirmar o resultado. Atualize os dados e confira o estado antes de tentar novamente.'
       : 'O sistema retornou uma resposta que não pôde ser validada. Tente novamente mais tarde.', uncertain);
 }
 
 function unknownCommand(): ApiError {
   return new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN',
-    'Não foi possível confirmar o resultado. Confira a agenda antes de tentar novamente.', true);
+    'Não foi possível confirmar o resultado. Atualize os dados e confira o estado antes de tentar novamente.', true);
 }
 
 function session(value: unknown): Session {
   if (!record(value) || !isUUID(value.accountId) || !isDate(value.expiresAt)) throw invalidResponse(true);
   return { accountId: value.accountId, expiresAt: value.expiresAt };
+}
+
+function mfaStatus(value: unknown): MfaStatus {
+  if (!record(value) || !oneOf(value.assuranceLevel, ['AAL1', 'AAL2']) || !Array.isArray(value.factors)
+      || value.factors.length > 20) throw invalidResponse();
+  return { assuranceLevel: value.assuranceLevel, factors: value.factors.map((item) => {
+    if (!record(item) || !isUUID(item.factorId) || !oneOf(item.status, ['VERIFIED', 'UNVERIFIED'])
+        || !(item.friendlyName === undefined || item.friendlyName === null || isString(item.friendlyName))) throw invalidResponse();
+    return { factorId: item.factorId, status: item.status, friendlyName: isString(item.friendlyName) ? item.friendlyName : null };
+  }) };
+}
+
+function totpEnrollment(value: unknown): TotpEnrollment {
+  if (!record(value) || !isUUID(value.factorId) || !isString(value.otpauthUri) || !value.otpauthUri.startsWith('otpauth://totp/')
+      || !isString(value.secret) || !/^[A-Z2-7]{16,128}=*$/.test(value.secret)
+      || !(value.qrCodeDataUri === undefined || value.qrCodeDataUri === null
+        || (isString(value.qrCodeDataUri) && value.qrCodeDataUri.startsWith('data:image/svg+xml')))) throw invalidResponse(true);
+  return { factorId: value.factorId, otpauthUri: value.otpauthUri, secret: value.secret,
+    qrCodeDataUri: isString(value.qrCodeDataUri) ? value.qrCodeDataUri : null };
+}
+
+function invitationAccepted(value: unknown): InvitationAccepted {
+  if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== 'PENDING') throw invalidResponse(true);
+  return { tenantId: value.tenantId, membershipId: value.membershipId, status: 'PENDING' };
 }
 
 function membership(value: unknown): Membership {
@@ -170,17 +264,17 @@ function availability(value: unknown, expected: {
     timeZone: expected.timeZone, from: value.from, until: value.until, observedAt: value.observedAt, blockedIntervals };
 }
 
-function list<T>(value: unknown, decode: (item: unknown) => T): T[] {
+export function list<T>(value: unknown, decode: (item: unknown) => T): T[] {
   if (!Array.isArray(value)) throw invalidResponse();
   return value.map(decode);
 }
 
-function identifier(value: string): string {
+export function identifier(value: string): string {
   if (!isUUID(value)) throw new ApiError(400, 'INVALID_RESOURCE_ID', 'O contexto selecionado não é válido. Selecione novamente.');
   return value;
 }
 
-function operationKey(value: string): string {
+export function operationKey(value: string): string {
   if (typeof value !== 'string' || !/^[\x21-\x7e]{16,200}$/.test(value))
     throw new ApiError(400, 'INVALID_IDEMPOTENCY_KEY', 'Não foi possível preparar esta solicitação. Reabra o formulário.');
   return value;
@@ -201,7 +295,7 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT';
   body?: string;
   key?: string;
   signal?: AbortSignal;
@@ -279,7 +373,7 @@ export class CondPulseApi {
     const deadline = this.authCooldowns.get(path);
     const remaining = remainingCooldown(deadline, this.now());
     if (remaining > 0) throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, remaining, deadline);
-    const mutation = options.method === 'POST';
+    const mutation = options.method === 'POST' || options.method === 'PUT';
     const headers = new Headers({ Accept: 'application/json' });
     if (mutation && useCsrf) {
       const token = await this.csrf(generation, options.signal);
@@ -440,6 +534,42 @@ export class CondPulseApi {
     const reply = await this.request(`/v1/tenants/${identifier(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
       { method: 'POST', body: JSON.stringify(body), key, ...(signal ? { signal } : {}) });
     return { data: reservation(reply.value, true), replayed: reply.response.headers.get('Idempotency-Replayed') === 'true' };
+  }
+  /**
+   * Transporte JSON para módulos de domínio (gestão). Mantém sessão, CSRF, renovação única e expiração do cliente;
+   * toda resposta passa por um parser estrito antes de chegar à interface.
+   */
+  async call<T>(path: string, parse: (value: unknown, response: Response) => T,
+    options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; key?: string; signal?: AbortSignal } = {}): Promise<T> {
+    if (options.key !== undefined) operationKey(options.key);
+    const reply = await this.request(path, { ...(options.method ? { method: options.method } : {}),
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      ...(options.key !== undefined ? { key: options.key } : {}), ...(options.signal ? { signal: options.signal } : {}) });
+    return parse(reply.value, reply.response);
+  }
+  async mfaStatus(signal?: AbortSignal): Promise<MfaStatus> {
+    return mfaStatus((await this.request('/auth/mfa', signal ? { signal } : {})).value);
+  }
+  /** O segredo e o QR aparecem uma única vez; quem chama não deve guardá-los em cache. */
+  async enrollTotp(signal?: AbortSignal): Promise<TotpEnrollment> {
+    return totpEnrollment((await this.request('/auth/mfa/enroll', { method: 'POST', ...(signal ? { signal } : {}) })).value);
+  }
+  /**
+   * Sucesso troca a sessão por outra AAL2 da mesma conta: o CSRF anterior deixa de valer. Consultas em andamento
+   * pertencem à mesma conta e não são descartadas (descartá-las derrubaria a tela de acesso sem motivo).
+   */
+  async verifyTotp(factorId: string, code: string, signal?: AbortSignal): Promise<Session> {
+    identifier(factorId);
+    if (!/^[0-9]{6}$/.test(code)) throw new ApiError(400, 'MFA_CODE_FORMAT', 'Digite os 6 números exibidos no aplicativo autenticador.');
+    const reply = await this.request('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ factorId, code }), ...(signal ? { signal } : {}) });
+    const result = session(reply.value);
+    this.csrfFlight = undefined;
+    return result;
+  }
+  async acceptInvitation(token: string, signal?: AbortSignal): Promise<InvitationAccepted> {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(400, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);
+    const reply = await this.request('/v1/invitations/accept', { method: 'POST', body: JSON.stringify({ token }), ...(signal ? { signal } : {}) });
+    return invitationAccepted(reply.value);
   }
 }
 

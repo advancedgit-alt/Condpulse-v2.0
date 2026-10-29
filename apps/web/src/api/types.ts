@@ -106,3 +106,28 @@ export interface MutationResult<T> {
   data: T;
   replayed: boolean;
 }
+
+export interface MfaFactor {
+  factorId: UUID;
+  status: 'VERIFIED' | 'UNVERIFIED';
+  friendlyName: string | null;
+}
+
+export interface MfaStatus {
+  assuranceLevel: 'AAL1' | 'AAL2';
+  factors: MfaFactor[];
+}
+
+/** Exibido uma única vez para cadastro no aplicativo autenticador; nunca persistir. */
+export interface TotpEnrollment {
+  factorId: UUID;
+  otpauthUri: string;
+  secret: string;
+  qrCodeDataUri: string | null;
+}
+
+export interface InvitationAccepted {
+  tenantId: UUID;
+  membershipId: UUID;
+  status: 'PENDING';
+}

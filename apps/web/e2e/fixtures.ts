@@ -51,6 +51,10 @@ export interface ApiState {
 }
 
 interface FixtureOptions {
+  /** Inclui vínculo MANAGER (sem unidade) no condomínio A. */
+  manager?: boolean;
+  /** Conta só de gestão: apenas o vínculo MANAGER, sem unidade residencial. */
+  managerOnly?: boolean;
   /** Área A exige aprovação: o servidor sintético devolve PENDING_APPROVAL na criação. */
   approvalRequired?: boolean;
   delayAmenitiesA?: Promise<void>;
@@ -71,13 +75,16 @@ interface FixtureOptions {
 
 const identity = {
   accountId: ACCOUNT,
-  memberships: [
+  memberships: [] as { membershipId: string; tenantId: string; tenantName: string; timeZone: string; unitId: string | null; role: string }[],
+};
+identity.memberships.push(
     { membershipId: '50000000-0000-4000-8000-000000000001', tenantId: TENANT_A,
       tenantName: 'Condomínio Sintético A', timeZone: 'America/Sao_Paulo', unitId: UNIT_A, role: 'RESIDENT' },
     { membershipId: '50000000-0000-4000-8000-000000000002', tenantId: TENANT_B,
       tenantName: 'Condomínio Sintético B', timeZone: 'America/Sao_Paulo', unitId: UNIT_B, role: 'RESIDENT' },
-  ],
-};
+);
+const managerMembership = { membershipId: '50000000-0000-4000-8000-000000000003', tenantId: TENANT_A,
+  tenantName: 'Condomínio Sintético A', timeZone: 'America/Sao_Paulo', unitId: null, role: 'MANAGER' };
 
 function amenity(tenant: string, approvalRequired = false) {
   return {
@@ -169,7 +176,8 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       return;
     }
     if (path === '/v1/me') {
-      await json(route, 200, identity);
+      await json(route, 200, options.managerOnly ? { ...identity, memberships: [managerMembership] }
+        : options.manager ? { ...identity, memberships: [...identity.memberships, managerMembership] } : identity);
       return;
     }
     if (!path.startsWith(`/v1/tenants/${TENANT_A}/`) && !path.startsWith(`/v1/tenants/${TENANT_B}/`)) {
