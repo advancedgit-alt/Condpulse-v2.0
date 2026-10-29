@@ -277,6 +277,20 @@ describe('reservas no celular', () => {
     expect(screen.getByRole('button', { name: 'Ver horários de Churrasqueira fictícia' })).toBeEnabled();
   });
 
+  it('chave vencida ao repetir não diz que nada foi gravado e leva a conferir a lista', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    await screen.findByText(/o mesmo pedido não é gravado duas vezes/);
+    fake.state.createError = new ApiError(409, 'IDEMPOTENCY_KEY_EXPIRED', 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.');
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/não dá para saber se ele foi gravado\. Confira em Minhas reservas antes de fazer outro\./)).toBeTruthy();
+    expect(screen.queryByText(/não foi gravado/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ver horários de Salão fictício' })).toBeEnabled();
+  });
+
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {
     const fake = await mount();
     fake.state.reservations = [{ reservationId: '41000000-0000-4000-8000-000000000009', unitId: UNIT, amenityId: SALAO, status: 'CONFIRMED',

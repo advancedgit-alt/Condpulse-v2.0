@@ -14,6 +14,9 @@ import { colors, touch } from './theme';
  * A chave de envio é a mesma ao repetir depois de resultado incerto: nada é reservado duas vezes.
  */
 export type KeyFactory = () => string;
+/** A chave venceu (24 h) sem resposta confirmada: o resultado continua desconhecido, mas não dá mais para repetir. */
+const expiredKey = (error: unknown) => error instanceof ApiError && error.code === 'IDEMPOTENCY_KEY_EXPIRED';
+const EXPIRED_TEXT = 'O prazo para confirmar o pedido anterior terminou e não dá para saber se ele foi gravado. Confira em Minhas reservas antes de fazer outro.';
 /** Antecedência máxima aceita pelo servidor em qualquer regra (ReservationPolicy). */
 export const MAX_ADVANCE_DAYS = 366;
 /**
@@ -163,6 +166,7 @@ function PendingConfirmation({ api, scope, tenantId, timeZone, saved, settle }: 
         text: `Pedido confirmado pelo servidor (${statusLabels[result.reservation.status]}): ${when}.` });
     } catch (error) {
       if (uncertain(error)) setFailure(error);
+      else if (expiredKey(error)) { void queries.invalidateQueries({ queryKey: [...scope] }); settle({ tone: 'info', text: EXPIRED_TEXT }); }
       else {
         void queries.invalidateQueries({ queryKey: [...scope] });
         settle({ tone: 'info', text: `${message(error)} O pedido anterior não foi gravado; confira em Minhas reservas.` });
@@ -237,6 +241,13 @@ function Booking({ api, scope, membership, area, newKey, now, close, pending, pe
           ? { tone: 'info', text: `Pedido enviado: ${area.name}, ${when}. Aguardando aprovação da gestão — ainda não é uma reserva confirmada.`, startsAt }
           : { tone: 'info', text: `Pedido registrado com a situação "${statusLabels[result.reservation.status]}". Confira em Minhas reservas.`, startsAt });
     } catch (error) {
+      if (expiredKey(error)) {
+        // Sem como repetir nem saber o resultado: fecha a escolha e leva a pessoa a conferir a lista, sem dizer "não gravado".
+        pending.delete(pendingScope); setPendingKey(null);
+        void queries.invalidateQueries({ queryKey: [...scope] });
+        close({ tone: 'info', text: EXPIRED_TEXT, startsAt: attempt.body.startsAt });
+        return;
+      }
       setFailure(error);
       if (!uncertain(error)) pending.delete(pendingScope);
       if (error instanceof ApiError && !error.uncertain) setPendingKey(null);

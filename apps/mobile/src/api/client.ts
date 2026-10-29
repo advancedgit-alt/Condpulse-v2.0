@@ -56,6 +56,7 @@ const messages: Record<string, string> = {
   AMENITY_AVAILABILITY_UNAVAILABLE: 'Não foi possível consultar a ocupação da área agora. Tente novamente.',
   RESERVATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Confira suas reservas antes de repetir.',
   IDEMPOTENCY_KEY_REUSED: 'Este envio já foi usado para outro pedido. Comece de novo.',
+  IDEMPOTENCY_KEY_EXPIRED: 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.',
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
   TENANT_ACCESS_DENIED: 'Condomínio não disponível para este acesso.',
 };
