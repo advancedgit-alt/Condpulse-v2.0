@@ -276,3 +276,36 @@ jobs:
           docker rm -f condpulse-web-ci || true
           docker network rm condpulse-web-ci || true
 
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Install locked mobile dependencies
+        run: npm ci --no-fund --no-audit
+      - name: Strict typecheck
+        run: npm run typecheck
+      - name: Session, vault and screen tests
+        run: npm test
+      - name: No secret or service key in the app source
+        run: |
+          if grep -rEn "sb_secret_|service_role|SUPABASE_SERVICE|CP_STORAGE_SERVICE_KEY" --include=*.ts --include=*.tsx --include=*.json --exclude-dir=node_modules --exclude-dir=__tests__ . ; then exit 1; fi
+      - name: Android JavaScript bundle with synthetic public config
+        env:
+          EXPO_OFFLINE: "1"
+          EXPO_PUBLIC_SUPABASE_URL: https://abcdefghijklmnopqrst.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_SYNTHETIC_TEST_ONLY_1234567890
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+        run: |
+          npx expo export --platform android --output-dir "$RUNNER_TEMP/mobile-export"
+          bundle=$(find "$RUNNER_TEMP/mobile-export" -name '*.hbc' | head -1)
+          test -n "$bundle"
+          grep -q 'abcdefghijklmnopqrst.supabase.co' "$bundle"
