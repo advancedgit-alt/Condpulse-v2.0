@@ -16,6 +16,8 @@ public class DatabaseRoleGuard implements ApplicationRunner {
   // horários e origem vêm do banco; tarefa do outbox e aviso não são apagados pela aplicação, que também não escolhe
   // estado, tentativa ou prazo da tarefa nem altera o aviso além da abertura. Pedidos (V017): nada apagado; mensagem
   // não muda; a gestão altera só andamento, responsável, prazo, resolução e versão; nomes e horários vêm do banco.
+  // Importação (V018): lote e linhas nunca apagados; o lote só muda de estado, parcial, contagens e versão, com autoria e
+  // horários do banco; a linha só recebe a unidade aplicada.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -64,6 +66,19 @@ public class DatabaseRoleGuard implements ApplicationRunner {
      or coalesce(has_table_privilege(current_user,to_regclass('cp.request_messages'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.request_messages') and c.attname in ('author_name','created_at')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.import_batches'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.import_rows'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.import_batches') and c.attname in ('state','partial','created_units','existing_units',
+        'created_blocks','created_by','created_at','decided_by','decided_at','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.import_batches') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','partial','created_units','existing_units','created_blocks','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.import_rows') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('applied','unit_id')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.import_rows') and c.attname in ('applied','unit_id')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

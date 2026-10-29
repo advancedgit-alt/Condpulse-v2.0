@@ -1422,6 +1422,78 @@ def request_checks():
           f"DELETE FROM cp.memberships WHERE account_id in ('{MGR}','{RES5}','{R6}','{DEP6}','{CONC}'); DELETE FROM cp.units WHERE id='{UA6}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{MGR}','{RES5}','{R6}','{DEP6}','{CONC}')")
 
+IMP = "a1000000-0000-4000-8000-000000000001"
+IMP_B = "a1000000-0000-4000-8000-000000000002"
+IMP_C = "a1000000-0000-4000-8000-000000000003"
+
+def import_checks():
+    """V018: lote de importação de unidades em staging, só para a gestão de unidades e sem duplicar."""
+    h = "c" * 64
+    batch = (f"INSERT INTO cp.import_batches(id,tenant_id,entity_type,source,file_hash,mapping_version,total_rows,valid_rows,"
+             f"invalid_rows,duplicate_rows) VALUES('{{id}}','{TA}','UNITS','unidades.csv','{{hash}}',1,3,1,1,1)")
+    rows = (f"INSERT INTO cp.import_rows(tenant_id,batch_id,line_number,block_name,unit_label,outcome,error_code) VALUES"
+            f"('{TA}','{IMP}',2,'BLOCO IMPORTADO','301','VALID',NULL),('{TA}','{IMP}',3,NULL,NULL,'INVALID','UNIT_LABEL_REQUIRED'),"
+            f"('{TA}','{IMP}',4,'bloco importado','301','DUPLICATE',NULL)")
+    expect(error(batch.format(id=IMP, hash=h), "42501", tenant=TA, role="cp_api"), "lote nao e aberto sem capacidade de unidades")
+    expect(error(capable("amenities.manage", batch.format(id=IMP, hash=h)), "42501", tenant=TA, role="cp_api"),
+           "capacidade de areas nao abre lote")
+    expect(error(capable("units.manage", batch.format(id=IMP, hash=h).replace(f"'{TA}'", f"'{TB}'")), "42501", tenant=TA, role="cp_api"),
+           "lote nao atravessa tenant")
+    query(capable("units.manage", batch.format(id=IMP, hash=h) + "; " + rows), tenant=TA, role="cp_api")
+    expect(value(f"select created_by||'|'||state||'|'||version from cp.import_batches where id='{IMP}'") == f"{AA}|PREVIEW|0",
+           "autoria, estado e versao do lote vem do banco")
+    expect(value(f"select count(*) from cp.import_batches where id='{IMP}'", tenant=TA, role="cp_api") == "0",
+           "lote nao e lido sem capacidade")
+    expect(value(capable("units.manage", f"select count(*) from cp.import_rows where batch_id='{IMP}'"), tenant=TB, actor=AB, role="cp_api") == "0",
+           "linhas de outro tenant permanecem invisiveis")
+    expect(error(capable("units.manage", batch.format(id=IMP_B, hash=h)), "23505", tenant=TA, role="cp_api"),
+           "mesmo arquivo nao abre segundo lote vivo")
+    expect(error(capable("units.manage", f"INSERT INTO cp.import_batches(tenant_id,entity_type,source,file_hash,mapping_version,"
+                 f"total_rows,valid_rows,invalid_rows,duplicate_rows) VALUES('{TA}','UNITS','x.csv','{'d'*64}',1,3,1,1,0)"), "23514",
+                 tenant=TA, role="cp_api"), "totais do lote precisam fechar")
+    approve_without_rows = (f"UPDATE cp.import_batches SET state='APPROVED',partial=true,created_units=1,existing_units=0,"
+                            f"created_blocks=1,version=version+1 WHERE id='{IMP}'")
+    expect(error(capable("units.manage", approve_without_rows), "23514", tenant=TA, role="cp_api"),
+           "aprovacao recusada com linha valida ainda nao aplicada")
+    query(approve_without_rows, tenant=TA, role="cp_api")
+    expect(value(f"select state from cp.import_batches where id='{IMP}'") == "PREVIEW",
+           "sem capacidade o lote nem aparece para aprovacao")
+    query(capable("units.manage", f"INSERT INTO cp.blocks(tenant_id,name) VALUES('{TA}','BLOCO IMPORTADO');"
+          f"INSERT INTO cp.units(id,tenant_id,block_id,label) SELECT '{IMP_C}','{TA}',id,'301' FROM cp.blocks WHERE tenant_id='{TA}' AND name='BLOCO IMPORTADO';"
+          f"UPDATE cp.import_rows SET applied='CREATED',unit_id='{IMP_C}' WHERE batch_id='{IMP}' AND line_number=2"), tenant=TA, role="cp_api")
+    expect(error(capable("units.manage", f"UPDATE cp.import_rows SET applied='EXISTING',unit_id='{IMP_C}' WHERE batch_id='{IMP}' AND line_number=2"),
+                 "23514", tenant=TA, role="cp_api"), "linha aplicada nao muda de novo")
+    expect(error(capable("units.manage", f"UPDATE cp.import_rows SET applied='CREATED',unit_id='{IMP_C}' WHERE batch_id='{IMP}' AND line_number=4"),
+                 "23514", tenant=TA, role="cp_api"), "linha repetida nao e aplicada")
+    expect(error(capable("units.manage", approve_without_rows.replace("partial=true", "partial=false")), "23514", tenant=TA, role="cp_api"),
+           "lote com linha invalida so e aprovado como parcial explicito")
+    expect(error(capable("units.manage", f"UPDATE cp.import_batches SET state='DISCARDED',version=version+1 WHERE id='{IMP}'"),
+                 "23514", tenant=TA, role="cp_api"), "lote com linha aplicada nao e descartado")
+    query(capable("units.manage", approve_without_rows), tenant=TA, role="cp_api")
+    expect(value(f"select state||'|'||version||'|'||decided_by||'|'||created_units from cp.import_batches where id='{IMP}'")
+           == f"APPROVED|1|{AA}|1", "aprovacao grava decisao, autoria e contagens")
+    expect(error(capable("units.manage", rows.replace("',2,", "',9,").split("),")[0] + ")"), "23514", tenant=TA, role="cp_api"),
+           "lote aprovado nao recebe linha nova")
+    expect(error(capable("units.manage", f"UPDATE cp.import_batches SET state='DISCARDED',version=version+1 WHERE id='{IMP}'"),
+                 "23514", tenant=TA, role="cp_api"), "lote aprovado nao volta nem e descartado")
+    expect(error(capable("units.manage", f"DELETE FROM cp.import_batches WHERE id='{IMP}'"), "42501", tenant=TA, role="cp_api"),
+           "aplicacao nao apaga lote")
+    expect(error(capable("units.manage", f"DELETE FROM cp.import_rows WHERE batch_id='{IMP}'"), "42501", tenant=TA, role="cp_api"),
+           "aplicacao nao apaga linhas do lote")
+    expect(error(capable("units.manage", f"UPDATE cp.import_rows SET unit_label='999' WHERE batch_id='{IMP}'"), "42501", tenant=TA, role="cp_api"),
+           "conteudo da linha nao muda")
+    query(capable("units.manage", batch.format(id=IMP_B, hash="e" * 64)), tenant=TA, role="cp_api")
+    query(capable("units.manage", f"UPDATE cp.import_batches SET state='DISCARDED',version=version+1 WHERE id='{IMP_B}'"), tenant=TA, role="cp_api")
+    query(capable("units.manage", batch.format(id="a1000000-0000-4000-8000-000000000004", hash="e" * 64)), tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.import_batches where file_hash='{'e'*64}'") == "2",
+           "arquivo de lote descartado pode ser aberto de novo")
+    audit = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+             f"VALUES('{TA}','{AA}','IMPORT_BATCH_APPROVED','IMPORT_BATCH','{{rid}}','{ROLL}')")
+    expect(error(audit.format(rid=IMP), "42501", tenant=TA, role="cp_api"), "trilha da importacao exige capacidade")
+    expect(error(capable("units.manage", audit.format(rid=UA)), "42501", tenant=TA, role="cp_api"),
+           "trilha da importacao exige lote existente")
+    query(capable("units.manage", audit.format(rid=IMP)), tenant=TA, role="cp_api")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1528,6 +1600,7 @@ def main():
     worker_checks()
     announcement_checks()
     request_checks()
+    import_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
