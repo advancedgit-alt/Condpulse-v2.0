@@ -194,7 +194,7 @@ class AttachmentJdbcTest {
    db.tenantA,late.attachment().attachmentId()));
   // Muitas tentativas recusadas depois do anexo liberado não o escondem da lista.
   for(int i=0;i<55;i++) {
-   var attempt=intent(db.accountA,request,"image/png",PNG.length);
+   var attempt=intent(db.accountA,request,"image/png",PDF.length);
    storage.put(attempt,PDF);
    assertEquals("TYPE_MISMATCH",attachments.complete(db.accountA,db.tenantA,AAL1,attempt.attachment().attachmentId()).rejection());
   }
