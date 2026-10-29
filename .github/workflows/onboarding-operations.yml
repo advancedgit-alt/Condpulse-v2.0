@@ -97,11 +97,14 @@ jobs:
           ca="$RUNNER_TEMP/condpulse-onboarding-operations/db-ca.crt"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --connect-timeout 5 --max-time 20 --max-filesize 65536 \
             'https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt' -o "$ca"
-          printf '%s  %s\n' '807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa' "$ca" | sha256sum -c -
+          # BEGIN AUDITABLE_ONBOARDING_CA_VALIDATION
+          # Pin the certificate's DER fingerprint, independent of PEM text encoding.
+          test "$(openssl x509 -in "$ca" -outform DER | sha256sum | cut -d ' ' -f1)" = '807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa'
           test "$(grep -c '^-----BEGIN CERTIFICATE-----$' "$ca")" -eq 1
           openssl x509 -in "$ca" -noout -checkend 86400
           openssl x509 -in "$ca" -noout -ext basicConstraints | grep -Eq '^[[:space:]]*CA:TRUE([,[:space:]]|$)'
           openssl verify -check_ss_sig -CAfile "$ca" "$ca"
+          # END AUDITABLE_ONBOARDING_CA_VALIDATION
           sudo install -d -m 0755 /run/secrets
           sudo install -m 0444 "$ca" /run/secrets/db-ca.crt
       - name: Execute only the selected onboarding operation
