@@ -185,16 +185,26 @@ class OutboxWorkerJdbcTest {
   assertEquals(1,notices(db.accountA),"Reprocessar não duplica o aviso (AC-049)");
  }
 
- @Test void workerThatLostTheLeaseConfirmsNothingAndItsEffectRollsBack() throws Exception {
+ @Test void workerThatLostTheLeaseConfirmsNothingAndRunsNoEffect() throws Exception {
   var parcel=receive(db.unitA);
   var first=lease().getFirst();
   expireLease(first.id());
   var second=lease().getFirst();
   assertEquals(first.id(),second.id()); assertEquals(2,second.attempts());
-  worker.process(db.tenantA,first);
+  var real=new InboxEffect(inboxStore);
+  var calls=new java.util.concurrent.atomic.AtomicInteger();
+  OutboxEffect counting=new OutboxEffect() {
+   @Override public boolean handles(String type) { return real.handles(type); }
+   @Override public boolean idempotent() { return true; }
+   @Override public OutboxModels.Outcome apply(UUID tenant,OutboxModels.LeasedEvent event) { calls.incrementAndGet(); return real.apply(tenant,event); }
+  };
+  var countingWorker=new OutboxWorker(transactions,outbox,List.of(counting));
+  countingWorker.process(db.tenantA,first);
+  assertEquals(0,calls.get(),"Worker atrasado nem começa o efeito: a trava cercada pela tentativa recusa a tarefa");
   assertEquals("LEASED:2",task(parcel.parcelId(),"PARCEL_RECEIVED"),"Worker atrasado não conclui a tarefa de outro");
-  assertEquals(0,notices(db.accountA),"O efeito do worker atrasado volta junto com a conclusão recusada");
-  worker.process(db.tenantA,second);
+  assertEquals(0,notices(db.accountA));
+  countingWorker.process(db.tenantA,second);
+  assertEquals(1,calls.get());
   assertEquals("DELIVERED:2",task(parcel.parcelId(),"PARCEL_RECEIVED"));
   assertEquals(1,notices(db.accountA));
  }
