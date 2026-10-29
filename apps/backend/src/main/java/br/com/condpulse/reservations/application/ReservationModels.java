@@ -10,8 +10,10 @@ public final class ReservationModels {
  private ReservationModels() {}
  public record Create(UUID unitId,UUID amenityId,Instant startsAt,Instant endsAt,int acceptedPolicyVersion) {}
  public record Cancel(UUID unitId,long expectedVersion) {}
+ /** decisionReason: motivo de decisão, cancelamento ou expiração, visível à unidade solicitante. */
  public record View(UUID reservationId,UUID unitId,UUID amenityId,String status,Instant startsAt,
-     Instant endsAt,Instant occupiedFrom,Instant occupiedUntil,int acceptedPolicyVersion,long feeCents,long version) {}
+     Instant endsAt,Instant occupiedFrom,Instant occupiedUntil,int acceptedPolicyVersion,long feeCents,long version,
+     String decisionReason) {}
  public record Page(List<View> reservations,boolean truncated) {
   public Page { reservations=List.copyOf(reservations); }
  }

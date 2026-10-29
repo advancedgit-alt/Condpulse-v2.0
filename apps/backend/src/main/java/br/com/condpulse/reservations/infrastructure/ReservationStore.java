@@ -21,6 +21,9 @@ import org.springframework.stereotype.Repository;
 /** Somente dentro da transação/contexto fornecidos pelo TenantTransactionExecutor. */
 @Repository @Profile("api")
 public class ReservationStore {
+ /** Textos de sistema gravados em decision_reason; o motivo da gestão é sempre informado por pessoa. */
+ public static final String EXPIRED_REASON="Prazo de decisão encerrado sem confirmação.";
+ public static final String AUTHOR_CANCELLED_REASON="Cancelamento solicitado pelo autor.";
  private final JdbcTemplate jdbc;
  public ReservationStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
@@ -43,8 +46,12 @@ public class ReservationStore {
   """;
  private static final String AMENITY_COLUMNS=AMENITY_FIELDS+" where tenant_id=? and active";
  private static final String RESERVATION_COLUMNS="""
-  select id as reservation_id,unit_id,amenity_id,status,starts_at,ends_at,occupied_from,occupied_until,
+  select id as reservation_id,unit_id,amenity_id,
+   case when status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp() then 'EXPIRED' else status end as status,
+   starts_at,ends_at,occupied_from,occupied_until,
    coalesce((rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,fee_cents,version,
+   case when status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp() then 'Prazo de decisão encerrado sem confirmação.'
+    else decision_reason end as decision_reason,
    rule_snapshot->'policy'->>'schemaVersion' as snapshot_schema,
    rule_snapshot->'policy'->>'cancellationLeadMinutes' as snapshot_cancel_lead
   from cp.reservations
@@ -53,7 +60,7 @@ public class ReservationStore {
  public record AmenityData(UUID id,String name,int capacity,boolean approvalRequired,long feeCents,
      int bufferMinutes,int policyVersion,String rawPolicy,long version,ReservationPolicy policy) {
   public ReservationModels.Amenity view() {
-   String state=policy==null?"POLICY_NOT_CONFIGURED":approvalRequired?"APPROVAL_UNAVAILABLE":"AVAILABLE_FOR_REQUEST";
+   String state=policy==null?"POLICY_NOT_CONFIGURED":approvalRequired?"AVAILABLE_FOR_APPROVAL_REQUEST":"AVAILABLE_FOR_REQUEST";
    return new ReservationModels.Amenity(id,name,capacity,policyVersion,feeCents,bufferMinutes,approvalRequired,
      state,policy==null?null:ReservationModels.Policy.from(policy));
   }
@@ -111,12 +118,16 @@ public class ReservationStore {
   return new ReservationModels.Page(rows.stream().limit(100).toList(),rows.size()>100);
  }
 
- /** Mesma ocupacao da exclusao GiST, inclusive BLOCK e holds vencidos ainda nao transicionados. */
+ /**
+  * Ocupacao da exclusao GiST, inclusive BLOCK. Retencoes e pedidos com prazo vencido nao bloqueiam: nao podem
+  * mais ser confirmados e a criacao os expira sob trava antes de gravar o novo periodo.
+  */
  public List<ReservationModels.BlockedInterval> blockedIntervals(UUID tenant,UUID amenity,Instant from,Instant until) {
   var rows=jdbc.query("""
    select greatest(occupied_from,?) as occupied_from,least(occupied_until,?) as occupied_until
    from cp.reservations where tenant_id=? and amenity_id=?
     and status in ('HELD','PENDING_APPROVAL','CONFIRMED')
+    and not (status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp())
     and tstzrange(occupied_from,occupied_until,'[)') && tstzrange(?::timestamptz,?::timestamptz,'[)')
    order by occupied_from,occupied_until limit 1001
    """,(r,n)->new ReservationModels.BlockedInterval(r.getTimestamp("occupied_from").toInstant(),
@@ -152,7 +163,8 @@ public class ReservationStore {
     (response_body->>'occupiedFrom')::timestamptz as occupied_from,
     (response_body->>'occupiedUntil')::timestamptz as occupied_until,
     (response_body->>'acceptedPolicyVersion')::integer as accepted_policy_version,
-    (response_body->>'feeCents')::bigint as fee_cents,(response_body->>'version')::bigint as version
+    (response_body->>'feeCents')::bigint as fee_cents,(response_body->>'version')::bigint as version,
+    response_body->>'decisionReason' as decision_reason
    from cp.idempotency_keys where tenant_id=? and actor_id=? and method='POST' and route=? and request_key=? for update
    """,(r,n)->{
     if(r.getBoolean("expired")) throw new BusinessProblem("IDEMPOTENCY_KEY_EXPIRED",409,"Use uma nova chave para esta operação.");
@@ -169,20 +181,52 @@ public class ReservationStore {
  public ReservationModels.View create(UUID tenant,UUID actor,ReservationModels.Create request,
      AmenityData amenity,ReservationWindow window,String timeZone) {
   UUID id=UUID.randomUUID();
-  int changed=jdbc.update("""
+  // Área com aprovação gera pedido PENDING_APPROVAL com prazo de decisão de até 24 h, nunca após o início.
+  var statuses=jdbc.query("""
    insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,
-     occupied_from,occupied_until,rule_snapshot,fee_cents)
-   select ?,a.tenant_id,a.id,?,?,'BOOKING','CONFIRMED',?,?,?,?,
+     occupied_from,occupied_until,expires_at,rule_snapshot,fee_cents)
+   select ?,a.tenant_id,a.id,?,?,'BOOKING',case when a.approval_required then 'PENDING_APPROVAL' else 'CONFIRMED' end,?,?,?,?,
+    case when a.approval_required then least(clock_timestamp()+interval '24 hours',?::timestamptz) end,
     jsonb_build_object('policyVersion',a.policy_version,'policy',a.policy,'bufferMinutes',a.buffer_minutes,
       'capacity',a.capacity,'approvalRequired',a.approval_required,'feeCents',a.fee_cents,'timeZone',?::text),a.fee_cents
-   from cp.amenities a where a.tenant_id=? and a.id=? and a.active and not a.approval_required
+   from cp.amenities a where a.tenant_id=? and a.id=? and a.active and a.approval_required=?
     and a.policy_version=? and a.version=? and a.policy=?::jsonb and a.buffer_minutes=? and a.fee_cents=?
-   """,id,request.unitId(),actor,Timestamp.from(window.startsAt()),Timestamp.from(window.endsAt()),
-    Timestamp.from(window.occupiedFrom()),Timestamp.from(window.occupiedUntil()),timeZone,tenant,request.amenityId(),
+   returning status
+   """,(r,n)->r.getString("status"),id,request.unitId(),actor,Timestamp.from(window.startsAt()),Timestamp.from(window.endsAt()),
+    Timestamp.from(window.occupiedFrom()),Timestamp.from(window.occupiedUntil()),Timestamp.from(window.startsAt()),timeZone,
+    tenant,request.amenityId(),amenity.approvalRequired(),
     amenity.policyVersion(),amenity.version(),amenity.rawPolicy(),amenity.bufferMinutes(),amenity.feeCents());
-  if(changed!=1) throw new BusinessProblem("AMENITY_POLICY_CHANGED",409,"As regras da área mudaram. Revise-as antes de tentar novamente.");
-  return new ReservationModels.View(id,request.unitId(),request.amenityId(),"CONFIRMED",window.startsAt(),window.endsAt(),
-    window.occupiedFrom(),window.occupiedUntil(),amenity.policyVersion(),amenity.feeCents(),0);
+  if(statuses.size()!=1) throw new BusinessProblem("AMENITY_POLICY_CHANGED",409,"As regras da área mudaram. Revise-as antes de tentar novamente.");
+  return new ReservationModels.View(id,request.unitId(),request.amenityId(),statuses.getFirst(),window.startsAt(),window.endsAt(),
+    window.occupiedFrom(),window.occupiedUntil(),amenity.policyVersion(),amenity.feeCents(),0,null);
+ }
+ /**
+  * Expiração verificada sob a trava da unidade antes de avaliar cota e intervalo: retenções e pedidos vencidos
+  * da própria unidade ou que ocupam o período pedido deixam de bloquear. Gera evento sem auditoria de ator.
+  */
+ public List<ReservationModels.View> expireStale(UUID tenant,UUID unit,UUID amenity,Instant occupiedFrom,Instant occupiedUntil) {
+  // Travas em ordem de id evitam deadlock entre expirações concorrentes de unidades e bloqueios diferentes.
+  var expired=jdbc.query("""
+   with stale as (
+    select id from cp.reservations
+    where tenant_id=? and status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp()
+     and (unit_id=?::uuid or (amenity_id=? and tstzrange(occupied_from,occupied_until,'[)') && tstzrange(?::timestamptz,?::timestamptz,'[)')))
+    order by id for update
+   )
+   update cp.reservations r set status='EXPIRED',updated_at=clock_timestamp(),version=r.version+1,decision_reason=?
+   from stale where r.id=stale.id and r.tenant_id=? and r.status in ('HELD','PENDING_APPROVAL')
+   returning r.id as reservation_id,r.unit_id,r.amenity_id,r.status,r.starts_at,r.ends_at,r.occupied_from,r.occupied_until,
+    coalesce((r.rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,r.fee_cents,r.version,r.decision_reason
+   """,(r,n)->view(r),tenant,unit,amenity,Timestamp.from(occupiedFrom),Timestamp.from(occupiedUntil),EXPIRED_REASON,tenant);
+  for(var item:expired) event(tenant,"RESERVATION_EXPIRED",item);
+  return expired;
+ }
+ public void event(UUID tenant,String eventType,ReservationModels.View reservation) {
+  jdbc.update("""
+   insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload)
+   values(?,?,?,?,jsonb_build_object('reservationId',?::uuid,'unitId',?::uuid,'amenityId',?::uuid,'status',?::text,'version',?::bigint))
+   """,tenant,eventType,reservation.reservationId(),reservation.version(),reservation.reservationId(),reservation.unitId(),
+    reservation.amenityId(),reservation.status(),reservation.version());
  }
  public StoredReservation ownForUpdate(UUID tenant,UUID unit,UUID actor,UUID reservation) {
   var rows=jdbc.query(RESERVATION_COLUMNS+"""
@@ -202,42 +246,44 @@ public class ReservationStore {
  }
  public ReservationModels.View cancel(UUID tenant,UUID actor,ReservationModels.View current) {
   int changed=jdbc.update("""
-   update cp.reservations set status='CANCELLED',updated_at=clock_timestamp(),version=version+1,
-    decision_reason='Cancelamento solicitado pelo autor.'
-   where tenant_id=? and id=? and unit_id=? and created_by=? and kind='BOOKING' and status='CONFIRMED' and version=?
-   """,tenant,current.reservationId(),current.unitId(),actor,current.version());
+   update cp.reservations set status='CANCELLED',updated_at=clock_timestamp(),version=version+1,decision_reason=?
+   where tenant_id=? and id=? and unit_id=? and created_by=? and kind='BOOKING'
+    and status in ('CONFIRMED','PENDING_APPROVAL') and version=?
+   """,AUTHOR_CANCELLED_REASON,tenant,current.reservationId(),current.unitId(),actor,current.version());
   if(changed!=1) throw new BusinessProblem("RESERVATION_CHANGED",409,"A reserva foi alterada. Atualize os dados.");
   return new ReservationModels.View(current.reservationId(),current.unitId(),current.amenityId(),"CANCELLED",
     current.startsAt(),current.endsAt(),current.occupiedFrom(),current.occupiedUntil(),
-    current.acceptedPolicyVersion(),current.feeCents(),current.version()+1);
+    current.acceptedPolicyVersion(),current.feeCents(),current.version()+1,AUTHOR_CANCELLED_REASON);
  }
  public void record(UUID tenant,UUID actor,ReservationModels.View reservation,String eventType,UUID trace) {
   jdbc.update("""
    insert into cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id)
    values(?,?,?,'RESERVATION',?,?)
    """,tenant,actor,eventType,reservation.reservationId(),trace);
-  jdbc.update("""
-   insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload)
-   values(?,?,?,?,jsonb_build_object('reservationId',?::uuid,'unitId',?::uuid,'amenityId',?::uuid,'status',?::text,'version',?::bigint))
-   """,tenant,eventType,reservation.reservationId(),reservation.version(),reservation.reservationId(),reservation.unitId(),
-    reservation.amenityId(),reservation.status(),reservation.version());
+  event(tenant,eventType,reservation);
  }
  public void finish(UUID tenant,UUID actor,String route,String key,ReservationModels.View value,int status) {
   int changed=jdbc.update("""
    update cp.idempotency_keys set response_status=?,response_body=jsonb_build_object(
     'reservationId',?::uuid,'unitId',?::uuid,'amenityId',?::uuid,'status',?::text,'startsAt',?::text,'endsAt',?::text,
-    'occupiedFrom',?::text,'occupiedUntil',?::text,'acceptedPolicyVersion',?::integer,'feeCents',?::bigint,'version',?::bigint)
+    'occupiedFrom',?::text,'occupiedUntil',?::text,'acceptedPolicyVersion',?::integer,'feeCents',?::bigint,'version',?::bigint,
+    'decisionReason',?::text)
    where tenant_id=? and actor_id=? and method='POST' and route=? and request_key=? and response_status is null
    """,status,value.reservationId(),value.unitId(),value.amenityId(),value.status(),value.startsAt().toString(),
     value.endsAt().toString(),value.occupiedFrom().toString(),value.occupiedUntil().toString(),value.acceptedPolicyVersion(),
-    value.feeCents(),value.version(),tenant,actor,route,key);
+    value.feeCents(),value.version(),value.decisionReason(),tenant,actor,route,key);
   if(changed!=1) throw new IllegalStateException("Resultado de idempotência não persistido.");
  }
- private static ReservationModels.View view(ResultSet r) throws SQLException {
+ /** Colunas de RETURNING compatíveis com {@link #view(ResultSet)} para alterações de uma única reserva. */
+ public static final String VIEW_RETURNING="""
+  id as reservation_id,unit_id,amenity_id,status,starts_at,ends_at,occupied_from,occupied_until,
+  coalesce((rule_snapshot->>'policyVersion')::integer,0) as accepted_policy_version,fee_cents,version,decision_reason
+  """;
+ public static ReservationModels.View view(ResultSet r) throws SQLException {
   return new ReservationModels.View(r.getObject("reservation_id",UUID.class),r.getObject("unit_id",UUID.class),
     r.getObject("amenity_id",UUID.class),r.getString("status"),r.getTimestamp("starts_at").toInstant(),
     r.getTimestamp("ends_at").toInstant(),r.getTimestamp("occupied_from").toInstant(),r.getTimestamp("occupied_until").toInstant(),
-    r.getInt("accepted_policy_version"),r.getLong("fee_cents"),r.getLong("version"));
+    r.getInt("accepted_policy_version"),r.getLong("fee_cents"),r.getLong("version"),r.getString("decision_reason"));
  }
  private static BusinessProblem unavailable() {
   return new BusinessProblem("RESERVATION_RESOURCE_UNAVAILABLE",404,"Recurso não disponível para esta operação.");

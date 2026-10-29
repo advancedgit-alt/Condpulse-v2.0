@@ -62,11 +62,14 @@ public class SecurityConfiguration {
     // Gestão local: autenticação aqui; papel, vínculo vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/blocks","/v1/tenants/*/management/units",
       "/v1/tenants/*/management/amenities","/v1/tenants/*/management/audit-events",
-      "/v1/tenants/*/management/memberships","/v1/tenants/*/management/invitations").authenticated()
+      "/v1/tenants/*/management/memberships","/v1/tenants/*/management/invitations",
+      "/v1/tenants/*/management/reservations").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/blocks","/v1/tenants/*/management/units",
       "/v1/tenants/*/management/amenities","/v1/tenants/*/management/memberships/*/decision",
       "/v1/tenants/*/management/memberships/*/revoke","/v1/tenants/*/management/invitations",
-      "/v1/tenants/*/management/invitations/*/revoke","/v1/invitations/accept").authenticated()
+      "/v1/tenants/*/management/invitations/*/revoke","/v1/invitations/accept",
+      "/v1/tenants/*/management/reservations/*/decision","/v1/tenants/*/management/reservations/*/cancel",
+      "/v1/tenants/*/management/amenities/*/maintenance-blocks").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/units/*","/v1/tenants/*/management/amenities/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify").permitAll()
