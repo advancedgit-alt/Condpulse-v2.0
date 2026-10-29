@@ -86,7 +86,8 @@ concessão foi feita.
 ## Pendências
 
 - Aplicação remota da V010 e concessão do primeiro papel, com aprovação explícita.
-- Suporte temporário justificado (OPS-01), contratos/planos e situação financeira (fase 5).
+- Suporte temporário justificado (OPS-01). Contratos/planos e situação financeira: ver
+  [FINANCEIRO_PLATAFORMA.md](FINANCEIRO_PLATAFORMA.md) (fase 5).
 - Ensaio com Supabase Auth real (AAL2) e aceite do painel em navegador com dados reais.
 - Exigir no banco a linha de auditoria a cada mudança de `platform.tenants` (hoje garantida pelo serviço).
 - Teste de duas alterações simultâneas pelo HTTP e paginação por cursor do catálogo (hoje: 200 + busca).

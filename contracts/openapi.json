@@ -3270,6 +3270,850 @@
           }
         }
       }
+    },
+    "/v1/platform/billing/plans": {
+      "get": {
+        "operationId": "billingPlans",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [],
+        "description": "Planos da assinatura CondPulse (billing.read). Nenhum preço é presumido: valores vêm do cadastro com motivo. Exige também CP_PLATFORM_ENABLED.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BillingPlan"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBillingPlan",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Cria plano com nome, valor em centavos e período (billing.manage), com motivo na auditoria. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingPlanCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/plans/{planId}": {
+      "put": {
+        "operationId": "updateBillingPlan",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "planId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Altera nome, valor ou disponibilidade pela versão lida; valor novo vale só para assinaturas novas. Pedido igual ao atual devolve applied=false. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingPlanUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingPlanChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/subscriptions": {
+      "get": {
+        "operationId": "billingSubscriptions",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Assinaturas dos condomínios, com valor contratado. Exige também CP_PLATFORM_ENABLED.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BillingSubscription"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBillingSubscription",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Contrata plano ativo para um condomínio (uma assinatura ativa por condomínio); valor e período copiados do plano. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingSubscriptionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingSubscription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/subscriptions/{subscriptionId}/end": {
+      "post": {
+        "operationId": "endBillingSubscription",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Encerra a assinatura numa data posterior ao início e sem cobrança não cancelada depois dela. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingSubscriptionEnd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingSubscription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/subscriptions/{subscriptionId}/charges": {
+      "post": {
+        "operationId": "createBillingCharge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gera a cobrança de um período alinhado ao início da assinatura, com o valor contratado; uma por período, sem rateio. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingChargeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingCharge"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/charges": {
+      "get": {
+        "operationId": "billingCharges",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "OVERDUE",
+                "PAID",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Cobranças por situação (OVERDUE = em aberto e vencida, calculado no fuso America/Sao_Paulo) e condomínio. Atraso não bloqueia acesso. Exige também CP_PLATFORM_ENABLED.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingChargePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/charges/{chargeId}/cancel": {
+      "post": {
+        "operationId": "cancelBillingCharge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "chargeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Cancela cobrança em aberto com motivo; cobrança paga exige estorno do pagamento antes. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingChargeCancel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingCharge"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/charges/{chargeId}/payments": {
+      "post": {
+        "operationId": "recordBillingPayment",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "chargeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Registro manual de pagamento: valor igual ao da cobrança, data até hoje, forma e referência do comprovante. PAID somente com este registro; não há gateway nem confirmação automática. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingPaymentRecord"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingCharge"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/platform/billing/payments/{paymentId}/void": {
+      "post": {
+        "operationId": "voidBillingPayment",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_BILLING_ENABLED",
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Estorna registro de pagamento errado (motivo obrigatório); a cobrança volta a ficar em aberto e nada é apagado. Exige também CP_PLATFORM_ENABLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingPaymentVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingCharge"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma vigente) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, registro duplicado ou estado financeiro alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4895,6 +5739,8 @@
             "items": {
               "type": "string",
               "enum": [
+                "billing.manage",
+                "billing.read",
                 "platform.audit.read",
                 "tenants.manage",
                 "tenants.read"
@@ -5214,6 +6060,536 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "BillingPlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "planId",
+          "name",
+          "priceCents",
+          "period",
+          "active",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "priceCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "MONTHLY",
+              "YEARLY"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BillingPlanCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "priceCents",
+          "period",
+          "reason"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "priceCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "MONTHLY",
+              "YEARLY"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "BillingPlanUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "priceCents",
+          "active",
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "priceCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "BillingPlanChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "plan",
+          "applied"
+        ],
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/BillingPlan"
+          },
+          "applied": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BillingSubscription": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subscriptionId",
+          "tenantId",
+          "tenantName",
+          "planId",
+          "planName",
+          "priceCents",
+          "period",
+          "startsOn",
+          "endsOn",
+          "dueDay",
+          "status",
+          "version",
+          "createdAt"
+        ],
+        "properties": {
+          "subscriptionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "priceCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "MONTHLY",
+              "YEARLY"
+            ]
+          },
+          "startsOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "endsOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "dueDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ENDED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BillingSubscriptionCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "planId",
+          "startsOn",
+          "dueDay",
+          "reason"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsOn": {
+            "type": "string",
+            "format": "date",
+            "description": "Dia do mês entre 1 e 28."
+          },
+          "dueDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "BillingSubscriptionEnd": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "endsOn",
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "endsOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "BillingPayment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "paymentId",
+          "amountCents",
+          "paidOn",
+          "method",
+          "reference",
+          "recordedBy",
+          "recordedAt"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "paidOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "PIX",
+              "TRANSFERENCIA",
+              "BOLETO",
+              "OUTRO"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "recordedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BillingCharge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chargeId",
+          "subscriptionId",
+          "tenantId",
+          "tenantName",
+          "periodStart",
+          "periodEnd",
+          "amountCents",
+          "dueOn",
+          "status",
+          "overdue",
+          "cancelReason",
+          "version",
+          "createdAt",
+          "payment"
+        ],
+        "properties": {
+          "chargeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subscriptionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": "string"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date",
+            "description": "Fim exclusivo do período."
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "dueOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "PAID",
+              "CANCELLED"
+            ]
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "cancelReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BillingPayment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BillingChargePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "charges",
+          "truncated"
+        ],
+        "properties": {
+          "charges": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/BillingCharge"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BillingChargeCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "periodStart"
+        ],
+        "properties": {
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "BillingChargeCancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "BillingPaymentRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "amountCents",
+          "paidOn",
+          "method",
+          "reference",
+          "expectedVersion"
+        ],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "paidOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "PIX",
+              "TRANSFERENCIA",
+              "BOLETO",
+              "OUTRO"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "BillingPaymentVoid": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedChargeVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedChargeVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
           }
         }
       }

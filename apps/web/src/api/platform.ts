@@ -3,7 +3,7 @@ import { codePoints } from './text';
 import type { ISODateTime, UUID } from './types';
 
 /** Painel master (OPS-01): somente dados da plataforma; nunca conteúdo dos moradores. */
-export type PlatformCapability = 'platform.audit.read' | 'tenants.manage' | 'tenants.read';
+export type PlatformCapability = 'billing.manage' | 'billing.read' | 'platform.audit.read' | 'tenants.manage' | 'tenants.read';
 export interface PlatformSession { accountId: UUID; role: 'PLATFORM_ADMIN'; capabilities: PlatformCapability[]; mfaRequired: boolean }
 export interface OnboardingReceipt {
   operationId: UUID; accounts: number | null; units: number | null; memberships: number | null; amenities: number | null;
@@ -23,7 +23,7 @@ export interface PlatformAuditEvent {
 }
 export interface PlatformAuditPage { events: PlatformAuditEvent[]; nextCursor: string | null }
 
-const CAPABILITIES: readonly PlatformCapability[] = ['platform.audit.read', 'tenants.manage', 'tenants.read'];
+const CAPABILITIES: readonly PlatformCapability[] = ['billing.manage', 'billing.read', 'platform.audit.read', 'tenants.manage', 'tenants.read'];
 const nullableCount = (value: unknown): value is number | null => value === null || isInteger(value);
 
 export function platformSession(value: unknown): PlatformSession {
