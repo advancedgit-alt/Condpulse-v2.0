@@ -98,8 +98,12 @@ public class InvitationService {
     jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,account.toString());
     jdbc.queryForObject("select set_config('app.invitation_hash',?,true)",String.class,tokenHash);
     String accountStatus=store.accountStatus(account);
-    if(accountStatus==null) store.insertAccount(account);
-    else if(!"ACTIVE".equals(accountStatus))
+    if(accountStatus==null) {
+     // Outro aceite simultâneo da mesma conta pode ter criado o espelho: relê em vez de colidir.
+     store.insertAccount(account);
+     accountStatus=store.accountStatus(account);
+    }
+    if(!"ACTIVE".equals(accountStatus))
      throw new BusinessProblem("ACCOUNT_INACTIVE",403,"Seu acesso precisa ser validado pela gestão.");
     var invitation=store.lockPresented(tokenHash);
     if(invitation==null || !MessageDigest.isEqual(invitation.emailHash().getBytes(StandardCharsets.US_ASCII),

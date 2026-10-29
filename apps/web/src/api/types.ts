@@ -132,6 +132,13 @@ export interface InvitationAccepted {
   status: 'PENDING';
 }
 
+/** Primeiro acesso por convite: sem sessão (sessionStarted=false) o convidado entra depois pelo login comum. */
+export interface InvitationFirstAccess extends InvitationAccepted {
+  sessionStarted: boolean;
+  accountId: UUID | null;
+  expiresAt: ISODateTime | null;
+}
+
 /** Tentativa de recuperação criada pelo link; o cookie fica com o servidor e nunca chega ao JavaScript. */
 export interface RecoveryVerified {
   mfaRequired: boolean;

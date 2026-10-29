@@ -139,8 +139,9 @@ public class MembershipStore {
   var rows=jdbc.query("select status from platform.accounts where id=?",(r,n)->r.getString("status"),account);
   return rows.size()==1?rows.getFirst():null;
  }
+ /** Espelho local da conta; dois aceites simultâneos da mesma conta nova não colidem (o segundo reutiliza o espelho). */
  public void insertAccount(UUID account) {
-  jdbc.update("insert into platform.accounts(id,status) values(?,'ACTIVE')",account);
+  jdbc.update("insert into platform.accounts(id,status) values(?,'ACTIVE') on conflict (id) do nothing",account);
  }
 
  public record PresentedInvitation(UUID id,UUID tenantId,UUID unitId,String role,String displayName,String emailHash) {}

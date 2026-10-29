@@ -179,9 +179,26 @@ provedor ainda não foi conferido em homologação de Auth.
 
 O convite é aberto em `/convite#token=…`: o token fica no fragmento (não vai ao
 servidor nem aos registros de acesso), é guardado só na aba atual e removido da
-barra de endereço. Quem ainda não entrou é orientado a entrar com a conta do
-e-mail convidado; a tela de acessos mostra o convite em aberto. Sair da conta
-descarta o convite guardado na aba.
+barra de endereço. Quem já entrou aceita com um clique; a tela de acessos mostra o
+convite em aberto. Quem ainda não entrou vê o formulário de primeiro acesso (abaixo).
+Sair da conta descarta o convite guardado na aba.
+
+Primeiro acesso por convite (`POST /auth/invitation/accept`, atrás de
+`CP_BFF_ENABLED` e `CP_MANAGEMENT_ENABLED`): o login comum do BFF exige conta local
+ativa, então quem ainda não tem conta local envia e-mail, senha do provedor e token
+do convite juntos. O BFF autentica no provedor, executa o aceite (espelho local da
+conta e vínculo `PENDING` na mesma transação, com o e-mail do token) e só então cria
+a sessão web, renovando o CSRF. Recusa do aceite encerra a sessão aberta no provedor
+e não cria sessão local; se o aceite for gravado mas a sessão não, a resposta indica
+`sessionStarted=false` e a tela orienta o login comum. Mesmo limite de tentativas do
+login, Origin e CSRF; a web guarda a espera do `429` para as duas rotas. O provedor
+recebe o e-mail na mesma forma contada pelo limite (sem espaços nas pontas, em
+minúsculas). Sessão anterior no navegador é substituída pela nova ou, sem sessão nova,
+removida; falha ao encerrá-la no servidor fica no log e não desfaz o aceite. Erro de
+senha, conta inativa e espera ficam no formulário; resultado incerto (rede ou `5xx`)
+é estado final que orienta o login comum, sem reenviar o mesmo convite. Aceites
+simultâneos da mesma conta nova reutilizam o espelho local. Login comum recusado por
+conta inexistente aponta para o convite aberto na aba.
 
 ## Pendências
 
@@ -190,7 +207,9 @@ ao banco remoto: o executor de migrations está fixado em V003–V005 e exige
 revisão e autorização próprias. Envio automático do convite por e-mail depende de
 SMTP e de credencial administrativa fora da API.
 
-Primeiro acesso por convite: o login do BFF exige conta local ativa, então quem
-ainda não tem conta local não consegue entrar para aceitar o convite pela tela. O
-aceite com credenciais (login no provedor, espelho local e vínculo `PENDING` na
-mesma operação) é pendência própria.
+Primeiro acesso por convite: a conta precisa existir no Supabase Auth (cadastro
+público desligado; criação pela operação) e o e-mail do token é usado sem conferir
+`email_verified`, como no aceite autenticado — conferir no ensaio com Auth real as
+opções de confirmação e troca segura de e-mail e a normalização do e-mail pelo
+provedor. Resposta idempotente para convite já aceito pela mesma conta (hoje `404`
+neutro) é melhoria registrada. Ensaio com Auth real pendente.

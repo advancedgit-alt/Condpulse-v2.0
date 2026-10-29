@@ -3,7 +3,9 @@ package br.com.condpulse.identity.bff;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -11,6 +13,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 
 public final class WebSessionService {
+ private static final System.Logger LOG=System.getLogger(WebSessionService.class.getName());
  private final WebSessionStore store;
  private final SupabaseAuthClient auth;
  private final TokenCipher cipher;
@@ -22,26 +25,72 @@ public final class WebSessionService {
   this.store=store; this.auth=auth; this.cipher=cipher; this.decoder=decoder; this.settings=settings; this.clock=clock;
  }
  public SessionTicket login(String email,String password) {
-  if(email==null || email.isBlank() || email.length()>320 || password==null || password.isEmpty() || password.length()>4096)
-   throw new BusinessProblem("INVALID_LOGIN_REQUEST",400,"Informe os dados de acesso.");
-  var tokens=auth.password(email,password);
+  var tokens=auth.password(requireLoginInput(email,password),password);
   Jwt jwt;
   try { jwt=decodeNew(tokens.access_token()); }
   catch(RuntimeException ex) { auth.signOutBestEffort(tokens.access_token()); throw ex; }
-  UUID account=UUID.fromString(jwt.getSubject());
-  String raw=SessionSecrets.newToken(),hash=SessionSecrets.hash(raw);
-  var session=new StoredWebSession(UUID.randomUUID(),hash,account,"","",jwt.getExpiresAt(),
-    clock.instant().plus(settings.lifetime()),0);
-  var stored=new StoredWebSession(session.id(),hash,account,
-    cipher.seal(tokens.access_token(),session.cipherContext("access")),
-    cipher.seal(tokens.refresh_token(),session.cipherContext("refresh")),
-    jwt.getExpiresAt(),session.expiresAt(),0);
-  try { store.create(stored); }
+  return start(tokens,jwt);
+ }
+ /**
+  * Primeiro acesso por convite (CP-020): quem ainda não tem conta local entra com a senha do provedor e, antes de
+  * qualquer sessão web, aceita o convite — o aceite cria o espelho local da conta e o vínculo PENDING na mesma
+  * transação. Recusa do aceite encerra a sessão aberta no provedor. Falha ao criar a sessão web depois do aceite
+  * devolve o aceite sem sessão: o vínculo pendente existe e o login comum passa a funcionar.
+  */
+ public <T> FirstAccess<T> loginAcceptingInvitation(String email,String password,BiFunction<UUID,String,T> accept) {
+  String normalized=requireLoginInput(email,password);
+  java.util.Objects.requireNonNull(accept);
+  var tokens=auth.password(normalized,password);
+  Jwt jwt; T accepted;
+  try {
+   jwt=decodeNew(tokens.access_token());
+   UUID account=subject(jwt);
+   Object claim=jwt.getClaims().get("email");
+   accepted=accept.apply(account,claim instanceof String text?text:null);
+  } catch(RuntimeException ex) { auth.signOutBestEffort(tokens.access_token()); throw ex; }
+  SessionTicket session;
+  try { session=start(tokens,jwt); }
   catch(RuntimeException ex) {
+   // O aceite já foi gravado e start encerrou a sessão no provedor: devolve o aceite sem sessão (login comum depois).
+   LOG.log(System.Logger.Level.WARNING,"Primeiro acesso aceito sem sessão web: {0}",ex.getClass().getSimpleName());
+   session=null;
+  }
+  return new FirstAccess<>(accepted,session);
+ }
+ /** Aceite concluído e, quando foi possível criá-la, a sessão web; sem sessão o convidado entra pelo login comum. */
+ public record FirstAccess<T>(T accepted,SessionTicket session) {}
+ /**
+  * Valida a entrada e devolve o e-mail na mesma forma contada pelo limite de tentativas (AuthRateLimiter.login): o
+  * provedor recebe exatamente o endereço que consumiu o balde, sem variações de maiúsculas que gerem outra chave.
+  */
+ private static String requireLoginInput(String email,String password) {
+  if(email==null || email.isBlank() || email.length()>320 || password==null || password.isEmpty() || password.length()>4096)
+   throw new BusinessProblem("INVALID_LOGIN_REQUEST",400,"Informe os dados de acesso.");
+  return email.strip().toLowerCase(Locale.ROOT);
+ }
+ private static UUID subject(Jwt jwt) {
+  try { return UUID.fromString(jwt.getSubject()); }
+  catch(IllegalArgumentException|NullPointerException ex) {
+   throw new BusinessProblem("AUTH_PROVIDER_UNAVAILABLE",503,"Não foi possível validar a sessão.");
+  }
+ }
+ /** Cria a sessão web opaca a partir de tokens já validados; qualquer falha (cifra ou banco) encerra a sessão no provedor. */
+ private SessionTicket start(SupabaseAuthClient.TokenResponse tokens,Jwt jwt) {
+  try {
+   UUID account=subject(jwt);
+   String raw=SessionSecrets.newToken(),hash=SessionSecrets.hash(raw);
+   var session=new StoredWebSession(UUID.randomUUID(),hash,account,"","",jwt.getExpiresAt(),
+     clock.instant().plus(settings.lifetime()),0);
+   var stored=new StoredWebSession(session.id(),hash,account,
+     cipher.seal(tokens.access_token(),session.cipherContext("access")),
+     cipher.seal(tokens.refresh_token(),session.cipherContext("refresh")),
+     jwt.getExpiresAt(),session.expiresAt(),0);
+   store.create(stored);
+   return new SessionTicket(raw,account,stored.expiresAt());
+  } catch(RuntimeException ex) {
    auth.signOutBestEffort(tokens.access_token());
    throw ex;
   }
-  return new SessionTicket(raw,account,stored.expiresAt());
  }
  public Jwt authenticate(String raw) {
   var session=store.load(hash(raw));
