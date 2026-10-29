@@ -8,6 +8,7 @@ import { Empty, ErrorState, Icon, Loading, Notice } from '../primitives';
 import { dateInZone } from '../dateTime';
 import { AnnouncementSection } from './Announcements';
 import { RequestSection } from './Requests';
+import { ImportSection } from './Imports';
 import { AuditSection } from './Audit';
 import { MembershipList, PeopleSection } from './People';
 import { PendingReservations, ReservationAgenda } from './Reservations';
@@ -20,6 +21,7 @@ export const managementSections = [
   { id: 'reservas', label: 'Reservas' },
   { id: 'areas', label: 'Áreas' },
   { id: 'unidades', label: 'Unidades' },
+  { id: 'importacao', label: 'Importação' },
   { id: 'pessoas', label: 'Pessoas' },
   { id: 'avisos', label: 'Avisos' },
   { id: 'pedidos', label: 'Pedidos' },
@@ -84,6 +86,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'reservas' ? <ReservationAgenda /> : null}
     {section === 'areas' ? <AmenitySection /> : null}
     {section === 'unidades' ? <UnitSection /> : null}
+    {section === 'importacao' ? <ImportSection /> : null}
     {section === 'pessoas' ? <PeopleSection /> : null}
     {section === 'avisos' ? <AnnouncementSection /> : null}
     {section === 'pedidos' ? <RequestSection /> : null}

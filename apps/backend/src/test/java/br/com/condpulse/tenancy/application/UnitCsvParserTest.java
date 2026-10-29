@@ -19,7 +19,7 @@ class UnitCsvParserTest {
  @Test void reportsErrorsPerLineAndRepeatedUnitsIgnoringCaseAndSpaces() {
   var parsed=UnitCsvParser.parse("bloco;unidade;codigo_externo\nA;"+"y".repeat(41)+";\n"+"b".repeat(61)+";1;\n"
    +"C;  3   01 ;\nD;1;\u0007\nc;3 01;\nF;3\n;;\n");
-  assertEquals(List.of("UNIT_LABEL_TOO_LONG","BLOCK_NAME_TOO_LONG",null,"IMPORT_ROW_CONTROL_CHARACTER",null,
+  assertEquals(java.util.Arrays.asList("UNIT_LABEL_TOO_LONG","BLOCK_NAME_TOO_LONG",null,"IMPORT_ROW_CONTROL_CHARACTER",null,
    "IMPORT_ROW_COLUMNS_INVALID","UNIT_LABEL_REQUIRED"),parsed.rows().stream().map(UnitCsvParser.Row::errorCode).toList());
   assertEquals("3 01",parsed.rows().get(2).unit(),"espaços internos normalizados");
   assertEquals("DUPLICATE",parsed.rows().get(4).outcome(),"mesmo bloco e unidade com outra caixa");
