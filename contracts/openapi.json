@@ -6897,6 +6897,683 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/requests": {
+      "get": {
+        "operationId": "listUnitRequests",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Pedidos da unidade (morador ou responsável com vínculo vigente), sem texto nem conversa.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRequestPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (unidade sem vínculo vigente da conta) ou rota desligada"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "openUnitRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestOpen"
+              }
+            }
+          }
+        },
+        "description": "Abre pedido pela unidade em nome da própria conta; nasce OPEN, sem responsável.",
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_CATEGORY_INVALID, SERVICE_REQUEST_TITLE_INVALID, SERVICE_REQUEST_DESCRIPTION_INVALID, SERVICE_REQUEST_INPUT_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (unidade sem vínculo vigente da conta) ou rota desligada"
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/requests/{requestId}": {
+      "get": {
+        "operationId": "getUnitRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Detalhe para a unidade, com as mensagens visíveis; a equipe aparece sem nome e comentário interno nunca vem.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido de outra unidade ou condomínio, mesmo com o ID conhecido"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/requests/{requestId}/messages": {
+      "post": {
+        "operationId": "addUnitRequestMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestUnitMessage"
+              }
+            }
+          }
+        },
+        "description": "Mensagem da unidade no próprio pedido (sempre visível).",
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_MESSAGE_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido de outra unidade ou condomínio, mesmo com o ID conhecido"
+          },
+          "409": {
+            "description": "SERVICE_REQUEST_CLOSED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/requests": {
+      "get": {
+        "operationId": "listManagedRequests",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "ALL",
+                "OPEN",
+                "TRIAGED",
+                "IN_PROGRESS",
+                "WAITING_RESIDENT",
+                "RESOLVED",
+                "CLOSED"
+              ],
+              "default": "ACTIVE"
+            }
+          }
+        ],
+        "description": "Pedidos do condomínio para a gestão (capacidade requests.manage, AAL2); ACTIVE exclui encerrados.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRequestPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_FILTER_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/requests/{requestId}": {
+      "get": {
+        "operationId": "getManagedRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Detalhe para a gestão, com toda a conversa (inclui comentários internos) e a equipe que pode ser responsável.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido de outra unidade ou condomínio, mesmo com o ID conhecido"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/requests/{requestId}/messages": {
+      "post": {
+        "operationId": "addStaffRequestMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestStaffMessage"
+              }
+            }
+          }
+        },
+        "description": "Mensagem da equipe: RESIDENT (visível para a unidade) ou INTERNAL (comentário interno).",
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_MESSAGE_INVALID, SERVICE_REQUEST_VISIBILITY_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido de outra unidade ou condomínio, mesmo com o ID conhecido"
+          },
+          "409": {
+            "description": "SERVICE_REQUEST_CLOSED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/requests/{requestId}/state": {
+      "post": {
+        "operationId": "updateManagedRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestUpdate"
+              }
+            }
+          }
+        },
+        "description": "Andamento, responsável da equipe, prazo comunicado e resolução pela versão lida. Concluir exige resolução, que também entra na conversa visível; encerrado é final.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_STATE_INVALID, SERVICE_REQUEST_VERSION_REQUIRED, SERVICE_REQUEST_RESOLUTION_REQUIRED, SERVICE_REQUEST_RESOLUTION_INVALID, SERVICE_REQUEST_ASSIGNEE_INVALID, SERVICE_REQUEST_DUE_INVALID ou SERVICE_REQUEST_UNCHANGED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido de outra unidade ou condomínio, mesmo com o ID conhecido"
+          },
+          "409": {
+            "description": "SERVICE_REQUEST_CHANGED, SERVICE_REQUEST_TRANSITION_INVALID ou SERVICE_REQUEST_CLOSED"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10740,6 +11417,664 @@
           "openedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "RequestMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Mensagem do pedido. Na visão da unidade, autor da equipe vem com authorName null e comentário interno nunca aparece.",
+        "required": [
+          "messageId",
+          "authorRole",
+          "authorName",
+          "mine",
+          "visibility",
+          "body",
+          "createdAt"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorRole": {
+            "type": "string",
+            "enum": [
+              "UNIT",
+              "STAFF"
+            ]
+          },
+          "authorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mine": {
+            "type": "boolean"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "INTERNAL"
+            ]
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UnitRequestSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Pedido na lista da unidade, sem texto nem conversa.",
+        "required": [
+          "requestId",
+          "unitId",
+          "category",
+          "title",
+          "state",
+          "assigned",
+          "dueOn",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MAINTENANCE",
+              "CLEANING",
+              "SECURITY",
+              "NOISE",
+              "ADMINISTRATIVE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIAGED",
+              "IN_PROGRESS",
+              "WAITING_RESIDENT",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "assigned": {
+            "type": "boolean"
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UnitRequestPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Até 100 pedidos da unidade, encerrados por último.",
+        "required": [
+          "requests",
+          "truncated"
+        ],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/UnitRequestSummary"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UnitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Pedido para a unidade: responsável só como definido/não definido; resolução vigente quando concluído.",
+        "required": [
+          "requestId",
+          "unitId",
+          "category",
+          "title",
+          "description",
+          "state",
+          "assigned",
+          "dueOn",
+          "resolution",
+          "requesterName",
+          "openedByMe",
+          "createdAt",
+          "updatedAt",
+          "resolvedAt",
+          "closedAt",
+          "messages",
+          "messagesTruncated"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MAINTENANCE",
+              "CLEANING",
+              "SECURITY",
+              "NOISE",
+              "ADMINISTRATIVE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIAGED",
+              "IN_PROGRESS",
+              "WAITING_RESIDENT",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "assigned": {
+            "type": "boolean"
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "requesterName": {
+            "type": "string"
+          },
+          "openedByMe": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/RequestMessage"
+            }
+          },
+          "messagesTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RequestOpen": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Abertura pela unidade (texto simples).",
+        "required": [
+          "category",
+          "title",
+          "description"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "MAINTENANCE",
+              "CLEANING",
+              "SECURITY",
+              "NOISE",
+              "ADMINISTRATIVE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "RequestUnitMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Mensagem da unidade.",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "RequestStaffMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Mensagem da equipe.",
+        "required": [
+          "body",
+          "visibility"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "INTERNAL"
+            ]
+          }
+        }
+      },
+      "RequestUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Atualização pela versão lida; assigneeMembershipId null tira o responsável e dueOn null tira o prazo.",
+        "required": [
+          "state",
+          "assigneeMembershipId",
+          "dueOn",
+          "resolution",
+          "expectedVersion"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIAGED",
+              "IN_PROGRESS",
+              "WAITING_RESIDENT",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "assigneeMembershipId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "RequestTeamMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Pessoa da equipe vigente (gestão ou portaria) que pode ser responsável.",
+        "required": [
+          "membershipId",
+          "name",
+          "role"
+        ],
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "CONCIERGE"
+            ]
+          }
+        }
+      },
+      "ManagedRequestSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Pedido na lista da gestão, sem texto nem conversa.",
+        "required": [
+          "requestId",
+          "unitId",
+          "unitLabel",
+          "category",
+          "title",
+          "state",
+          "assigneeMembershipId",
+          "assigneeName",
+          "dueOn",
+          "createdAt",
+          "updatedAt",
+          "version"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MAINTENANCE",
+              "CLEANING",
+              "SECURITY",
+              "NOISE",
+              "ADMINISTRATIVE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIAGED",
+              "IN_PROGRESS",
+              "WAITING_RESIDENT",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "assigneeMembershipId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assigneeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ManagedRequestPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Até 100 pedidos atualizados mais recentemente.",
+        "required": [
+          "requests",
+          "truncated"
+        ],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ManagedRequestSummary"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ManagedRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Pedido para a gestão, com toda a conversa e a equipe.",
+        "required": [
+          "requestId",
+          "unitId",
+          "unitLabel",
+          "category",
+          "title",
+          "description",
+          "state",
+          "assigneeMembershipId",
+          "assigneeName",
+          "dueOn",
+          "resolution",
+          "requesterName",
+          "createdAt",
+          "updatedAt",
+          "resolvedAt",
+          "closedAt",
+          "version",
+          "messages",
+          "messagesTruncated",
+          "team"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MAINTENANCE",
+              "CLEANING",
+              "SECURITY",
+              "NOISE",
+              "ADMINISTRATIVE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIAGED",
+              "IN_PROGRESS",
+              "WAITING_RESIDENT",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "assigneeMembershipId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assigneeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requesterName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/RequestMessage"
+            }
+          },
+          "messagesTruncated": {
+            "type": "boolean"
+          },
+          "team": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/RequestTeamMember"
+            }
           }
         }
       }

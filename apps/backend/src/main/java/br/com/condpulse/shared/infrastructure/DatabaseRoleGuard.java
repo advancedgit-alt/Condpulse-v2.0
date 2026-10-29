@@ -14,7 +14,8 @@ public class DatabaseRoleGuard implements ApplicationRunner {
   // avisos (V016) conferidos por to_regclass: banco ainda sem a migration não falha aqui. O financeiro nunca apaga: estorno e
   // cancelamento mantêm a linha; o registro de acesso nunca muda: correção é um evento adicional, e unidade, pessoa,
   // horários e origem vêm do banco; tarefa do outbox e aviso não são apagados pela aplicação, que também não escolhe
-  // estado, tentativa ou prazo da tarefa nem altera o aviso além da abertura.
+  // estado, tentativa ou prazo da tarefa nem altera o aviso além da abertura. Pedidos (V017): nada apagado; mensagem
+  // não muda; a gestão altera só andamento, responsável, prazo, resolução e versão; nomes e horários vêm do banco.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -52,6 +53,17 @@ public class DatabaseRoleGuard implements ApplicationRunner {
      or coalesce(has_column_privilege(current_user,to_regclass('cp.announcement_reads'),'read_at','INSERT'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.notifications') and c.attnum>0 and not c.attisdropped and c.attname<>'state'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.service_requests'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.service_requests') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','assignee_membership_id','due_on','resolution','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.service_requests') and c.attname in ('requester_name','created_at','updated_at','resolved_at',
+        'closed_at')),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.request_messages'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.request_messages'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.request_messages') and c.attname in ('author_name','created_at')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

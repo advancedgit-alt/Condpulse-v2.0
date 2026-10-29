@@ -1290,6 +1290,138 @@ def announcement_checks():
           f"DELETE FROM cp.memberships WHERE account_id in ('{MGR}','{R3}','{R4}','{OWN}'); DELETE FROM cp.units WHERE id in ('{UA3}','{UA4}'); "
           f"DELETE FROM cp.blocks WHERE id='{BK}'; DELETE FROM platform.accounts WHERE id in ('{MGR}','{R3}','{R4}','{OWN}')")
 
+def request_checks():
+    """V017: pedidos da unidade com conversa vinculada; comentario interno so para a equipe; fechamento preserva historico."""
+    MGR, RES5, R6, DEP6, CONC = ("10000000-0000-4000-8000-0000000000b1", "10000000-0000-4000-8000-0000000000b2",
+                                 "10000000-0000-4000-8000-0000000000b3", "10000000-0000-4000-8000-0000000000b4",
+                                 "10000000-0000-4000-8000-0000000000b5")
+    UA6 = "20000000-0000-4000-8000-0000000000b6"
+    Q1, Q2 = "7a000000-0000-4000-8000-000000000001", "7a000000-0000-4000-8000-000000000002"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MGR}','ACTIVE'),('{RES5}','ACTIVE'),('{R6}','ACTIVE'),('{DEP6}','ACTIVE'),('{CONC}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UA6}','{TA}','FICTICIA 601');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MGR}',NULL,'GESTAO PEDIDOS','MANAGER','ACTIVE'),('{TA}','{RES5}','{UA}','RESPONSAVEL 101','RESPONSIBLE','ACTIVE'),
+                ('{TA}','{R6}','{UA6}','MORADOR 601','RESIDENT','ACTIVE'),('{TA}','{DEP6}','{UA}','DEPENDENTE 101','DEPENDENT','ACTIVE'),
+                ('{TA}','{CONC}',NULL,'PORTARIA PEDIDOS','CONCIERGE','ACTIVE');
+    """)
+    staff = "requests.manage"
+    def open_request(identifier, actor=AA, unit=UA, extra_cols="", extra_vals=""):
+        return (f"INSERT INTO cp.service_requests(id,tenant_id,unit_id,requester_id,category,title,description{extra_cols}) "
+                f"VALUES('{identifier}','{TA}','{unit}','{actor}','MAINTENANCE','Vazamento ficticio','Agua no teto do banheiro{extra_vals}')")
+    def as_staff(statement, state=None):
+        if state:
+            return error(capable(staff, statement), state, tenant=TA, actor=MGR, role="cp_api")
+        return query(capable(staff, statement), tenant=TA, actor=MGR, role="cp_api")
+    def visible(identifier, actor):
+        return value(f"select count(*) from cp.service_requests where id='{identifier}'", tenant=TA, actor=actor, role="cp_api")
+    def change(identifier, assignments, version):
+        return f"UPDATE cp.service_requests SET {assignments},version={version + 1} WHERE id='{identifier}'"
+    def message(identifier, request, actor, role="UNIT", visibility="RESIDENT", body="Mensagem ficticia"):
+        return (f"INSERT INTO cp.request_messages(id,tenant_id,request_id,author_id,author_role,body,visibility) "
+                f"VALUES('{identifier}','{TA}','{request}','{actor}','{role}','{body}','{visibility}')")
+    expect(error(open_request(Q1, actor=RES5), "42501", tenant=TA, actor=AA, role="cp_api"), "pedido sempre em nome da propria conta")
+    expect(error(open_request(Q1, actor=R6), "42501", tenant=TA, actor=R6, role="cp_api"), "outra unidade nao abre pedido para a unidade")
+    expect(error(open_request(Q1, actor=DEP6), "42501", tenant=TA, actor=DEP6, role="cp_api"), "dependente sem permissao nao abre pedido")
+    expect(error(open_request(Q1, extra_cols=",state", extra_vals="','RESOLVED"), "42501", tenant=TA, actor=AA, role="cp_api"),
+           "unidade nao escolhe o andamento")
+    expect(error(open_request(Q1, extra_cols=",requester_name", extra_vals="','OUTRO NOME"), "42501", tenant=TA, actor=AA, role="cp_api"),
+           "unidade nao escolhe o nome de quem abriu")
+    query(open_request(Q1), tenant=TA, actor=AA, role="cp_api")
+    expect(value(f"select requester_name from cp.service_requests where id='{Q1}'") == "PESSOA FICTICIA A",
+           "nome de quem abriu vem do proprio vinculo")
+    expect(value(f"select state||':'||version||':'||(assignee_membership_id is null) from cp.service_requests where id='{Q1}'") == "OPEN:0:true",
+           "pedido nasce aberto, sem responsavel")
+    expect(visible(Q1, AA) == "1" and visible(Q1, RES5) == "1", "adultos da unidade acompanham o pedido")
+    expect(visible(Q1, R6) == "0" and visible(Q1, DEP6) == "0", "outra unidade e dependente sem permissao nao veem o pedido")
+    expect(value(f"select count(*) from cp.service_requests where id='{Q1}'", tenant=TB, actor=AB, role="cp_api") == "0", "outro condominio nao ve o pedido")
+    expect(value(capable(staff, f"select count(*) from cp.service_requests where id='{Q1}'"), tenant=TA, actor=MGR, role="cp_api") == "1",
+           "gestao com capacidade ve o pedido")
+    triage_by_unit = change(Q1, "state='TRIAGED'", 0)
+    expect(value(f"WITH u AS ({triage_by_unit} RETURNING 1) SELECT count(*) FROM u", tenant=TA, actor=AA, role="cp_api") == "0",
+           "unidade nao muda o andamento")
+    expect(as_staff(f"UPDATE cp.service_requests SET title='Outro titulo',version=1 WHERE id='{Q1}'", "42501"), "gestao nao altera o conteudo")
+    expect(as_staff(change(Q1, "state='RESOLVED',resolution='Resolvido'", 0), "23514"), "aberto nao vai direto a resolvido")
+    expect(as_staff(change(Q1, "state='TRIAGED'", 4), "23514"), "andamento pela versao lida")
+    resident_membership = value(f"SELECT id FROM cp.memberships WHERE account_id='{R6}'")
+    concierge_membership = value(f"SELECT id FROM cp.memberships WHERE account_id='{CONC}'")
+    team = value(f"SELECT count(*) FROM cp.memberships WHERE tenant_id='{TA}' AND role IN ('MANAGER','CONCIERGE') AND status='ACTIVE'")
+    expect(value(capable(staff, "select count(*) from cp.memberships where role in ('MANAGER','CONCIERGE')"), tenant=TA, actor=MGR,
+                 role="cp_api") == team, "gestao de pedidos ve a equipe vigente para escolher o responsavel")
+    expect(value(capable(staff, f"select count(*) from cp.memberships where account_id='{R6}'"), tenant=TA, actor=MGR, role="cp_api") == "0",
+           "gestao de pedidos nao ve vinculo residencial")
+    expect(as_staff(change(Q1, f"state='TRIAGED',assignee_membership_id='{resident_membership}'", 0), "23514"), "responsavel e da equipe")
+    as_staff(change(Q1, f"state='TRIAGED',assignee_membership_id='{concierge_membership}',due_on=current_date+3", 0))
+    expect(value(f"select state||':'||version||':'||(due_on is not null) from cp.service_requests where id='{Q1}'") == "TRIAGED:1:true",
+           "triagem com responsavel e prazo comunicado")
+    # Conversa vinculada ao pedido.
+    query(message("7b000000-0000-4000-8000-000000000001", Q1, AA), tenant=TA, actor=AA, role="cp_api")
+    expect(error(message("7b000000-0000-4000-8000-000000000002", Q1, AA, visibility="INTERNAL"), "42501", tenant=TA, actor=AA, role="cp_api"),
+           "unidade nao escreve comentario interno")
+    expect(error(message("7b000000-0000-4000-8000-000000000002", Q1, AA, role="STAFF"), "42501", tenant=TA, actor=AA, role="cp_api"),
+           "unidade nao escreve como equipe")
+    expect(error(message("7b000000-0000-4000-8000-000000000002", Q1, RES5), "42501", tenant=TA, actor=AA, role="cp_api"),
+           "mensagem sempre em nome da propria conta")
+    expect(error(message("7b000000-0000-4000-8000-000000000002", Q1, R6), "42501", tenant=TA, actor=R6, role="cp_api"),
+           "outra unidade nao escreve no pedido")
+    as_staff(message("7b000000-0000-4000-8000-000000000003", Q1, MGR, role="STAFF", visibility="INTERNAL", body="Comentario interno ficticio"))
+    as_staff(message("7b000000-0000-4000-8000-000000000004", Q1, MGR, role="STAFF", body="Equipe a caminho"))
+    expect(error(capable(staff, message("7b000000-0000-4000-8000-000000000005", Q1, MGR, role="UNIT", visibility="INTERNAL")), "42501",
+                 tenant=TA, actor=MGR, role="cp_api"), "equipe nao escreve como unidade")
+    expect(error(message("7b000000-0000-4000-8000-000000000005", Q1, MGR, role="UNIT", visibility="INTERNAL"), "23514"),
+           "comentario interno e sempre da equipe, tambem pela restricao da tabela")
+    expect(value(f"select count(*) from cp.request_messages where request_id='{Q1}'", tenant=TA, actor=AA, role="cp_api") == "2",
+           "unidade ve so as mensagens visiveis")
+    expect(value(f"select string_agg(author_role||':'||author_name,',' order by created_at) from cp.request_messages where request_id='{Q1}'")
+           == "UNIT:PESSOA FICTICIA A,STAFF:GESTAO PEDIDOS,STAFF:GESTAO PEDIDOS", "autor da mensagem pelo nome do proprio vinculo")
+    expect(value(f"select count(*) from cp.request_messages where request_id='{Q1}' and visibility='INTERNAL'", tenant=TA, actor=RES5,
+                 role="cp_api") == "0", "comentario interno nunca aparece para a unidade")
+    expect(value(capable(staff, f"select count(*) from cp.request_messages where request_id='{Q1}'"), tenant=TA, actor=MGR, role="cp_api") == "3",
+           "equipe ve toda a conversa")
+    expect(value(f"select count(*) from cp.request_messages where request_id='{Q1}'", tenant=TA, actor=R6, role="cp_api") == "0",
+           "outra unidade nao le a conversa")
+    expect(error(f"UPDATE cp.request_messages SET body='alterada' WHERE request_id='{Q1}'", "42501", tenant=TA, actor=AA, role="cp_api"),
+           "mensagem nao e alterada")
+    expect(error(capable(staff, f"DELETE FROM cp.request_messages WHERE request_id='{Q1}'"), "42501", tenant=TA, actor=MGR, role="cp_api"),
+           "mensagem nao e apagada")
+    # Resolucao, reabertura e fechamento.
+    as_staff(change(Q1, "state='IN_PROGRESS'", 1))
+    expect(as_staff(change(Q1, "state='RESOLVED'", 2), "23514"), "resolvido exige resolucao")
+    as_staff(change(Q1, "state='RESOLVED',resolution='Vedacao trocada'", 2))
+    expect(value(f"select state||':'||(resolved_at is not null)||':'||resolution from cp.service_requests where id='{Q1}'") == "RESOLVED:true:Vedacao trocada",
+           "resolucao com horario do banco")
+    expect(as_staff(change(Q1, "resolution='Outra resolucao'", 3), "23514"), "resolucao registrada nao muda")
+    as_staff(change(Q1, "state='IN_PROGRESS'", 3))
+    expect(value(f"select state||':'||(resolution is null)||':'||(resolved_at is null) from cp.service_requests where id='{Q1}'") == "IN_PROGRESS:true:true",
+           "reaberto perde a resolucao vigente")
+    as_staff(change(Q1, "state='RESOLVED',resolution='Vedacao trocada de novo'", 4) + "; " + change(Q1, "state='CLOSED'", 5))
+    expect(value(f"select state||':'||(closed_at is not null)||':'||resolution from cp.service_requests where id='{Q1}'") == "CLOSED:true:Vedacao trocada de novo",
+           "fechamento preserva a resolucao")
+    expect(as_staff(change(Q1, "state='IN_PROGRESS'", 6), "23514"), "fechado e final")
+    expect(error(message("7b000000-0000-4000-8000-000000000006", Q1, AA), "23514", tenant=TA, actor=AA, role="cp_api"),
+           "pedido fechado nao recebe mensagem")
+    expect(value(f"select count(*) from cp.request_messages where request_id='{Q1}'", tenant=TA, actor=AA, role="cp_api") == "2",
+           "historico continua visivel depois de fechado")
+    # Eventos e trilha.
+    query(open_request(Q2, actor=RES5), tenant=TA, actor=RES5, role="cp_api")
+    event = (f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) "
+             f"VALUES('{TA}','REQUEST_OPENED','{Q2}',0,jsonb_build_object('id','{Q2}','unitId','{{unit}}'))")
+    expect(error(event.format(unit=UA), "42501", tenant=TA, actor=R6, role="cp_api"), "outra unidade nao grava evento do pedido")
+    expect(error(event.format(unit=UA6), "42501", tenant=TA, actor=RES5, role="cp_api"), "evento leva a unidade real do pedido")
+    query(event.format(unit=UA), tenant=TA, actor=RES5, role="cp_api")
+    trail = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+             f"VALUES('{TA}','{{actor}}','REQUEST_OPENED','SERVICE_REQUEST','{Q2}','{ROLL}')")
+    expect(error(trail.format(actor=AA), "42501", tenant=TA, actor=RES5, role="cp_api"), "trilha de pedido so em nome da propria conta")
+    query(trail.format(actor=RES5), tenant=TA, actor=RES5, role="cp_api")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{RES5}'")
+    expect(visible(Q2, RES5) == "0", "vinculo encerrado deixa de ver o pedido")
+    query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE account_id='{RES5}'")
+    expect(error("select count(*) from cp.service_requests", "42501", tenant=TA, role="cp_worker"), "worker nao le pedidos")
+    query(f"DELETE FROM cp.outbox WHERE event_type LIKE 'REQUEST%'; DELETE FROM cp.audit_log WHERE action LIKE 'REQUEST%'; "
+          f"DELETE FROM cp.request_messages WHERE tenant_id='{TA}'; DELETE FROM cp.service_requests WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MGR}','{RES5}','{R6}','{DEP6}','{CONC}'); DELETE FROM cp.units WHERE id='{UA6}'; "
+          f"DELETE FROM platform.accounts WHERE id in ('{MGR}','{RES5}','{R6}','{DEP6}','{CONC}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1395,6 +1527,7 @@ def main():
     access_checks()
     worker_checks()
     announcement_checks()
+    request_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

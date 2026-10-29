@@ -8,7 +8,8 @@ test "${PORT:-}" = 8081
 test "${DATABASE_URL:-}" = jdbc:postgresql://localhost:5432/condpulse_ci
 test "${DATABASE_USER:-}" = cp_ci_login
 for flag in CP_BFF_ENABLED CP_RESERVATIONS_ENABLED CP_MANAGEMENT_ENABLED CP_PLATFORM_ENABLED \
-  CP_PLATFORM_BILLING_ENABLED CP_PARCELS_ENABLED CP_VISITS_ENABLED CP_NOTIFICATIONS_ENABLED; do
+  CP_PLATFORM_BILLING_ENABLED CP_PARCELS_ENABLED CP_VISITS_ENABLED CP_NOTIFICATIONS_ENABLED \
+  CP_ANNOUNCEMENTS_ENABLED CP_REQUESTS_ENABLED; do
   test "${!flag:-}" = true
 done
 test -z "${CP_BFF_RECOVERY_ENABLED:-}${CP_WORKER_OUTBOX_ENABLED:-}"
@@ -50,7 +51,9 @@ tenant=22222222-2222-4222-8222-222222222222
 unit=33333333-3333-4333-8333-333333333333
 for route in /v1/me "/v1/tenants/$tenant/reservations" "/v1/tenants/$tenant/management/units" \
   "/v1/tenants/$tenant/parcels" "/v1/tenants/$tenant/arrivals" "/v1/tenants/$tenant/access-events" \
-  "/v1/tenants/$tenant/units/$unit/notifications" /v1/platform/tenants /v1/platform/billing/plans; do
+  "/v1/tenants/$tenant/units/$unit/notifications" "/v1/tenants/$tenant/management/announcements" \
+  "/v1/tenants/$tenant/units/$unit/announcements" "/v1/tenants/$tenant/management/requests" \
+  "/v1/tenants/$tenant/units/$unit/requests" /v1/platform/tenants /v1/platform/billing/plans; do
   status=$(curl -sS -o "$body" -w '%{http_code}' "$base$route")
   if [ "$status" != 401 ]; then echo "Rota sem sessão respondeu $status: $route" >&2; exit 1; fi
   node -e "const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)" "$body"

@@ -52,6 +52,8 @@ condpulse:
     enabled: ${CP_NOTIFICATIONS_ENABLED:false}
   announcements:
     enabled: ${CP_ANNOUNCEMENTS_ENABLED:false}
+  requests:
+    enabled: ${CP_REQUESTS_ENABLED:false}
   worker:
     outbox-enabled: ${CP_WORKER_OUTBOX_ENABLED:false}
     poll-millis: ${CP_WORKER_POLL_MILLIS:2000}

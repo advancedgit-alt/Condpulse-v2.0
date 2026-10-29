@@ -90,6 +90,11 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/announcements","/v1/tenants/*/management/announcements/*/publish",
       "/v1/tenants/*/management/announcements/*/archive","/v1/tenants/*/announcements/*/open").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/announcements/*").authenticated()
+    // Pedidos da unidade: autenticação aqui; vínculo da unidade ou capacidade com AAL2 (gestão) no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*","/v1/tenants/*/management/requests",
+      "/v1/tenants/*/management/requests/*").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*/messages",
+      "/v1/tenants/*/management/requests/*/messages","/v1/tenants/*/management/requests/*/state").authenticated()
     // Caixa interna da unidade: autenticação aqui; somente os próprios avisos, com vínculo vigente, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/notifications").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/notifications/*/open").authenticated()

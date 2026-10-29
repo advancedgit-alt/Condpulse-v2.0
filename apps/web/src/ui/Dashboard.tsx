@@ -9,6 +9,7 @@ import { Empty, ErrorState, Icon, Loading, Notice } from './primitives';
 import { dateInZone, formatWhen, queryRange } from './dateTime';
 import { UnitInbox } from './Inbox';
 import { UnitAnnouncements } from './Announcements';
+import { UnitRequests } from './Requests';
 import './Dashboard.css';
 
 const residentialRoles = new Set<Membership['role']>(['RESIDENT', 'RESPONSIBLE', 'DEPENDENT']);
@@ -110,6 +111,7 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
     </div>
     <UnitInbox scope={scope} timeZone={membership.timeZone} />
     <UnitAnnouncements scope={scope} timeZone={membership.timeZone} />
+    <UnitRequests scope={scope} timeZone={membership.timeZone} />
     <section className="dashboard-reservations" aria-labelledby="dashboard-reservations-title"><div className="section-heading"><div><span className="section-index">PRÓXIMOS COMPROMISSOS</span><h2 id="dashboard-reservations-title">Próximas reservas da unidade</h2></div><button className="button button-secondary button-compact" disabled={validating} onClick={() => void refresh()}>{validating ? 'Atualizando.' : 'Atualizar resumo'}</button></div>
       <p className="dashboard-window">Consulta de 30 dias locais, iniciada em {new Intl.DateTimeFormat('pt-BR', { timeZone: membership.timeZone, day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(range.value?.from ?? now))}. Horários em {membership.timeZone}.</p>
       {stale && !validating && !denial ? <Notice tone="warning">Este resumo usa a última consulta, feita há mais de um minuto. Atualize antes de tomar uma decisão.</Notice> : null}
