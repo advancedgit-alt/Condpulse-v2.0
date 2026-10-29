@@ -18,6 +18,8 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  final UUID accountA=UUID.randomUUID(),accountB=UUID.randomUUID(),accountC=UUID.randomUUID();
  final UUID tenantA=UUID.randomUUID(),tenantB=UUID.randomUUID();
  final UUID unitA=UUID.randomUUID(),unitB=UUID.randomUUID(),otherUnitA=UUID.randomUUID();
+ /** Contas criadas pelo próprio fluxo testado (ex.: aceite de convite), removidas no encerramento. */
+ final java.util.Set<UUID> extraAccounts=java.util.concurrent.ConcurrentHashMap.newKeySet();
  final HikariDataSource pool;
  final JdbcTemplate jdbc;
  final JdbcTransactionManager manager;
@@ -87,7 +89,9 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  void restoreActiveFixtures() throws SQLException {
   adminUpdate("update platform.accounts set status='ACTIVE' where id in (?,?,?)",accountA,accountB,accountC);
-  adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
+  // Somente vínculos-base das contas fixas: vínculos criados por convite ou revogados por um teste não voltam.
+  adminUpdate("update cp.memberships set status='ACTIVE' where tenant_id in (?,?) and account_id in (?,?,?) and invitation_id is null",
+   tenantA,tenantB,accountA,accountB,accountC);
   adminUpdate("update cp.units set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
  }
  void adminUpdate(String sql,Object...args) throws SQLException {
@@ -136,7 +140,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  int backendPid() { return jdbc.queryForObject("select pg_backend_pid()",Integer.class); }
  void assertEmptyContext() {
-  for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities"}) {
+  for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities","app.invitation_hash"}) {
    String value=jdbc.queryForObject("select coalesce(current_setting(?,true),'')",String.class,setting);
    org.junit.jupiter.api.Assertions.assertEquals("",value,"Contexto não pode sobreviver à devolução ao pool: "+setting);
   }
@@ -147,11 +151,14 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
    for(String table:new String[]{"outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
-   update(connection,"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB);
+   // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.
+   update(connection,"with invitations as (delete from cp.membership_invitations where tenant_id in (?,?)) "
+    +"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB);
    update(connection,"delete from cp.units where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.blocks where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.tenants where id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.accounts where id in (?,?,?)",accountA,accountB,accountC);
+   for(UUID extra:extraAccounts) update(connection,"delete from platform.accounts where id=?",extra);
    connection.commit();
   } finally { pool.close(); }
  }

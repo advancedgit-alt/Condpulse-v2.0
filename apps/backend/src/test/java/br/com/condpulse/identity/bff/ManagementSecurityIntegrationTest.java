@@ -18,7 +18,12 @@ import br.com.condpulse.reservations.application.AmenityManagementModels;
 import br.com.condpulse.reservations.application.AmenityManagementService;
 import br.com.condpulse.shared.api.ProblemHandler;
 import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.tenancy.api.InvitationAcceptanceController;
+import br.com.condpulse.tenancy.api.MembershipManagementController;
 import br.com.condpulse.tenancy.api.UnitManagementController;
+import br.com.condpulse.tenancy.application.InvitationService;
+import br.com.condpulse.tenancy.application.MembershipManagementService;
+import br.com.condpulse.tenancy.application.MembershipModels;
 import br.com.condpulse.tenancy.application.UnitManagementModels;
 import br.com.condpulse.tenancy.application.UnitManagementService;
 import org.junit.jupiter.api.AfterEach;
@@ -60,6 +65,8 @@ class ManagementSecurityIntegrationTest {
  private UnitManagementService units;
  private AmenityManagementService amenities;
  private AuditQuery audit;
+ private MembershipManagementService memberships;
+ private InvitationService invitations;
 
  @BeforeEach void setup() {
   context=new AnnotationConfigWebApplicationContext();
@@ -74,6 +81,7 @@ class ManagementSecurityIntegrationTest {
   sessions=context.getBean(WebSessionService.class); decoder=context.getBean("testDecoder",JwtDecoder.class);
   units=context.getBean(UnitManagementService.class); amenities=context.getBean(AmenityManagementService.class);
   audit=context.getBean(AuditQuery.class);
+  memberships=context.getBean(MembershipManagementService.class); invitations=context.getBean(InvitationService.class);
   mvc=MockMvcBuilders.webAppContextSetup(context)
    .addFilters(context.getBean("springSecurityFilterChain",Filter.class)).build();
  }
@@ -171,21 +179,67 @@ class ManagementSecurityIntegrationTest {
   assertEquals(403,mvc.perform(delete(unit).servletPath(unit).secure(true).header("Origin",ORIGIN)
    .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1]))
    .andReturn().getResponse().getStatus());
-  String other=BASE+"/memberships";
+  String other=BASE+"/memberships/"+UNIT;
   assertEquals(403,mvc.perform(get(other).servletPath(other).secure(true).cookie(new Cookie(BffCookies.SESSION,raw)))
    .andReturn().getResponse().getStatus());
   verifyNoInteractions(units,amenities,audit);
  }
 
+ @Test void invitationAcceptanceUsesSubjectAndVerifiedEmailClaimOnly() throws Exception {
+  String raw=SessionSecrets.newToken(); var csrf=csrf();
+  var jwt=Jwt.withTokenValue("synthetic-access").header("alg","ES256").subject(ACCOUNT.toString())
+   .claim("email","pessoa@example.invalid").issuedAt(NOW).expiresAt(NOW.plusSeconds(3600)).build();
+  when(sessions.authenticate(raw)).thenReturn(jwt);
+  var request=new MembershipModels.AcceptInvitation("t".repeat(43));
+  when(invitations.accept(ACCOUNT,"pessoa@example.invalid",request))
+   .thenReturn(new MembershipModels.InvitationAccepted(TENANT,UNIT,"PENDING"));
+  String route="/v1/invitations/accept";
+  var response=mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .contentType(MediaType.APPLICATION_JSON).content("{\"token\":\""+"t".repeat(43)+"\",\"tenantId\":\"ignored\"}"))
+   .andReturn().getResponse();
+  assertEquals(201,response.getStatus()); assertTrue(response.getContentAsString().contains("\"status\":\"PENDING\""));
+  verify(invitations).accept(ACCOUNT,"pessoa@example.invalid",request);
+ }
+ @Test void membershipDecisionAndInvitationRoutesRequireCsrfAndPassAssurance() throws Exception {
+  String raw=session("aal2"); var csrf=csrf();
+  UUID membership=UUID.fromString("66666666-6666-4666-8666-666666666666");
+  var decision=new MembershipModels.Decision("APPROVE",3L,null);
+  when(memberships.decide(ACCOUNT,TENANT,AssuranceLevel.AAL2,membership,decision)).thenReturn(
+   new MembershipModels.Membership(membership,UNIT,"101","PESSOA","RESIDENT","ACTIVE",NOW,null,4));
+  String route=BASE+"/memberships/"+membership+"/decision";
+  var denied=mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw)).contentType(MediaType.APPLICATION_JSON)
+   .content("{\"decision\":\"APPROVE\",\"expectedVersion\":3}")).andReturn().getResponse();
+  assertEquals(403,denied.getStatus()); verifyNoInteractions(memberships);
+  var ok=mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"APPROVE\",\"expectedVersion\":3}"))
+   .andReturn().getResponse();
+  assertEquals(200,ok.getStatus()); verify(memberships).decide(ACCOUNT,TENANT,AssuranceLevel.AAL2,membership,decision);
+  var invite=new MembershipModels.CreateInvitation(UNIT,"RESIDENT","Pessoa","pessoa@example.invalid",7);
+  when(invitations.create(ACCOUNT,TENANT,AssuranceLevel.AAL2,invite)).thenReturn(
+   new MembershipModels.InvitationCreated(UUID.randomUUID(),"k".repeat(43),NOW.plusSeconds(86400)));
+  String invitationsRoute=BASE+"/invitations";
+  var created=mvc.perform(post(invitationsRoute).servletPath(invitationsRoute).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .contentType(MediaType.APPLICATION_JSON).content("{\"unitId\":\""+UNIT
+    +"\",\"role\":\"RESIDENT\",\"displayName\":\"Pessoa\",\"email\":\"pessoa@example.invalid\",\"validDays\":7}"))
+   .andReturn().getResponse();
+  assertEquals(201,created.getStatus()); assertEquals("no-store",created.getHeader("Cache-Control"));
+  assertTrue(created.getContentAsString().contains("k".repeat(43)));
+ }
  @Configuration(proxyBeanMethods=false)
  @EnableWebMvc @EnableWebSecurity
  @Import({SecurityConfiguration.class,UnitManagementController.class,AmenityManagementController.class,
-   AuditController.class,ProblemHandler.class})
+   AuditController.class,MembershipManagementController.class,InvitationAcceptanceController.class,ProblemHandler.class})
  static class TestConfiguration {
   @Bean WebSessionService testSessions() { return mock(WebSessionService.class); }
   @Bean UnitManagementService testUnits() { return mock(UnitManagementService.class); }
   @Bean AmenityManagementService testAmenities() { return mock(AmenityManagementService.class); }
   @Bean AuditQuery testAudit() { return mock(AuditQuery.class); }
+  @Bean MembershipManagementService testMemberships() { return mock(MembershipManagementService.class); }
+  @Bean InvitationService testInvitations() { return mock(InvitationService.class); }
   @Bean @Primary JwtDecoder testDecoder() { return mock(JwtDecoder.class); }
   @Bean CsrfTokenRepository testCsrfRepository() { return new BffConfiguration().bffCsrfRepository(); }
   @Bean BffSecurityConfigurer testBffConfigurer(WebSessionService sessions,CsrfTokenRepository csrf) {

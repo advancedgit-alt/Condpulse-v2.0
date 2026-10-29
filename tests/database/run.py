@@ -159,6 +159,98 @@ def manage_checks():
     expect(value(capable("audit.read", "select count(*) from cp.audit_log"), tenant=TB, actor=AB, role="cp_api") == "0",
            "auditoria de outro tenant permanece invisivel")
 
+INV = "70000000-0000-4000-8000-000000000001"
+INV_EXPIRED = "70000000-0000-4000-8000-000000000002"
+NEWCOMER = "10000000-0000-4000-8000-000000000003"
+TOKEN = "a" * 64
+EXPIRED_TOKEN = "b" * 64
+INV_SHARED = "70000000-0000-4000-8000-000000000004"
+SHARED_TOKEN = "f" * 64
+NEWCOMER_2 = "10000000-0000-4000-8000-000000000004"
+NEWCOMER_3 = "10000000-0000-4000-8000-000000000005"
+
+def with_invitation(token, statement):
+    return f"SET LOCAL app.invitation_hash='{token}'; {statement}"
+
+def invitation_checks():
+    """V007: convite individual e vinculo pendente criado somente pelo convidado."""
+    invite = (f"INSERT INTO cp.membership_invitations(id,tenant_id,unit_id,role,display_name,email_hash,token_hash,expires_at,created_by) "
+              f"VALUES('{INV}','{TA}','{UA}','RESIDENT','CONVIDADO FICTICIO','{'c'*64}','{TOKEN}',now()+interval '7 days','{AA}')")
+    expect(error(invite, "42501", tenant=TA, role="cp_api"), "convite nao e criado sem capacidade de vinculos")
+    query(capable("memberships.manage", invite), tenant=TA, role="cp_api")
+    expired = (f"INSERT INTO cp.membership_invitations(id,tenant_id,unit_id,role,display_name,email_hash,token_hash,expires_at,created_by,created_at) "
+               f"VALUES('{INV_EXPIRED}','{TA}','{UA}','RESIDENT','CONVIDADO VENCIDO','{'d'*64}','{EXPIRED_TOKEN}',now()-interval '1 day','{AA}',now()-interval '2 days')")
+    query(expired)
+    expect(error(capable("memberships.manage", invite.replace(INV, "70000000-0000-4000-8000-000000000003").replace("'MANAGER'", "x").replace("'RESIDENT'", "'MANAGER'").replace(TOKEN, "e"*64)),
+                 "23514", tenant=TA, role="cp_api"), "convite nao concede papel de gestor")
+    expect(value("select count(*) from cp.membership_invitations", tenant=TA, role="cp_api") == "0",
+           "convites nao sao listados sem capacidade")
+    expect(value("select count(*) from cp.membership_invitations", tenant=None, actor=NEWCOMER, role="cp_api") == "0",
+           "convidado sem token nao enumera convites")
+    expect(value(with_invitation(TOKEN, "select count(*) from cp.membership_invitations"), actor=NEWCOMER, role="cp_api") == "1",
+           "token apresentado revela somente o proprio convite")
+    expect(error(f"INSERT INTO platform.accounts(id,status) VALUES('{AB}','ACTIVE')", "42501", actor=NEWCOMER, role="cp_api"),
+           "conta local so pode ser criada para o proprio ator")
+    expect(error(f"INSERT INTO platform.accounts(id,status) VALUES('{NEWCOMER}','SUSPENDED')", "42501", actor=NEWCOMER, role="cp_api"),
+           "conta propria nasce somente ativa")
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{NEWCOMER}','ACTIVE')", actor=NEWCOMER, role="cp_api")
+    member = (f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,invitation_id) "
+              f"VALUES('{TA}','{NEWCOMER}','{UA}','CONVIDADO FICTICIO','RESIDENT','PENDING','{INV}')")
+    expect(error(member, "42501", tenant=TA, actor=NEWCOMER, role="cp_api"), "vinculo nao nasce sem convite no contexto")
+    expect(error(with_invitation(EXPIRED_TOKEN, member.replace("CONVIDADO FICTICIO", "CONVIDADO VENCIDO").replace(INV, INV_EXPIRED)), "42501", tenant=TA, actor=NEWCOMER, role="cp_api"),
+           "convite vencido nao cria vinculo")
+    expect(error(with_invitation(TOKEN, member.replace(f",'{INV}')", ",NULL)")), "42501", tenant=TA, actor=NEWCOMER, role="cp_api"),
+           "vinculo precisa apontar o proprio convite")
+    expect(error(with_invitation(TOKEN, member.replace("status,invitation_id)", "status,invitation_id,valid_from)").replace(f",'{INV}')", f",'{INV}',now()-interval '1 year')")),
+                 "42501", tenant=TA, actor=NEWCOMER, role="cp_api"), "convidado nao escolhe inicio da vigencia")
+    manager_membership = value(f"select id from cp.memberships where tenant_id='{TA}' and account_id='{AA}' order by id limit 1")
+    hijack = query(with_invitation(TOKEN, member + "; " +
+        f"UPDATE cp.membership_invitations SET status='ACCEPTED',accepted_by='{NEWCOMER}',accepted_at=now(),"
+        f"membership_id='{manager_membership}',version=version+1 WHERE id='{INV}'"), tenant=TA, actor=NEWCOMER, role="cp_api", check=False)
+    expect(hijack.returncode != 0 and "42501" in hijack.stderr, "convite so e concluido com o vinculo do proprio convidado")
+    expect(error(with_invitation(TOKEN, member.replace("'PENDING'", "'ACTIVE'")), "42501", tenant=TA, actor=NEWCOMER, role="cp_api"),
+           "convidado nao se aprova sozinho")
+    expect(error(with_invitation(TOKEN, member.replace("'RESIDENT'", "'OWNER'")), "42501", tenant=TA, actor=NEWCOMER, role="cp_api"),
+           "papel diferente do convite e recusado")
+    expect(error(with_invitation(TOKEN, member.replace(f"'{TA}','{NEWCOMER}','{UA}'", f"'{TB}','{NEWCOMER}','{UB}'")), "42501", tenant=TB, actor=NEWCOMER, role="cp_api"),
+           "convite nao atravessa tenant")
+    accepted = query(with_invitation(TOKEN, member + " RETURNING id; " +
+        f"UPDATE cp.membership_invitations SET status='ACCEPTED',accepted_by='{NEWCOMER}',accepted_at=now(),"
+        f"membership_id=(SELECT id FROM cp.memberships WHERE account_id='{NEWCOMER}'),version=version+1 WHERE id='{INV}' RETURNING id"),
+        tenant=TA, actor=NEWCOMER, role="cp_api").stdout.strip().splitlines()
+    expect(len(accepted) == 2, "convidado cria vinculo pendente e conclui o convite na mesma transacao")
+    expect(value(with_invitation(TOKEN, f"WITH u AS (UPDATE cp.membership_invitations SET status='ACCEPTED',accepted_by='{NEWCOMER}',accepted_at=now(),membership_id=membership_id WHERE id='{INV}' RETURNING id) SELECT count(*) FROM u"),
+                 tenant=TA, actor=NEWCOMER, role="cp_api") == "0", "convite aceito nao e reutilizado")
+    expect(value("select count(*) from platform.tenants", actor=NEWCOMER, role="cp_api") == "0",
+           "vinculo pendente nao libera o condominio")
+    staff_read = "select count(*) from cp.memberships"
+    expect(value(staff_read, tenant=TA, role="cp_api") == "1", "sem capacidade a gestao ve apenas o proprio vinculo")
+    expect(int(value(capable("memberships.manage", staff_read), tenant=TA, role="cp_api")) >= 2,
+           "gestor com capacidade ve vinculos do proprio tenant")
+    approve = f"WITH u AS (UPDATE cp.memberships SET status='ACTIVE',version=version+1 WHERE account_id='{NEWCOMER}' RETURNING id) SELECT count(*) FROM u"
+    expect(value(approve, tenant=TA, role="cp_api") == "0", "aprovacao exige capacidade")
+    expect(value(capable("memberships.manage", approve), tenant=TA, role="cp_api") == "1", "gestor aprova vinculo pendente")
+    expect(value("select count(*) from platform.tenants", actor=NEWCOMER, role="cp_api") == "1",
+           "vinculo aprovado libera o condominio")
+    expect(error(capable("memberships.manage", f"UPDATE cp.memberships SET role='MANAGER' WHERE account_id='{NEWCOMER}'"), "42501", tenant=TA, role="cp_api"),
+           "gestao nao altera papel do vinculo")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{NEWCOMER}'")
+    shared_invite = invite.replace(INV, INV_SHARED).replace(TOKEN, SHARED_TOKEN)
+    query(capable("memberships.manage", shared_invite), tenant=TA, role="cp_api")
+    for account in (NEWCOMER_2, NEWCOMER_3):
+        query(f"INSERT INTO platform.accounts(id,status) VALUES('{account}','ACTIVE')", actor=account, role="cp_api")
+    shared = member.replace(NEWCOMER, NEWCOMER_2).replace(INV, INV_SHARED)
+    query(with_invitation(SHARED_TOKEN, shared), tenant=TA, actor=NEWCOMER_2, role="cp_api")
+    expect(error(with_invitation(SHARED_TOKEN, shared.replace(NEWCOMER_2, NEWCOMER_3)), "23505", tenant=TA, actor=NEWCOMER_3, role="cp_api"),
+           "o mesmo convite nao gera segundo vinculo mesmo antes de concluido")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{NEWCOMER_2}'")
+    again = f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{TA}','{NEWCOMER}','{UA}','CONVIDADO FICTICIO','RESIDENT','PENDING')"
+    query(again)
+    expect(error(again, "23505"), "somente um vinculo nao revogado por conta, unidade e papel")
+    expect(value(f"select count(*) from cp.memberships where account_id='{NEWCOMER}' and status='REVOKED'") == "1",
+           "vinculo revogado nao impede novo convite para a mesma unidade e papel")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{NEWCOMER}'")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -249,6 +341,7 @@ def main():
     expect(value("select count(*) from cp.idempotency_keys",tenant=TA,actor=AB,role="cp_api")=="0",
            "resposta idempotente nao atravessa ator no mesmo tenant")
     manage_checks()
+    invitation_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

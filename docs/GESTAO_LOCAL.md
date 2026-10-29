@@ -56,8 +56,52 @@ select 'amenity_limits',tenant_id::text,id::text,capacity::text||'/'||fee_cents:
 from cp.amenities where capacity>10000 or fee_cents>10000000;
 ```
 
+## Vínculos e convites (V007)
+
+| Rota | Capacidade | Observação |
+| --- | --- | --- |
+| `GET .../management/memberships?status=` | `memberships.manage` | Sem e-mail ou conta Auth |
+| `POST .../memberships/{id}/decision` | `memberships.manage` | `APPROVE`→ACTIVE, `REJECT`→REVOKED (motivo obrigatório); versão lida |
+| `POST .../memberships/{id}/revoke` | `memberships.manage` | Motivo obrigatório; evento `MEMBERSHIP_REVOKED`; nega o próprio vínculo de gestão e o último gestor ativo |
+| `GET/POST .../management/invitations` | `memberships.manage` | Papéis residenciais e `CONCIERGE`; nunca `MANAGER` |
+| `POST .../invitations/{id}/revoke` | `memberships.manage` | Somente convite pendente |
+| `POST /v1/invitations/accept` | autenticado | Convidado com o mesmo e-mail cria só o próprio vínculo `PENDING` |
+
+O convite tem validade de 1 a 14 dias. O token (32 bytes) aparece uma vez para a
+gestão compartilhar pelo canal combinado; o banco guarda só o hash do token e o
+hash do e-mail ligado ao convite. O aceite cria o espelho local da conta Auth já
+existente, nunca usuário no provedor: o cadastro no Supabase Auth continua sendo
+operação administrativa (cadastro público desligado). O vínculo só opera após
+aprovação da gestão. No banco, o `INSERT` do convidado exige convite válido no
+contexto local (`app.invitation_hash`), mesmo papel/unidade/nome, status
+`PENDING` e o identificador do próprio convite (`invitation_id` único: cada convite
+gera no máximo um vínculo, mesmo antes de concluído). A conclusão do convite só
+aceita o vínculo do próprio convidado; o início da vigência é definido pelo banco.
+
+Regras adicionais:
+
+- Há no máximo um vínculo não revogado por conta, unidade e papel. Vínculo
+  revogado ou rejeitado não impede novo convite para a mesma unidade e papel.
+- Revogações que envolvem gestores são serializadas por condomínio; depois da
+  trava, quem revoga precisa continuar gestor ativo. Assim a revogação cruzada
+  entre dois gestores nunca deixa o condomínio sem gestor.
+- Ninguém decide sobre o próprio vínculo; outro gestor precisa aprovar ou rejeitar.
+- Unidade inativada depois da emissão bloqueia o aceite com a mesma resposta
+  neutra.
+- A validade do convite é calculada pelo relógio do banco.
+
+Limites conhecidos: o aceite publica `app.tenant_id` para quem ainda não é membro,
+apenas depois de travar um convite válido e somente para as instruções fixas do
+aceite (endurecimento com função `SECURITY DEFINER` pendente). O claim `email` é
+usado sem checar `email_verified`; a proteção depende de cadastro público
+desligado e contas criadas pela operação. `email_hash` é SHA-256 sem chave secreta
+(HMAC pendente). Convite de `CONCIERGE` aprovado ainda exige o cadastro
+supervisionado do segundo fator descrito em OPERACAO_MFA.md antes de qualquer
+operação de portaria. A lista de convites mostra os 500 mais recentes.
+
 ## Pendências
 
-Vínculos/moradores, convites, decisões de reserva pela gestão e telas web ficam
-nas próximas PRs. A V006 ainda não foi aplicada ao banco remoto: o executor de
-migrations está fixado em V003–V005 e exige revisão e autorização próprias.
+Decisões de reserva pela gestão e telas web ficam nas próximas PRs. V006/V007
+ainda não foram aplicadas ao banco remoto: o executor de migrations está fixado
+em V003–V005 e exige revisão e autorização próprias. Envio automático do convite
+por e-mail depende de SMTP e de credencial administrativa fora da API.
