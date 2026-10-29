@@ -49,6 +49,13 @@ describe('canal de atualização da unidade', () => {
     expect(h.calls).toEqual(['resync', 'resync', 'resync']);
   });
 
+  it('queda antes do primeiro ready também consulta de novo ao abrir', () => {
+    const h = harness();
+    h.last().fail(false);
+    h.last().emit('ready', '{}');
+    expect(h.calls).toEqual(['resync']);
+  });
+
   it('reconexão do navegador consulta o estado de novo; a primeira abertura não', () => {
     const h = harness();
     h.last().emit('ready', '{}');
@@ -92,6 +99,8 @@ describe('canal de atualização da unidade', () => {
     expect(waits).toEqual([RETRY_BASE_MS, RETRY_BASE_MS * 2, RETRY_BASE_MS * 4, RETRY_BASE_MS * 8, RETRY_MAX_MS, RETRY_MAX_MS]);
     expect(h.calls).toEqual([]);
     h.last().emit('ready', '{}');
+    // Mudanças durante as recusas ficaram de fora: a primeira abertura depois delas consulta tudo de novo.
+    expect(h.calls).toEqual(['resync']);
     h.last().fail(true);
     expect(h.timers.at(-1)!.ms).toBe(RETRY_BASE_MS); // abertura bem-sucedida zera a espera
   });

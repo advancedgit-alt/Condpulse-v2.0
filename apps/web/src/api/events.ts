@@ -47,6 +47,8 @@ export function connectUnitEvents(url: string, handlers: UnitEventHandlers, crea
   let disposed = false;
   let failures = 0;
   let opened = false;
+  // Qualquer queda ou recusa antes do primeiro ready também exige consultar de novo quando o canal abrir.
+  let lost = false;
   let pending: unknown = null;
 
   const schedule = (ms: number) => {
@@ -64,8 +66,8 @@ export function connectUnitEvents(url: string, handlers: UnitEventHandlers, crea
     current.addEventListener('ready', () => {
       if (source !== current) return;
       // Primeira abertura: a tela acabou de consultar. Reabertura: consultar tudo de novo.
-      if (opened) handlers.resync();
-      opened = true; failures = 0;
+      if (opened || lost) handlers.resync();
+      opened = true; lost = false; failures = 0;
     });
     current.addEventListener('changed', (event) => {
       if (source !== current) return;
@@ -79,11 +81,13 @@ export function connectUnitEvents(url: string, handlers: UnitEventHandlers, crea
       if (source !== current) return;
       const reason = parse(event)?.reason;
       if (reason === 'revoked') { stop(); disposed = true; handlers.ended('revoked'); return; }
-      if (reason === 'expired') { stop(); handlers.ended('expired'); schedule(EXPIRED_RETRY_MS); }
+      if (reason === 'expired') { stop(); lost = true; handlers.ended('expired'); schedule(EXPIRED_RETRY_MS); }
       // timeout, shutdown, unavailable: o navegador reconecta sozinho e o "ready" seguinte consulta tudo de novo.
     });
     current.onerror = () => {
-      if (source !== current || current.readyState !== CLOSED) return;
+      if (source !== current) return;
+      lost = true;
+      if (current.readyState !== CLOSED) return;
       // Recusa (401, 404 com a função desligada, 429, 503): o navegador desiste; tentar de novo com espera crescente.
       // Sem consulta aqui: a próxima abertura bem-sucedida já consulta tudo de novo.
       stop();
