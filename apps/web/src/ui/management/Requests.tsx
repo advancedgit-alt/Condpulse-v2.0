@@ -6,6 +6,7 @@ import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { dateInZone, formatWhen } from '../dateTime';
 import { codeOf, repeatFailure, settleFailure, usePendingOperation } from '../operationIntent';
 import { categoryLabels, civilDate, stateLabels } from '../requestLabels';
+import { RequestAttachments } from '../RequestAttachments';
 import { ActionFeedback, useAccessGuard, useAction, useManagement, managementKey, type ActionResult } from './shared';
 
 const accessCodes = ['MFA_REQUIRED', 'STAFF_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'];
@@ -76,6 +77,7 @@ function ManagedDetail({ requestId, close }: { requestId: string; close(): void 
           <strong>{message.mine ? 'Você' : <bdi>{message.authorName}</bdi>}{message.authorRole === 'STAFF' ? ' (equipe)' : ' (unidade)'}</strong>
           <span>{formatWhen(message.createdAt, scope.timeZone)}{message.visibility === 'INTERNAL' ? ' · comentário interno, não aparece para a unidade' : ''}</span>
           <p className="announcement-body"><bdi>{message.body}</bdi></p></li>)}</ol>}
+    <RequestAttachments tenantId={scope.tenantId} requestId={request.requestId} queryKey={managementKey(scope)} canUpload={request.state !== 'CLOSED'} timeZone={scope.timeZone} />
     {request.state === 'CLOSED' ? <Notice tone="info">Pedido encerrado: a conversa fica guardada e não recebe novas mensagens.</Notice>
       : <><StaffMessageForm request={request} /><UpdateForm request={request} done={setOutcome} /></>}
     <div className="button-row"><button className="button button-secondary button-compact" type="button" onClick={close}>Fechar pedido</button></div>

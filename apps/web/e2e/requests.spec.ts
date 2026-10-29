@@ -68,6 +68,8 @@ async function installRequestsApi(page: Page) {
   await page.route(`**/v1/tenants/${TENANT_A}/requests/**`, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname.replace(`/v1/tenants/${TENANT_A}/requests/`, '');
+    // Anexos (CP-017) desligados neste conjunto: a rota não existe e a seção some sem erro.
+    if (path.endsWith('/attachments')) { await route.fulfill({ status: 404 }); return; }
     const item = state.items.find((candidate) => candidate.requestId === path.split('/')[0]);
     if (!item) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
     if (request.method() === 'GET') { await json(route, 200, unitView(item)); return; }

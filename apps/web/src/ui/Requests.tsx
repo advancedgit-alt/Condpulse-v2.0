@@ -7,6 +7,7 @@ import { Empty, ErrorState, Loading, Notice, errorMessage } from './primitives';
 import { formatWhen } from './dateTime';
 import { codeOf, repeatFailure, settleFailure, uncertain, usePendingOperation } from './operationIntent';
 import { categoryLabels, civilDate, stateLabels } from './requestLabels';
+import { RequestAttachments } from './RequestAttachments';
 import './management/Management.css';
 
 /** Recurso desligado no ambiente ou vínculo que mudou: a seção some sem erro técnico (o resumo trata o vínculo). */
@@ -131,6 +132,7 @@ function RequestDetail({ scope, requestId, timeZone, close }: { scope: Scope; re
       : <ol className="request-messages" aria-label="Conversa do pedido">{request.messages.map((message) =>
         <li key={message.messageId}><strong>{author(message)}</strong> <span>{formatWhen(message.createdAt, timeZone)}</span>
           <p className="announcement-body"><bdi>{message.body}</bdi></p></li>)}</ol>}
+    <RequestAttachments tenantId={scope.tenantId} requestId={request.requestId} queryKey={scopeKey(scope)} canUpload={request.state !== 'CLOSED'} timeZone={timeZone} />
     {request.state === 'CLOSED' ? <Notice tone="info">Pedido encerrado. A conversa fica guardada; se precisar, abra um novo pedido.</Notice>
       : <ReplyForm scope={scope} request={request} />}
     <div className="button-row"><button className="button button-secondary button-compact" type="button" onClick={close}>Fechar conversa</button></div>
