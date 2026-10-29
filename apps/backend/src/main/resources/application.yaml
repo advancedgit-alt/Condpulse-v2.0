@@ -43,6 +43,8 @@ condpulse:
     enabled: ${CP_MANAGEMENT_ENABLED:false}
   platform:
     enabled: ${CP_PLATFORM_ENABLED:false}
+  parcels:
+    enabled: ${CP_PARCELS_ENABLED:false}
   bff:
     enabled: ${CP_BFF_ENABLED:false}
     origin: ${CP_BFF_ORIGIN:}

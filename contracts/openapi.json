@@ -3270,6 +3270,548 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/parcels": {
+      "get": {
+        "operationId": "listParcels",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Situação",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RECEIVED",
+                "DELIVERED"
+              ]
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "required": false,
+            "description": "Unidade",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "description": "Trecho do local de guarda; % e _ são texto literal.",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
+        "description": "Lista da portaria (capacidade concierge.operate com AAL2), mais recentes primeiro, até 100.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PARCEL_STATUS_INVALID ou PARCEL_FILTER_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "receiveParcel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Recebimento pela portaria. Grava encomenda, auditoria e intenção de aviso na mesma transação; o aviso nunca condiciona o registro.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelReceive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Encomenda recebida; repetição com a mesma chave devolve o mesmo resultado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados inválidos ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARCEL_UNIT_UNAVAILABLE, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}": {
+      "get": {
+        "operationId": "getParcel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Detalhe para a portaria ou para vínculo residencial vigente com a unidade; fora disso, PARCEL_NOT_FOUND.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}/handoff": {
+      "post": {
+        "operationId": "deliverParcel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Entrega única pela portaria, com documento conferido e versão lida. Segunda tentativa: PARCEL_ALREADY_DELIVERED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelDeliver"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PARCEL_RECIPIENT_REQUIRED, PARCEL_IDENTITY_CHECK_REQUIRED, PARCEL_VERSION_REQUIRED ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "409": {
+            "description": "PARCEL_ALREADY_DELIVERED, PARCEL_CHANGED, IDEMPOTENCY_KEY_REUSED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/parcels": {
+      "get": {
+        "operationId": "listUnitParcels",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Situação",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RECEIVED",
+                "DELIVERED"
+              ]
+            }
+          }
+        ],
+        "description": "Encomendas da unidade para morador, responsável ou dependente com vínculo vigente.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PARCEL_STATUS_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED, TENANT_ACCESS_DENIED, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/units": {
+      "get": {
+        "operationId": "listConciergeUnits",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Trecho do rótulo ou do bloco",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "description": "Unidades ativas para o recebimento pela portaria; busca por trecho do rótulo ou do bloco.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "maxItems": 500,
+                  "items": {
+                    "$ref": "#/components/schemas/ParcelUnitOption"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PARCEL_FILTER_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem a capacidade da portaria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator, ou rota inexistente com CP_PARCELS_ENABLED=false"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5214,6 +5756,212 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "ParcelHandoff": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recipientName",
+          "deliveredAt",
+          "evidenceKind"
+        ],
+        "description": "Entrega registrada pela portaria. Sem identificador da conta da equipe; operador e horário ficam na auditoria.",
+        "properties": {
+          "recipientName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evidenceKind": {
+            "type": "string",
+            "enum": [
+              "ASSISTED"
+            ],
+            "description": "ASSISTED: documento conferido pela portaria. Código e delegação ainda não existem."
+          }
+        }
+      },
+      "Parcel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "parcelId",
+          "unitId",
+          "unitLabel",
+          "blockName",
+          "quantity",
+          "description",
+          "storageLocation",
+          "status",
+          "receivedAt",
+          "version",
+          "handoff"
+        ],
+        "properties": {
+          "parcelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "storageLocation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "DELIVERED"
+            ]
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "handoff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ParcelHandoff"
+              }
+            ],
+            "description": "Presente somente quando DELIVERED."
+          }
+        }
+      },
+      "ParcelPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "parcels",
+          "truncated"
+        ],
+        "properties": {
+          "parcels": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Parcel"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ParcelReceive": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "quantity",
+          "storageLocation"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Descrição curta opcional; espaços Unicode normalizados."
+          },
+          "storageLocation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      },
+      "ParcelDeliver": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recipientName",
+          "identityChecked",
+          "expectedVersion"
+        ],
+        "properties": {
+          "recipientName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "identityChecked": {
+            "type": "boolean",
+            "const": true,
+            "description": "A portaria confirma que conferiu o documento da pessoa que retira."
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ParcelUnitOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "label",
+          "blockName"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }

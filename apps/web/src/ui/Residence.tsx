@@ -55,13 +55,17 @@ export function ContextPage() {
     navigate(`/morador/${tenantId}/${unitId}/inicio`);
   }
   const managed = memberships.filter(membership => membership.role === 'MANAGER' && membership.unitId === null);
+  const concierge = memberships.filter(membership => membership.role === 'CONCIERGE' && membership.unitId === null);
   const invitation = storedInvitation();
   return <div className="context-page"><div className="page-intro"><span className="eyebrow">SEU ACESSO</span><h1>Escolha seu espaço.</h1><p>Você verá apenas os condomínios e as unidades vinculados ao seu cadastro.</p></div>
     {invitation ? <Notice>Há um convite aberto nesta janela. <Link to="/convite">Concluir o aceite do convite</Link></Notice> : null}
     {managed.length > 0 ? <section className="panel management-context" aria-labelledby="management-access-title"><span className="section-index">GESTÃO</span><h2 id="management-access-title">Gestão do condomínio</h2>
       <p>Ações de gestão exigem o segundo fator de autenticação e ficam registradas na auditoria.</p>
       <div className="button-row">{managed.map(membership => <Link key={membership.membershipId} className="button button-secondary" to={`/gestao/${membership.tenantId}/pendencias`}>Abrir gestão · {membership.tenantName}<Icon name="arrow" /></Link>)}</div></section> : null}
-    {tenants.length === 0 ? managed.length > 0 ? <Notice>Esta conta não tem unidade vinculada como morador. Use o acesso de gestão acima.</Notice>
+    {concierge.length > 0 ? <section className="panel management-context" aria-labelledby="concierge-access-title"><span className="section-index">PORTARIA</span><h2 id="concierge-access-title">Portaria do condomínio</h2>
+      <p>Recebimentos e entregas exigem o segundo fator de autenticação e ficam registrados com o seu acesso.</p>
+      <div className="button-row">{concierge.map(membership => <Link key={membership.membershipId} className="button button-secondary" to={`/portaria/${membership.tenantId}/encomendas`}>Abrir portaria · {membership.tenantName}<Icon name="arrow" /></Link>)}</div></section> : null}
+    {tenants.length === 0 ? managed.length > 0 || concierge.length > 0 ? <Notice>Esta conta não tem unidade vinculada como morador. Use o acesso {managed.length > 0 ? 'de gestão' : 'da portaria'} acima.</Notice>
       : <div className="panel"><Empty title="Nenhum vínculo disponível">A gestão precisa validar seu vínculo antes de você acessar a unidade. Se seu cadastro acabou de ser aprovado, atualize o acesso.</Empty></div>
       : <div className="context-grid"><section className="panel context-form"><span className="section-index">01 / CONTEXTO</span><h2>Onde você quer acessar?</h2><form className="stack-form" onSubmit={event => void enter(event)}>
         <label htmlFor="tenant">Condomínio</label><select id="tenant" value={selected ? tenantId : ''} onChange={event => void changeTenant(event.target.value)} disabled={switching || operations.locked}><option value="">Selecione um condomínio</option>{tenants.map(tenant => <option key={tenant.tenantId} value={tenant.tenantId}>{tenant.tenantName}</option>)}</select>

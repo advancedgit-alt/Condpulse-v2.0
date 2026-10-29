@@ -71,6 +71,10 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/reservations/*/decision","/v1/tenants/*/management/reservations/*/cancel",
       "/v1/tenants/*/management/amenities/*/maintenance-blocks").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/units/*","/v1/tenants/*/management/amenities/*").authenticated()
+    // Encomendas: autenticação aqui; capacidade da portaria (AAL2) ou vínculo residencial no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*","/v1/tenants/*/units/*/parcels",
+      "/v1/tenants/*/concierge/units").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*/handoff").authenticated()
     // Painel master: autenticação aqui; papel de plataforma vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/session","/v1/platform/tenants","/v1/platform/audit-events").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()

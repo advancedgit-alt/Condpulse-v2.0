@@ -471,6 +471,76 @@ def platform_checks():
     expect(value(history).endswith(",DELETE:ACTIVE:-"), "remocao do papel tambem fica na trilha")
     query("DELETE FROM platform.platform_role_events")
 
+def parcel_checks():
+    """V012: portaria recebe e entrega por capacidade; morador ve somente a propria unidade; entrega unica e conferida."""
+    CONC, UA2, P2, P3 = ("10000000-0000-4000-8000-0000000000c1", "20000000-0000-4000-8000-0000000000a2",
+                         "40000000-0000-4000-8000-000000000002", "40000000-0000-4000-8000-000000000003")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{CONC}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UA2}','{TA}','FICTICIA 102');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{CONC}',NULL,'PORTARIA FICTICIA','CONCIERGE','ACTIVE');
+        INSERT INTO cp.parcels(id,tenant_id,unit_id,quantity,description,storage_location,received_by)
+          VALUES('{P2}','{TA}','{UA2}',2,'CAIXAS FICTICIAS','PRATELEIRA 2','{CONC}');
+    """)
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    def as_concierge(statement):
+        return concierge + statement
+    expect(value(f"select count(*) from cp.parcels where id in ('{PA}','{P2}')", tenant=TA, role="cp_api") == "1",
+           "morador ve somente encomendas da propria unidade")
+    expect(value(f"select count(*) from cp.parcels where id='{P2}'", tenant=TA, role="cp_api") == "0",
+           "UUID de encomenda de outra unidade nao atravessa RLS")
+    expect(value(f"select count(*) from cp.parcels where id in ('{PA}','{P2}')", tenant=TA, actor=CONC, role="cp_api") == "0",
+           "portaria sem capacidade publicada (sem AAL2) nao ve encomendas")
+    expect(value(as_concierge(f"select count(*) from cp.parcels where id in ('{PA}','{P2}')"), tenant=TA, actor=CONC, role="cp_api") == "2",
+           "portaria com capacidade ve as encomendas do condominio")
+    expect(value(as_concierge("select count(*) from cp.parcels"), tenant=TB, actor=AB, role="cp_api") == "0",
+           "capacidade publicada nao atravessa condominio")
+    def receive(identifier, actor=CONC, extra_cols="", extra_vals=""):
+        return (f"INSERT INTO cp.parcels(id,tenant_id,unit_id,quantity,description,storage_location,received_by{extra_cols}) "
+                f"VALUES('{identifier}','{TA}','{UA}',1,'ENVELOPE FICTICIO','ARMARIO 1','{actor}'{extra_vals})")
+    expect(error(receive(P3, actor=AA), "42501", tenant=TA, actor=AA, role="cp_api"), "morador nao registra recebimento")
+    expect(error(as_concierge(receive(P3, actor=AA)), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "recebimento registra a propria conta da portaria")
+    expect(error(as_concierge(receive(P3, extra_cols=",status", extra_vals=",'DELIVERED'")), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "encomenda nasce recebida")
+    expect(error(as_concierge(receive(P3, extra_cols=",received_at", extra_vals=",now()-interval '1 day'")), "42501", tenant=TA, actor=CONC,
+                 role="cp_api"), "aplicacao nao escolhe a data do recebimento")
+    query(as_concierge(receive(P3)), tenant=TA, actor=CONC, role="cp_api")
+    expect(value(f"select count(*) from cp.parcels where id='{P3}'", tenant=TA, role="cp_api") == "1", "morador ve encomenda recebida da unidade")
+    resident_update = f"WITH u AS (UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{P3}' RETURNING 1) SELECT count(*) FROM u"
+    expect(value(resident_update, tenant=TA, role="cp_api") == "0", "morador nao marca entrega")
+    expect(error(as_concierge(f"UPDATE cp.parcels SET quantity=9 WHERE id='{P3}'"), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "quantidade e local ficam fora da alteracao")
+    expect(error(as_concierge(f"UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{P3}'"), "23514", tenant=TA, actor=CONC,
+                 role="cp_api"), "entrega sem registro de retirada e recusada no commit")
+    expect(error(as_concierge(f"UPDATE cp.parcels SET status='DELIVERED',version=version+2 WHERE id='{P3}'"), "23514", tenant=TA, actor=CONC,
+                 role="cp_api"), "versao da encomenda avanca uma unidade")
+    def handoff(operator=CONC, evidence="ASSISTED"):
+        return (f"INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,evidence_kind) "
+                f"VALUES('{TA}','{P3}','{operator}','RECEBEDOR FICTICIO','{evidence}')")
+    deliver = f"UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{P3}'; "
+    expect(error(as_concierge(deliver + handoff(operator=AA)), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "retirada registra a propria conta da portaria")
+    expect(error(as_concierge(deliver + handoff(evidence="CODE")), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "codigo e delegacao ainda nao sao aceitos")
+    expect(error(handoff(operator=AA), "42501", tenant=TA, role="cp_api"), "morador nao registra retirada")
+    expect(error(as_concierge(handoff()), "23514", tenant=TA, actor=CONC, role="cp_api"), "retirada sem entrega e recusada no commit")
+    query(as_concierge(deliver + handoff()), tenant=TA, actor=CONC, role="cp_api")
+    expect(value(f"select status||':'||version from cp.parcels where id='{P3}'") == "DELIVERED:1", "entrega com registro de retirada")
+    expect(value(f"select recipient_name from cp.parcel_handoffs where parcel_id='{P3}'", tenant=TA, role="cp_api") == "RECEBEDOR FICTICIO",
+           "morador ve quem retirou a encomenda da unidade")
+    expect(value(f"select count(*) from cp.parcel_handoffs where parcel_id='{P3}'", tenant=TA, actor=AB, role="cp_api") == "0",
+           "retirada de outra unidade nao e visivel")
+    expect(error(as_concierge(f"UPDATE cp.parcels SET status='RECEIVED',version=version+1 WHERE id='{P3}'"), "23514", tenant=TA, actor=CONC,
+                 role="cp_api"), "entrega nao volta")
+    expect(error(as_concierge(f"DELETE FROM cp.parcel_handoffs WHERE parcel_id='{P3}'"), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "registro de retirada nao e apagado")
+    expect(error("select count(*) from cp.parcels", "42501", tenant=TA, role="cp_worker"), "worker nao le encomendas")
+    query(f"DELETE FROM cp.parcel_handoffs WHERE parcel_id='{P3}'; DELETE FROM cp.parcels WHERE id in ('{P2}','{P3}'); "
+          f"DELETE FROM cp.memberships WHERE account_id='{CONC}'; DELETE FROM cp.units WHERE id='{UA2}'; "
+          f"DELETE FROM platform.accounts WHERE id='{CONC}'")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -535,6 +605,7 @@ def main():
     expect(bool(query(reservation(),tenant=TA,role="cp_api").stdout.strip()),"cancelamento libera intervalo")
 
     pickup = f"""
+        SET LOCAL app.capabilities='concierge.operate';
         WITH claimed AS(
           UPDATE cp.parcels SET status='DELIVERED',version=version+1
           WHERE id='{PA}' AND status='RECEIVED' RETURNING id
@@ -545,7 +616,8 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
         results = list(pool.map(lambda _: query(pickup,tenant=TA,role="cp_api"), range(20)))
     expect(sum(bool(r.stdout.strip()) for r in results) == 1, "20 retiradas concorrentes geram somente um handoff")
-    duplicate = f"insert into cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,evidence_kind) values('{TA}','{PA}','{AA}','FICTICIO','ASSISTED')"
+    duplicate = (f"SET LOCAL app.capabilities='concierge.operate'; insert into cp.parcel_handoffs(tenant_id,parcel_id,operator_id,"
+                 f"recipient_name,evidence_kind) values('{TA}','{PA}','{AA}','FICTICIO','ASSISTED')")
     expect(error(duplicate,"23505",tenant=TA,role="cp_api"), "UNIQUE impede segunda evidencia de retirada")
 
     def decide(state):
@@ -565,6 +637,7 @@ def main():
     decision_checks()
     recovery_checks()
     platform_checks()
+    parcel_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

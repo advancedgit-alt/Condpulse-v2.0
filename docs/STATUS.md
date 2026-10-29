@@ -1,5 +1,11 @@
 # Estado verificável - 29/10/2026
 
+## Encomendas — CP-029/CP-030/CP-031
+
+- Atrás de `CP_PARCELS_ENABLED=false`; V012 não aplicada a nenhum banco remoto. Portaria (capacidade `concierge.operate` com AAL2) registra recebimento idempotente — encomenda, auditoria e intenção de aviso na mesma transação — e retirada única com documento conferido; morador, responsável e dependente veem somente as encomendas da própria unidade. Banco: grants por coluna, políticas restritivas por capacidade e por vínculo residencial, transição única RECEIVED→DELIVERED e gatilho diferido que exige o registro de retirada. Telas `/portaria/{tenantId}/encomendas` e `/morador/{tenantId}/{unitId}/encomendas`. Detalhes em [ENCOMENDAS.md](ENCOMENDAS.md).
+- Local: SQL 190 verificações; Vitest 102; Playwright 51 (Chromium do sandbox). Java/JDBC no CI.
+- Fora do recorte: foto (CP-017), código e delegação (CP-041), envio do aviso (CP-034/CP-035). Flags remotas inalteradas.
+
 ## Painel master (fase 4, OPS-01) — CP-014/CP-019
 
 - Atrás de `CP_PLATFORM_ENABLED=false` (inclusive na Vercel); V010 não aplicada a nenhum banco remoto. Papel `PLATFORM_ADMIN` em tabela própria, concedido só por SQL operacional revisado (trilha por gatilho em `platform_role_events`); capacidades publicadas no contexto local apenas com conta ativa, papel vigente e AAL2. Catálogo dos condomínios com busca, renomear/suspender/reativar pela versão lida com motivo e auditoria da plataforma por cursor; sem criação de condomínio pela API, sem leitura de dados residenciais e sem personificação. Tela `/master`. Detalhes em [PAINEL_MASTER.md](PAINEL_MASTER.md).
