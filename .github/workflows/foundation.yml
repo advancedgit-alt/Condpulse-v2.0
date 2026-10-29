@@ -33,6 +33,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
@@ -145,6 +147,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.0"
@@ -174,6 +178,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.0"
