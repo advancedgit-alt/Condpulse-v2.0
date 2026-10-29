@@ -1,5 +1,11 @@
 # Estado verificável - 29/10/2026
 
+## Telas web da gestão local — CP-014/CP-018/CP-021/CP-023
+
+- Web `/gestao/{condomínio}` (atrás de `CP_MANAGEMENT_ENABLED=false`): acesso só para vínculo `MANAGER` vigente; sem AAL2 nenhuma rota de gestão é chamada e a tela cadastra/verifica o autenticador. Seções Pendências, Reservas (decisão, cancelamento com motivo, bloqueio idempotente), Áreas, Unidades, Pessoas (vínculos, convite com link exibido uma vez, revogação) e Auditoria. Ações nunca repetem sozinhas; perda de acesso remove os dados da tela. Detalhes em [GESTAO_LOCAL.md](GESTAO_LOCAL.md).
+- CI 40813963737 verde (head `dca1c1d`) antes da revisão. Revisão independente: dois altos, quatro médios e dez baixos, sem falha crítica. Corrigidos: edição pela versão lida com aviso e recarga quando a lista traz versão mais nova (alto); repetição natural de decisão, cancelamento e bloqueio mostrada como informação/aviso, nunca como sucesso; taxa com ponto decimal e limites das regras validados na tela; falha do status de MFA não derruba a tela; verificação TOTP não apaga a sessão local; QR do GoTrue (SVG cru) normalizado pelo BFF para data URI base64; convite descartado ao sair; conta só de gestão sem formulário de morador. Testes novos de formato de taxa, limites, mensagens de resultado, convite na aba, QR e conta só de gestão. CI 40817694087 verde (head `c09c554`); localmente `tsc`, Vitest (84) e Playwright (34, Chromium do sandbox) verdes.
+- Pendente (alto, PR própria): primeiro acesso por convite de quem ainda não tem conta local — o login do BFF exige conta local ativa. Também pendentes: formato real do QR conferido no Supabase Auth, SMTP, aplicação remota de V006–V008 e aceite em navegador com dados reais. Flags remotas inalteradas.
+
 ## Pedidos, decisões e bloqueios de reserva — CP-022/CP-023
 
 - V008: políticas restritivas (confirmar/rejeitar só com `reservations.decide`; área com aprovação não recebe `BOOKING` já `CONFIRMED`; bloqueio só com `amenities.manage`; `INSERT` da aplicação só cria `BOOKING` `PENDING_APPROVAL`/`CONFIRMED` e `BLOCK` `CONFIRMED`, sem `HELD`) e gatilho de transição válido para qualquer papel: estados encerrados não voltam. Motivo até 500 caracteres.
@@ -23,7 +29,7 @@
 - CI 40805310227 verde (head `58f559c`) com `LocalManagementJdbcTest` em PostgreSQL real e 13 verificações SQL novas. O run 40804489500 falhou uma vez na etapa SQL sem log acessível e não se repetiu sem mudança SQL; o CI agora anota o final do log das etapas Maven/SQL/JDBC.
 - Revisão independente (sem falha crítica/alta) apontou dois achados médios e cinco baixos. Corrigidos no PR #26: manifesto de onboarding alinhado à V006 e à gestão (nome de área até 120 e único sem diferenciar maiúsculas, capacidade até 10000, taxa até 10000000 centavos); índice `audit_log_tenant_recent` (plano local com 50 mil linhas usa Index Only Scan); cursor com faixa validada (400, não 503); `UPDATE` sem capacidade recusado com 42501; grant de `UPDATE` em blocos removido; uma ação de auditoria por mudança; testes de barreira em blocos/áreas, de cada campo que versiona a regra e de paginação completa com empates. CI 40808087311 verde (head `8ddebb4`); após o merge, foundation 40808431637 e smoke público 40808431569 verdes.
 - Ficam registrados: incremento de `version`/`policy_version` garantido só pela API (sem gatilho) e auditoria sem valores anteriores/novos. Antes de aplicar a V006 em banco com dados, rodar a consulta prévia de GESTAO_LOCAL.md.
-- V006 não foi aplicada ao banco remoto (executor fixado em V003–V005). Telas web pendentes.
+- V006 não foi aplicada ao banco remoto (executor fixado em V003–V005). Telas web na seção "Telas web da gestão local".
 
 ## MFA de equipe e capacidades — CP-013/CP-014
 
