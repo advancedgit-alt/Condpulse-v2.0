@@ -1,0 +1,26 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ app [label="Entradas
+REST · BFF · SSE · webhooks",fillcolor="#102A43",fontcolor=white];
+ security [label="Identidade / autorização
+Tenant + unidade + papel + validade"];
+ identity [label="Cadastro
+Condomínios · unidades · vínculos"];
+ booking [label="Reservas
+Regras · slots · fila · taxas"];
+ access [label="Acessos
+Convites · chegadas · eventos"];
+ parcels [label="Encomendas
+Registro · delegação · entrega"];
+ comm [label="Comunicação
+Avisos · pedidos · documentos"];
+ integ [label="Integração
+Credenciais · sync por equipamento"];
+ cross [label="Serviços transversais
+Auditoria · outbox · arquivos · privacidade",fillcolor="#E3F4F4"];
+ ports [label="Ports / adapters
+Postgres · Supabase · parceiro · push"];
+ app -> security;security -> identity;security -> booking;security -> access;security -> parcels [constraint=false];security -> comm [constraint=false];access -> integ;
+ {rank=same;identity;booking;access} {rank=same;parcels;comm;integ} identity -> parcels [style=invis];booking -> comm [style=invis];
+ identity -> cross;booking -> cross;parcels -> cross;comm -> cross;integ -> cross;cross -> ports;
+
+}

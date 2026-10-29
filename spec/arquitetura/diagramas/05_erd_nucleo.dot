@@ -1,0 +1,40 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [constraint=false,color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ tenant [label="tenants
+id · nome · timezone · estado",shape=box];
+ account [label="accounts
+id = subject do Auth · estado",shape=box];
+ unit [label="units
+tenant_id · id · bloco · número",shape=box];
+ member [label="memberships
+tenant_id · account_id · unit_id
+role · permissions · vigência",shape=box];
+ amenity [label="amenities
+regras · taxa · aprovação",shape=box];
+ res [label="reservations
+área · unidade · período · estado
+EXCLUDE: conflito de horário",shape=box];
+ visitor [label="visitors
+identidade mínima por condomínio",shape=box];
+ permit [label="visit_permits / permit_windows
+visitante · unidade · validade
+reserva opcional · revogação",shape=box];
+ arrival [label="arrival_requests
+chegada · prazo · resposta",shape=box];
+ events [label="access_events
+tipo · origem · direção · evidência",shape=box];
+ parcel [label="parcels / parcel_handoffs
+unidade · estado · retirada única",shape=box];
+ tenant -> unit [label="1:N"];tenant -> amenity [label="1:N"];
+ account -> member [label="1:N"];unit -> member [label="1:N"];
+ amenity -> res [label="1:N"];unit -> res [label="1:N"];
+ visitor -> permit [label="1:N"];res -> permit [label="0:N"];unit -> permit [label="1:N"];
+ permit -> arrival [label="0:N"];permit -> events [label="0:N"];unit -> parcel [label="1:N"];
+
+
+{rank=same;tenant;account}
+{rank=same;unit;member}
+{rank=same;amenity;res}
+{rank=same;visitor;permit}
+{rank=same;arrival;events;parcel}
+tenant -> unit -> amenity -> visitor -> arrival [style=invis,constraint=true,weight=10];
+}

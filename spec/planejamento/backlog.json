@@ -1,0 +1,1860 @@
+[
+  {
+    "id": "CP-001",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Produto",
+    "title": "Congelar escopo e dois pilotos",
+    "deliverable": "Assinar matriz P0/P1, pacote e processos preservados por condomínio.",
+    "acceptance": [
+      "Nenhuma função vendida fica sem responsável ou critério de aceite.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-002",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Arquitetura",
+    "title": "Fixar toolchain e ADRs",
+    "deliverable": "Java 25, Spring Boot compatível, Node LTS e Expo SDK compatível; arquivos de lock e SBOM.",
+    "acceptance": [
+      "Build reproduzível de checkout limpo e relatório de dependências, sem versões flutuantes.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-003",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Backend",
+    "title": "Criar monólito modular e limites",
+    "deliverable": "Pacotes por domínio com testes de dependência; controllers não acessam repositórios de outros módulos.",
+    "acceptance": [
+      "Teste de arquitetura falha em dependência circular ou acesso proibido.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-004",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "DevOps",
+    "title": "Provisionar ambientes isolados",
+    "deliverable": "Projetos e segredos separados de desenvolvimento, homologação e produção CondPulse.",
+    "acceptance": [
+      "Dados e credenciais de um ambiente não acessam outro; nenhum recurso Advanced é alterado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-005",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Banco",
+    "title": "Executar migrações de referência",
+    "deliverable": "Validar V001/V002 em Postgres descartável compatível; ajustar migrations por revisão.",
+    "acceptance": [
+      "Execução limpa, constraints testadas e nenhuma alteração manual fora de migration.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-006",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Segurança",
+    "title": "Implementar contexto e RLS",
+    "deliverable": "JWT, conta ativa, tenant validado e contexto transacional no pool.",
+    "acceptance": [
+      "Requests alternando tenants não herdam contexto; role comum não tem BYPASSRLS.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-007",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Frontend",
+    "title": "Criar design system CondPulse",
+    "deliverable": "Tokens, botões, formulário, tabelas, modais, status, navegação e estados de erro.",
+    "acceptance": [
+      "Contraste verificado, foco por teclado e toques de 48 px nas ações principais.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-008",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Integração",
+    "title": "Abrir homologação do parceiro",
+    "deliverable": "Obter documentação, contrato, sandbox, modelo/firmware e integrador nomeado.",
+    "acceptance": [
+      "Disponibilidade e licença verificadas; sem isso facial segue desabilitado e gate é registrado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-009",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "DevOps",
+    "title": "Configurar pipeline protegido",
+    "deliverable": "Testes, análise estática, lockfiles, scanner e artefatos por commit.",
+    "acceptance": [
+      "PR externo não lê segredo nem publica; release exige aprovação e artefato identificado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-010",
+    "phase": "F0",
+    "window": "D0–D2",
+    "owner": "Produto",
+    "title": "Preparar cadastros e autorização legal",
+    "deliverable": "Modelo de unidades, responsáveis, aviso de privacidade e fluxo de alternativa não biométrica.",
+    "acceptance": [
+      "Condomínio valida responsáveis, finalidade e procedimento antes de importar dados reais.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0"
+  },
+  {
+    "id": "CP-011",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Backend",
+    "title": "Sessão web BFF",
+    "deliverable": "Login, cookie HttpOnly, CSRF, renovação, expiração e logout.",
+    "acceptance": [
+      "Tokens não ficam no localStorage; logout invalida sessão; requests CSRF falham.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-012",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Mobile",
+    "title": "Sessão nativa segura",
+    "deliverable": "Integração Auth com armazenamento seguro e limpeza de dados no logout.",
+    "acceptance": [
+      "Reinstalação, token expirado e troca de usuário não mostram dados anteriores.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-013",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Backend",
+    "title": "MFA de operadores",
+    "deliverable": "Exigir AAL2 nas ações privilegiadas e procedimento de recuperação auditado.",
+    "acceptance": [
+      "Token AAL1 de porteiro/gestor não autoriza operação protegida.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-014",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Backend",
+    "title": "Vínculos e capacidades",
+    "deliverable": "Morador, titular, operador, gestor, suporte temporário; vigência por unidade.",
+    "acceptance": [
+      "Conhecer número da unidade não permite entrar nela; revogação bloqueia novas operações.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-015",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Frontend",
+    "title": "Troca segura de contexto",
+    "deliverable": "Selecionar apenas vínculos ativos e limpar cache por usuário/tenant/unidade.",
+    "acceptance": [
+      "Resposta atrasada do contexto anterior não aparece na nova unidade.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-016",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Banco",
+    "title": "Importação em staging",
+    "deliverable": "CSV, preview, validação, duplicatas, erros por linha e aprovação de lote.",
+    "acceptance": [
+      "Repetir o mesmo lote não duplica unidades ou vínculos; origem e contagens são registradas.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-017",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Backend",
+    "title": "Upload privado e download autorizado",
+    "deliverable": "Intenção, tamanho/MIME, quarentena, conclusão e link curto após autorização.",
+    "acceptance": [
+      "Objeto de outro tenant e arquivo com tipo inválido são negados; upload não vira público.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-018",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Backend",
+    "title": "Auditoria mínima de ações",
+    "deliverable": "Ator, escopo, ação, objeto, motivo e correlação; segredos/fotos fora dos logs.",
+    "acceptance": [
+      "Mudanças sensíveis têm trilha; role comum não edita nem apaga auditoria.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-019",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "QA",
+    "title": "Testar isolamento de identidade",
+    "deliverable": "Matriz de papéis e tenants incluindo inválido, suspenso, expirado e suporte.",
+    "acceptance": [
+      "Todos os testes negativos passam nas rotas, arquivos e stream.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-020",
+    "phase": "F1",
+    "window": "D3–D5",
+    "owner": "Frontend",
+    "title": "Onboarding e recuperação",
+    "deliverable": "Convite validado, primeiro acesso, tutorial curto, recuperação e troca de dispositivo.",
+    "acceptance": [
+      "Usuário convidado conclui ativação sem intervenção de banco; convite expirado não cria vínculo.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-001",
+      "CP-002",
+      "CP-003",
+      "CP-004",
+      "CP-005",
+      "CP-006",
+      "CP-007",
+      "CP-008",
+      "CP-009",
+      "CP-010"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-021",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Configuração de áreas e regras",
+    "deliverable": "Cadastro de área, horário, capacidade, taxa informativa, buffer e versão de regulamento.",
+    "acceptance": [
+      "Regra inválida é rejeitada e edição não reescreve silenciosamente reservas existentes.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-022",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Disponibilidade e reserva transacional",
+    "deliverable": "Constraint de intervalo efetivo, idempotência e versão das regras aceitas.",
+    "acceptance": [
+      "Teste concorrente confirma uma única reserva bloqueante no mesmo período.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-023",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Aprovação, rejeição e cancelamento",
+    "deliverable": "Estados, autorização do gestor, prazo, cancelamento e propagação aos convites.",
+    "acceptance": [
+      "Decisão repetida não duplica evento; cancelamento desativa convites associados.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-024",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Frontend",
+    "title": "Reserva no celular",
+    "deliverable": "Área, calendário, horário, regras, taxa e estado da solicitação.",
+    "acceptance": [
+      "Pedido pendente não é mostrado como confirmado; conflito oferece nova disponibilidade.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-025",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Autorização de visitante",
+    "deliverable": "Identidade mínima, responsável, validade e revogação.",
+    "acceptance": [
+      "Token de convite não expõe CPF/unidade e não pode autorizar fora do prazo.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-026",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Chegada sem convite",
+    "deliverable": "Solicitação vinculada à pessoa/unidade; decisão única com prazo.",
+    "acceptance": [
+      "Push sem resposta não libera visita; resposta antiga não decide nova chegada.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-027",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Frontend",
+    "title": "Fila operacional de portaria",
+    "deliverable": "Busca, chegadas, autorizações, ocorrências e ações contextuais.",
+    "acceptance": [
+      "Não há botão que marque entrada de visitante ainda não autorizado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-028",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Registro de acesso manual",
+    "deliverable": "Direção, evidência manual, operador e motivo de correção por evento adicional.",
+    "acceptance": [
+      "Entrada manual não é rotulada como passagem detectada por sensor.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-029",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Recebimento de encomendas",
+    "deliverable": "Unidade, volumes, posição de guarda, foto opcional e outbox.",
+    "acceptance": [
+      "Clique repetido com mesma chave gera apenas um registro e uma intenção de notificação.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-030",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Retirada de encomendas",
+    "deliverable": "Transação de entrega, recebedor, operador e constraint única.",
+    "acceptance": [
+      "Duas retiradas simultâneas produzem um sucesso e um conflito, sem sobrescrever histórico.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-031",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Frontend",
+    "title": "Painel de encomendas",
+    "deliverable": "Listas, detalhes e confirmação explícita da pessoa recebedora.",
+    "acceptance": [
+      "Lista do morador inclui somente entregas autorizadas; portaria filtra por posição e unidade.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-032",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Publicação de avisos e documentos",
+    "deliverable": "Rascunho, público-alvo, publicação e registro de abertura.",
+    "acceptance": [
+      "Rascunho não aparece para morador e abertura não é tratada como ciência jurídica.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-033",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Backend",
+    "title": "Pedidos e conversa vinculada",
+    "deliverable": "Solicitação, mensagem, anexo, responsável e atualização de estado.",
+    "acceptance": [
+      "Conversa permanece no pedido certo; acesso indevido por ID conhecido é negado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-034",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Infra",
+    "title": "Outbox e worker duráveis",
+    "deliverable": "Lease, backoff, dead-letter operacional, correlação e replay seletivo.",
+    "acceptance": [
+      "Interrupção entre efeito e ack é testada; efeitos não idempotentes não recebem retry cego.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-035",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Infra",
+    "title": "Push e caixa interna",
+    "deliverable": "Consentimento, instalações, preferências, receipts e falhas.",
+    "acceptance": [
+      "Provider aceitou não vira morador visualizou; token inválido é desativado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-036",
+    "phase": "F2",
+    "window": "D6–D9",
+    "owner": "Frontend",
+    "title": "Atualizações em tempo real",
+    "deliverable": "SSE autenticado e consulta de estado na reconexão.",
+    "acceptance": [
+      "Revogação fecha stream; eventos não são transmitidos a usuários sem autorização.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-011",
+      "CP-012",
+      "CP-013",
+      "CP-014",
+      "CP-015",
+      "CP-016",
+      "CP-017",
+      "CP-018",
+      "CP-019",
+      "CP-020"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-037",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Backend",
+    "title": "Convites compartilháveis de uso controlado",
+    "deliverable": "Token opaco com validade, hash no banco e limites de tentativas.",
+    "acceptance": [
+      "Token bruto não aparece em logs, analytics nem URL persistida.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-038",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Backend",
+    "title": "Convidados de uma reserva",
+    "deliverable": "Autorizações derivadas da janela do evento e do responsável.",
+    "acceptance": [
+      "Reserva cancelada deixa todos os convites dependentes revogados, inclusive após retry.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-039",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Backend",
+    "title": "Prestador recorrente",
+    "deliverable": "Dias locais, horas, vigência, revogação e expansão da próxima janela.",
+    "acceptance": [
+      "Acesso fora de dia/horário falha; fuso da unidade não depende do celular.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-040",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Backend",
+    "title": "Fila de espera",
+    "deliverable": "Ordem estável, oferta com prazo e reserva de slot durante oferta.",
+    "acceptance": [
+      "Duas ofertas não capturam o mesmo slot; oferta vencida avança a fila sem dupla confirmação.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-041",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Backend",
+    "title": "Retirada delegada e código",
+    "deliverable": "Delegação por encomenda, validade, código com hash e limite de tentativas.",
+    "acceptance": [
+      "Código gasto não é reutilizado; delegação de outra encomenda não é aceita.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-042",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Frontend",
+    "title": "Mudança e entrega de móveis",
+    "deliverable": "Formulário específico, período e aprovação, avisos à portaria.",
+    "acceptance": [
+      "Aprovação não promete reserva de elevador inexistente; regras configuradas são exibidas.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-043",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Integração",
+    "title": "Adaptador simulado de acesso",
+    "deliverable": "Implementar contrato interno com cenários de timeout, duplicata e confirmação parcial.",
+    "acceptance": [
+      "Testes determinísticos cobrem cada estado sem contato com dispositivo real.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-044",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Integração",
+    "title": "Adaptador real do parceiro",
+    "deliverable": "Mapeamento documentado de operações e erros para contrato interno.",
+    "acceptance": [
+      "Somente endpoints documentados; sandbox confirma operações, idempotência e limites.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-045",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Integração",
+    "title": "Cadastro e atualização facial",
+    "deliverable": "Revisão, legalidade, destinatários, envio e confirmação por versão/dispositivo.",
+    "acceptance": [
+      "ACK de recebimento não gera estado ativo; uma falha aparece por destino.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-046",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Integração",
+    "title": "Revogação prioritária",
+    "deliverable": "Estado desejado, prioridade, reconciliação e tratamento de callback antigo.",
+    "acceptance": [
+      "Confirmação de versão antiga não reativa credencial revogada.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-047",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Integração",
+    "title": "Inbox autenticada e eventos",
+    "deliverable": "Assinatura do parceiro, timestamp, deduplicação e mapeamento de evidência/direção.",
+    "acceptance": [
+      "Callback de conector A não escreve tenant B; repetição não duplica evento.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-048",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Integração",
+    "title": "Saúde e reconciliação",
+    "deliverable": "Heartbeat, relógio, backlog e comparação do estado desejado/aplicado.",
+    "acceptance": [
+      "Equipamento offline aparece como offline; reconciliação recupera estado final, não reproduz fila obsoleta.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-049",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Frontend",
+    "title": "Histórico residencial protegido",
+    "deliverable": "Mostrar acessos pertinentes e distinguir autorização, abertura e passagem.",
+    "acceptance": [
+      "Sem identificador de saída, exibir sem registro de saída; nada de presença inferida.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-050",
+    "phase": "F3",
+    "window": "D10–D12",
+    "owner": "Segurança",
+    "title": "Ciclo de vida biométrico",
+    "deliverable": "Upload transitório, remoção, alternativa não facial e pedidos do titular.",
+    "acceptance": [
+      "Purge e exclusão no parceiro têm evidência; falha gera pendência, não sucesso falso.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-021",
+      "CP-022",
+      "CP-023",
+      "CP-024",
+      "CP-025",
+      "CP-026",
+      "CP-027",
+      "CP-028",
+      "CP-029",
+      "CP-030",
+      "CP-031",
+      "CP-032",
+      "CP-033",
+      "CP-034",
+      "CP-035",
+      "CP-036"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P1",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-051",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "QA",
+    "title": "Teste de concorrência e banco",
+    "deliverable": "Executar constraints, migrações, replay e pools na mesma família Postgres do destino.",
+    "acceptance": [
+      "Nenhuma reserva ou retirada duplicada; sem dependência em H2 para integridade.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-052",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "QA",
+    "title": "Teste de carga representativo",
+    "deliverable": "100 rps/1.000 sessões como carga-alvo inicial; misturar leituras e gravações.",
+    "acceptance": [
+      "Relatório p50/p95/p99, erros, saturação e custo; comparar com metas, sem declarar capacidade sem dados.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-053",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "QA",
+    "title": "Teste mobile e acessibilidade",
+    "deliverable": "Aparelhos Android/iOS reais, fontes ampliadas, leitor de tela e rede instável.",
+    "acceptance": [
+      "Jornadas críticas usáveis com teclado/leitor e sem botões inacessíveis.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-054",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "Integrador",
+    "title": "Homologar instalação física",
+    "deliverable": "Cadastro, expiração, bloqueio, sensor, retorno de energia/rede e cada turno.",
+    "acceptance": [
+      "Modelo/firmware registrados e termo de aceite assinado; preservar saída de emergência.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-055",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "DevOps",
+    "title": "Restaurar banco e objetos",
+    "deliverable": "Restore em ambiente isolado, validar contagens, vínculos e hashes de arquivos.",
+    "acceptance": [
+      "Cronometrar RTO/RPO reais; não religar integrações antes de reconciliar revogações.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-056",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "Segurança",
+    "title": "Revisão de ameaças e segredos",
+    "deliverable": "Isolamento, BOLA, CSRF, upload, callbacks, logs e cofre.",
+    "acceptance": [
+      "Nenhum achado crítico/alto aberto; nenhum segredo detectado no repositório.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-057",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "Produto",
+    "title": "Treinar todos os turnos",
+    "deliverable": "Roteiro de chegada, encomenda, falha de internet e escalonamento.",
+    "acceptance": [
+      "Cada turno executa as tarefas sem depender de agente de IA.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-058",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "Operação",
+    "title": "Reconciliar dados migrados",
+    "deliverable": "Cadastros, reservas futuras, encomendas pendentes e permissões válidas.",
+    "acceptance": [
+      "Contagens e exceções aprovadas pelo condomínio; lote rastreável.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-059",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "Produto",
+    "title": "Pilotar condomínio sem sistema",
+    "deliverable": "Ativar escopo Essencial com suporte nomeado e observação.",
+    "acceptance": [
+      "Conclusões/erros medidos por jornada e autorização de continuidade registrada.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-060",
+    "phase": "F4",
+    "window": "D13–D15",
+    "owner": "Produto",
+    "title": "Pilotar condomínio em substituição",
+    "deliverable": "Cutover por processo e fornecedor anterior preservado até aceite.",
+    "acceptance": [
+      "Uma agenda oficial, continuidade do acesso e rollback acordado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-037",
+      "CP-038",
+      "CP-039",
+      "CP-040",
+      "CP-041",
+      "CP-042",
+      "CP-043",
+      "CP-044",
+      "CP-045",
+      "CP-046",
+      "CP-047",
+      "CP-048",
+      "CP-049",
+      "CP-050"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-061",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Backend",
+    "title": "Corrigir defeitos do piloto",
+    "deliverable": "Classificação por risco, reprodução e regressão automatizada.",
+    "acceptance": [
+      "Incidentes críticos resolvidos antes de expansão; nenhuma correção sem teste associado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-062",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Mobile",
+    "title": "Preparar distribuição",
+    "deliverable": "Assinatura, builds, política de privacidade, contas e submissão às lojas.",
+    "acceptance": [
+      "Build de teste instalável; data de aprovação externa não é tratada como garantida.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-063",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Operação",
+    "title": "Formalizar atendimento e contratos",
+    "deliverable": "Matriz software/hardware, horários, severidade e escalonamento.",
+    "acceptance": [
+      "Cliente sabe quem atende falha de leitor versus software e quais custos foram contratados.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-064",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Produto",
+    "title": "Concluir aceite do Completo",
+    "deliverable": "Revisar fila de espera, delegação, recorrência e integração vendida.",
+    "acceptance": [
+      "Função sem aceite fica desabilitada e fora de promessa comercial.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-065",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Financeiro",
+    "title": "Medir margem e suporte",
+    "deliverable": "Custos reais de infraestrutura, parceiro, comunicação e minutos de atendimento.",
+    "acceptance": [
+      "Preço confrontado com custo por condomínio, sem chamar faturamento de lucro.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-066",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "DevOps",
+    "title": "Publicar release por artefato",
+    "deliverable": "Promover digest homologado, migrations compatíveis e smoke em produção.",
+    "acceptance": [
+      "Versão rastreável, monitoramento ativo e rollback de aplicação demonstrado.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-067",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Produto",
+    "title": "Aplicar gate de lançamento",
+    "deliverable": "Revisar todos os critérios D20 com responsáveis e evidências.",
+    "acceptance": [
+      "Liberar apenas escopo aprovado; não usar a data para ignorar teste ou homologação.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  },
+  {
+    "id": "CP-068",
+    "phase": "F5",
+    "window": "D16–D20",
+    "owner": "Operação",
+    "title": "Preparar próxima implantação",
+    "deliverable": "Checklist replicável, inventário, treinamento e limites de capacidade.",
+    "acceptance": [
+      "Terceiro condomínio usa o mesmo procedimento; exceções viram tarefas, não alterações manuais.",
+      "Evidências anexadas ao PR; sem segredos e sem regressão nas jornadas relacionadas."
+    ],
+    "depends_on": [
+      "CP-051",
+      "CP-052",
+      "CP-053",
+      "CP-054",
+      "CP-055",
+      "CP-056",
+      "CP-057",
+      "CP-058",
+      "CP-059",
+      "CP-060"
+    ],
+    "status": "PLANEJADO",
+    "priority": "P0",
+    "dependency_note": "Gate da fase anterior; dependências finas do PR devem ser refinadas."
+  }
+]

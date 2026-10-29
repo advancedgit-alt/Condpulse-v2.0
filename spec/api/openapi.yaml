@@ -1,0 +1,6091 @@
+openapi: 3.0.3
+info:
+  title: CondPulse — contrato inicial
+  version: 1.0.0
+  description: Especificação de desenvolvimento. Nenhum endpoint está publicado por este pacote. Domínio .invalid
+    é proposital. Endpoints de manutenção adicional de cadastros/configuração seguem contratos detalhados no
+    backlog e precisam ser definidos antes da implementação.
+servers:
+- url: https://api.condpulse.invalid
+  description: Exemplo não executável; substituir somente por domínio autorizado.
+security:
+- bearerAuth: []
+- cookieSession: []
+paths:
+  /v1/auth/login:
+    post:
+      summary: Login web pelo BFF
+      operationId: post__v1_auth_login
+      tags:
+      - Identidade
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+      x-authorization: Rate limit e validação específica; não expor listagens ou dados de terceiros.
+  /v1/auth/mfa/verify:
+    post:
+      summary: Verificar segundo fator web
+      operationId: post__v1_auth_mfa_verify
+      tags:
+      - Identidade
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+      security:
+      - cookieSession: []
+        csrfToken: []
+  /v1/auth/logout:
+    post:
+      summary: Encerrar sessão web
+      operationId: post__v1_auth_logout
+      tags:
+      - Identidade
+      responses:
+        '204':
+          description: Resultado autorizado e confirmado no escopo indicado.
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+      security:
+      - cookieSession: []
+        csrfToken: []
+  /v1/me/contexts:
+    get:
+      summary: Listar somente vínculos ativos da própria conta
+      operationId: get__v1_me_contexts
+      tags:
+      - Identidade
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Context'
+                  nextCursor: &id001
+                    type: string
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/home:
+    get:
+      summary: Resumo do contexto autorizado
+      operationId: get__v1_tenants__tenantId__home
+      tags:
+      - Morador
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Home'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: &id002
+          type: string
+          format: uuid
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/units:
+    get:
+      summary: Consultar unidades no escopo do papel
+      operationId: get__v1_tenants__tenantId__units
+      tags:
+      - Cadastro
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Unit'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/memberships:
+    get:
+      summary: Consultar vínculos permitidos
+      operationId: get__v1_tenants__tenantId__memberships
+      tags:
+      - Cadastro
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Membership'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/memberships/{membershipId}/decision:
+    post:
+      summary: Aprovar ou rejeitar vínculo
+      operationId: post__v1_tenants__tenantId__memberships__membershipId__decision
+      tags:
+      - Cadastro
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: membershipId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Decision'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/memberships/{membershipId}/revoke:
+    post:
+      summary: Revogar vínculo e enfileirar credenciais
+      operationId: post__v1_tenants__tenantId__memberships__membershipId__revoke
+      tags:
+      - Cadastro
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: membershipId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/amenities:
+    get:
+      summary: Áreas do condomínio
+      operationId: get__v1_tenants__tenantId__amenities
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Amenity'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/amenities/{amenityId}/availability:
+    get:
+      summary: Disponibilidade não é retenção de horário
+      operationId: get__v1_tenants__tenantId__amenities__amenityId__availability
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: amenityId
+        in: path
+        required: true
+        schema: *id002
+      - name: from
+        in: query
+        required: true
+        schema: &id003
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: true
+        schema: *id003
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/reservations:
+    post:
+      summary: Criar reserva com trava de conflito
+      operationId: post__v1_tenants__tenantId__reservations
+      tags:
+      - Reservas
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+    get:
+      summary: Reservas visíveis ao usuário
+      operationId: get__v1_tenants__tenantId__reservations
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reservation'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/reservations/{reservationId}:
+    get:
+      summary: Detalhe e regras aceitas
+      operationId: get__v1_tenants__tenantId__reservations__reservationId
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: reservationId
+        in: path
+        required: true
+        schema: *id002
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/reservations/{reservationId}/decision:
+    post:
+      summary: Decidir pedido de reserva
+      operationId: post__v1_tenants__tenantId__reservations__reservationId__decision
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: reservationId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Decision'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/reservations/{reservationId}/cancel:
+    post:
+      summary: Cancelar e revogar convites vinculados
+      operationId: post__v1_tenants__tenantId__reservations__reservationId__cancel
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: reservationId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/waitlist:
+    post:
+      summary: Entrar na fila da área
+      operationId: post__v1_tenants__tenantId__waitlist
+      tags:
+      - Reservas
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistEntry'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaitlistCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/waitlist/{waitlistId}/accept:
+    post:
+      summary: Aceitar oferta ainda válida
+      operationId: post__v1_tenants__tenantId__waitlist__waitlistId__accept
+      tags:
+      - Reservas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: waitlistId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/permits:
+    post:
+      summary: Autorizar visita com vigência
+      operationId: post__v1_tenants__tenantId__permits
+      tags:
+      - Acessos
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permit'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermitCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+    get:
+      summary: Listar autorizações visíveis
+      operationId: get__v1_tenants__tenantId__permits
+      tags:
+      - Acessos
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permit'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/permits/{permitId}/share:
+    post:
+      summary: Gerar link temporário; token não autoriza sem conferência
+      operationId: post__v1_tenants__tenantId__permits__permitId__share
+      tags:
+      - Acessos
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteLink'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: permitId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/permits/{permitId}/revoke:
+    post:
+      summary: Revogar convite e credenciais derivadas
+      operationId: post__v1_tenants__tenantId__permits__permitId__revoke
+      tags:
+      - Acessos
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: permitId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/public/invitations/resolve:
+    post:
+      summary: Resolver convite sem instalar o app
+      operationId: post__v1_public_invitations_resolve
+      tags:
+      - Público
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicInvitation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicInvitationResolve'
+      x-authorization: Rate limit e validação específica; não expor listagens ou dados de terceiros.
+  /v1/tenants/{tenantId}/arrivals:
+    post:
+      summary: Registrar pessoa aguardando decisão
+      operationId: post__v1_tenants__tenantId__arrivals
+      tags:
+      - Portaria
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Arrival'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArrivalCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+    get:
+      summary: Fila de chegadas autorizada
+      operationId: get__v1_tenants__tenantId__arrivals
+      tags:
+      - Portaria
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Arrival'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/arrivals/{arrivalId}/decision:
+    post:
+      summary: Primeira decisão válida vence
+      operationId: post__v1_tenants__tenantId__arrivals__arrivalId__decision
+      tags:
+      - Acessos
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Arrival'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: arrivalId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArrivalDecision'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/access-events/manual:
+    post:
+      summary: Registrar entrada ou saída conferida pela portaria
+      operationId: post__v1_tenants__tenantId__access_events_manual
+      tags:
+      - Portaria
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessEvent'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualAccessCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/access-events:
+    get:
+      summary: Histórico com origem e evidência, filtrado por privacidade
+      operationId: get__v1_tenants__tenantId__access_events
+      tags:
+      - Acessos
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccessEvent'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/parcels:
+    post:
+      summary: Receber encomenda e enfileirar aviso
+      operationId: post__v1_tenants__tenantId__parcels
+      tags:
+      - Encomendas
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Parcel'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParcelCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+    get:
+      summary: Listar encomendas permitidas
+      operationId: get__v1_tenants__tenantId__parcels
+      tags:
+      - Encomendas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Parcel'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/parcels/{parcelId}:
+    get:
+      summary: Detalhe de encomenda
+      operationId: get__v1_tenants__tenantId__parcels__parcelId
+      tags:
+      - Encomendas
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Parcel'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: parcelId
+        in: path
+        required: true
+        schema: *id002
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/parcels/{parcelId}/delegations:
+    post:
+      summary: Delegar retirada específica
+      operationId: post__v1_tenants__tenantId__parcels__parcelId__delegations
+      tags:
+      - Encomendas
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: parcelId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DelegationCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/parcels/{parcelId}/handoff:
+    post:
+      summary: Concluir uma única retirada
+      operationId: post__v1_tenants__tenantId__parcels__parcelId__handoff
+      tags:
+      - Encomendas
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handoff'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: parcelId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoffCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/announcements:
+    post:
+      summary: Criar aviso em rascunho
+      operationId: post__v1_tenants__tenantId__announcements
+      tags:
+      - Comunicação
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+    get:
+      summary: Avisos visíveis ao usuário
+      operationId: get__v1_tenants__tenantId__announcements
+      tags:
+      - Comunicação
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Announcement'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/announcements/{announcementId}/publish:
+    post:
+      summary: Publicar para destinatários validados
+      operationId: post__v1_tenants__tenantId__announcements__announcementId__publish
+      tags:
+      - Comunicação
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: announcementId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/announcements/{announcementId}/read:
+    post:
+      summary: Registrar abertura autenticada
+      operationId: post__v1_tenants__tenantId__announcements__announcementId__read
+      tags:
+      - Comunicação
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadReceipt'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: announcementId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/requests:
+    post:
+      summary: Abrir pedido
+      operationId: post__v1_tenants__tenantId__requests
+      tags:
+      - Atendimento
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+    get:
+      summary: Consultar pedidos no escopo autorizado
+      operationId: get__v1_tenants__tenantId__requests
+      tags:
+      - Atendimento
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Request'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/requests/{requestId}:
+    get:
+      summary: Detalhar pedido
+      operationId: get__v1_tenants__tenantId__requests__requestId
+      tags:
+      - Atendimento
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: requestId
+        in: path
+        required: true
+        schema: *id002
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/requests/{requestId}/messages:
+    post:
+      summary: Adicionar mensagem visível ou interna
+      operationId: post__v1_tenants__tenantId__requests__requestId__messages
+      tags:
+      - Atendimento
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: requestId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/requests/{requestId}/state:
+    post:
+      summary: Transição autorizada de atendimento
+      operationId: post__v1_tenants__tenantId__requests__requestId__state
+      tags:
+      - Atendimento
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: requestId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestStateChange'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/uploads/intents:
+    post:
+      summary: Emitir upload privado em quarentena
+      operationId: post__v1_tenants__tenantId__uploads_intents
+      tags:
+      - Arquivos
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadGrant'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadIntent'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/attachments/{attachmentId}/complete:
+    post:
+      summary: Conferir arquivo e iniciar validação
+      operationId: post__v1_tenants__tenantId__attachments__attachmentId__complete
+      tags:
+      - Arquivos
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: attachmentId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/attachments/{attachmentId}/download:
+    post:
+      summary: Autorizar URL curta após verificar ACL
+      operationId: post__v1_tenants__tenantId__attachments__attachmentId__download
+      tags:
+      - Arquivos
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadGrant'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: attachmentId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/credentials:
+    post:
+      summary: Criar solicitação de facial; não marcar ativo
+      operationId: post__v1_tenants__tenantId__credentials
+      tags:
+      - Facial
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/credentials/{credentialId}:
+    get:
+      summary: Estado por equipamento autorizado
+      operationId: get__v1_tenants__tenantId__credentials__credentialId
+      tags:
+      - Facial
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: credentialId
+        in: path
+        required: true
+        schema: *id002
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/credentials/{credentialId}/review:
+    post:
+      summary: Conferir solicitação de cadastro
+      operationId: post__v1_tenants__tenantId__credentials__credentialId__review
+      tags:
+      - Facial
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: credentialId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Decision'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/credentials/{credentialId}/revoke:
+    post:
+      summary: Revogação prioritária e confirmável
+      operationId: post__v1_tenants__tenantId__credentials__credentialId__revoke
+      tags:
+      - Facial
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: credentialId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/access-devices:
+    get:
+      summary: Equipamentos e idade da comunicação
+      operationId: get__v1_tenants__tenantId__access_devices
+      tags:
+      - Facial
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/operations/{operationId}:
+    get:
+      summary: Consultar processamento assíncrono
+      operationId: get__v1_tenants__tenantId__operations__operationId
+      tags:
+      - Operação
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationStatus'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: operationId
+        in: path
+        required: true
+        schema: *id002
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/imports:
+    post:
+      summary: Abrir lote sem gravar registros finais
+      operationId: post__v1_tenants__tenantId__imports
+      tags:
+      - Importação
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatch'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/imports/{batchId}:
+    get:
+      summary: Prévia e reconciliação do lote
+      operationId: get__v1_tenants__tenantId__imports__batchId
+      tags:
+      - Importação
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatch'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: batchId
+        in: path
+        required: true
+        schema: *id002
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/imports/{batchId}/approve:
+    post:
+      summary: Confirmar lote previamente validado
+      operationId: post__v1_tenants__tenantId__imports__batchId__approve
+      tags:
+      - Importação
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAck'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: batchId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Versão/ETag atual do recurso; divergência retorna 409.
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/privacy-requests:
+    post:
+      summary: Abrir solicitação de direito
+      operationId: post__v1_tenants__tenantId__privacy_requests
+      tags:
+      - Privacidade
+      responses:
+        '201':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivacyRequest'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/push-installations:
+    post:
+      summary: Registrar ou atualizar instalação autorizada
+      operationId: post__v1_tenants__tenantId__push_installations
+      tags:
+      - Notificações
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushInstallation'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      security:
+      - bearerAuth: []
+      - cookieSession: []
+        csrfHeader: []
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushInstallationCreate'
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/tenants/{tenantId}/audit-events:
+    get:
+      summary: Auditoria limitada por papel e finalidade
+      operationId: get__v1_tenants__tenantId__audit_events
+      tags:
+      - Gestão
+      responses:
+        '200':
+          description: Resultado autorizado e confirmado no escopo indicado.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEvent'
+                  nextCursor: *id001
+                required:
+                - items
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: cursor
+        in: query
+        schema: *id001
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      x-authorization: Validar conta ativa, vínculo e capacidade; filtrar tenant/unidade/recurso antes de acessar
+        ou responder.
+  /v1/webhooks/access/{connectorKey}:
+    post:
+      summary: Receber evento autenticado do parceiro
+      operationId: post__v1_webhooks_access__connectorKey
+      tags:
+      - Integração
+      responses:
+        '202':
+          description: Operação aceita para processamento; consultar estado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAccepted'
+        '400':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Erro estruturado; nenhuma confirmação antecipada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      parameters:
+      - name: connectorKey
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Provider-Timestamp
+        in: header
+        required: true
+        schema: *id001
+      security:
+      - providerSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookEnvelope'
+      x-authorization: Rate limit e validação específica; não expor listagens ou dados de terceiros.
+      description: Resolver conector no servidor, validar assinatura no corpo original, prazo e deduplicação
+        antes do aceite. O formato de payload é adaptado à API real; o schema normalizado não substitui contrato
+        do parceiro.
+  /v1/tenants/{tenantId}/events/stream:
+    get:
+      summary: Eventos mínimos autorizados via SSE
+      operationId: streamTenantEvents
+      tags:
+      - Notificações
+      parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema: *id002
+      - name: Last-Event-ID
+        in: header
+        schema: *id001
+      responses:
+        '200':
+          description: text/event-stream; IDs mínimos, reconsulta autorizada e ressincronização.
+          content:
+            text/event-stream:
+              schema: *id001
+        '401':
+          description: Sessão inválida
+        '403':
+          description: Sem vínculo ativo
+        '410':
+          description: Cursor expirado; recarregar snapshot autorizado
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: __Host-cp_session
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+    providerSignature:
+      type: apiKey
+      in: header
+      name: X-Provider-Signature
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  schemas:
+    Problem:
+      type: object
+      additionalProperties: false
+      properties:
+        type: *id001
+        title: *id001
+        status:
+          type: integer
+        code: *id001
+        detail: *id001
+        traceId: *id001
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              field: *id001
+              code: *id001
+              message: *id001
+            required:
+            - field
+            - code
+            - message
+      required:
+      - type
+      - title
+      - status
+      - code
+      - traceId
+    OperationAck:
+      type: object
+      additionalProperties: false
+      properties:
+        operationId: *id002
+        resourceId: *id002
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - PENDING
+          - UNKNOWN
+        statusUrl: *id001
+      required:
+      - operationId
+      - status
+      - statusUrl
+    Context:
+      type: object
+      additionalProperties: false
+      properties:
+        tenantId: *id002
+        tenantName: *id001
+        unitId: *id002
+        unitLabel: *id001
+        role: *id001
+        capabilities:
+          type: array
+          items: *id001
+      required:
+      - tenantId
+      - tenantName
+      - role
+      - capabilities
+    Membership:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        tenantId: *id002
+        unitId: *id002
+        accountId: *id002
+        displayName: *id001
+        role:
+          type: string
+          enum:
+          - RESIDENT
+          - HOUSEHOLD
+          - OWNER_NONRESIDENT
+          - CONCIERGE
+          - MANAGER
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - REVOKED
+        validFrom: *id003
+        validUntil: *id003
+        version: &id004
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - tenantId
+      - accountId
+      - displayName
+      - role
+      - status
+      - version
+    Unit:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        blockId: *id002
+        label: *id001
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+      required:
+      - id
+      - label
+      - status
+    Amenity:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        name: *id001
+        capacity:
+          type: integer
+          minimum: 1
+        approvalRequired:
+          type: boolean
+        feeCents:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          enum:
+          - BRL
+        bufferMinutes:
+          type: integer
+          minimum: 0
+        rulesText: *id001
+        policyVersion: *id004
+        version: *id004
+      required:
+      - id
+      - name
+      - approvalRequired
+      - feeCents
+      - currency
+      - policyVersion
+      - version
+    Availability:
+      type: object
+      additionalProperties: false
+      properties:
+        amenityId: *id002
+        timezone: *id001
+        generatedAt: *id003
+        slots:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              startsAt: *id003
+              endsAt: *id003
+              available:
+                type: boolean
+            required:
+            - startsAt
+            - endsAt
+            - available
+      required:
+      - amenityId
+      - timezone
+      - generatedAt
+      - slots
+    Reservation:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        amenityId: *id002
+        unitId: *id002
+        startsAt: *id003
+        endsAt: *id003
+        expiresAt: *id003
+        status:
+          type: string
+          enum:
+          - HELD
+          - PENDING_APPROVAL
+          - CONFIRMED
+          - REJECTED
+          - CANCELLED
+          - EXPIRED
+        feeCents:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          enum:
+          - BRL
+        rulesText: *id001
+        version: *id004
+      required:
+      - id
+      - amenityId
+      - startsAt
+      - endsAt
+      - status
+      - feeCents
+      - currency
+      - version
+    ReservationCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        amenityId: *id002
+        unitId: *id002
+        startsAt: *id003
+        endsAt: *id003
+        acceptedPolicyVersion: *id004
+      required:
+      - amenityId
+      - unitId
+      - startsAt
+      - endsAt
+      - acceptedPolicyVersion
+    Decision:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+        reason:
+          type: string
+          maxLength: 1000
+      required:
+      - decision
+    Reason:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 1000
+      required:
+      - reason
+    WaitlistCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        amenityId: *id002
+        unitId: *id002
+        startsAt: *id003
+        endsAt: *id003
+      required:
+      - amenityId
+      - unitId
+      - startsAt
+      - endsAt
+    WaitlistEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        amenityId: *id002
+        status:
+          type: string
+          enum:
+          - WAITING
+          - OFFERED
+          - ACCEPTED
+          - EXPIRED
+          - CANCELLED
+        offerExpiresAt: *id003
+        reservationId: *id002
+        version: *id004
+      required:
+      - id
+      - amenityId
+      - status
+      - version
+    Permit:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        visitorId: *id002
+        visitorName: *id001
+        unitId: *id002
+        reservationId: *id002
+        validFrom: *id003
+        validUntil: *id003
+        state:
+          type: string
+          enum:
+          - ACTIVE
+          - REVOKED
+          - EXPIRED
+        singleUse:
+          type: boolean
+        version: *id004
+      required:
+      - id
+      - visitorName
+      - unitId
+      - validFrom
+      - validUntil
+      - state
+      - version
+    Recurrence:
+      type: object
+      additionalProperties: false
+      properties:
+        weekdays:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+          minItems: 1
+          uniqueItems: true
+        localStart:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+        localEnd:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+        timezone: *id001
+      required:
+      - weekdays
+      - localStart
+      - localEnd
+      - timezone
+    PermitCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        visitorName:
+          type: string
+          minLength: 2
+          maxLength: 180
+        unitId: *id002
+        reservationId: *id002
+        validFrom: *id003
+        validUntil: *id003
+        singleUse:
+          type: boolean
+        recurrence:
+          $ref: '#/components/schemas/Recurrence'
+      required:
+      - visitorName
+      - unitId
+      - validFrom
+      - validUntil
+    InviteLink:
+      type: object
+      additionalProperties: false
+      properties:
+        shareUrl:
+          type: string
+          format: uri
+        expiresAt: *id003
+        notice: *id001
+      required:
+      - shareUrl
+      - expiresAt
+      - notice
+    PublicInvitationResolve:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 32
+          maxLength: 512
+      required:
+      - token
+    PublicInvitation:
+      type: object
+      additionalProperties: false
+      properties:
+        condominiumLabel: *id001
+        hostLabel: *id001
+        validFrom: *id003
+        validUntil: *id003
+        status:
+          type: string
+          enum:
+          - VALID
+          - EXPIRED
+          - REVOKED
+        instructions: *id001
+      required:
+      - condominiumLabel
+      - validFrom
+      - validUntil
+      - status
+      - instructions
+    ArrivalCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        unitId: *id002
+        visitorName:
+          type: string
+          minLength: 2
+          maxLength: 180
+        permitId: *id002
+      required:
+      - unitId
+      - visitorName
+    Arrival:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        unitId: *id002
+        visitorName: *id001
+        state:
+          type: string
+          enum:
+          - WAITING
+          - APPROVED
+          - DENIED
+          - EXPIRED
+          - CANCELLED
+        expiresAt: *id003
+        decidedAt: *id003
+        version: *id004
+      required:
+      - id
+      - unitId
+      - visitorName
+      - state
+      - expiresAt
+      - version
+    ArrivalDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - DENY
+      required:
+      - decision
+    AccessEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        unitId: *id002
+        personLabel: *id001
+        eventType:
+          type: string
+          enum:
+          - AUTHORIZED
+          - ACTUATED
+          - PASSAGE_IN
+          - PASSAGE_OUT
+          - MANUAL_IN
+          - MANUAL_OUT
+          - DENIED
+          - UNKNOWN
+          - CORRECTION
+        source:
+          type: string
+          enum:
+          - PROVIDER
+          - CONCIERGE
+          - SYSTEM
+        occurredAt: *id003
+        receivedAt: *id003
+        deviceLabel: *id001
+        evidenceLabel: *id001
+      required:
+      - id
+      - eventType
+      - source
+      - occurredAt
+      - receivedAt
+      - evidenceLabel
+    ManualAccessCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        unitId: *id002
+        visitorId: *id002
+        permitId: *id002
+        arrivalId: *id002
+        direction:
+          type: string
+          enum:
+          - IN
+          - OUT
+        reason:
+          type: string
+          maxLength: 1000
+      required:
+      - unitId
+      - direction
+      - reason
+    ParcelCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        unitId: *id002
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        storageLocation:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+      - unitId
+      - description
+      - quantity
+      - storageLocation
+    Parcel:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        unitId: *id002
+        description: *id001
+        quantity:
+          type: integer
+        storageLocation: *id001
+        state:
+          type: string
+          enum:
+          - RECEIVED
+          - HANDED_OVER
+          - RETURNED
+        receivedAt: *id003
+        version: *id004
+      required:
+      - id
+      - unitId
+      - description
+      - state
+      - receivedAt
+      - version
+    DelegationCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        delegateName:
+          type: string
+          minLength: 2
+          maxLength: 180
+        expiresAt: *id003
+      required:
+      - delegateName
+      - expiresAt
+    Delegation:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        parcelId: *id002
+        delegateName: *id001
+        state:
+          type: string
+          enum:
+          - ACTIVE
+          - USED
+          - REVOKED
+          - EXPIRED
+        expiresAt: *id003
+        pickupCode:
+          type: string
+          description: Exibido somente no retorno inicial autorizado; não em listagens.
+      required:
+      - id
+      - parcelId
+      - delegateName
+      - state
+      - expiresAt
+    HandoffCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        recipientName:
+          type: string
+          minLength: 2
+          maxLength: 180
+        delegationId: *id002
+        pickupCode:
+          type: string
+          minLength: 6
+          maxLength: 12
+        evidenceType:
+          type: string
+          enum:
+          - IN_PERSON
+          - DELEGATION_CODE
+          - ASSISTED
+      required:
+      - recipientName
+      - evidenceType
+    Handoff:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        parcelId: *id002
+        handedAt: *id003
+        state:
+          type: string
+          enum:
+          - HANDED_OVER
+      required:
+      - id
+      - parcelId
+      - handedAt
+      - state
+    Announcement:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        title: *id001
+        body: *id001
+        publishedAt: *id003
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - ARCHIVED
+        version: *id004
+      required:
+      - id
+      - title
+      - body
+      - state
+      - version
+    AnnouncementCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 180
+        body:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        unitIds:
+          type: array
+          items: *id002
+        allUnits:
+          type: boolean
+      required:
+      - title
+      - body
+      - allUnits
+    Request:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        unitId: *id002
+        category: *id001
+        title: *id001
+        description: *id001
+        state:
+          type: string
+          enum:
+          - OPEN
+          - TRIAGED
+          - IN_PROGRESS
+          - WAITING_RESIDENT
+          - RESOLVED
+          - CLOSED
+        version: *id004
+      required:
+      - id
+      - unitId
+      - category
+      - title
+      - state
+      - version
+    RequestCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        unitId: *id002
+        category: *id001
+        title:
+          type: string
+          minLength: 3
+          maxLength: 180
+        description:
+          type: string
+          minLength: 5
+          maxLength: 5000
+        startsAt: *id003
+        endsAt: *id003
+      required:
+      - unitId
+      - category
+      - title
+      - description
+    MessageCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        visibility:
+          type: string
+          enum:
+          - RESIDENT
+          - INTERNAL
+      required:
+      - body
+      - visibility
+    Message:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        body: *id001
+        createdAt: *id003
+        visibility:
+          type: string
+          enum:
+          - RESIDENT
+          - INTERNAL
+      required:
+      - id
+      - body
+      - createdAt
+      - visibility
+    RequestStateChange:
+      type: object
+      additionalProperties: false
+      properties:
+        state:
+          type: string
+          enum:
+          - TRIAGED
+          - IN_PROGRESS
+          - WAITING_RESIDENT
+          - RESOLVED
+          - CLOSED
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 1000
+      required:
+      - state
+      - reason
+    UploadIntent:
+      type: object
+      additionalProperties: false
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mimeType: *id001
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 20971520
+        purpose:
+          type: string
+          enum:
+          - DOCUMENT
+          - PARCEL_PHOTO
+          - REQUEST_ATTACHMENT
+          - FACE_TRANSIT
+        unitId: *id002
+        entityType: *id001
+        entityId: *id002
+      required:
+      - fileName
+      - mimeType
+      - sizeBytes
+      - purpose
+      - entityType
+    UploadGrant:
+      type: object
+      additionalProperties: false
+      properties:
+        attachmentId: *id002
+        uploadUrl:
+          type: string
+          format: uri
+        expiresAt: *id003
+        state:
+          type: string
+          enum:
+          - QUARANTINED
+      required:
+      - attachmentId
+      - uploadUrl
+      - expiresAt
+      - state
+    DownloadGrant:
+      type: object
+      additionalProperties: false
+      properties:
+        downloadUrl:
+          type: string
+          format: uri
+        expiresAt: *id003
+      required:
+      - downloadUrl
+      - expiresAt
+    CredentialCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        subjectKind:
+          type: string
+          enum:
+          - SELF
+          - VISITOR
+        visitorId: *id002
+        permitId: *id002
+        kind:
+          type: string
+          enum:
+          - FACE
+        noticeVersion: *id001
+        captureReference: *id001
+      required:
+      - subjectKind
+      - kind
+      - noticeVersion
+      - captureReference
+    Credential:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        status:
+          type: string
+          enum:
+          - PENDING_REVIEW
+          - SYNC_PENDING
+          - PARTIAL
+          - ACTIVE
+          - FAILED
+          - REVOKING
+          - REVOKED
+        desiredVersion: *id004
+        deviceStatuses:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              deviceId: *id002
+              label: *id001
+              state:
+                type: string
+                enum:
+                - PENDING
+                - SENT
+                - CONFIRMED
+                - FAILED
+                - UNKNOWN
+                - REVOKED
+              confirmedAt: *id003
+            required:
+            - deviceId
+            - label
+            - state
+        version: *id004
+      required:
+      - id
+      - status
+      - desiredVersion
+      - deviceStatuses
+      - version
+    Device:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        label: *id001
+        model: *id001
+        firmware: *id001
+        direction:
+          type: string
+          enum:
+          - IN
+          - OUT
+          - BOTH
+          - UNKNOWN
+        lastSeenAt: *id003
+        health:
+          type: string
+          enum:
+          - RECENT
+          - STALE
+          - OFFLINE
+          - UNKNOWN
+      required:
+      - id
+      - label
+      - model
+      - firmware
+      - direction
+      - health
+    ImportCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        attachmentId: *id002
+        source: *id001
+        entityType:
+          type: string
+          enum:
+          - UNITS
+          - MEMBERSHIPS
+          - RESERVATIONS
+          - PARCELS
+          - PERMITS
+        mappingVersion: *id004
+      required:
+      - attachmentId
+      - source
+      - entityType
+      - mappingVersion
+    ImportBatch:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        state:
+          type: string
+          enum:
+          - UPLOADED
+          - VALIDATED
+          - APPROVED
+          - RUNNING
+          - COMPLETED
+          - FAILED
+        validRows:
+          type: integer
+          minimum: 0
+        invalidRows:
+          type: integer
+          minimum: 0
+        importedRows:
+          type: integer
+          minimum: 0
+        version: *id004
+      required:
+      - id
+      - state
+      - validRows
+      - invalidRows
+      - importedRows
+      - version
+    PrivacyRequestCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum:
+          - ACCESS
+          - CORRECTION
+          - ERASURE
+          - REVOCATION
+          - INFORMATION
+        description:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - kind
+      - description
+    PrivacyRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        kind: *id001
+        state: *id001
+        createdAt: *id003
+      required:
+      - id
+      - kind
+      - state
+      - createdAt
+    PushInstallationCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        installationId: *id002
+        platform:
+          type: string
+          enum:
+          - ANDROID
+          - IOS
+        token:
+          type: string
+          minLength: 8
+          maxLength: 512
+        enabled:
+          type: boolean
+      required:
+      - installationId
+      - platform
+      - token
+      - enabled
+    PushInstallation:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        installationId: *id002
+        enabled:
+          type: boolean
+      required:
+      - id
+      - installationId
+      - enabled
+    Home:
+      type: object
+      additionalProperties: false
+      properties:
+        tenantId: *id002
+        unitId: *id002
+        generatedAt: *id003
+        waitingArrivals:
+          type: integer
+          minimum: 0
+        pendingParcels:
+          type: integer
+          minimum: 0
+        nextReservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reservation'
+        announcements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Announcement'
+      required:
+      - tenantId
+      - generatedAt
+      - waitingArrivals
+      - pendingParcels
+      - nextReservations
+      - announcements
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        action: *id001
+        resourceType: *id001
+        resourceId: *id002
+        occurredAt: *id003
+        traceId: *id001
+      required:
+      - id
+      - action
+      - resourceType
+      - occurredAt
+      - traceId
+    Login:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+      - email
+      - password
+    Session:
+      type: object
+      additionalProperties: false
+      properties:
+        authenticated:
+          type: boolean
+        mfaRequired:
+          type: boolean
+        csrfToken: *id001
+        expiresAt: *id003
+      required:
+      - authenticated
+      - mfaRequired
+    MfaVerify:
+      type: object
+      additionalProperties: false
+      properties:
+        factorId: *id002
+        challengeId: *id002
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
+      required:
+      - factorId
+      - challengeId
+      - code
+    WebhookEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        eventId: *id001
+        deviceExternalId: *id001
+        eventType: *id001
+        occurredAt: *id003
+        data:
+          type: object
+          additionalProperties: true
+      required:
+      - eventId
+      - eventType
+      - occurredAt
+      - data
+      description: Contrato interno normalizado. O corpo real recebido é validado pelo adaptador do fornecedor
+        homologado; nunca presumir este formato como API Bravas/Control iD.
+    WebhookAccepted:
+      type: object
+      additionalProperties: false
+      properties:
+        accepted:
+          type: boolean
+        duplicate:
+          type: boolean
+      required:
+      - accepted
+      - duplicate
+    ReadReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        read:
+          type: boolean
+        readAt: *id003
+      required:
+      - read
+      - readAt
+    OperationStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id002
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - DONE
+          - FAILED
+          - UNKNOWN
+          - EXPIRED
+        resourceId: *id002
+        errorCode: *id001
+        updatedAt: *id003
+      required:
+      - id
+      - status
+      - updatedAt

@@ -1,0 +1,36 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [constraint=false,color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ connector [label="connectors
+parceiro · configuração · secret_ref",shape=box];
+ device [label="access_devices
+modelo · firmware · direção · saúde",shape=box];
+ cred [label="access_credentials
+pessoa · finalidade · validade
+desired_version · estado",shape=box];
+ sync [label="credential_syncs
+credencial × equipamento
+desejado ≠ observado",shape=box];
+ cmd [label="integration_commands
+chave idempotente · deadline
+enviado / confirmado / incerto",shape=box];
+ inbox [label="webhook_inbox
+external_event_id único
+assinatura · recebimento",shape=box];
+ events [label="access_events
+normalização sem inventar passagem",shape=box];
+ out [label="outbox_events
+mesma transação do negócio",shape=box];
+ notify [label="notifications / ui_events
+usuário · canal · confirmação",shape=box];
+ audit [label="audit_events
+ator · contexto · ação · evidência",shape=box];
+ connector -> device [label="1:N"];connector -> cred [label="1:N"];cred -> sync [label="1:N"];device -> sync [label="1:N"];
+ sync -> cmd;connector -> inbox;inbox -> events;events -> out;out -> notify;cmd -> audit;
+
+
+{rank=same;connector;device}
+{rank=same;cred;sync}
+{rank=same;cmd;inbox}
+{rank=same;audit;events}
+{rank=same;out;notify}
+connector -> cred -> cmd -> audit -> out [style=invis,constraint=true,weight=10];
+}

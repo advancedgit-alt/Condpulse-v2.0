@@ -1,0 +1,1843 @@
+[
+  {
+    "name": "blocks",
+    "description": "Blocos do condomínio",
+    "fields": [
+      [
+        "name",
+        "text NOT NULL",
+        "Nome do bloco"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE (tenant_id, name)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "units",
+    "description": "Unidades residenciais/comerciais",
+    "fields": [
+      [
+        "block_id",
+        "uuid",
+        "Bloco, quando existir"
+      ],
+      [
+        "label",
+        "text NOT NULL",
+        "Identificação da unidade"
+      ],
+      [
+        "status",
+        "text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','INACTIVE'))",
+        "Estado operacional"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, block_id) REFERENCES cp.blocks(tenant_id, id)",
+      "UNIQUE NULLS NOT DISTINCT (tenant_id, block_id, label)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "memberships",
+    "description": "Vínculos e permissões por unidade ou função",
+    "fields": [
+      [
+        "account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Subject de Auth"
+      ],
+      [
+        "unit_id",
+        "uuid",
+        "Unidade; nulo para equipe"
+      ],
+      [
+        "display_name",
+        "text NOT NULL",
+        "Nome exibido no contexto"
+      ],
+      [
+        "role",
+        "text NOT NULL CHECK (role IN ('RESIDENT','HOUSEHOLD','OWNER_NONRESIDENT','CONCIERGE','MANAGER'))",
+        "Papel"
+      ],
+      [
+        "permissions",
+        "jsonb NOT NULL DEFAULT '{}'::jsonb",
+        "Capacidades validadas pelo serviço"
+      ],
+      [
+        "status",
+        "text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','REVOKED'))",
+        "Validação"
+      ],
+      [
+        "valid_from",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Início"
+      ],
+      [
+        "valid_until",
+        "timestamptz",
+        "Fim"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "CHECK (valid_until IS NULL OR valid_until > valid_from)",
+      "CHECK ((role IN ('RESIDENT','HOUSEHOLD','OWNER_NONRESIDENT') AND unit_id IS NOT NULL) OR (role IN ('CONCIERGE','MANAGER') AND unit_id IS NULL))"
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX memberships_active_unique ON cp.memberships (tenant_id, account_id, COALESCE(unit_id,'00000000-0000-0000-0000-000000000000'::uuid), role) WHERE status = 'ACTIVE';",
+      "CREATE INDEX memberships_actor ON cp.memberships(account_id,status);"
+    ],
+    "mutable": true
+  },
+  {
+    "name": "subscriptions",
+    "description": "Plano e recursos contratados",
+    "fields": [
+      [
+        "plan",
+        "text NOT NULL CHECK (plan IN ('ESSENTIAL','COMPLETE'))",
+        "Plano"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'TRIAL' CHECK (state IN ('TRIAL','ACTIVE','PAST_DUE','ENDING','ENDED'))",
+        "Contrato; não bloqueia portão por dívida"
+      ],
+      [
+        "features",
+        "jsonb NOT NULL DEFAULT '{}'::jsonb",
+        "Flags controladas no servidor"
+      ],
+      [
+        "starts_at",
+        "timestamptz NOT NULL",
+        "Início"
+      ],
+      [
+        "ends_at",
+        "timestamptz",
+        "Fim"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE (tenant_id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "amenities",
+    "description": "Áreas reserváveis e regras",
+    "fields": [
+      [
+        "name",
+        "text NOT NULL",
+        "Nome público"
+      ],
+      [
+        "capacity",
+        "integer NOT NULL CHECK (capacity > 0)",
+        "Capacidade informativa"
+      ],
+      [
+        "approval_required",
+        "boolean NOT NULL DEFAULT true",
+        "Aprovação"
+      ],
+      [
+        "fee_cents",
+        "bigint NOT NULL DEFAULT 0 CHECK (fee_cents >= 0)",
+        "Taxa em centavos"
+      ],
+      [
+        "buffer_minutes",
+        "integer NOT NULL DEFAULT 0 CHECK (buffer_minutes BETWEEN 0 AND 1440)",
+        "Limpeza"
+      ],
+      [
+        "policy_version",
+        "integer NOT NULL DEFAULT 1 CHECK (policy_version > 0)",
+        "Versão de regras"
+      ],
+      [
+        "policy",
+        "jsonb NOT NULL DEFAULT '{}'::jsonb",
+        "Horários/cotas/antecedência com schema validado"
+      ],
+      [
+        "active",
+        "boolean NOT NULL DEFAULT true",
+        "Disponibilidade do cadastro"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE (tenant_id,name)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "reservations",
+    "description": "Reservas e bloqueios no mesmo mecanismo anti-conflito",
+    "fields": [
+      [
+        "amenity_id",
+        "uuid NOT NULL",
+        "Área"
+      ],
+      [
+        "unit_id",
+        "uuid",
+        "Unidade; obrigatória em BOOKING"
+      ],
+      [
+        "created_by",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Ator"
+      ],
+      [
+        "kind",
+        "text NOT NULL DEFAULT 'BOOKING' CHECK (kind IN ('BOOKING','BLOCK'))",
+        "Reserva ou manutenção"
+      ],
+      [
+        "status",
+        "text NOT NULL CHECK (status IN ('HELD','PENDING_APPROVAL','CONFIRMED','REJECTED','CANCELLED','EXPIRED'))",
+        "Estado"
+      ],
+      [
+        "starts_at",
+        "timestamptz NOT NULL",
+        "Início de uso"
+      ],
+      [
+        "ends_at",
+        "timestamptz NOT NULL",
+        "Fim de uso"
+      ],
+      [
+        "occupied_from",
+        "timestamptz NOT NULL",
+        "Início efetivo com buffer"
+      ],
+      [
+        "occupied_until",
+        "timestamptz NOT NULL",
+        "Fim efetivo com buffer"
+      ],
+      [
+        "expires_at",
+        "timestamptz",
+        "Expiração de hold/aprovação"
+      ],
+      [
+        "rule_snapshot",
+        "jsonb NOT NULL",
+        "Regras aceitas"
+      ],
+      [
+        "fee_cents",
+        "bigint NOT NULL DEFAULT 0 CHECK (fee_cents >= 0)",
+        "Taxa registrada"
+      ],
+      [
+        "decision_reason",
+        "text",
+        "Motivo de decisão/cancelamento"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, amenity_id) REFERENCES cp.amenities(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "CHECK (starts_at < ends_at AND occupied_from <= starts_at AND occupied_until >= ends_at)",
+      "CHECK (kind <> 'BOOKING' OR unit_id IS NOT NULL)",
+      "CHECK (status NOT IN ('HELD','PENDING_APPROVAL') OR expires_at IS NOT NULL)",
+      "EXCLUDE USING gist (tenant_id WITH =, amenity_id WITH =, tstzrange(occupied_from, occupied_until, '[)') WITH &&) WHERE (status IN ('HELD','PENDING_APPROVAL','CONFIRMED'))"
+    ],
+    "indexes": [
+      "CREATE INDEX reservations_unit_period ON cp.reservations(tenant_id,unit_id,starts_at);"
+    ],
+    "mutable": true
+  },
+  {
+    "name": "reservation_waitlist",
+    "description": "Fila de espera e oferta temporária",
+    "fields": [
+      [
+        "amenity_id",
+        "uuid NOT NULL",
+        "Área"
+      ],
+      [
+        "unit_id",
+        "uuid NOT NULL",
+        "Unidade"
+      ],
+      [
+        "account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Solicitante"
+      ],
+      [
+        "starts_at",
+        "timestamptz NOT NULL",
+        "Período desejado"
+      ],
+      [
+        "ends_at",
+        "timestamptz NOT NULL",
+        "Fim"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'WAITING' CHECK (state IN ('WAITING','OFFERED','ACCEPTED','EXPIRED','CANCELLED'))",
+        "Fila"
+      ],
+      [
+        "offer_reservation_id",
+        "uuid",
+        "Hold correspondente"
+      ],
+      [
+        "offer_expires_at",
+        "timestamptz",
+        "Prazo da oferta"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, amenity_id) REFERENCES cp.amenities(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, offer_reservation_id) REFERENCES cp.reservations(tenant_id, id)",
+      "CHECK (starts_at < ends_at)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "reservation_fee_entries",
+    "description": "Encaminhamento de taxa, sem presumir pagamento",
+    "fields": [
+      [
+        "reservation_id",
+        "uuid NOT NULL",
+        "Reserva"
+      ],
+      [
+        "amount_cents",
+        "bigint NOT NULL CHECK (amount_cents >= 0)",
+        "Centavos"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'PENDING_EXPORT' CHECK (state IN ('PENDING_EXPORT','EXPORTED','CONFIRMED_BY_ADMIN','CANCELLED'))",
+        "Estado"
+      ],
+      [
+        "external_reference",
+        "text",
+        "Comprovante da administração"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, reservation_id) REFERENCES cp.reservations(tenant_id, id)",
+      "UNIQUE (tenant_id,reservation_id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "visitors",
+    "description": "Identidade mínima de visitante por tenant",
+    "fields": [
+      [
+        "full_name",
+        "text NOT NULL",
+        "Nome"
+      ],
+      [
+        "document_last4",
+        "text",
+        "Somente final quando necessário"
+      ],
+      [
+        "document_fingerprint",
+        "text",
+        "HMAC opcional, não hash simples de CPF"
+      ],
+      [
+        "contact_ciphertext",
+        "bytea",
+        "Contato cifrado quando necessário"
+      ],
+      [
+        "retention_until",
+        "timestamptz",
+        "Prazo de retenção"
+      ]
+    ],
+    "constraints": [],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "visit_permits",
+    "description": "Autorizações temporais e recorrentes",
+    "fields": [
+      [
+        "visitor_id",
+        "uuid NOT NULL",
+        "Visitante"
+      ],
+      [
+        "unit_id",
+        "uuid NOT NULL",
+        "Destino"
+      ],
+      [
+        "reservation_id",
+        "uuid",
+        "Evento opcional"
+      ],
+      [
+        "created_by",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Autor"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE','REVOKED','EXPIRED'))",
+        "Estado"
+      ],
+      [
+        "valid_from",
+        "timestamptz NOT NULL",
+        "Início"
+      ],
+      [
+        "valid_until",
+        "timestamptz NOT NULL",
+        "Fim obrigatório"
+      ],
+      [
+        "schedule",
+        "jsonb",
+        "Recorrência validada no fuso do tenant"
+      ],
+      [
+        "public_token_hash",
+        "text",
+        "Hash do token compartilhável"
+      ],
+      [
+        "single_use",
+        "boolean NOT NULL DEFAULT false",
+        "Política de uso"
+      ],
+      [
+        "revoked_at",
+        "timestamptz",
+        "Revogação"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, visitor_id) REFERENCES cp.visitors(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, reservation_id) REFERENCES cp.reservations(tenant_id, id)",
+      "CHECK (valid_from < valid_until)",
+      "UNIQUE (public_token_hash)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "permit_windows",
+    "description": "Janelas materializadas de uma recorrência",
+    "fields": [
+      [
+        "permit_id",
+        "uuid NOT NULL",
+        "Autorização"
+      ],
+      [
+        "starts_at",
+        "timestamptz NOT NULL",
+        "Início"
+      ],
+      [
+        "ends_at",
+        "timestamptz NOT NULL",
+        "Fim"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE','USED','REVOKED','EXPIRED'))",
+        "Estado"
+      ],
+      [
+        "used_at",
+        "timestamptz",
+        "Uso"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, permit_id) REFERENCES cp.visit_permits(tenant_id, id)",
+      "CHECK (starts_at < ends_at)",
+      "UNIQUE(tenant_id,permit_id,starts_at)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "arrival_requests",
+    "description": "Pedido de decisão por chegada específica",
+    "fields": [
+      [
+        "visitor_id",
+        "uuid NOT NULL",
+        "Pessoa"
+      ],
+      [
+        "unit_id",
+        "uuid NOT NULL",
+        "Destino"
+      ],
+      [
+        "permit_id",
+        "uuid",
+        "Convite opcional"
+      ],
+      [
+        "created_by",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Porteiro"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'WAITING' CHECK (state IN ('WAITING','APPROVED','DENIED','EXPIRED','CANCELLED'))",
+        "Estado"
+      ],
+      [
+        "expires_at",
+        "timestamptz NOT NULL",
+        "Prazo"
+      ],
+      [
+        "decided_by",
+        "uuid REFERENCES platform.accounts(id)",
+        "Ator da decisão"
+      ],
+      [
+        "decided_at",
+        "timestamptz",
+        "Momento"
+      ],
+      [
+        "decision_source",
+        "text",
+        "Aplicativo ou procedimento assistido"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, visitor_id) REFERENCES cp.visitors(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, permit_id) REFERENCES cp.visit_permits(tenant_id, id)",
+      "CHECK (state NOT IN ('APPROVED','DENIED') OR (decided_by IS NOT NULL AND decided_at IS NOT NULL))"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "parcels",
+    "description": "Recebimento e guarda de encomendas",
+    "fields": [
+      [
+        "unit_id",
+        "uuid NOT NULL",
+        "Destino"
+      ],
+      [
+        "received_by",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Operador"
+      ],
+      [
+        "description",
+        "text NOT NULL",
+        "Descrição curta"
+      ],
+      [
+        "quantity",
+        "integer NOT NULL DEFAULT 1 CHECK (quantity > 0)",
+        "Quantidade"
+      ],
+      [
+        "storage_location",
+        "text NOT NULL",
+        "Local físico"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'RECEIVED' CHECK (state IN ('RECEIVED','HANDED_OVER','RETURNED'))",
+        "Estado"
+      ],
+      [
+        "received_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Recebimento"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "parcel_delegations",
+    "description": "Pessoa autorizada a retirar uma encomenda",
+    "fields": [
+      [
+        "parcel_id",
+        "uuid NOT NULL",
+        "Encomenda"
+      ],
+      [
+        "created_by",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Morador"
+      ],
+      [
+        "delegate_name",
+        "text NOT NULL",
+        "Pessoa indicada"
+      ],
+      [
+        "code_hmac",
+        "text NOT NULL",
+        "Código protegido com segredo"
+      ],
+      [
+        "expires_at",
+        "timestamptz NOT NULL",
+        "Validade"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'ACTIVE' CHECK (state IN ('ACTIVE','USED','REVOKED','EXPIRED'))",
+        "Estado"
+      ],
+      [
+        "failed_attempts",
+        "integer NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0)",
+        "Tentativas"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, parcel_id) REFERENCES cp.parcels(tenant_id, id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "parcel_handoffs",
+    "description": "Evidência única de retirada",
+    "fields": [
+      [
+        "parcel_id",
+        "uuid NOT NULL",
+        "Encomenda"
+      ],
+      [
+        "delegation_id",
+        "uuid",
+        "Autorização opcional"
+      ],
+      [
+        "operator_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Porteiro"
+      ],
+      [
+        "recipient_name",
+        "text NOT NULL",
+        "Recebedor conferido"
+      ],
+      [
+        "handed_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Horário"
+      ],
+      [
+        "evidence_type",
+        "text NOT NULL CHECK (evidence_type IN ('IN_PERSON','DELEGATION_CODE','ASSISTED'))",
+        "Origem da confirmação"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, parcel_id) REFERENCES cp.parcels(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, delegation_id) REFERENCES cp.parcel_delegations(tenant_id, id)",
+      "UNIQUE(tenant_id,parcel_id)"
+    ],
+    "indexes": [],
+    "mutable": false
+  },
+  {
+    "name": "announcements",
+    "description": "Avisos publicados e segmentação",
+    "fields": [
+      [
+        "title",
+        "text NOT NULL",
+        "Título"
+      ],
+      [
+        "body",
+        "text NOT NULL",
+        "Texto sem scripts"
+      ],
+      [
+        "audience",
+        "jsonb NOT NULL",
+        "Segmentação validada"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'DRAFT' CHECK (state IN ('DRAFT','PUBLISHED','ARCHIVED'))",
+        "Estado"
+      ],
+      [
+        "published_at",
+        "timestamptz",
+        "Publicação"
+      ],
+      [
+        "author_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Autor"
+      ]
+    ],
+    "constraints": [],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "announcement_reads",
+    "description": "Leitura autenticada de aviso",
+    "fields": [
+      [
+        "announcement_id",
+        "uuid NOT NULL",
+        "Aviso"
+      ],
+      [
+        "account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Leitor"
+      ],
+      [
+        "read_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Abertura autenticada"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, announcement_id) REFERENCES cp.announcements(tenant_id, id)",
+      "UNIQUE(tenant_id,announcement_id,account_id)"
+    ],
+    "indexes": [],
+    "mutable": false
+  },
+  {
+    "name": "service_requests",
+    "description": "Pedidos acompanháveis do morador",
+    "fields": [
+      [
+        "unit_id",
+        "uuid NOT NULL",
+        "Unidade"
+      ],
+      [
+        "requester_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Autor"
+      ],
+      [
+        "category",
+        "text NOT NULL",
+        "Categoria validada"
+      ],
+      [
+        "title",
+        "text NOT NULL",
+        "Título"
+      ],
+      [
+        "description",
+        "text NOT NULL",
+        "Descrição"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'OPEN' CHECK (state IN ('OPEN','TRIAGED','IN_PROGRESS','WAITING_RESIDENT','RESOLVED','CLOSED'))",
+        "Andamento"
+      ],
+      [
+        "assigned_to",
+        "uuid REFERENCES platform.accounts(id)",
+        "Responsável"
+      ],
+      [
+        "desired_window",
+        "tstzrange",
+        "Mudança/entrega"
+      ],
+      [
+        "external_ref",
+        "text",
+        "Integração futura"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "request_messages",
+    "description": "Mensagens do atendimento",
+    "fields": [
+      [
+        "request_id",
+        "uuid NOT NULL",
+        "Pedido"
+      ],
+      [
+        "author_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Autor"
+      ],
+      [
+        "body",
+        "text NOT NULL",
+        "Texto"
+      ],
+      [
+        "visibility",
+        "text NOT NULL DEFAULT 'RESIDENT' CHECK (visibility IN ('RESIDENT','INTERNAL'))",
+        "Destinatários"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, request_id) REFERENCES cp.service_requests(tenant_id, id)"
+    ],
+    "indexes": [],
+    "mutable": false
+  },
+  {
+    "name": "attachments",
+    "description": "Metadados de arquivo privado",
+    "fields": [
+      [
+        "owner_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Dono"
+      ],
+      [
+        "unit_id",
+        "uuid",
+        "Escopo de unidade"
+      ],
+      [
+        "purpose",
+        "text NOT NULL",
+        "Uso autorizado"
+      ],
+      [
+        "entity_type",
+        "text NOT NULL",
+        "Agregado; vínculo validado no serviço"
+      ],
+      [
+        "entity_id",
+        "uuid",
+        "Recurso associado"
+      ],
+      [
+        "bucket",
+        "text NOT NULL",
+        "Bucket privado"
+      ],
+      [
+        "object_key",
+        "text NOT NULL",
+        "Chave interna"
+      ],
+      [
+        "sha256",
+        "text",
+        "Integridade"
+      ],
+      [
+        "mime_type",
+        "text NOT NULL",
+        "Tipo conferido"
+      ],
+      [
+        "size_bytes",
+        "bigint NOT NULL CHECK(size_bytes > 0)",
+        "Tamanho"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'QUARANTINED' CHECK (state IN ('QUARANTINED','CLEAN','REJECTED','DELETED'))",
+        "Liberação"
+      ],
+      [
+        "retention_until",
+        "timestamptz",
+        "Expurgo"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "UNIQUE(tenant_id,bucket,object_key)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "connectors",
+    "description": "Conexão por condomínio com parceiro",
+    "fields": [
+      [
+        "provider_code",
+        "text NOT NULL",
+        "Fornecedor escolhido"
+      ],
+      [
+        "mode",
+        "text NOT NULL CHECK(mode IN ('SANDBOX','LIVE'))",
+        "Ambiente"
+      ],
+      [
+        "secret_ref",
+        "text NOT NULL",
+        "Referência a cofre, não segredo"
+      ],
+      [
+        "configuration",
+        "jsonb NOT NULL DEFAULT '{}'::jsonb",
+        "Configuração validada e sem segredo"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'DISABLED' CHECK(state IN ('DISABLED','ENABLING','ACTIVE','DEGRADED','DISABLING'))",
+        "Estado"
+      ],
+      [
+        "last_confirmed_at",
+        "timestamptz",
+        "Última comunicação verificada"
+      ]
+    ],
+    "constraints": [],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "access_devices",
+    "description": "Equipamentos homologados e sua condição",
+    "fields": [
+      [
+        "connector_id",
+        "uuid NOT NULL",
+        "Conector"
+      ],
+      [
+        "external_id",
+        "text NOT NULL",
+        "ID no parceiro"
+      ],
+      [
+        "label",
+        "text NOT NULL",
+        "Nome operacional"
+      ],
+      [
+        "model",
+        "text NOT NULL",
+        "Modelo exato"
+      ],
+      [
+        "firmware",
+        "text NOT NULL",
+        "Firmware homologado"
+      ],
+      [
+        "direction",
+        "text NOT NULL CHECK(direction IN ('IN','OUT','BOTH','UNKNOWN'))",
+        "Direção identificável"
+      ],
+      [
+        "capabilities",
+        "jsonb NOT NULL",
+        "Operações verificadas"
+      ],
+      [
+        "last_seen_at",
+        "timestamptz",
+        "Comunicação"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, connector_id) REFERENCES cp.connectors(tenant_id, id)",
+      "UNIQUE(tenant_id,connector_id,external_id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "legal_records",
+    "description": "Prova de finalidade/base legal/aviso",
+    "fields": [
+      [
+        "account_id",
+        "uuid REFERENCES platform.accounts(id)",
+        "Titular com conta"
+      ],
+      [
+        "visitor_id",
+        "uuid",
+        "Titular visitante"
+      ],
+      [
+        "purpose",
+        "text NOT NULL",
+        "Finalidade"
+      ],
+      [
+        "legal_basis",
+        "text NOT NULL",
+        "Base aprovada, não texto gerado automaticamente"
+      ],
+      [
+        "notice_version",
+        "text NOT NULL",
+        "Aviso apresentado"
+      ],
+      [
+        "recorded_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Momento"
+      ],
+      [
+        "evidence_ref",
+        "text",
+        "Evidência mínima"
+      ],
+      [
+        "withdrawn_at",
+        "timestamptz",
+        "Quando aplicável"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, visitor_id) REFERENCES cp.visitors(tenant_id, id)",
+      "CHECK ((account_id IS NOT NULL)::int + (visitor_id IS NOT NULL)::int = 1)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "access_credentials",
+    "description": "Estado desejado de credencial, sem template facial",
+    "fields": [
+      [
+        "connector_id",
+        "uuid NOT NULL",
+        "Conector"
+      ],
+      [
+        "account_id",
+        "uuid REFERENCES platform.accounts(id)",
+        "Morador"
+      ],
+      [
+        "visitor_id",
+        "uuid",
+        "Visitante"
+      ],
+      [
+        "permit_id",
+        "uuid",
+        "Permissão temporal"
+      ],
+      [
+        "legal_record_id",
+        "uuid NOT NULL",
+        "Finalidade/aviso aprovado"
+      ],
+      [
+        "provider_person_ref",
+        "text",
+        "Identificador no parceiro"
+      ],
+      [
+        "kind",
+        "text NOT NULL CHECK(kind IN ('FACE','QR','CARD'))",
+        "Tipo"
+      ],
+      [
+        "desired_state",
+        "text NOT NULL CHECK(desired_state IN ('ACTIVE','REVOKED'))",
+        "Intenção atual"
+      ],
+      [
+        "desired_version",
+        "bigint NOT NULL DEFAULT 1 CHECK(desired_version > 0)",
+        "Versão monotônica"
+      ],
+      [
+        "valid_until",
+        "timestamptz",
+        "Expiração"
+      ],
+      [
+        "status",
+        "text NOT NULL DEFAULT 'PENDING_REVIEW' CHECK(status IN ('PENDING_REVIEW','SYNC_PENDING','PARTIAL','ACTIVE','FAILED','REVOKING','REVOKED'))",
+        "Resumo derivado"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, connector_id) REFERENCES cp.connectors(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, visitor_id) REFERENCES cp.visitors(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, permit_id) REFERENCES cp.visit_permits(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, legal_record_id) REFERENCES cp.legal_records(tenant_id, id)",
+      "CHECK ((account_id IS NOT NULL)::int + (visitor_id IS NOT NULL)::int = 1)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "credential_syncs",
+    "description": "Confirmação por credencial e equipamento",
+    "fields": [
+      [
+        "credential_id",
+        "uuid NOT NULL",
+        "Credencial"
+      ],
+      [
+        "device_id",
+        "uuid NOT NULL",
+        "Leitor/controladora"
+      ],
+      [
+        "desired_version",
+        "bigint NOT NULL",
+        "Versão esperada"
+      ],
+      [
+        "observed_version",
+        "bigint",
+        "Versão aplicada"
+      ],
+      [
+        "state",
+        "text NOT NULL CHECK(state IN ('PENDING','SENT','CONFIRMED','FAILED','UNKNOWN','REVOKED'))",
+        "Situação confirmável"
+      ],
+      [
+        "confirmed_at",
+        "timestamptz",
+        "Verificação"
+      ],
+      [
+        "provider_reference",
+        "text",
+        "Prova externa"
+      ],
+      [
+        "last_error_code",
+        "text",
+        "Erro saneado"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, credential_id) REFERENCES cp.access_credentials(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, device_id) REFERENCES cp.access_devices(tenant_id, id)",
+      "UNIQUE(tenant_id,credential_id,device_id)",
+      "CHECK(observed_version IS NULL OR observed_version <= desired_version)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "integration_commands",
+    "description": "Comandos externos com expiração e incerteza",
+    "fields": [
+      [
+        "connector_id",
+        "uuid NOT NULL",
+        "Conector"
+      ],
+      [
+        "credential_id",
+        "uuid",
+        "Credencial"
+      ],
+      [
+        "device_id",
+        "uuid",
+        "Dispositivo"
+      ],
+      [
+        "kind",
+        "text NOT NULL CHECK(kind IN ('UPSERT_CREDENTIAL','REVOKE_CREDENTIAL','RECONCILE','OPEN_DOOR'))",
+        "Ação"
+      ],
+      [
+        "idempotency_key",
+        "text NOT NULL",
+        "Chave estável do comando"
+      ],
+      [
+        "desired_version",
+        "bigint",
+        "Versão"
+      ],
+      [
+        "expires_at",
+        "timestamptz NOT NULL",
+        "Não executar depois"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'QUEUED' CHECK(state IN ('QUEUED','SENT','CONFIRMED','FAILED','UNKNOWN','EXPIRED'))",
+        "Estado"
+      ],
+      [
+        "attempts",
+        "integer NOT NULL DEFAULT 0",
+        "Tentativas"
+      ],
+      [
+        "last_error",
+        "text",
+        "Mensagem sem segredo"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, connector_id) REFERENCES cp.connectors(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, credential_id) REFERENCES cp.access_credentials(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, device_id) REFERENCES cp.access_devices(tenant_id, id)",
+      "UNIQUE(tenant_id,connector_id,idempotency_key)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "webhook_inbox",
+    "description": "Entrada autenticada e deduplicada",
+    "fields": [
+      [
+        "connector_id",
+        "uuid NOT NULL",
+        "Conector confiável"
+      ],
+      [
+        "external_event_id",
+        "text NOT NULL",
+        "ID/fingerprint estável"
+      ],
+      [
+        "payload_hash",
+        "text NOT NULL",
+        "Integridade"
+      ],
+      [
+        "payload_minimized",
+        "jsonb NOT NULL",
+        "Conteúdo mínimo; sem foto/template"
+      ],
+      [
+        "received_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Recebimento"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING','PROCESSED','FAILED'))",
+        "Processamento"
+      ],
+      [
+        "processed_at",
+        "timestamptz",
+        "Conclusão"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, connector_id) REFERENCES cp.connectors(tenant_id, id)",
+      "UNIQUE(tenant_id,connector_id,external_event_id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "access_events",
+    "description": "Histórico factual, inclusive operação manual",
+    "fields": [
+      [
+        "unit_id",
+        "uuid",
+        "Unidade visível"
+      ],
+      [
+        "account_id",
+        "uuid REFERENCES platform.accounts(id)",
+        "Pessoa com conta"
+      ],
+      [
+        "visitor_id",
+        "uuid",
+        "Visitante"
+      ],
+      [
+        "permit_id",
+        "uuid",
+        "Convite"
+      ],
+      [
+        "device_id",
+        "uuid",
+        "Dispositivo"
+      ],
+      [
+        "connector_id",
+        "uuid",
+        "Parceiro"
+      ],
+      [
+        "external_event_id",
+        "text",
+        "ID externo"
+      ],
+      [
+        "event_type",
+        "text NOT NULL CHECK(event_type IN ('AUTHORIZED','ACTUATED','PASSAGE_IN','PASSAGE_OUT','MANUAL_IN','MANUAL_OUT','DENIED','UNKNOWN','CORRECTION'))",
+        "Significado"
+      ],
+      [
+        "source",
+        "text NOT NULL CHECK(source IN ('PROVIDER','CONCIERGE','SYSTEM'))",
+        "Origem"
+      ],
+      [
+        "occurred_at",
+        "timestamptz NOT NULL",
+        "Horário da origem"
+      ],
+      [
+        "received_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Horário do servidor"
+      ],
+      [
+        "recorded_by",
+        "uuid REFERENCES platform.accounts(id)",
+        "Operador em registro manual"
+      ],
+      [
+        "evidence",
+        "jsonb NOT NULL",
+        "Prova mínima sem biometria"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, unit_id) REFERENCES cp.units(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, visitor_id) REFERENCES cp.visitors(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, permit_id) REFERENCES cp.visit_permits(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, device_id) REFERENCES cp.access_devices(tenant_id, id)",
+      "FOREIGN KEY (tenant_id, connector_id) REFERENCES cp.connectors(tenant_id, id)",
+      "CHECK(source <> 'CONCIERGE' OR recorded_by IS NOT NULL)"
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX access_event_external_unique ON cp.access_events(tenant_id,connector_id,external_event_id) WHERE external_event_id IS NOT NULL;",
+      "CREATE INDEX access_event_unit_time ON cp.access_events(tenant_id,unit_id,occurred_at DESC);"
+    ],
+    "mutable": false
+  },
+  {
+    "name": "outbox_events",
+    "description": "Tarefas duráveis criadas no commit de negócio",
+    "fields": [
+      [
+        "aggregate_type",
+        "text NOT NULL",
+        "Módulo"
+      ],
+      [
+        "aggregate_id",
+        "uuid NOT NULL",
+        "Registro"
+      ],
+      [
+        "event_type",
+        "text NOT NULL",
+        "Contrato de evento"
+      ],
+      [
+        "event_version",
+        "integer NOT NULL DEFAULT 1",
+        "Versão de schema"
+      ],
+      [
+        "payload",
+        "jsonb NOT NULL",
+        "Somente IDs e dados mínimos"
+      ],
+      [
+        "dedupe_key",
+        "text NOT NULL",
+        "Identidade de evento"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING','LEASED','DONE','DEAD'))",
+        "Fila"
+      ],
+      [
+        "available_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Próxima tentativa"
+      ],
+      [
+        "lease_until",
+        "timestamptz",
+        "Prazo do lock lógico"
+      ],
+      [
+        "attempts",
+        "integer NOT NULL DEFAULT 0",
+        "Tentativas"
+      ],
+      [
+        "last_error",
+        "text",
+        "Erro saneado"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE(tenant_id,dedupe_key)"
+    ],
+    "indexes": [
+      "CREATE INDEX outbox_poll ON cp.outbox_events(tenant_id,state,available_at);"
+    ],
+    "mutable": true
+  },
+  {
+    "name": "idempotency_keys",
+    "description": "Replay controlado de requisição crítica",
+    "fields": [
+      [
+        "actor_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Ator"
+      ],
+      [
+        "method",
+        "text NOT NULL",
+        "Método"
+      ],
+      [
+        "route",
+        "text NOT NULL",
+        "Rota normalizada"
+      ],
+      [
+        "key",
+        "text NOT NULL",
+        "Chave do cliente"
+      ],
+      [
+        "request_hash",
+        "text NOT NULL",
+        "Hash do corpo canônico"
+      ],
+      [
+        "response_status",
+        "integer",
+        "Status HTTP"
+      ],
+      [
+        "result_reference",
+        "jsonb",
+        "Referência; consulta novamente aplica permissão"
+      ],
+      [
+        "expires_at",
+        "timestamptz NOT NULL",
+        "Expurgo"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE(tenant_id,actor_id,method,route,key)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "push_installations",
+    "description": "Dispositivos do usuário e consentimento de notificações",
+    "fields": [
+      [
+        "account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Titular"
+      ],
+      [
+        "installation_id",
+        "uuid NOT NULL",
+        "Instalação do app"
+      ],
+      [
+        "platform",
+        "text NOT NULL CHECK(platform IN ('IOS','ANDROID','WEB'))",
+        "Plataforma"
+      ],
+      [
+        "token_ciphertext",
+        "bytea NOT NULL",
+        "Token cifrado"
+      ],
+      [
+        "token_hash",
+        "text NOT NULL",
+        "Deduplicação"
+      ],
+      [
+        "enabled",
+        "boolean NOT NULL DEFAULT true",
+        "Permissão"
+      ],
+      [
+        "last_seen_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Último uso"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE(tenant_id,account_id,installation_id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "notifications",
+    "description": "Envio e evidência por destinatário e canal",
+    "fields": [
+      [
+        "account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Destinatário"
+      ],
+      [
+        "event_key",
+        "text NOT NULL",
+        "Evento"
+      ],
+      [
+        "channel",
+        "text NOT NULL CHECK(channel IN ('IN_APP','PUSH','EMAIL'))",
+        "Canal inicial"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'QUEUED' CHECK(state IN ('QUEUED','SENT_TO_PROVIDER','PROVIDER_ACCEPTED','FAILED','READ_IN_APP'))",
+        "Não confundir com autorização"
+      ],
+      [
+        "provider_receipt",
+        "text",
+        "ID opaco"
+      ],
+      [
+        "read_at",
+        "timestamptz",
+        "Abertura no app"
+      ],
+      [
+        "payload_minimized",
+        "jsonb NOT NULL",
+        "Sem PII no lock screen"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE(tenant_id,account_id,event_key,channel)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "ui_events",
+    "description": "Eventos mínimos para SSE e ressincronização",
+    "fields": [
+      [
+        "seq",
+        "bigint GENERATED ALWAYS AS IDENTITY",
+        "Cursor monotônico"
+      ],
+      [
+        "account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Destinatário"
+      ],
+      [
+        "event_type",
+        "text NOT NULL",
+        "Tipo"
+      ],
+      [
+        "resource_id",
+        "uuid",
+        "ID para reconsulta"
+      ],
+      [
+        "expires_at",
+        "timestamptz NOT NULL",
+        "Validade do cursor"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE(seq)"
+    ],
+    "indexes": [
+      "CREATE INDEX ui_feed ON cp.ui_events(tenant_id,account_id,seq);"
+    ],
+    "mutable": false
+  },
+  {
+    "name": "audit_events",
+    "description": "Auditoria mínima append-only para a aplicação",
+    "fields": [
+      [
+        "actor_id",
+        "uuid REFERENCES platform.accounts(id)",
+        "Ator"
+      ],
+      [
+        "action",
+        "text NOT NULL",
+        "Ação"
+      ],
+      [
+        "resource_type",
+        "text NOT NULL",
+        "Tipo"
+      ],
+      [
+        "resource_id",
+        "uuid",
+        "Registro"
+      ],
+      [
+        "trace_id",
+        "text NOT NULL",
+        "Correlação"
+      ],
+      [
+        "context",
+        "jsonb NOT NULL",
+        "Motivo e dados mínimos, sem segredo"
+      ],
+      [
+        "occurred_at",
+        "timestamptz NOT NULL DEFAULT now()",
+        "Momento"
+      ]
+    ],
+    "constraints": [],
+    "indexes": [
+      "CREATE INDEX audit_tenant_time ON cp.audit_events(tenant_id,occurred_at DESC);"
+    ],
+    "mutable": false
+  },
+  {
+    "name": "privacy_requests",
+    "description": "Exercício de direitos e ações em destinos",
+    "fields": [
+      [
+        "account_id",
+        "uuid REFERENCES platform.accounts(id)",
+        "Titular"
+      ],
+      [
+        "visitor_id",
+        "uuid",
+        "Visitante"
+      ],
+      [
+        "kind",
+        "text NOT NULL",
+        "Tipo de direito"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'OPEN' CHECK(state IN ('OPEN','VERIFYING','PROCESSING','WAITING_PARTNER','COMPLETED','REJECTED_WITH_REASON'))",
+        "Andamento"
+      ],
+      [
+        "decision",
+        "text",
+        "Justificativa aprovada"
+      ],
+      [
+        "due_at",
+        "timestamptz",
+        "Prazo definido pelo responsável"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, visitor_id) REFERENCES cp.visitors(tenant_id, id)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "import_batches",
+    "description": "Importação com prévia, hash e aceite",
+    "fields": [
+      [
+        "source",
+        "text NOT NULL",
+        "Origem"
+      ],
+      [
+        "file_hash",
+        "text NOT NULL",
+        "SHA-256"
+      ],
+      [
+        "entity_type",
+        "text NOT NULL",
+        "Tipo importado"
+      ],
+      [
+        "mapping_version",
+        "integer NOT NULL",
+        "Mapa de colunas"
+      ],
+      [
+        "state",
+        "text NOT NULL DEFAULT 'UPLOADED' CHECK(state IN ('UPLOADED','VALIDATED','APPROVED','RUNNING','COMPLETED','FAILED'))",
+        "Estado"
+      ],
+      [
+        "approved_by",
+        "uuid REFERENCES platform.accounts(id)",
+        "Aceite"
+      ],
+      [
+        "counts",
+        "jsonb NOT NULL DEFAULT '{}'::jsonb",
+        "Reconciliado/rejeitado"
+      ]
+    ],
+    "constraints": [
+      "UNIQUE(tenant_id,source,file_hash,entity_type,mapping_version)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "import_rows",
+    "description": "Resultado por linha e referência externa",
+    "fields": [
+      [
+        "batch_id",
+        "uuid NOT NULL",
+        "Lote"
+      ],
+      [
+        "row_number",
+        "integer NOT NULL CHECK(row_number > 0)",
+        "Linha"
+      ],
+      [
+        "external_key",
+        "text",
+        "ID de origem"
+      ],
+      [
+        "state",
+        "text NOT NULL",
+        "VALID/INVALID/IMPORTED"
+      ],
+      [
+        "target_id",
+        "uuid",
+        "Destino"
+      ],
+      [
+        "errors",
+        "jsonb",
+        "Erros sem segredo"
+      ]
+    ],
+    "constraints": [
+      "FOREIGN KEY (tenant_id, batch_id) REFERENCES cp.import_batches(tenant_id, id)",
+      "UNIQUE(tenant_id,batch_id,row_number)"
+    ],
+    "indexes": [],
+    "mutable": true
+  },
+  {
+    "name": "support_access_grants",
+    "description": "Concessão temporária para suporte",
+    "fields": [
+      [
+        "support_account_id",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Conta do suporte"
+      ],
+      [
+        "approved_by",
+        "uuid NOT NULL REFERENCES platform.accounts(id)",
+        "Aprovador"
+      ],
+      [
+        "reason",
+        "text NOT NULL",
+        "Justificativa"
+      ],
+      [
+        "scope",
+        "jsonb NOT NULL",
+        "Permissões limitadas"
+      ],
+      [
+        "expires_at",
+        "timestamptz NOT NULL",
+        "Prazo"
+      ],
+      [
+        "revoked_at",
+        "timestamptz",
+        "Revogação"
+      ]
+    ],
+    "constraints": [],
+    "indexes": [],
+    "mutable": true
+  }
+]

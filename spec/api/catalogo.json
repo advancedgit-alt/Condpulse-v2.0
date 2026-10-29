@@ -1,0 +1,356 @@
+[
+  {
+    "method": "POST",
+    "path": "/v1/auth/login",
+    "title": "Login web pelo BFF",
+    "tag": "Identidade"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/auth/mfa/verify",
+    "title": "Verificar segundo fator web",
+    "tag": "Identidade"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/auth/logout",
+    "title": "Encerrar sessão web",
+    "tag": "Identidade"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/me/contexts",
+    "title": "Listar somente vínculos ativos da própria conta",
+    "tag": "Identidade"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/home",
+    "title": "Resumo do contexto autorizado",
+    "tag": "Morador"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/units",
+    "title": "Consultar unidades no escopo do papel",
+    "tag": "Cadastro"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/memberships",
+    "title": "Consultar vínculos permitidos",
+    "tag": "Cadastro"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/memberships/{membershipId}/decision",
+    "title": "Aprovar ou rejeitar vínculo",
+    "tag": "Cadastro"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/memberships/{membershipId}/revoke",
+    "title": "Revogar vínculo e enfileirar credenciais",
+    "tag": "Cadastro"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/amenities",
+    "title": "Áreas do condomínio",
+    "tag": "Reservas"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/amenities/{amenityId}/availability",
+    "title": "Disponibilidade não é retenção de horário",
+    "tag": "Reservas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/reservations",
+    "title": "Criar reserva com trava de conflito",
+    "tag": "Reservas"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/reservations",
+    "title": "Reservas visíveis ao usuário",
+    "tag": "Reservas"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/reservations/{reservationId}",
+    "title": "Detalhe e regras aceitas",
+    "tag": "Reservas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/reservations/{reservationId}/decision",
+    "title": "Decidir pedido de reserva",
+    "tag": "Reservas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/reservations/{reservationId}/cancel",
+    "title": "Cancelar e revogar convites vinculados",
+    "tag": "Reservas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/waitlist",
+    "title": "Entrar na fila da área",
+    "tag": "Reservas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/waitlist/{waitlistId}/accept",
+    "title": "Aceitar oferta ainda válida",
+    "tag": "Reservas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/permits",
+    "title": "Autorizar visita com vigência",
+    "tag": "Acessos"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/permits",
+    "title": "Listar autorizações visíveis",
+    "tag": "Acessos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/permits/{permitId}/share",
+    "title": "Gerar link temporário; token não autoriza sem conferência",
+    "tag": "Acessos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/permits/{permitId}/revoke",
+    "title": "Revogar convite e credenciais derivadas",
+    "tag": "Acessos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/public/invitations/resolve",
+    "title": "Resolver convite sem instalar o app",
+    "tag": "Público"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/arrivals",
+    "title": "Registrar pessoa aguardando decisão",
+    "tag": "Portaria"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/arrivals",
+    "title": "Fila de chegadas autorizada",
+    "tag": "Portaria"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/arrivals/{arrivalId}/decision",
+    "title": "Primeira decisão válida vence",
+    "tag": "Acessos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/access-events/manual",
+    "title": "Registrar entrada ou saída conferida pela portaria",
+    "tag": "Portaria"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/access-events",
+    "title": "Histórico com origem e evidência, filtrado por privacidade",
+    "tag": "Acessos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/parcels",
+    "title": "Receber encomenda e enfileirar aviso",
+    "tag": "Encomendas"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/parcels",
+    "title": "Listar encomendas permitidas",
+    "tag": "Encomendas"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/parcels/{parcelId}",
+    "title": "Detalhe de encomenda",
+    "tag": "Encomendas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/parcels/{parcelId}/delegations",
+    "title": "Delegar retirada específica",
+    "tag": "Encomendas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/parcels/{parcelId}/handoff",
+    "title": "Concluir uma única retirada",
+    "tag": "Encomendas"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/announcements",
+    "title": "Criar aviso em rascunho",
+    "tag": "Comunicação"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/announcements/{announcementId}/publish",
+    "title": "Publicar para destinatários validados",
+    "tag": "Comunicação"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/announcements",
+    "title": "Avisos visíveis ao usuário",
+    "tag": "Comunicação"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/announcements/{announcementId}/read",
+    "title": "Registrar abertura autenticada",
+    "tag": "Comunicação"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/requests",
+    "title": "Abrir pedido",
+    "tag": "Atendimento"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/requests",
+    "title": "Consultar pedidos no escopo autorizado",
+    "tag": "Atendimento"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/requests/{requestId}",
+    "title": "Detalhar pedido",
+    "tag": "Atendimento"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/requests/{requestId}/messages",
+    "title": "Adicionar mensagem visível ou interna",
+    "tag": "Atendimento"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/requests/{requestId}/state",
+    "title": "Transição autorizada de atendimento",
+    "tag": "Atendimento"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/uploads/intents",
+    "title": "Emitir upload privado em quarentena",
+    "tag": "Arquivos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/attachments/{attachmentId}/complete",
+    "title": "Conferir arquivo e iniciar validação",
+    "tag": "Arquivos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/attachments/{attachmentId}/download",
+    "title": "Autorizar URL curta após verificar ACL",
+    "tag": "Arquivos"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/credentials",
+    "title": "Criar solicitação de facial; não marcar ativo",
+    "tag": "Facial"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/credentials/{credentialId}",
+    "title": "Estado por equipamento autorizado",
+    "tag": "Facial"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/credentials/{credentialId}/review",
+    "title": "Conferir solicitação de cadastro",
+    "tag": "Facial"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/credentials/{credentialId}/revoke",
+    "title": "Revogação prioritária e confirmável",
+    "tag": "Facial"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/access-devices",
+    "title": "Equipamentos e idade da comunicação",
+    "tag": "Facial"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/operations/{operationId}",
+    "title": "Consultar processamento assíncrono",
+    "tag": "Operação"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/imports",
+    "title": "Abrir lote sem gravar registros finais",
+    "tag": "Importação"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/imports/{batchId}",
+    "title": "Prévia e reconciliação do lote",
+    "tag": "Importação"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/imports/{batchId}/approve",
+    "title": "Confirmar lote previamente validado",
+    "tag": "Importação"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/privacy-requests",
+    "title": "Abrir solicitação de direito",
+    "tag": "Privacidade"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/tenants/{tenantId}/push-installations",
+    "title": "Registrar ou atualizar instalação autorizada",
+    "tag": "Notificações"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/audit-events",
+    "title": "Auditoria limitada por papel e finalidade",
+    "tag": "Gestão"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/webhooks/access/{connectorKey}",
+    "title": "Receber evento autenticado do parceiro",
+    "tag": "Integração"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/tenants/{tenantId}/events/stream",
+    "title": "SSE com cursor e ressincronização",
+    "tag": "Notificações"
+  }
+]

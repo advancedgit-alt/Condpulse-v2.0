@@ -1,0 +1,20 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ a [label="Morador escolhe área e período"];
+ b [label="Consulta regras, taxa e disponibilidade"];
+ c [label="API valida vínculo / cota / horário"];
+ d [label="Transação no Postgres
+Reserva + outbox + auditoria"];
+ e [label="Conflito de período?",shape=diamond];
+ f [label="409 · atualizar agenda
+Ou entrar na fila",fillcolor="#FFFAEB"];
+ g [label="Requer aprovação?",shape=diamond];
+ h [label="Pendente e bloqueando período
+Prazo definido para decisão"];
+ i [label="Confirmada
+Convidados e operação do evento",fillcolor="#E3F4F4"];
+ j [label="Cancelamento / rejeição / expiração
+Libera período + revoga convites
+Oferece vaga ao próximo"];
+ a -> b -> c -> d -> e;e -> f [label="sim"];e -> g [label="não"];g -> h [label="sim"];g -> i [label="não"];h -> i [label="aprovação"];h -> j;i -> j;
+
+}

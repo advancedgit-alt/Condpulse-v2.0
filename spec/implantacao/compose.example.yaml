@@ -1,0 +1,51 @@
+# ESQUEMA DE EMPACOTAMENTO, NÃO PRONTO PARA DEPLOY. Imagens, entrypoints, UID, healthchecks, volumes/segredos e limits devem ser finalizados em CP-004 e ticket de publicação de release. Sem portas públicas ou senhas embutidas.
+name: condpulse-example
+services:
+  api:
+    image: ${CONDPULSE_API_IMAGE:?fornecer imagem homologada com digest}
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      APP_ROLE: api
+      FEATURE_REMOTE_OPEN: 'false'
+    expose:
+    - '8080'
+    networks:
+    - app
+    read_only: true
+    tmpfs:
+    - /tmp
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+  worker:
+    image: ${CONDPULSE_API_IMAGE:?fornecer imagem homologada com digest}
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      APP_ROLE: worker
+      OUTBOUND_EFFECTS_ENABLED: 'false'
+    networks:
+    - app
+    read_only: true
+    tmpfs:
+    - /tmp
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+  web:
+    image: ${CONDPULSE_WEB_IMAGE:?fornecer imagem homologada com digest}
+    restart: unless-stopped
+    expose:
+    - '8080'
+    networks:
+    - app
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+networks:
+  app:
+    driver: bridge

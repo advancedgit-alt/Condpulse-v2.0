@@ -18,7 +18,7 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 - Sem force push ou reescrita de histórico compartilhado.
 
 ## Base técnica
-- PRD CondPulse v1.0, 27/10/2026; decisões em docs/adr.
+- PRD CondPulse v1.0, 27/10/2026, em spec/documentacao (pacote em spec/, somente referência); decisões em docs/adr.
 - Java25/Spring Boot4.1.2, monólito modular com API/BFF e worker separados.
 - React/TypeScript/Vite na web e React Native/Expo no mobile.
 - PostgreSQL como banco único principal, projetos Supabase exclusivos em São Paulo.
