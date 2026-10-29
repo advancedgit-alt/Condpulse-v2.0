@@ -1411,6 +1411,12 @@
             "node --test tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs"
           ],
           "scope": "10 testes do executor runtime passaram sem skips, incluindo compilacao exata, SCRAM, grants/RLS, replay e recuperacao parcial. Nao provisionou runtime/Vercel remoto nem completa o ticket; depende de token proprio e aprovacao concreta apos inspect."
+        },
+        {
+          "commit": "8aa5ec691959427866adbee072236cd5d124ecc8",
+          "environment": "Supabase rpnrqfrfwywglvyykgrg (homologação) pelo executor manual protegido; Vercel Production da homologação",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40861754667",
+          "scope": "Com OK do responsável, migrate 006-015 aplicou V006 a V015; a repetição 40862234364 não gravou linha nova e o smoke público 40862484199 passou no deployment anterior às flags. Flags dos módulos, BFF e reservas ligadas na Vercel Production da homologação, valendo a partir do próximo deployment. Registro: docs/evidence/database-operations-20261029.json. Homologação, não produção; sem tenant, login real ou aceite integral do ticket."
         }
       ]
     },

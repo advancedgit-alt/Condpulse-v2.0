@@ -1,0 +1,321 @@
+name: CondPulse production database operations (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operacao explicita; inspect nunca escreve no banco
+        type: choice
+        options: [inspect, migrate]
+        default: inspect
+        required: true
+      expected_commit:
+        description: SHA completo revisado da branch principal (40 hex)
+        type: string
+        required: true
+      migration_ack:
+        description: Somente migrate; tkxcujckpsuawnzkvpjg:DE-ATE:SHA_REVISADO (banco novo comeca em 001; ATE e a ultima migration do commit)
+        type: string
+        required: false
+      maintenance_confirmed:
+        description: Somente migrate; escrita aprovada, backup compativel e janela exclusiva sem outro DDL
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: condpulse-database-operations-tkxcujckpsuawnzkvpjg
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Validate manual request before releasing environment secrets
+        env:
+          REQUEST_OPERATION: ${{ inputs.operation }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MIGRATION_ACK: ${{ inputs.migration_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: |
+          node --input-type=module <<'REQUEST_GATE'
+          // BEGIN AUDITABLE_REQUEST_GATE
+          export function validateRequest(env) {
+            const project = 'tkxcujckpsuawnzkvpjg';
+            if (env.GITHUB_EVENT_NAME !== 'workflow_dispatch'
+                || env.GITHUB_REPOSITORY !== 'advancedgit-alt/Condpulse-v2.0'
+                || env.GITHUB_REF !== 'refs/heads/ccr-5e725112-3x8hyg') throw Error('REQUEST_CONTEXT_DENIED');
+            if (!/^[a-f0-9]{40}$/.test(env.EXPECTED_COMMIT ?? '') || env.EXPECTED_COMMIT !== env.GITHUB_SHA)
+              throw Error('EXACT_REVIEWED_COMMIT_REQUIRED');
+            if (!['inspect', 'migrate'].includes(env.REQUEST_OPERATION)) throw Error('OPERATION_DENIED');
+            if (env.REQUEST_OPERATION === 'migrate') {
+              if (env.MAINTENANCE_CONFIRMED !== 'true') throw Error('MAINTENANCE_ACK_REQUIRED');
+              const range = new RegExp(`^${project}:([0-9]{3})-([0-9]{3}):${env.EXPECTED_COMMIT}$`).exec(env.MIGRATION_ACK ?? '');
+              if (!range || Number(range[1]) < 1 || Number(range[2]) < Number(range[1])) throw Error('EXPLICIT_MIGRATION_ACK_REQUIRED');
+            } else if (env.MIGRATION_ACK) throw Error('MIGRATION_ACK_NOT_APPLICABLE');
+          }
+          // END AUDITABLE_REQUEST_GATE
+          try { validateRequest(process.env); console.log('REQUEST_APPROVED_FOR_ENVIRONMENT_GATE'); }
+          catch (error) { console.error(error.message); process.exitCode = 1; }
+          REQUEST_GATE
+  database-operation:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: condpulse-production-database-operations
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Build reviewed source without database credentials
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          mvn -B -ntp -f apps/backend/pom.xml -DskipTests package
+          sha256sum apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar
+          mkdir -p "$RUNNER_TEMP/condpulse-prod-db-operations/classes"
+          cd "$RUNNER_TEMP/condpulse-prod-db-operations/classes"
+          jar -xf "$GITHUB_WORKSPACE/apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar"
+      - name: Fetch and validate public Supabase CA using verified HTTPS
+        run: |
+          set -euo pipefail
+          umask 077
+          ca="$RUNNER_TEMP/condpulse-prod-db-operations/db-ca.crt"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            'https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt' -o "$ca"
+          test "$(wc -c < "$ca")" -le 65536
+          test "$(grep -c '^-----BEGIN CERTIFICATE-----$' "$ca")" -eq 1
+          openssl x509 -in "$ca" -noout -checkend 86400
+          openssl x509 -in "$ca" -noout -ext basicConstraints | grep -Eq '^[[:space:]]*CA:TRUE([,[:space:]]|$)'
+          openssl verify -check_ss_sig -CAfile "$ca" "$ca"
+          openssl x509 -in "$ca" -noout -sha256 -fingerprint
+          sudo install -d -m 0755 /run/secrets
+          sudo install -m 0444 "$ca" /run/secrets/db-ca.crt
+      - name: Compile isolated production guard without credentials
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/condpulse-prod-db-operations/ProductionDatabaseGuard.java" <<'PRODUCTION_GUARD'
+          // BEGIN AUDITABLE_PRODUCTION_GUARD
+          package br.com.condpulse.bootstrap;
+          import java.math.BigInteger;
+          import java.sql.*;
+          import java.util.*;
+          import java.util.regex.Pattern;
+          import org.flywaydb.core.Flyway;
+          import org.flywaydb.core.api.CoreErrorCode;
+          import org.flywaydb.core.api.logging.LogFactory;
+          public final class ProductionDatabaseGuard {
+            static final String PROJECT = "tkxcujckpsuawnzkvpjg";
+            static final String URL = "jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt";
+            static final long LOCK_KEY = 0x4350504f44424f50L;
+            private static final Pattern ACK = Pattern.compile("^" + PROJECT + ":([0-9]{3})-([0-9]{3}):([a-f0-9]{40})$");
+            private static void require(boolean value) { if (!value) throw new IllegalStateException(); }
+            /** Faixa DE-ATE reconhecida pelo operador, ligada ao commit revisado (conferido no gate e de novo aqui). */
+            static int[] range(String ack, String commit) {
+              var match = ACK.matcher(ack == null ? "" : ack);
+              require(match.matches() && commit != null && commit.matches("[a-f0-9]{40}") && ack.endsWith(":" + commit));
+              int from = Integer.parseInt(match.group(1)), to = Integer.parseInt(match.group(2));
+              require(from >= 1 && to >= from);
+              return new int[]{from, to};
+            }
+            private static int version(Object value) { return new BigInteger(value.toString()).intValueExact(); }
+            record History(boolean exists, Set<Integer> applied) {}
+            /** Banco novo pelo migrate normal: marcador opcional de criacao de schemas e SQL contiguas a partir de 1, sem baseline. */
+            static History history(Connection c, int to) throws Exception {
+              Set<Integer> applied = new TreeSet<>(); boolean first = true;
+              try (var exists = c.prepareStatement("select to_regclass('platform.flyway_schema_history') is not null")) {
+                exists.setQueryTimeout(10);
+                try (var r = exists.executeQuery()) { require(r.next()); if (!r.getBoolean(1)) return new History(false, applied); }
+              }
+              try (var q = c.prepareStatement("select version,type,success,checksum from platform.flyway_schema_history order by installed_rank")) {
+                q.setQueryTimeout(10);
+                try (var r = q.executeQuery()) {
+                  while (r.next()) {
+                    require(r.getBoolean("success"));
+                    if (first && r.getString("version") == null && "SCHEMA".equals(r.getString("type"))) { first = false; continue; }
+                    first = false;
+                    require(r.getString("version") != null);
+                    int version = version(r.getString("version"));
+                    require(version >= 1 && version <= to && "SQL".equals(r.getString("type")) && r.getObject("checksum") != null && applied.add(version));
+                  }
+                }
+              }
+              for (int version = 1; version <= applied.size(); version++) require(applied.contains(version));
+              return new History(true, applied);
+            }
+            private static long count(Connection c, String sql) throws Exception {
+              try (var q = c.prepareStatement(sql)) { q.setQueryTimeout(10); try (var r = q.executeQuery()) { require(r.next()); return r.getLong(1); } }
+            }
+            private static void owners(Connection c) throws Exception {
+              require(count(c, "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('platform','cp') and c.relkind in ('r','p','S') and pg_get_userbyid(c.relowner)<>'postgres'") == 0);
+              require(count(c, "select (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('platform','cp') and pg_get_userbyid(p.proowner)<>'postgres') + (select count(*) from pg_namespace where nspname in ('platform','cp') and pg_get_userbyid(nspowner)<>'postgres')") == 0);
+            }
+            /** Somente leitura: ator, TLS, schemas, historico e ownership agregados. */
+            static String inspect(Connection c) throws Exception {
+              String actor;
+              try (var q = c.prepareStatement("select current_user")) { q.setQueryTimeout(10); try (var r = q.executeQuery()) { require(r.next()); actor = r.getString(1); } }
+              require("postgres".equals(actor));
+              long ssl = count(c, "select count(*) from pg_stat_ssl where pid=pg_backend_pid() and ssl");
+              long schemas = count(c, "select count(*) from pg_namespace where nspname in ('platform','cp')");
+              long tables = count(c, "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('platform','cp') and c.relkind in ('r','p')");
+              owners(c);
+              Set<Integer> applied = history(c, 999).applied();
+              int last = applied.isEmpty() ? 0 : Collections.max(applied);
+              return "{\"inspected\":true,\"actor\":\"postgres\",\"ssl\":" + (ssl == 1) + ",\"schemas\":" + schemas + ",\"tables\":" + tables
+                + ",\"appliedVersions\":" + applied.size() + ",\"lastVersion\":" + last + "}";
+            }
+            static int migrate(Connection c, Flyway flyway, int from, int to) throws Exception {
+              boolean locked=false;
+              try {
+                  require(c.getAutoCommit());
+                  try (var q = c.prepareStatement("select current_user,pg_try_advisory_lock(?)")) {
+                    q.setQueryTimeout(10); q.setLong(1, LOCK_KEY);
+                    try (var r = q.executeQuery()) {
+                      require(r.next()); locked=r.getBoolean(2);
+                      require("postgres".equals(r.getString(1)) && locked);
+                    }
+                  }
+                  owners(c);
+                  var history = history(c, to);
+                  Set<Integer> applied = history.applied();
+                  // Tudo antes da faixa ja aplicado; dentro dela, so um prefixo (repeticao ou retomada), nunca lacuna.
+                  int last = applied.size();
+                  require(last >= from - 1 && last <= to);
+                  int latest = 0;
+                  // ATE e a ultima migration resolvida no JAR revisado (aplicada fora do JAR nao conta).
+                  for (var migration : flyway.info().all())
+                    if (migration.getVersion() != null && migration.getState().isResolved()) latest = Math.max(latest, version(migration.getVersion()));
+                  require(latest == to);
+                  Set<Integer> expected = new TreeSet<>();
+                  for (int version = last + 1; version <= to; version++) expected.add(version);
+                  Set<Integer> pending = new TreeSet<>();
+                  for (var migration : flyway.info().pending()) require(pending.add(version(migration.getVersion())));
+                  require(pending.equals(expected));
+                  if (history.exists()) {
+                    var validation = flyway.validateWithResult();
+                    require(validation.invalidMigrations.size() == expected.size());
+                    Set<Integer> invalid = new TreeSet<>();
+                    for (var migration : validation.invalidMigrations) {
+                      require(migration.errorDetails.errorCode == CoreErrorCode.RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED);
+                      require(invalid.add(version(migration.version)));
+                    }
+                    require(invalid.equals(expected) && validation.validationSuccessful == expected.isEmpty());
+                  } else {
+                    // Banco novo sem historico: nenhum objeto da aplicacao nos schemas; a validacao estrita roda no proprio migrate.
+                    require(from == 1 && count(c, "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('platform','cp') and c.relkind in ('r','p','v','m','S','f')") == 0);
+                  }
+                  var result = flyway.migrate();
+                  flyway.validate();
+                  Set<Integer> all = new TreeSet<>();
+                  for (int version = 1; version <= to; version++) all.add(version);
+                  var after = history(c, to);
+                  require(after.exists() && after.applied().equals(all));
+                  require(flyway.info().pending().length == 0);
+                  owners(c);
+                  return result.migrationsExecuted;
+              } finally {
+                if(locked) try(var q=c.prepareStatement("select pg_advisory_unlock(?)")) {
+                  q.setQueryTimeout(10); q.setLong(1,LOCK_KEY); q.execute();
+                }
+              }
+            }
+            static Flyway flyway(String url, String user, String password, int to) {
+              return Flyway.configure().dataSource(url, user, password)
+                .defaultSchema("platform").schemas("platform", "cp").createSchemas(true)
+                .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true).skipDefaultCallbacks(true)
+                .validateMigrationNaming(true).validateOnMigrate(true).outOfOrder(false).target(String.valueOf(to))
+                .loggers(BootstrapBaseline.QuietLogCreator.class.getName()).load();
+            }
+            private static String sqlState(Throwable error) {
+              for (Throwable current = error; current != null; current = current.getCause())
+                if (current instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().matches("[0-9A-Z]{5}")) return "\"" + sql.getSQLState() + "\"";
+              return "null";
+            }
+            public static void main(String[] args) {
+              java.util.logging.LogManager.getLogManager().reset();
+              LogFactory.setLogCreator(new BootstrapBaseline.QuietLogCreator());
+              try {
+                require(args.length == 1 && Set.of("inspect", "migrate").contains(args[0]));
+                require(URL.equals(System.getenv("DATABASE_URL")) && ("postgres." + PROJECT).equals(System.getenv("DATABASE_USER")));
+                require(System.getenv("DATABASE_PASSWORD") != null && !System.getenv("DATABASE_PASSWORD").isEmpty());
+                var properties = new Properties();
+                properties.setProperty("user", System.getenv("DATABASE_USER"));
+                properties.setProperty("password", System.getenv("DATABASE_PASSWORD"));
+                properties.setProperty("connectTimeout", "5"); properties.setProperty("socketTimeout", "20");
+                try (var c = DriverManager.getConnection(URL, properties)) {
+                  if ("inspect".equals(args[0])) { System.out.println(inspect(c)); return; }
+                  int[] range = range(System.getenv("CP_MIGRATION_ACK"), System.getenv("CP_EXPECTED_COMMIT"));
+                  int executed = migrate(c, flyway(URL, System.getenv("DATABASE_USER"), System.getenv("DATABASE_PASSWORD"), range[1]), range[0], range[1]);
+                  System.out.println("{\"migrated\":true,\"validated\":true,\"target\":\"" + String.format("%03d", range[1]) + "\",\"migrationsExecuted\":" + executed + "}");
+                }
+              } catch (Throwable error) {
+                System.out.println("{\"ok\":false,\"code\":\"PRODUCTION_GUARD_FAILED_OR_RESULT_UNKNOWN\",\"sqlState\":" + sqlState(error) + "}");
+                System.exit(1);
+              }
+            }
+          }
+          // END AUDITABLE_PRODUCTION_GUARD
+          PRODUCTION_GUARD
+          javac -cp "$RUNNER_TEMP/condpulse-prod-db-operations/classes/BOOT-INF/classes:$RUNNER_TEMP/condpulse-prod-db-operations/classes/BOOT-INF/lib/*" \
+            -d "$RUNNER_TEMP/condpulse-prod-db-operations/classes/BOOT-INF/classes" "$RUNNER_TEMP/condpulse-prod-db-operations/ProductionDatabaseGuard.java"
+      - name: Execute only the manually selected database operation
+        env:
+          DATABASE_PASSWORD: ${{ secrets.CP_PRODUCTION_DATABASE_PASSWORD }}
+          REQUEST_OPERATION: ${{ inputs.operation }}
+          CP_MIGRATION_ACK: ${{ inputs.migration_ack }}
+          CP_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          node --input-type=module <<'EXECUTE'
+          import {spawnSync} from 'node:child_process';
+          // BEGIN AUDITABLE_OPERATION_LAUNCHER
+          import {join} from 'node:path';
+          export function operationInvocation(source) {
+            const operation=source.REQUEST_OPERATION;
+            if(!['inspect','migrate'].includes(operation) || !source.DATABASE_PASSWORD) throw Error('OPERATION_CONFIGURATION_INVALID');
+            const base=join(source.RUNNER_TEMP,'condpulse-prod-db-operations/classes/BOOT-INF');
+            const env={PATH:source.PATH,JAVA_HOME:source.JAVA_HOME,
+              DATABASE_URL:'jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt',
+              DATABASE_USER:'postgres.tkxcujckpsuawnzkvpjg',DATABASE_PASSWORD:source.DATABASE_PASSWORD,
+              CP_MIGRATION_ACK:source.CP_MIGRATION_ACK??'',CP_EXPECTED_COMMIT:source.CP_EXPECTED_COMMIT??''};
+            return {executable:join(source.JAVA_HOME,'bin/java'),args:['-Xmx768m',
+              `-Dlogback.configurationFile=${base}/classes/bootstrap/logback-baseline.xml`,
+              '-cp',`${base}/classes:${base}/lib/*`,'br.com.condpulse.bootstrap.ProductionDatabaseGuard',operation],env};
+          }
+          // END AUDITABLE_OPERATION_LAUNCHER
+          // The password is passed only in the environment, never argv, a file or a log.
+          const invocation=operationInvocation(process.env);
+          const result=spawnSync(invocation.executable,invocation.args,{env:invocation.env,stdio:'inherit',timeout:15*60*1000});
+          if(result.error || result.signal) {console.error('OPERATION_PROCESS_FAILED_OR_RESULT_UNKNOWN');process.exitCode=1;}
+          else process.exitCode=result.status===0?0:1;
+          EXECUTE
+      - name: Remove ephemeral CA and build extraction
+        if: always()
+        run: |
+          set -euo pipefail
+          sudo rm -f -- /run/secrets/db-ca.crt
+          node --input-type=module <<'CLEANUP'
+          import {rmSync,existsSync,realpathSync,lstatSync} from 'node:fs';
+          import {resolve,dirname,basename} from 'node:path';
+          const target=resolve(process.env.RUNNER_TEMP,'condpulse-prod-db-operations');
+          if(existsSync(target)) {
+            const actual=realpathSync(target), base=realpathSync(process.env.RUNNER_TEMP);
+            if(lstatSync(target).isSymbolicLink() || dirname(actual)!==base || basename(actual)!=='condpulse-prod-db-operations') throw Error('CLEANUP_TARGET_DENIED');
+            rmSync(actual,{recursive:true,force:true});
+          }
+          CLEANUP

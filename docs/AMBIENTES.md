@@ -102,7 +102,9 @@ projeto Supabase, não um painel CondPulse utilizável.
 
 ## Próximos gates por ambiente
 
-1. Manter o alvo atual de homologação e suas flags preservados. Concluir no alvo
+1. Manter o alvo atual de homologação (V006 a V015 aplicadas e flags dos módulos,
+   BFF e reservas ligadas em 29/10/2026 com autorização do responsável; ver
+   [STATUS.md](STATUS.md)). Concluir no alvo
    restrito o cadastro aprovado, principal operacional/cofre e jornadas do
    [executor de onboarding](EXECUTOR_ONBOARDING.md), sem dados fictícios remotos.
 2. Revisar o suporte ao novo alvo em executores e inventários. Os guards atuais
