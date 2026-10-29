@@ -40,6 +40,9 @@ class UnitCsvParserTest {
   assertEquals("IMPORT_FILE_EMPTY",code("unidade\n\n"));
   assertEquals("IMPORT_FILE_TOO_LARGE",code("unidade\n"+"1\n".repeat(140_000)));
   assertEquals("IMPORT_TOO_MANY_ROWS",code("unidade\n"+"1\n".repeat(2001)));
+  // 2.000 registros com uma linha vazia no meio: a posição do último seria 2.002, acima do que o banco aceita.
+  assertEquals("IMPORT_TOO_MANY_ROWS",code("unidade\n"+"1\n".repeat(1999)+"\n2\n"));
+  assertEquals(2001,UnitCsvParser.parse("unidade\n"+"1\n".repeat(1999)+"2\n").rows().getLast().line());
  }
 
  private static String code(String content) {

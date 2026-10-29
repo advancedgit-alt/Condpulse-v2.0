@@ -73,6 +73,13 @@ public class UnitImportStore {
     r.getString("external_id"),r.getString("outcome"),r.getString("error_code"),r.getBoolean("already_exists"),
     r.getString("applied"),r.getObject("unit_id",UUID.class)),tenant,batch);
  }
+ /**
+  * Serializa as aprovações de importação do condomínio até o fim da transação: a comparação sem diferenciar caixa
+  * ("Casa 1" e "casa 1") não é garantida pelas constraints de blocos e unidades, que comparam o texto original.
+  */
+ public void lockTenantImports(UUID tenant) {
+  jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended('cp.import_units:'||?::text,0))::text",String.class,tenant);
+ }
  /** Cria os blocos que faltam (sem diferenciar caixa) e devolve os criados. */
  public List<UUID> createMissingBlocks(UUID tenant,UUID batch) {
   return jdbc.queryForList("""

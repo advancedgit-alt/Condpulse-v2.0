@@ -69,6 +69,9 @@ public class UnitImportService {
    throw invalid("IMPORT_VERSION_REQUIRED","Informe a versão lida do lote.");
   boolean acceptPartial=Boolean.TRUE.equals(request.acceptPartial());
   return execute(actor,tenant,assurance,context->{
+   // Trava do condomínio antes da do lote (mesma ordem em toda aprovação): lotes diferentes com a mesma unidade em
+   // caixa diferente não criam duas unidades equivalentes.
+   store.lockTenantImports(tenant);
    var batch=store.find(tenant,batchId,true);
    if(batch==null) throw notFound();
    if("APPROVED".equals(batch.state()))

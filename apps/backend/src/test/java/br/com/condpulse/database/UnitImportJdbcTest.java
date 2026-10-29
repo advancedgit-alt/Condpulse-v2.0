@@ -155,6 +155,24 @@ class UnitImportJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void simultaneousBatchesWithTheSameUnitInDifferentCaseCreateItOnce() throws Exception {
+  String t=tag();
+  long before=units(db.tenantA);
+  var upper=imports.open(db.accountC,db.tenantA,AAL2,new UnitImportModels.Open("maiusculas.csv","unidade\nCasa "+t+"\n")).detail();
+  var lower=imports.open(db.accountC,db.tenantA,AAL2,new UnitImportModels.Open("minusculas.csv","unidade\ncasa "+t.toLowerCase()+"\n")).detail();
+  var pool=Executors.newFixedThreadPool(2);
+  try {
+   List<Callable<UnitImportModels.Decided>> calls=List.of(
+    ()->imports.approve(db.accountC,db.tenantA,AAL2,upper.batch().batchId(),new UnitImportModels.Approve(0L,false)),
+    ()->imports.approve(db.accountC,db.tenantA,AAL2,lower.batch().batchId(),new UnitImportModels.Approve(0L,false)));
+   int created=0;
+   for(var result:pool.invokeAll(calls)) created+=result.get().detail().batch().createdUnits();
+   assertEquals(1,created,"a unidade equivalente é criada por um só lote; o outro a encontra");
+  } finally { pool.shutdownNow(); }
+  assertEquals(before+1,units(db.tenantA));
+  db.assertEmptyContext();
+ }
+
  @Test void onlyAal2ManagersOfTheSameTenantSeeOrDecide() throws Exception {
   String t=tag();
   var opened=imports.open(db.accountC,db.tenantA,AAL2,new UnitImportModels.Open("isolamento.csv","unidade\nI"+t+"\n")).detail();

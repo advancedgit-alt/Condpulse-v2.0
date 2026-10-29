@@ -66,9 +66,10 @@ public final class UnitCsvParser {
   for(int index=1;index<lines.size();index++) {
    String line=lines.get(index);
    if(line.isBlank()) continue;
-   if(rows.size()==MAX_ROWS)
-    throw new FileProblem("IMPORT_TOO_MANY_ROWS","O arquivo passa de 2.000 linhas. Divida em lotes menores.");
    int number=index+1;
+   // Linhas vazias não viram registro, mas contam na posição: a posição gravada nunca passa de 2.001 (cabeçalho + 2.000).
+   if(rows.size()==MAX_ROWS || number>MAX_ROWS+1)
+    throw new FileProblem("IMPORT_TOO_MANY_ROWS","O arquivo passa de 2.000 linhas. Divida em lotes menores.");
    var parsed=fields(line,separator);
    if(parsed.isEmpty()) { rows.add(new Row(number,null,null,null,"INVALID","IMPORT_ROW_QUOTES_INVALID")); invalid++; continue; }
    List<String> values=parsed.get();
