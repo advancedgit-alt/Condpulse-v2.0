@@ -177,4 +177,31 @@ class AttachmentJdbcTest {
   assertEquals("SERVICE_REQUEST_CLOSED",assertThrows(BusinessProblem.class,()->intent(db.accountA,other,"image/png",PNG.length)).code());
   db.assertEmptyContext();
  }
+
+ @Test void lateCompletionOfAValidFileEndsExpiredAndAvailableFilesAreListedFirst() throws Exception {
+  UUID request=openRequest();
+  var valid=intent(db.accountA,request,"image/png",PNG.length);
+  storage.put(valid,PNG);
+  attachments.complete(db.accountA,db.tenantA,AAL1,valid.attachment().attachmentId());
+  // Arquivo chegou, mas a conclusão só foi repetida depois da tolerância: encerra como vencido, não fica pendente.
+  var late=intent(db.accountA,request,"image/png",PNG.length);
+  storage.put(late,PNG);
+  db.adminUpdateWithoutTriggers("update cp.attachments set upload_expires_at=clock_timestamp()-interval '6 minutes' where id=?",
+   late.attachment().attachmentId());
+  var expired=attachments.complete(db.accountA,db.tenantA,AAL1,late.attachment().attachmentId());
+  assertEquals("REJECTED",expired.state()); assertEquals("UPLOAD_EXPIRED",expired.rejection());
+  assertEquals("1",db.adminString("select count(*) from cp.audit_log where tenant_id=? and action='ATTACHMENT_REJECTED' and resource_id=?",
+   db.tenantA,late.attachment().attachmentId()));
+  // Muitas tentativas recusadas depois do anexo liberado não o escondem da lista.
+  for(int i=0;i<55;i++) {
+   var attempt=intent(db.accountA,request,"image/png",PNG.length);
+   storage.put(attempt,PDF);
+   assertEquals("TYPE_MISMATCH",attachments.complete(db.accountA,db.tenantA,AAL1,attempt.attachment().attachmentId()).rejection());
+  }
+  var page=attachments.forRequest(db.accountA,db.tenantA,AAL1,request).attachments();
+  assertEquals(50,page.size());
+  assertEquals(valid.attachment().attachmentId(),page.getFirst().attachmentId());
+  assertEquals("AVAILABLE",page.getFirst().state());
+  db.assertEmptyContext();
+ }
 }

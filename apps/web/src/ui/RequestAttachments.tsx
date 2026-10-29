@@ -29,7 +29,8 @@ export function RequestAttachments({ tenantId, requestId, queryKey, canUpload, t
   if (codeOf(list.error) === 'API_NOT_AVAILABLE') return null;
   const refresh = () => queries.invalidateQueries({ queryKey: key });
   const items = list.data ?? [];
-  const occupied = items.filter((item) => item.state === 'AVAILABLE' || item.state === 'PENDING').length;
+  // Pendente vencido não ocupa vaga no servidor; o limite real vem dele (ATTACHMENT_LIMIT_REACHED).
+  const occupied = items.filter((item) => item.state === 'AVAILABLE').length;
 
   async function download(item: Attachment) {
     setBusyItem(item.attachmentId); setOutcome(null);

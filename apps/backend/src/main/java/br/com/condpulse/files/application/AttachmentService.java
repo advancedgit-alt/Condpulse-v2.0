@@ -81,11 +81,17 @@ public class AttachmentService {
    rejection="UPLOAD_EXPIRED";
   } else if(object.size()!=row.sizeBytes()) rejection="SIZE_MISMATCH";
   else if(!startsWith(object.head(),SIGNATURES.get(row.mimeType()))) rejection="TYPE_MISMATCH";
-  String reason=rejection;
+  String checked=rejection;
   return execute(actor,tenant,assurance,context->{
+   String reason=checked;
    boolean changed=reason==null?store.complete(tenant,id,object.sha256()):store.reject(tenant,id,reason);
    var current=store.find(tenant,id);
    if(current==null) throw notFound();
+   // Arquivo válido concluído depois da tolerância do prazo: não é liberado e encerra como vencido, para não ficar
+   // pendente para sempre.
+   if(!changed && reason==null && "PENDING".equals(current.state())) {
+    reason="UPLOAD_EXPIRED"; changed=store.reject(tenant,id,reason); current=store.find(tenant,id);
+   }
    if(changed) audit.record(tenant,actor,reason==null?"ATTACHMENT_UPLOADED":"ATTACHMENT_REJECTED","ATTACHMENT",id,reason);
    return current.view(actor);
   });

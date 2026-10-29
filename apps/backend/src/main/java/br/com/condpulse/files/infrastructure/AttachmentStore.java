@@ -42,14 +42,18 @@ public class AttachmentStore {
   var rows=jdbc.query("select "+COLUMNS+" from cp.attachments where tenant_id=? and id=?",(r,n)->row(r),tenant,id);
   return rows.isEmpty()?null:rows.getFirst();
  }
- /** Disponíveis para quem vê o pedido; os pendentes e recusados só para quem enviou. */
+ /**
+  * Disponíveis para quem vê o pedido; os pendentes e recusados só para quem enviou. Os disponíveis (no máximo 10 pelo
+  * gatilho) vêm sempre primeiro, para tentativas antigas nunca esconderem um anexo liberado.
+  */
  public List<Row> forRequest(UUID tenant,UUID request,UUID actor) {
   return jdbc.query("select "+COLUMNS+" from cp.attachments where tenant_id=? and entity_type='SERVICE_REQUEST' and entity_id=?"
-   +" and (state='AVAILABLE' or owner_id=?) order by created_at,id limit 50",(r,n)->row(r),tenant,request,actor);
+   +" and (state='AVAILABLE' or owner_id=?) order by state<>'AVAILABLE',created_at desc,id limit 50",(r,n)->row(r),tenant,request,actor);
  }
  public boolean complete(UUID tenant,UUID id,String sha256) {
-  return jdbc.update("update cp.attachments set state='AVAILABLE',sha256=? where tenant_id=? and id=? and state='PENDING'",
-   sha256,tenant,id)==1;
+  // Só dentro da tolerância do prazo (a mesma do gatilho): vencido não é liberado e fica para a recusa.
+  return jdbc.update("update cp.attachments set state='AVAILABLE',sha256=? where tenant_id=? and id=? and state='PENDING'"
+   +" and clock_timestamp()<=upload_expires_at+interval '5 minutes'",sha256,tenant,id)==1;
  }
  public boolean reject(UUID tenant,UUID id,String reason) {
   return jdbc.update("update cp.attachments set state='REJECTED',rejection=? where tenant_id=? and id=? and state='PENDING'",
