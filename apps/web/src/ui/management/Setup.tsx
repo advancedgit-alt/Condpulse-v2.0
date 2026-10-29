@@ -215,6 +215,6 @@ export function UnitSection() {
           {editing === unit.unitId ? <UnitEditor unit={unit} blocks={blocks.data ?? []} onClose={() => setEditing(null)} />
             : <button className="text-button" type="button" disabled={editing !== null} onClick={() => setEditing(unit.unitId)} aria-label={`Editar unidade ${unit.label}`}>Editar</button>}
         </li>)}</ul>}
-    {units.data?.truncated ? <Notice tone="warning">A lista mostra as primeiras unidades. Use a busca do cadastro quando disponível.</Notice> : null}
+    {units.data?.truncated ? <Notice tone="warning">A lista mostra as primeiras 1000 unidades; a paginação desta tela ainda não existe.</Notice> : null}
   </section>;
 }

@@ -1,7 +1,10 @@
 import { api, identifier, invalidResponse, isDate, isInteger, isString, isUUID, list, oneOf, record, type CondPulseApi } from './client';
 import type { ISODateTime, ReservationPolicy, UUID } from './types';
 
-/** Contratos da gestão local (CP-014/CP-018/CP-020/CP-021/CP-023). Toda resposta é validada antes da interface. */
+/**
+ * Contratos da gestão local (CP-014/CP-018/CP-020/CP-021/CP-023). Toda resposta é validada antes da interface e
+ * toda falha, inclusive de identificador inválido, chega como Promise rejeitada.
+ */
 export type MembershipRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MANAGER' | 'SUPPORT';
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
 export type InvitationRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE';
@@ -136,36 +139,36 @@ const mutationOf = <T>(decode: (value: unknown, uncertain?: boolean) => T) => (v
 export function createManagementApi(client: CondPulseApi = api) {
   const base = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}/management`;
   return {
-    blocks: (tenantId: string, signal?: AbortSignal) =>
+    blocks: async (tenantId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/blocks`, (value) => list(value, block), signal ? { signal } : {}),
-    createBlock: (tenantId: string, name: string) =>
+    createBlock: async (tenantId: string, name: string) =>
       client.call(`${base(tenantId)}/blocks`, mutationOf(block), { method: 'POST', body: { name } }),
-    units: (tenantId: string, signal?: AbortSignal) =>
+    units: async (tenantId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/units`, page('units', unit), signal ? { signal } : {}) as Promise<ManagedUnitPage>,
-    createUnit: (tenantId: string, body: { label: string; blockId: string | null }) =>
+    createUnit: async (tenantId: string, body: { label: string; blockId: string | null }) =>
       client.call(`${base(tenantId)}/units`, mutationOf(unit), { method: 'POST', body }),
-    updateUnit: (tenantId: string, unitId: string, body: { label: string; blockId: string | null; status: 'ACTIVE' | 'INACTIVE'; expectedVersion: number; reason: string | null }) =>
+    updateUnit: async (tenantId: string, unitId: string, body: { label: string; blockId: string | null; status: 'ACTIVE' | 'INACTIVE'; expectedVersion: number; reason: string | null }) =>
       client.call(`${base(tenantId)}/units/${identifier(unitId)}`, mutationOf(unit), { method: 'PUT', body }),
-    amenities: (tenantId: string, signal?: AbortSignal) =>
+    amenities: async (tenantId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/amenities`, (value) => list(value, amenity), signal ? { signal } : {}),
-    createAmenity: (tenantId: string, body: AmenityInput) =>
+    createAmenity: async (tenantId: string, body: AmenityInput) =>
       client.call(`${base(tenantId)}/amenities`, mutationOf(amenity), { method: 'POST', body }),
-    updateAmenity: (tenantId: string, amenityId: string, body: AmenityInput) =>
+    updateAmenity: async (tenantId: string, amenityId: string, body: AmenityInput) =>
       client.call(`${base(tenantId)}/amenities/${identifier(amenityId)}`, mutationOf(amenity), { method: 'PUT', body }),
-    memberships: (tenantId: string, status: MembershipStatus | null, signal?: AbortSignal) =>
+    memberships: async (tenantId: string, status: MembershipStatus | null, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/memberships${status ? `?status=${status}` : ''}`, page('memberships', membership),
         signal ? { signal } : {}) as Promise<ManagedMembershipPage>,
-    decideMembership: (tenantId: string, membershipId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
+    decideMembership: async (tenantId: string, membershipId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
       client.call(`${base(tenantId)}/memberships/${identifier(membershipId)}/decision`, mutationOf(membership), { method: 'POST', body }),
-    revokeMembership: (tenantId: string, membershipId: string, body: { expectedVersion: number; reason: string }) =>
+    revokeMembership: async (tenantId: string, membershipId: string, body: { expectedVersion: number; reason: string }) =>
       client.call(`${base(tenantId)}/memberships/${identifier(membershipId)}/revoke`, mutationOf(membership), { method: 'POST', body }),
-    invitations: (tenantId: string, signal?: AbortSignal) =>
+    invitations: async (tenantId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/invitations`, (value) => list(value, invitation), signal ? { signal } : {}),
-    createInvitation: (tenantId: string, body: CreateInvitation) =>
+    createInvitation: async (tenantId: string, body: CreateInvitation) =>
       client.call(`${base(tenantId)}/invitations`, invitationCreated, { method: 'POST', body }),
-    revokeInvitation: (tenantId: string, invitationId: string) =>
+    revokeInvitation: async (tenantId: string, invitationId: string) =>
       client.call(`${base(tenantId)}/invitations/${identifier(invitationId)}/revoke`, () => undefined, { method: 'POST', body: {} }),
-    reservations: (tenantId: string, filter: { status: ReservationStatus | null; from: string | null; until: string | null }, signal?: AbortSignal) => {
+    reservations: async (tenantId: string, filter: { status: ReservationStatus | null; from: string | null; until: string | null }, signal?: AbortSignal) => {
       const query = new URLSearchParams();
       if (filter.status) query.set('status', filter.status);
       if (filter.from && filter.until) { query.set('from', filter.from); query.set('until', filter.until); }
@@ -173,15 +176,15 @@ export function createManagementApi(client: CondPulseApi = api) {
       return client.call(`${base(tenantId)}/reservations${suffix}`, page('reservations', (item) => managedReservation(item)),
         signal ? { signal } : {}) as Promise<ManagedReservationPage>;
     },
-    decideReservation: (tenantId: string, reservationId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
+    decideReservation: async (tenantId: string, reservationId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
       client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/decision`, mutationOf(managedReservation), { method: 'POST', body }),
-    cancelReservation: (tenantId: string, reservationId: string, body: { expectedVersion: number; reason: string }) =>
+    cancelReservation: async (tenantId: string, reservationId: string, body: { expectedVersion: number; reason: string }) =>
       client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/cancel`, mutationOf(managedReservation), { method: 'POST', body }),
-    createMaintenanceBlock: (tenantId: string, amenityId: string, key: string, body: { startsAt: string; endsAt: string; reason: string }) =>
+    createMaintenanceBlock: async (tenantId: string, amenityId: string, key: string, body: { startsAt: string; endsAt: string; reason: string }) =>
       client.call(`${base(tenantId)}/amenities/${identifier(amenityId)}/maintenance-blocks`, (value, response): BlockResult => ({
         reservation: managedReservation(value, true), replayed: response.headers.get('Idempotency-Replayed') === 'true' }),
       { method: 'POST', body, key }),
-    audit: (tenantId: string, cursor: string | null, signal?: AbortSignal) => {
+    audit: async (tenantId: string, cursor: string | null, signal?: AbortSignal) => {
       const query = new URLSearchParams({ limit: '30' });
       if (cursor) query.set('cursor', cursor);
       return client.call(`${base(tenantId)}/audit-events?${query}`, (value): AuditEventPage => {
