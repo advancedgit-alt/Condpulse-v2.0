@@ -9,7 +9,7 @@ import { Empty, ErrorState, Icon, Loading, Notice } from './primitives';
 import { addDays, dateInZone, formatWhen, money, queryRange, toInstant } from './dateTime';
 import { AvailabilityPanel, useAmenityAvailability } from './Availability';
 import { selectionAvailability } from './availabilityWindow';
-import { storedInvitation } from './Invitation';
+import { storedInvitation } from './invitationStorage';
 
 const roleNames: Record<string, string> = { RESIDENT: 'Morador', RESPONSIBLE: 'Responsável', DEPENDENT: 'Dependente', OWNER: 'Proprietário', CONCIERGE: 'Portaria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
 
@@ -22,7 +22,9 @@ export function ContextPage() {
   const queries = useQueryClient();
   const operations = useOperations();
   const navigate = useNavigate();
-  const tenants = uniqueTenants(identity?.memberships ?? []);
+  const memberships = identity?.memberships ?? [];
+  // O seletor de morador lista apenas condomínios com vínculo de unidade; vínculo só de gestão abre pelo painel de gestão.
+  const tenants = uniqueTenants(memberships.filter(membership => membership.unitId !== null));
   const [tenantId, setTenantId] = useState(() => tenants[0]?.tenantId ?? '');
   const [unitId, setUnitId] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -52,14 +54,15 @@ export function ContextPage() {
     queries.removeQueries({ queryKey: ['private', identity.accountId] });
     navigate(`/morador/${tenantId}/${unitId}/inicio`);
   }
-  const managed = (identity?.memberships ?? []).filter(membership => membership.role === 'MANAGER' && membership.unitId === null);
+  const managed = memberships.filter(membership => membership.role === 'MANAGER' && membership.unitId === null);
   const invitation = storedInvitation();
   return <div className="context-page"><div className="page-intro"><span className="eyebrow">SEU ACESSO</span><h1>Escolha seu espaço.</h1><p>Você verá apenas os condomínios e as unidades vinculados ao seu cadastro.</p></div>
     {invitation ? <Notice>Há um convite aberto nesta janela. <Link to="/convite">Concluir o aceite do convite</Link></Notice> : null}
     {managed.length > 0 ? <section className="panel management-context" aria-labelledby="management-access-title"><span className="section-index">GESTÃO</span><h2 id="management-access-title">Gestão do condomínio</h2>
       <p>Ações de gestão exigem o segundo fator de autenticação e ficam registradas na auditoria.</p>
       <div className="button-row">{managed.map(membership => <Link key={membership.membershipId} className="button button-secondary" to={`/gestao/${membership.tenantId}/pendencias`}>Abrir gestão · {membership.tenantName}<Icon name="arrow" /></Link>)}</div></section> : null}
-    {tenants.length === 0 ? <div className="panel"><Empty title="Nenhum vínculo disponível">A gestão precisa validar seu vínculo antes de você acessar a unidade. Se seu cadastro acabou de ser aprovado, atualize o acesso.</Empty></div>
+    {tenants.length === 0 ? managed.length > 0 ? <Notice>Esta conta não tem unidade vinculada como morador. Use o acesso de gestão acima.</Notice>
+      : <div className="panel"><Empty title="Nenhum vínculo disponível">A gestão precisa validar seu vínculo antes de você acessar a unidade. Se seu cadastro acabou de ser aprovado, atualize o acesso.</Empty></div>
       : <div className="context-grid"><section className="panel context-form"><span className="section-index">01 / CONTEXTO</span><h2>Onde você quer acessar?</h2><form className="stack-form" onSubmit={event => void enter(event)}>
         <label htmlFor="tenant">Condomínio</label><select id="tenant" value={selected ? tenantId : ''} onChange={event => void changeTenant(event.target.value)} disabled={switching || operations.locked}><option value="">Selecione um condomínio</option>{tenants.map(tenant => <option key={tenant.tenantId} value={tenant.tenantId}>{tenant.tenantName}</option>)}</select>
         <label htmlFor="unit">Unidade</label><select id="unit" value={!unitDenied && units.isSuccess && !units.isFetching && units.data.some(unit => unit.id === unitId) ? unitId : ''} onChange={event => setUnitId(event.target.value)} disabled={!selected || units.isFetching || units.isError || Boolean(unitDenied) || switching || operations.locked}><option value="">Selecione sua unidade</option>{!unitDenied && units.isSuccess && !units.isFetching ? units.data.map(unit => <option key={unit.id} value={unit.id}>{unit.blockName ? `${unit.blockName} · ` : ''}{unit.label}</option>) : null}</select>

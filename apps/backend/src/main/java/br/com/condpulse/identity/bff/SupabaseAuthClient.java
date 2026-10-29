@@ -1,5 +1,8 @@
 package br.com.condpulse.identity.bff;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -73,10 +76,37 @@ public final class SupabaseAuthClient {
    if(uri==null || !uri.startsWith("otpauth://totp/") || uri.length()>2048
       || secret==null || !secret.matches("[A-Z2-7]{16,128}=*"))
     throw unavailable();
-   String safeQr=qr!=null && qr.startsWith("data:image/svg+xml") && qr.length()<=65536?qr:null;
-   return new TotpEnrollment(requireUuid(result.id()),uri,secret,safeQr);
+   return new TotpEnrollment(requireUuid(result.id()),uri,secret,qrDataUri(qr));
   } catch(RestClientResponseException ex) { throw mfaProblem(ex); }
   catch(RestClientException ex) { throw unavailable(); }
+ }
+ /** O GoTrue gera um retângulo por módulo do QR (centenas de KiB); acima deste limite o QR é omitido e o segredo continua disponível. */
+ static final int MAX_QR_SVG_BYTES=524_288;
+ private static final String BASE64_PREFIX="data:image/svg+xml;base64,";
+ /**
+  * O GoTrue devolve o SVG cru em totp.qr_code (o SDK JS é que prefixa "data:image/svg+xml;utf-8,"). Aceita SVG cru ou já em
+  * data URI e normaliza para base64, que funciona em img sem depender de escapar "#", espaços e quebras de linha. O QR só é
+  * exibido como imagem (sem execução de script); conteúdo que não pareça um documento SVG é omitido.
+  */
+ static String qrDataUri(String qr) {
+  if(qr==null || qr.length()>MAX_QR_SVG_BYTES*2) return null;
+  String svg;
+  if(qr.startsWith(BASE64_PREFIX)) {
+   try { svg=new String(Base64.getDecoder().decode(qr.substring(BASE64_PREFIX.length())),StandardCharsets.UTF_8); }
+   catch(IllegalArgumentException invalid) { return null; }
+  } else if(qr.startsWith("data:image/svg+xml,") || qr.startsWith("data:image/svg+xml;utf-8,")
+     || qr.startsWith("data:image/svg+xml;utf8,") || qr.startsWith("data:image/svg+xml;charset=utf-8,")) {
+   svg=qr.substring(qr.indexOf(',')+1);
+   if(svg.regionMatches(true,0,"%3C",0,3)) {
+    try { svg=URLDecoder.decode(svg.replace("+","%2B"),StandardCharsets.UTF_8); }
+    catch(IllegalArgumentException invalid) { return null; }
+   }
+  } else if(qr.startsWith("data:")) return null;
+  else svg=qr;
+  svg=svg.strip();
+  if(svg.isEmpty() || !svg.startsWith("<") || !svg.endsWith(">") || !svg.contains("<svg")) return null;
+  byte[] bytes=svg.getBytes(StandardCharsets.UTF_8);
+  return bytes.length>MAX_QR_SVG_BYTES?null:BASE64_PREFIX+Base64.getEncoder().encodeToString(bytes);
  }
  /** Desafio e verificação no mesmo comando; código incorreto não altera a sessão local. */
  public TokenResponse verifyTotp(String accessToken,UUID factorId,String code) {

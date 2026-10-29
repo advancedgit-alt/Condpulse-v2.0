@@ -152,13 +152,13 @@ export const oneOf = <T extends string>(value: unknown, values: readonly T[]): v
 
 export function invalidResponse(uncertain = false): ApiError {
   return new ApiError(502, 'INVALID_API_RESPONSE',
-    uncertain ? 'Não foi possível confirmar o resultado. Confira a agenda antes de tentar novamente.'
+    uncertain ? 'Não foi possível confirmar o resultado. Atualize os dados e confira o estado antes de tentar novamente.'
       : 'O sistema retornou uma resposta que não pôde ser validada. Tente novamente mais tarde.', uncertain);
 }
 
 function unknownCommand(): ApiError {
   return new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN',
-    'Não foi possível confirmar o resultado. Confira a agenda antes de tentar novamente.', true);
+    'Não foi possível confirmar o resultado. Atualize os dados e confira o estado antes de tentar novamente.', true);
 }
 
 function session(value: unknown): Session {
@@ -585,13 +585,16 @@ export class CondPulseApi {
   async enrollTotp(signal?: AbortSignal): Promise<TotpEnrollment> {
     return totpEnrollment((await this.request('/auth/mfa/enroll', { method: 'POST', ...(signal ? { signal } : {}) })).value);
   }
-  /** Sucesso troca a sessão por outra AAL2: CSRF e respostas anteriores deixam de valer. */
+  /**
+   * Sucesso troca a sessão por outra AAL2 da mesma conta: o CSRF anterior deixa de valer. Consultas em andamento
+   * pertencem à mesma conta e não são descartadas (descartá-las derrubaria a tela de acesso sem motivo).
+   */
   async verifyTotp(factorId: string, code: string, signal?: AbortSignal): Promise<Session> {
     identifier(factorId);
     if (!/^[0-9]{6}$/.test(code)) throw new ApiError(400, 'MFA_CODE_FORMAT', 'Digite os 6 números exibidos no aplicativo autenticador.');
     const reply = await this.request('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ factorId, code }), ...(signal ? { signal } : {}) });
     const result = session(reply.value);
-    this.clearSession();
+    this.csrfFlight = undefined;
     return result;
   }
   /**

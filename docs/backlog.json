@@ -394,6 +394,19 @@
             "python3 tests/database/run.py"
           ],
           "scope": "Correções da revisão independente: revogação entre gestores serializada por condomínio (revogação cruzada não deixa o condomínio sem gestor, teste JDBC concorrente), unicidade de vínculo só entre não revogados (reconvite após rejeição ou revogação), convite de uso único também no banco, conclusão presa ao vínculo do próprio convidado, valid_from fora do grant, account_self só leitura, validade pelo relógio do banco, aceite recusa unidade inativa e gestor não decide o próprio vínculo. 7 verificações SQL novas. Pendentes registrados: endurecimento do aceite com SECURITY DEFINER, email_verified, HMAC do e-mail e MFA supervisionado de CONCIERGE."
+        },
+        {
+          "commit": "c09c5542b7210755fc365c6fead6d5838dc486af",
+          "branch": "feat/web-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40817694087",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Telas web da gestão local atrás de CP_MANAGEMENT_ENABLED=false: porta com segundo fator, pendências, reservas (decisão, cancelamento, bloqueio), áreas/regras, unidades, vínculos/convites e auditoria, com versão lida, repetição natural sem falso sucesso e perda de acesso limpando a tela. API sintética no navegador; primeiro acesso por convite sem conta local, Auth real e aceite em navegador com dados reais pendentes: não constitui aceite."
         }
       ]
     },
@@ -521,6 +534,19 @@
             "python3 tests/database/run.py"
           ],
           "scope": "V007 (convites com hash de token e de e-mail; INSERT do vínculo pelo convidado exige convite válido no contexto local) e API de gestão de vínculos (aprovar, rejeitar e revogar com motivo, evento MEMBERSHIP_REVOKED, guardas de auto-revogação e último gestor) e de convites (emitir 1 a 14 dias, listar, revogar), mais aceite pelo convidado autenticado com o mesmo e-mail criando só vínculo PENDING, atrás de CP_MANAGEMENT_ENABLED=false. JDBC real e 20 verificações SQL novas. Sem SMTP, sem criação de usuário Auth pela API, sem telas web e sem V007 remota; não constitui aceite integral de CP-020."
+        },
+        {
+          "commit": "c09c5542b7210755fc365c6fead6d5838dc486af",
+          "branch": "feat/web-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40817694087",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Telas web da gestão local atrás de CP_MANAGEMENT_ENABLED=false: porta com segundo fator, pendências, reservas (decisão, cancelamento, bloqueio), áreas/regras, unidades, vínculos/convites e auditoria, com versão lida, repetição natural sem falso sucesso e perda de acesso limpando a tela. API sintética no navegador; primeiro acesso por convite sem conta local, Auth real e aceite em navegador com dados reais pendentes: não constitui aceite."
         }
       ]
     },
@@ -653,6 +679,19 @@
             "python3 tests/database/run.py"
           ],
           "scope": "Correções da revisão independente do PR #26: manifesto de onboarding alinhado à V006 e aos limites da gestão; índice audit_log_tenant_recent; cursor de auditoria com faixa validada; UPDATE sem capacidade recusado com 42501; grant de UPDATE em blocos removido; uma ação de auditoria por mudança; testes de barreira em blocos/áreas, de cada campo que versiona a regra e de paginação completa com empates e outro tenant. Pós-merge: foundation 40808431637 e smoke público 40808431569 verdes. Incremento de versão sem gatilho no banco e auditoria sem antes/depois permanecem pendentes."
+        },
+        {
+          "commit": "c09c5542b7210755fc365c6fead6d5838dc486af",
+          "branch": "feat/web-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40817694087",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Telas web da gestão local atrás de CP_MANAGEMENT_ENABLED=false: porta com segundo fator, pendências, reservas (decisão, cancelamento, bloqueio), áreas/regras, unidades, vínculos/convites e auditoria, com versão lida, repetição natural sem falso sucesso e perda de acesso limpando a tela. API sintética no navegador; primeiro acesso por convite sem conta local, Auth real e aceite em navegador com dados reais pendentes: não constitui aceite."
         }
       ]
     },
@@ -747,6 +786,19 @@
             "npm run test:e2e"
           ],
           "scope": "Pedido PENDING_APPROVAL com prazo de até 24 h, retirada pelo autor, decisão única pela gestão (AAL2, reservations.decide) com expiração gravada antes da recusa tardia, autodecisão negada, cancelamento com motivo, bloqueio de manutenção idempotente e máquina de estados no banco (V008). Revogação transacional de convites dependentes (CP-038) pendente: não constitui aceite integral de CP-023."
+        },
+        {
+          "commit": "c09c5542b7210755fc365c6fead6d5838dc486af",
+          "branch": "feat/web-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40817694087",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Telas web da gestão local atrás de CP_MANAGEMENT_ENABLED=false: porta com segundo fator, pendências, reservas (decisão, cancelamento, bloqueio), áreas/regras, unidades, vínculos/convites e auditoria, com versão lida, repetição natural sem falso sucesso e perda de acesso limpando a tela. API sintética no navegador; primeiro acesso por convite sem conta local, Auth real e aceite em navegador com dados reais pendentes: não constitui aceite."
         }
       ]
     },

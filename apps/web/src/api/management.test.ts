@@ -5,6 +5,7 @@ import { createManagementApi, managedReservation } from './management';
 import { amenityInput, cents } from '../ui/management/Setup';
 import { groupSecret } from '../ui/Mfa';
 import { invitationLink } from '../ui/management/People';
+import { cancellationOutcome, decisionOutcome } from '../ui/management/Reservations';
 
 const tenant = '20000000-0000-4000-8000-000000000001';
 const amenity = '40000000-0000-4000-8000-000000000001';
@@ -90,6 +91,12 @@ describe('regras locais de formulário', () => {
   it('converte valores em reais sem ponto flutuante e recusa formatos ambíguos', () => {
     expect(cents('0')).toBe(0); expect(cents('25,5')).toBe(2550); expect(cents('1.234,56')).toBe(123456);
     expect(cents('100000,00')).toBe(10_000_000); expect(cents('1,234')).toBeNull(); expect(cents('abc')).toBeNull();
+    // Ponto decimal sem vírgula (até 2 casas) e ponto de milhar em grupos de 3.
+    expect(cents('50.00')).toBe(5000); expect(cents('50.5')).toBe(5050); expect(cents('1234.56')).toBe(123456);
+    expect(cents('1.234')).toBe(123400); expect(cents('12.345,6')).toBe(1234560); expect(cents(' 7 ')).toBe(700);
+    expect(cents('1.2.3.4')).toBeNull(); expect(cents('1.23.456')).toBeNull(); expect(cents('.5')).toBeNull();
+    expect(cents('1,')).toBeNull(); expect(cents('1.234.5')).toBeNull(); expect(cents('-1')).toBeNull(); expect(cents('1e3')).toBeNull();
+    expect(cents('1234567890')).toBeNull();
   });
   it('monta regra explícita e aponta o primeiro problema', () => {
     const draft = { name: '  Salão   de festas ', capacity: '20', approvalRequired: true, fee: '50,00', buffer: '30', active: true,
@@ -104,10 +111,43 @@ describe('regras locais de formulário', () => {
     expect(amenityInput({ ...draft, closesAt: '07:00' }, 3)).toMatch(/fechamento/);
     expect(amenityInput({ ...draft, weekDays: [] }, 3)).toMatch(/dia da semana/);
     expect(amenityInput({ ...draft, capacity: '0' }, 3)).toMatch(/capacidade/);
+    expect(amenityInput({ ...draft, fee: '50.00' }, 3)).toMatchObject({ feeCents: 5000 });
+    expect(amenityInput({ ...draft, minimumLead: '525601' }, 3)).toMatch(/antecedência mínima/);
+    expect(amenityInput({ ...draft, maximumAdvance: '0' }, 3)).toMatch(/janela máxima/);
+    expect(amenityInput({ ...draft, maximumAdvance: '367' }, 3)).toMatch(/janela máxima/);
+    expect(amenityInput({ ...draft, maximumDuration: '1441' }, 3)).toMatch(/duração máxima/);
+    expect(amenityInput({ ...draft, maximumActive: '0' }, 3)).toMatch(/reservas ativas/);
+    expect(amenityInput({ ...draft, maximumActive: '101' }, 3)).toMatch(/reservas ativas/);
+    expect(amenityInput({ ...draft, cancellationLead: '525601' }, 3)).toMatch(/cancelamento/);
+    expect(amenityInput({ ...draft, minimumLead: '525600', maximumAdvance: '366', maximumDuration: '1440', maximumActive: '100',
+      cancellationLead: '525600' }, 3)).toMatchObject({ expectedVersion: 3 });
   });
   it('agrupa a chave do autenticador e monta o link com token só no fragmento', () => {
     expect(groupSecret('JBSWY3DPEHPK3PXP')).toBe('JBSW Y3DP EHPK 3PXP');
     const link = invitationLink('https://condpulse.example', 'A'.repeat(43));
     expect(new URL(link).search).toBe(''); expect(new URL(link).hash).toBe(`#token=${'A'.repeat(43)}`);
+  });
+});
+
+describe('resultado mostrado após decisão ou cancelamento', () => {
+  const pending = managedReservation(reservation);
+  it('só confirma sucesso quando a versão avançou pela própria ação', () => {
+    expect(decisionOutcome({ ...pending, status: 'CONFIRMED', version: 1 }, 'APPROVE', 0)).toEqual({ tone: 'success', text: 'Pedido aprovado. A reserva está confirmada.' });
+    expect(decisionOutcome({ ...pending, status: 'REJECTED', version: 1 }, 'REJECT', 0)).toEqual({ tone: 'success', text: 'Pedido rejeitado. O período foi liberado.' });
+    // Repetição natural: outra pessoa já decidiu (versão não avançou a partir da lida) ou o resultado diverge do pedido.
+    const replay = decisionOutcome({ ...pending, status: 'CONFIRMED', version: 1 }, 'APPROVE', 1);
+    expect(replay.tone).toBe('info'); expect(replay.text).toMatch(/já estava confirmada/); expect(replay.text).toMatch(/não foi registrado/);
+    expect(decisionOutcome({ ...pending, status: 'REJECTED', version: 1 }, 'APPROVE', 0).tone).toBe('info');
+    expect(decisionOutcome({ ...pending, status: 'EXPIRED', version: 1 }, 'APPROVE', 0).text).toMatch(/já estava expirada/);
+  });
+  it('cancelamento repetido ou feito por outra pessoa não aparece como sucesso desta ação', () => {
+    const confirmed = { ...pending, status: 'CONFIRMED' as const, version: 1 };
+    expect(cancellationOutcome({ ...confirmed, status: 'CANCELLED', version: 2, decisionReason: 'Manutenção' }, 'Manutenção', 1))
+      .toEqual({ tone: 'success', text: 'Reserva cancelada com motivo registrado.' });
+    expect(cancellationOutcome({ ...confirmed, kind: 'BLOCK', unitId: null, unitLabel: null, requesterName: null, status: 'CANCELLED', version: 2,
+      decisionReason: 'Obra' }, 'Obra', 1)).toEqual({ tone: 'success', text: 'Bloqueio encerrado. O período foi liberado.' });
+    const other = cancellationOutcome({ ...confirmed, status: 'CANCELLED', version: 2, decisionReason: 'Outro motivo' }, 'Manutenção', 1);
+    expect(other.tone).toBe('warning'); expect(other.text).toBe('A reserva já estava cancelada (motivo registrado: Outro motivo). O seu motivo não foi registrado.');
+    expect(cancellationOutcome({ ...confirmed, status: 'CANCELLED', version: 3, decisionReason: 'Manutenção' }, 'Manutenção', 1).tone).toBe('warning');
   });
 });
