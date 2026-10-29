@@ -261,7 +261,7 @@ describe('reservas no celular', () => {
     expect(screen.queryByText(/a área não aparece mais na lista/)).toBeNull();
   });
 
-  it('recusa definitiva da confirmação sem área libera novos pedidos e avisa que nada foi gravado', async () => {
+  it('recusa ao confirmar sem área libera novos pedidos sem afirmar que nada foi gravado', async () => {
     const fake = await mount();
     await pickSlot('10:00–11:00');
     fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
@@ -273,7 +273,7 @@ describe('reservas no celular', () => {
     await screen.findByText(/a área não aparece mais na lista/);
     fake.state.createError = new ApiError(404, 'RESERVATION_RESOURCE_UNAVAILABLE', 'A reserva ou a área não está disponível para esta operação.');
     await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
-    expect(await screen.findByText(/O pedido anterior não foi gravado/)).toBeTruthy();
+    expect(await screen.findByText(/Não dá para saber se o pedido anterior foi gravado/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ver horários de Churrasqueira fictícia' })).toBeEnabled();
   });
 
@@ -289,6 +289,19 @@ describe('reservas no celular', () => {
     expect(await screen.findByText(/não dá para saber se ele foi gravado\. Confira em Minhas reservas antes de fazer outro\./)).toBeTruthy();
     expect(screen.queryByText(/não foi gravado/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Ver horários de Salão fictício' })).toBeEnabled();
+  });
+
+  it('recusa de autorização ao repetir pedido incerto não afirma que o primeiro falhou', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    await screen.findByText(/o mesmo pedido não é gravado duas vezes/);
+    fake.state.createError = new ApiError(403, 'RESERVATION_ACCESS_DENIED', 'Seu vínculo não permite acessar as reservas.');
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/Seu vínculo não permite.*Não dá para saber se o pedido anterior foi gravado\. Confira em Minhas reservas/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tentar confirmar o mesmo pedido' })).toBeNull();
   });
 
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {
