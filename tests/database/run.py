@@ -1650,6 +1650,86 @@ def permit_link_checks():
            "link nao nasce revogado nem com horario escolhido")
     expect(error(link(L4, PL2, "ABC", actor=DEPL), "23514", tenant=TA, actor=DEPL, role="cp_api"), "hash so em hexadecimal de 64")
 
+def reservation_guest_checks():
+    """V021: convidados de reserva com janela do evento; encerrar a reserva revoga todos na mesma transacao."""
+    MGRG, RESG, UG = ("10000000-0000-4000-8000-0000000000d1", "10000000-0000-4000-8000-0000000000d2", "20000000-0000-4000-8000-0000000000d3")
+    RG1, RG2, RG3 = ("31000000-0000-4000-8000-0000000000d1", "31000000-0000-4000-8000-0000000000d2", "31000000-0000-4000-8000-0000000000d3")
+    AG = "30000000-0000-4000-8000-0000000000d4"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MGRG}','ACTIVE'),('{RESG}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UG}','{TA}','FICTICIA CONVIDADOS');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MGRG}',NULL,'GESTAO CONVIDADOS','MANAGER','ACTIVE'),('{TA}','{RESG}','{UG}','MORADOR CONVIDADOS','RESIDENT','ACTIVE');
+        INSERT INTO cp.amenities(id,tenant_id,name,capacity,approval_required) VALUES('{AG}','{TA}','AREA CONVIDADOS',2,false);
+    """)
+    def booking(identifier, offset_hours, status="CONFIRMED", unit=UA, actor=AA, kind="BOOKING"):
+        start = f"date_trunc('hour',clock_timestamp())+interval '{offset_hours} hours'"
+        expires = f"{start}-interval '1 hour'" if status == "PENDING_APPROVAL" else "NULL"
+        return (f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,expires_at) "
+                f"VALUES('{identifier}','{TA}','{AG}','{unit}','{actor}','{kind}','{status}',{start},{start}+interval '2 hours',{start},{start}+interval '2 hours','{{}}'::jsonb,{expires})")
+    query(booking(RG1, 26), tenant=TA, role="cp_api")
+    query(booking(RG2, 50, status="PENDING_APPROVAL"), tenant=TA, role="cp_api")
+    query(booking(RG3, 74, unit=UG, actor=RESG), tenant=TA, actor=RESG, role="cp_api")
+    counter = [0]
+    def guest(reservation, actor=AA, unit=UA, before="1 hour", end_shift="0 minutes"):
+        counter[0] += 1
+        visitor = f"74000000-0000-4000-8000-{counter[0]:012d}"
+        permit = f"75000000-0000-4000-8000-{counter[0]:012d}"
+        window = (f"(SELECT starts_at-interval '{before}' FROM cp.reservations WHERE id='{reservation}'),"
+                  f"(SELECT ends_at+interval '{end_shift}' FROM cp.reservations WHERE id='{reservation}')")
+        return permit, (f"INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{visitor}','{TA}','CONVIDADO {counter[0]}','{actor}'); "
+                        f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until,reservation_id) "
+                        f"VALUES('{permit}','{TA}','{visitor}','{unit}','CONVIDADO DE RESERVA','{actor}',{window},'{reservation}')")
+    g1, sql = guest(RG1)
+    query(sql, tenant=TA, role="cp_api")
+    expect(value(f"select state from cp.visit_permits where id='{g1}'") == "ACTIVE", "morador convida para a propria reserva confirmada")
+    _, sql = guest(RG1, before="2 hours")
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "convidado nao comeca mais de 1 hora antes do evento")
+    _, sql = guest(RG1, end_shift="1 hour")
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "convidado termina junto com o evento")
+    _, sql = guest(RG2)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "pedido aguardando aprovacao nao recebe convidados")
+    _, sql = guest(RG3)
+    expect(error(sql, "42501", tenant=TA, role="cp_api"), "reserva de outra unidade nao recebe convidados desta")
+    _, sql = guest(RG3, actor=RESG, unit=UA)
+    expect(error(sql, "42501", tenant=TA, actor=RESG, role="cp_api"), "outra unidade nao convida em nome desta")
+    g2, sql = guest(RG1)
+    query(sql, tenant=TA, role="cp_api")
+    _, sql = guest(RG1)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "convidados ativos ate a capacidade da area")
+    # Gestao cancela a reserva: todos os convidados revogados na mesma transacao, em nome de quem cancelou.
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
+           "gestao nao ve convidados no dia a dia")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api")
+    expect(value(f"select string_agg(state||':'||revoked_by||':'||revoke_reason,',' order by id) from cp.visit_permits where reservation_id='{RG1}'")
+           == f"REVOKED:{MGRG}:Reserva cancelada,REVOKED:{MGRG}:Reserva cancelada", "cancelar a reserva revoga todos os convidados")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
+           "a liberacao para quem encerra nao sobra depois")
+    expect(error(f"UPDATE cp.visit_permits SET state='ACTIVE',revoked_by=NULL,revoke_reason=NULL,version=version+1 WHERE id='{g1}'",
+                 "23514", tenant=TA, role="cp_api"), "convidado revogado nao volta")
+    _, sql = guest(RG1)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "reserva cancelada nao recebe convidados")
+    # Repeticao do cancelamento (mesmo estado) nao reativa nem falha.
+    expect(error(f"UPDATE cp.reservations SET status='CONFIRMED',version=version+1 WHERE id='{RG1}'", "23514", tenant=TA, role="cp_api"),
+           "reserva cancelada nao volta a confirmar")
+    query(f"UPDATE cp.reservations SET version=version WHERE id='{RG1}'", tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}' and state='ACTIVE'") == "0", "repeticao nao reativa convidados")
+    # Morador cancela a propria reserva com convidado: revogado em nome dele.
+    g3, sql = guest(RG3, actor=RESG, unit=UG)
+    query(sql, tenant=TA, actor=RESG, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG3}'", tenant=TA, actor=RESG, role="cp_api")
+    expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g3}'") == f"REVOKED:{RESG}", "cancelamento pelo morador revoga convidado")
+    # Sem conta (processo sem ator) nao encerra reserva com convidados.
+    RG4 = "31000000-0000-4000-8000-0000000000d4"
+    query(booking(RG4, 98), tenant=TA, role="cp_api")
+    g4, sql = guest(RG4)
+    query(sql, tenant=TA, role="cp_api")
+    expect(error(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG4}'", "42501", tenant=TA, actor="", role="cp_api"),
+           "encerramento sem conta nao deixa convidado valido")
+    expect(value(f"select state from cp.visit_permits where id='{g4}'") == "ACTIVE", "nada muda na recusa")
+    expect(value(f"select count(*) from cp.visit_permits where id='{g4}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
+           "marca de encerramento nao vaza")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1759,6 +1839,7 @@ def main():
     import_checks()
     attachment_checks()
     permit_link_checks()
+    reservation_guest_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
