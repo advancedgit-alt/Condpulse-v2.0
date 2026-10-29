@@ -44,7 +44,8 @@ Nenhuma configuração real foi preenchida nesta implementação.
 
 ## Fluxo de navegador
 1. GET /auth/csrf: cookie __Host-cp_csrf Secure/HttpOnly/SameSite=Lax/Path=/; JSON headerName/token.
-2. POST /auth/login com email/password, Origin correto e header X-CSRF-Token do passo1.
+2. POST /auth/login com email/password, Origin correto e header X-CSRF-Token do passo1. O provedor recebe o
+   e-mail sem espaços nas pontas e em minúsculas, a mesma forma contada pelo limite de tentativas.
 3. Resposta expõe somente accountId/expiresAt. Auth tokens permanecem no servidor.
 4. Login rotaciona o cookie CSRF; repetir GET /auth/csrf antes de próxima mutação.
 5. GET /v1/me usa cookie __Host-cp_session Secure/HttpOnly/SameSite=Lax/Path=/.
@@ -52,6 +53,10 @@ Nenhuma configuração real foi preenchida nesta implementação.
    POST /auth/refresh requer CSRF/origem, renova fora de transação e rotaciona CSRF.
 7.409 SESSION_REFRESH_IN_PROGRESS mantém cookie e não repete Auth.401/503 de refresh invalida cookie.
 8. POST /auth/logout exige CSRF/origem, remove sessão e expira ambos cookies.
+9. Primeiro acesso por convite (com CP_MANAGEMENT_ENABLED): POST /auth/invitation/accept com email/password/token,
+   Origin e CSRF; aceite antes da sessão (espelho local + vínculo PENDING), cookie de sessão e CSRF novos somente
+   quando a sessão foi criada (sessionStarted); sem sessão nova, o cookie anterior é expirado. Mesmo limite do login
+   (o provedor recebe o e-mail normalizado como no limite). Detalhes em GESTAO_LOCAL.md.
 Todas as respostas /auth são no-store. Nenhum localStorage, token em URL ou confirmação otimista.
 
 ## CI

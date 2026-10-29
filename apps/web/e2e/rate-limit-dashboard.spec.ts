@@ -24,8 +24,11 @@ test('login limitado espera o prazo, não repete e permite nova tentativa explí
 test('refresh limitado não finge logout e saída continua disponível', async ({ page }) => {
   const state = await installSyntheticApi(page);
   await signIn(page); await chooseContext(page);
+  // Sai da página antes de exigir a renovação: uma consulta tardia da página anterior não pode contar como refresh.
+  const current = page.url();
+  await page.goto('about:blank');
   state.refreshRequired = true; state.rateRefresh = true;
-  await page.reload();
+  await page.goto(current);
   await expect(page.getByRole('heading', { name: 'Não foi possível verificar seu acesso.', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Tentar novamente', exact: true })).toBeDisabled();
   expect(state.refreshRequests).toBe(1); expect(state.authenticated).toBe(true);

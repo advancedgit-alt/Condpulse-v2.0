@@ -81,6 +81,21 @@ class MembershipInvitationJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void inactiveLocalAccountCannotAcceptAndLeavesTheInvitationPending() throws Exception {
+  for(String status:new String[]{"SUSPENDED","PENDING","CLOSED"}) {
+   String email="inativa."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
+   var created=invite(email);
+   UUID person=newcomer();
+   db.adminUpdate("insert into platform.accounts(id,status) values(?,?)",person,status);
+   assertEquals("ACCOUNT_INACTIVE",assertThrows(BusinessProblem.class,
+    ()->invitations.accept(person,email,new MembershipModels.AcceptInvitation(created.token()))).code(),status);
+   db.assertEmptyContext();
+   assertEquals("PENDING",db.adminString("select status from cp.membership_invitations where id=?",created.invitationId()),status);
+   assertEquals("0",db.adminString("select count(*) from cp.memberships where account_id=?",person),status);
+   assertEquals(status,db.adminString("select status from platform.accounts where id=?",person));
+   invitations.revoke(db.accountC,db.tenantA,AAL2,created.invitationId());
+  }
+ }
  @Test void suspendedTenantDoesNotReceiveNewMembershipsUntilReactivated() throws Exception {
   String email="suspenso."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
   var created=invite(email);

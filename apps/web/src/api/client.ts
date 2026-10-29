@@ -1,11 +1,18 @@
 import type {
-  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, Membership,
+  Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, InvitationFirstAccess, Membership,
   MfaStatus, MutationResult, RecoveryCompleted, RecoveryVerified, Reservation, ReservationPage, ReservationPolicy, Session,
   TotpEnrollment, Unit,
 } from './types';
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 import { instantMicros } from './instant';
 
+/**
+ * Rotas que guardam a espera do 429. O primeiro acesso por convite consome o mesmo balde de tentativas do login no
+ * servidor, então as duas rotas compartilham a espera.
+ */
+const COOLDOWN_KEYS: Readonly<Record<string, string>> = {
+  '/auth/login': '/auth/login', '/auth/invitation/accept': '/auth/login', '/auth/refresh': '/auth/refresh',
+};
 const messages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: 'Entre novamente para continuar.',
   SESSION_EXPIRED: 'Sua sessão terminou. Entre novamente para continuar.',
@@ -107,6 +114,7 @@ const messages: Record<string, string> = {
   INVITATION_VALIDITY_INVALID: 'A validade deve ter entre 1 e 14 dias.',
   INVITATION_NOT_PENDING: 'O convite não está mais pendente.',
   INVITATION_NOT_AVAILABLE: 'Convite inválido, expirado, já utilizado ou emitido para outro e-mail.',
+  INVITATION_FIRST_ACCESS_UNKNOWN: 'Não foi possível confirmar o aceite do convite. Tente entrar com seu e-mail e senha; se o convite tiver sido aceito, o pedido aparecerá para a gestão.',
   INVITATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir o convite. Tente novamente.',
   RESERVATION_NOT_FOUND: 'Reserva não encontrada neste condomínio.',
   RESERVATION_DECISION_EXPIRED: 'O prazo de decisão terminou. O pedido expirou e a unidade precisa solicitar novamente.',
@@ -214,6 +222,14 @@ export const RECOVERY_LINK = /^[A-Za-z0-9_-]{16,512}$/;
 function invitationAccepted(value: unknown): InvitationAccepted {
   if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== 'PENDING') throw invalidResponse(true);
   return { tenantId: value.tenantId, membershipId: value.membershipId, status: 'PENDING' };
+}
+function invitationFirstAccess(value: unknown): InvitationFirstAccess {
+  const accepted = invitationAccepted(value);
+  if (!record(value) || typeof value.sessionStarted !== 'boolean'
+      || (value.sessionStarted ? !isUUID(value.accountId) || !isDate(value.expiresAt) : value.accountId !== null || value.expiresAt !== null))
+    throw invalidResponse(true);
+  return { ...accepted, sessionStarted: value.sessionStarted, accountId: value.accountId as string | null,
+    expiresAt: value.expiresAt as string | null };
 }
 
 function membership(value: unknown): Membership {
@@ -410,7 +426,8 @@ export class CondPulseApi {
 
   private async send(path: string, options: RequestOptions, generation: number, useCsrf = true): Promise<Reply> {
     this.ensureCurrent(generation, options.signal);
-    const deadline = this.authCooldowns.get(path);
+    const cooldownKey = COOLDOWN_KEYS[path] ?? path;
+    const deadline = this.authCooldowns.get(cooldownKey);
     const remaining = remainingCooldown(deadline, this.now());
     if (remaining > 0) throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, remaining, deadline);
     const mutation = options.method === 'POST' || options.method === 'PUT';
@@ -454,8 +471,8 @@ export class CondPulseApi {
     if (!response.ok) {
       if (response.status === 429) {
         const seconds = parseRetryAfterSeconds(response.headers.get('Retry-After'));
-        const until = Math.max(this.authCooldowns.get(path) ?? 0, this.now() + seconds * 1_000);
-        if (path === '/auth/login' || path === '/auth/refresh') this.authCooldowns.set(path, until);
+        const until = Math.max(this.authCooldowns.get(cooldownKey) ?? 0, this.now() + seconds * 1_000);
+        if (COOLDOWN_KEYS[path]) this.authCooldowns.set(cooldownKey, until);
         throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, seconds, until);
       }
       const candidate = record(value) && isString(value.code) ? value.code : '';
@@ -645,6 +662,26 @@ export class CondPulseApi {
     }
     this.clearSession();
     return result;
+  }
+  /**
+   * Primeiro acesso por convite: entra com a senha do provedor e aceita o convite na mesma chamada, para quem ainda
+   * não tem conta local. Com sessão iniciada o CSRF anterior deixa de valer. Resultado incerto não é repetido.
+   */
+  async acceptInvitationWithLogin(input: { email: string; password: string; token: string }, signal?: AbortSignal): Promise<InvitationFirstAccess> {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(input.token)) throw new ApiError(404, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);
+    const body = JSON.stringify({ email: input.email, password: input.password, token: input.token });
+    return this.auth(async () => {
+      try {
+        const reply = await this.send('/auth/invitation/accept', { method: 'POST', body, ...(signal ? { signal } : {}) }, this.generation);
+        const result = invitationFirstAccess(reply.value);
+        this.clearSession();
+        return result;
+      } catch (error) {
+        if (error instanceof ApiError && (error.uncertain || error.code === 'INVALID_API_RESPONSE'))
+          throw new ApiError(error.status, 'INVITATION_FIRST_ACCESS_UNKNOWN', messages.INVITATION_FIRST_ACCESS_UNKNOWN!, true);
+        throw error;
+      }
+    });
   }
   async acceptInvitation(token: string, signal?: AbortSignal): Promise<InvitationAccepted> {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(400, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);

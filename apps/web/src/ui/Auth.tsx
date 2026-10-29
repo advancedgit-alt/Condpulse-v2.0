@@ -2,10 +2,10 @@ import { createContext, useContext, useEffect, useRef, useState, type FormEvent,
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
-import type { CurrentIdentity } from '../api/types';
+import type { CurrentIdentity, InvitationFirstAccess } from '../api/types';
 import { Brand, ErrorState, Icon, Loading, Notice, RateLimitNotice, errorMessage } from './primitives';
 import { useCooldown } from './cooldown';
-import { forgetInvitation } from './invitationStorage';
+import { forgetInvitation, storedInvitation } from './invitationStorage';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated' | 'blocked' | 'unavailable' | 'logoutPending' | 'logoutUnconfirmed';
 interface AuthValue {
@@ -13,6 +13,8 @@ interface AuthValue {
   status: AuthStatus;
   error: unknown;
   login(email: string, password: string): Promise<void>;
+  /** Primeiro acesso por convite: entra e aceita o convite na mesma operação (conta local ainda inexistente). */
+  acceptInvitation(email: string, password: string, token: string): Promise<InvitationFirstAccess>;
   logout(): Promise<void>;
   recheck(): void;
 }
@@ -76,6 +78,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw failure;
     }
   }
+  async function acceptInvitation(email: string, password: string, token: string): Promise<InvitationFirstAccess> {
+    // Conta sem espelho local termina o login comum em "bloqueado" (ACCOUNT_INACTIVE): o primeiro acesso é a saída.
+    if (status !== 'anonymous' && status !== 'blocked') throw new ApiError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'O serviço de acesso está temporariamente indisponível.');
+    const epoch = ++authEpoch.current;
+    setMode('loginPending'); setModeError(null);
+    let accepted = false;
+    try {
+      await queries.cancelQueries(); queries.clear(); api.clearSession();
+      const result = await api.acceptInvitationWithLogin({ email, password, token }); accepted = true;
+      // Aceite gravado: o resultado volta à tela mesmo se a identidade não puder ser lida agora (nova consulta depois).
+      if (epoch !== authEpoch.current) return result;
+      if (!result.sessionStarted) { setMode('anonymous'); return result; }
+      try {
+        const account = await api.currentIdentity();
+        if (epoch === authEpoch.current) queries.setQueryData(['identity'], account);
+      } catch { /* a consulta de identidade é refeita com o modo pronto */ }
+      if (epoch === authEpoch.current) { setModeError(null); setMode('ready'); }
+      return result;
+    } catch (failure) {
+      if (epoch === authEpoch.current) {
+        setModeError(failure);
+        setMode(failure instanceof ApiError && failure.code === 'ACCOUNT_INACTIVE' ? 'blocked'
+          : !accepted && failure instanceof ApiError && [400, 401, 404, 409, 429].includes(failure.status) ? 'anonymous' : 'unavailable');
+      }
+      throw failure;
+    }
+  }
   async function logout() {
     const epoch = ++authEpoch.current;
     setMode('logoutPending'); setModeError(null);
@@ -90,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setModeError(null); setMode('ready');
     void queries.invalidateQueries({ queryKey: ['identity'] });
   }
-  return <AuthContext.Provider value={{ identity: status === 'authenticated' ? identity.data ?? null : null, status, error, login, logout, recheck }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ identity: status === 'authenticated' ? identity.data ?? null : null, status, error, login, acceptInvitation, logout, recheck }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthValue {
@@ -108,6 +137,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     <button className="button" onClick={() => void auth.logout()}>Tentar sair novamente</button></SessionPage>;
   if (auth.status === 'blocked') return <SessionPage><span className="eyebrow">ACESSO EM VALIDAÇÃO</span><h1>Seu cadastro precisa ser validado.</h1>
     <p>Procure a gestão do condomínio para confirmar seu acesso e seus vínculos.</p>
+    {storedInvitation() ? <Notice>Há um convite aberto nesta janela. <Link to="/convite">Concluir o primeiro acesso pelo convite</Link></Notice> : null}
     <div className="button-row"><button className="button" onClick={auth.recheck}>Verificar acesso</button><button className="button button-secondary" onClick={() => void auth.logout()}>Sair</button></div></SessionPage>;
   if (auth.status === 'unavailable') return <SessionPage><h1>Não foi possível verificar seu acesso.</h1><ErrorState error={auth.error} retry={auth.recheck} /><button className="button button-secondary" onClick={() => void auth.logout()}>Sair</button></SessionPage>;
   if (auth.status === 'anonymous') return <Navigate to="/entrar" replace />;
@@ -151,7 +181,8 @@ export function LoginPage() {
         <label htmlFor="email">E-mail</label><input id="email" name="email" type="email" autoComplete="username" required maxLength={254} value={email} onChange={event => setEmail(event.target.value)} disabled={pending || unavailable} />
         <label htmlFor="password">Senha</label><input id="password" name="password" type="password" autoComplete="current-password" required maxLength={1024} value={password} onChange={event => setPassword(event.target.value)} disabled={pending || unavailable} />
         {failure instanceof ApiError && failure.status === 429 ? <RateLimitNotice error={failure} remaining={remaining} />
-          : failure ? <Notice tone="error">{errorMessage(failure)}{failure instanceof ApiError && failure.code === 'ACCOUNT_INACTIVE' ? ' Solicite a validação do cadastro à gestão.' : ''}</Notice> : null}
+          : failure ? <Notice tone="error">{errorMessage(failure)}{failure instanceof ApiError && failure.code === 'ACCOUNT_INACTIVE'
+            ? storedInvitation() ? <> Primeiro acesso por convite? <Link to="/convite">Conclua pelo convite aberto nesta janela</Link>.</> : ' Solicite a validação do cadastro à gestão.' : ''}</Notice> : null}
         {!failure && unavailable && auth.error instanceof ApiError && auth.error.status === 429 ? <RateLimitNotice error={auth.error} remaining={remaining} /> : null}
         <button className="button button-wide" type="submit" disabled={pending || unavailable || remaining > 0}>{pending ? 'Entrando…' : remaining > 0 ? 'Aguarde para entrar' : 'Entrar'}<Icon name="arrow" /></button>
       </form>

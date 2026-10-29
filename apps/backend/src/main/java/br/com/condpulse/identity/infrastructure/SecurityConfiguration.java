@@ -76,7 +76,7 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify",
-      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete").permitAll()
+      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete","/auth/invitation/accept").permitAll()
     .anyRequest().denyAll())
    .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults())
     .authenticationEntryPoint((req,res,ex)->problem(res,401))
