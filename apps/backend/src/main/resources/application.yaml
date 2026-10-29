@@ -48,6 +48,7 @@ condpulse:
     encryption-key: ${CP_BFF_ENCRYPTION_KEY:}
     rate-limit-key: ${CP_BFF_RATE_LIMIT_KEY:}
     session-hours: ${CP_BFF_SESSION_HOURS:8}
+    recovery-enabled: ${CP_BFF_RECOVERY_ENABLED:false}
   auth:
     issuer: ${CP_JWT_ISSUER:}
     jwk-set-uri: ${CP_JWT_JWK_SET_URI:}

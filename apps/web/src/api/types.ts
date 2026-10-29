@@ -131,3 +131,14 @@ export interface InvitationAccepted {
   membershipId: UUID;
   status: 'PENDING';
 }
+
+/** Tentativa de recuperação criada pelo link; o cookie fica com o servidor e nunca chega ao JavaScript. */
+export interface RecoveryVerified {
+  mfaRequired: boolean;
+  expiresAt: ISODateTime;
+}
+
+export interface RecoveryCompleted {
+  status: 'PASSWORD_CHANGED';
+  otherSessionsEnded: boolean;
+}

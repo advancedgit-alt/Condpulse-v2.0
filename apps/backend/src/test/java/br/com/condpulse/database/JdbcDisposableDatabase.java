@@ -107,6 +107,12 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  void deleteSessions() throws SQLException {
   adminUpdate("delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
  }
+ void deleteRecoveryAttempts() throws SQLException {
+  adminUpdate("delete from platform.recovery_attempts where account_id in (?,?,?)",accountA,accountB,accountC);
+ }
+ long recoveryCount(String hash) throws SQLException {
+  return Long.parseLong(adminString("select count(*) from platform.recovery_attempts where token_hash=?",hash));
+ }
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
    connection.setAutoCommit(false);
@@ -140,7 +146,8 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  int backendPid() { return jdbc.queryForObject("select pg_backend_pid()",Integer.class); }
  void assertEmptyContext() {
-  for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities","app.invitation_hash"}) {
+  for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities","app.invitation_hash",
+    "app.recovery_hash","app.recovery_purge"}) {
    String value=jdbc.queryForObject("select coalesce(current_setting(?,true),'')",String.class,setting);
    org.junit.jupiter.api.Assertions.assertEquals("",value,"Contexto não pode sobreviver à devolução ao pool: "+setting);
   }
@@ -149,6 +156,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   try(Connection connection=admin()) {
    connection.setAutoCommit(false);
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
+   update(connection,"delete from platform.recovery_attempts where account_id in (?,?,?)",accountA,accountB,accountC);
    for(String table:new String[]{"outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.

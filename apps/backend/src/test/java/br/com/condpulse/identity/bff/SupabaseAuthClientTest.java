@@ -143,6 +143,69 @@ class SupabaseAuthClientTest {
   assertEquals("synthetic-aal2",tokens.access_token());
   server.verify();
  }
+ @Test void recoveryRequestNeverThrowsForProviderOutcomes() {
+  var cases=new Object[][]{{HttpStatus.OK,SupabaseAuthClient.RecoveryDispatch.ACCEPTED},
+   {HttpStatus.BAD_REQUEST,SupabaseAuthClient.RecoveryDispatch.REFUSED},
+   {HttpStatus.TOO_MANY_REQUESTS,SupabaseAuthClient.RecoveryDispatch.RATE_LIMITED},
+   {HttpStatus.INTERNAL_SERVER_ERROR,SupabaseAuthClient.RecoveryDispatch.UNAVAILABLE}};
+  for(var item:cases) {
+   var builder=RestClient.builder();
+   var server=MockRestServiceServer.bindTo(builder).build();
+   server.expect(requestTo("https://auth.example.invalid/auth/v1/recover")).andExpect(method(HttpMethod.POST))
+    .andExpect(header("apikey","synthetic-publishable")).andExpect(jsonPath("$.email").value("pessoa@example.invalid"))
+    .andRespond(withStatus((HttpStatus)item[0]).body("{\"msg\":\"sensitive-provider-detail\"}"));
+   assertEquals(item[1],new SupabaseAuthClient(builder.build(),settings()).recover("pessoa@example.invalid"));
+   server.verify();
+  }
+ }
+ @Test void recoveryLinkIsExchangedByHashAndRejectionHidesProviderDetail() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/verify")).andExpect(method(HttpMethod.POST))
+   .andExpect(jsonPath("$.type").value("recovery")).andExpect(jsonPath("$.token_hash").value("synthetic-hash-0123456789"))
+   .andRespond(withSuccess("""
+    {"access_token":"synthetic-recovery","token_type":"bearer","expires_in":3600,"refresh_token":"synthetic-refresh","user":{}}
+    """,MediaType.APPLICATION_JSON));
+  assertEquals("synthetic-recovery",new SupabaseAuthClient(builder.build(),settings()).verifyRecovery("synthetic-hash-0123456789").access_token());
+  server.verify();
+  var rejected=RestClient.builder();
+  MockRestServiceServer.bindTo(rejected).build().expect(requestTo("https://auth.example.invalid/auth/v1/verify"))
+   .andRespond(withStatus(HttpStatus.FORBIDDEN).body("{\"msg\":\"sensitive-provider-detail\"}"));
+  var error=assertThrows(BusinessProblem.class,()->new SupabaseAuthClient(rejected.build(),settings()).verifyRecovery("synthetic-hash-0123456789"));
+  assertEquals("RECOVERY_LINK_INVALID",error.code()); assertEquals(400,error.status());
+  assertFalse(error.getMessage().contains("sensitive-provider-detail"));
+ }
+ @Test void passwordUpdateUsesUserTokenAndSeparatesPolicyRejectionFromUncertainty() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/user")).andExpect(method(HttpMethod.PUT))
+   .andExpect(header("Authorization","Bearer synthetic-recovery")).andExpect(jsonPath("$.password").value("Senha-sintetica-longa"))
+   .andRespond(withSuccess("{\"id\":\"11111111-1111-4111-8111-111111111111\"}",MediaType.APPLICATION_JSON));
+  new SupabaseAuthClient(builder.build(),settings()).updatePassword("synthetic-recovery","Senha-sintetica-longa");
+  server.verify();
+  var statuses=new Object[][]{{422,"PASSWORD_REJECTED"},{401,"RECOVERY_SESSION_EXPIRED"},{403,"RECOVERY_NOT_ALLOWED"},
+   {429,"AUTH_RATE_LIMITED"},{502,"AUTH_PROVIDER_UNAVAILABLE"}};
+  for(var item:statuses) {
+   var failing=RestClient.builder();
+   MockRestServiceServer.bindTo(failing).build().expect(requestTo("https://auth.example.invalid/auth/v1/user"))
+    .andRespond(withStatus(org.springframework.http.HttpStatusCode.valueOf((Integer)item[0])).body("{\"msg\":\"sensitive-provider-detail\"}"));
+   var error=assertThrows(BusinessProblem.class,()->new SupabaseAuthClient(failing.build(),settings())
+    .updatePassword("synthetic-recovery","Senha-sintetica-longa"));
+   assertEquals(item[1],error.code()); assertFalse(error.getMessage().contains("sensitive-provider-detail"));
+  }
+ }
+ @Test void globalSignOutReportsWhetherProviderConfirmed() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/logout?scope=global")).andExpect(method(HttpMethod.POST))
+   .andExpect(header("Authorization","Bearer synthetic-recovery")).andRespond(withStatus(HttpStatus.NO_CONTENT));
+  assertTrue(new SupabaseAuthClient(builder.build(),settings()).signOutGlobal("synthetic-recovery"));
+  server.verify();
+  var failing=RestClient.builder();
+  MockRestServiceServer.bindTo(failing).build().expect(requestTo("https://auth.example.invalid/auth/v1/logout?scope=global"))
+   .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+  assertFalse(new SupabaseAuthClient(failing.build(),settings()).signOutGlobal("synthetic-recovery"));
+ }
  @Test void rejectedCodeIsStableAndHidesProviderDetail() {
   var builder=RestClient.builder();
   var server=MockRestServiceServer.bindTo(builder).build();

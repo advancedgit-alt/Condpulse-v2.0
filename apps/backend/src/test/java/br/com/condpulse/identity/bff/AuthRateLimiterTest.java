@@ -60,6 +60,21 @@ class AuthRateLimiterTest {
    assertFalse(error.getMessage().contains("SECRET_SENTINEL")); assertNull(error.getCause());
   }
  }
+ @SuppressWarnings({"rawtypes","unchecked"})
+ @Test void recoveryBucketsAreSeparatedFromLoginAndBoundedPerSubject() {
+  var store=mock(AuthRateStore.class); when(store.admit(anyList())).thenReturn(AuthRateLimiter.Admission.permitted());
+  var limiter=new AuthRateLimiter(key(5),key(6),store);
+  limiter.login("pessoa@example.invalid"); limiter.recoveryRequest(" Pessoa@Example.invalid ");
+  limiter.recoveryVerify("synthetic-link-hash-0123"); limiter.recoveryComplete("a".repeat(43)); limiter.recoveryComplete("forjado");
+  ArgumentCaptor<List<AuthRateLimiter.Bucket>> captured=ArgumentCaptor.forClass((Class)List.class);
+  verify(store,times(5)).admit(captured.capture());
+  var calls=captured.getAllValues();
+  assertNotEquals(calls.get(0).getLast().key(),calls.get(1).getLast().key(),"Pedido de recuperação não consome o limite do login");
+  assertEquals(3,calls.get(1).getLast().limit()); assertEquals(900,calls.get(1).getLast().seconds());
+  assertEquals(5,calls.get(2).getLast().limit()); assertEquals(10,calls.get(3).getLast().limit());
+  assertNotEquals(calls.get(3).getLast().key(),calls.get(4).getLast().key());
+  for(var call:calls) assertEquals(2,call.size());
+ }
  @Test void denialsAreReturnedWithBoundedServerRetryAfter() {
   var store=mock(AuthRateStore.class); when(store.admit(anyList())).thenReturn(new AuthRateLimiter.Admission(false,899));
   var limiter=new AuthRateLimiter(key(1),key(2),store);

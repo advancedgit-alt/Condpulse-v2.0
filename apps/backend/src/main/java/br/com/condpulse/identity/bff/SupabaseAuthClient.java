@@ -118,6 +118,65 @@ public final class SupabaseAuthClient {
    return parsed;
   } catch(IllegalArgumentException | NullPointerException ex) { throw unavailable(); }
  }
+ /** Resultado do pedido de e-mail de recuperação, usado só para decidir a resposta neutra. */
+ public enum RecoveryDispatch { ACCEPTED, REFUSED, RATE_LIMITED, UNAVAILABLE }
+ /**
+  * Pede ao provedor o e-mail de recuperação. Nunca lança por resposta do provedor: conta inexistente, envio
+  * recusado ou limite do provedor não podem mudar a resposta devolvida ao navegador.
+  */
+ public RecoveryDispatch recover(String email) {
+  try {
+   client.post().uri(settings.authBase()+"/recover").header("apikey",settings.publishableKey())
+    .contentType(MediaType.APPLICATION_JSON).body(Map.of("email",email)).retrieve().toBodilessEntity();
+   return RecoveryDispatch.ACCEPTED;
+  } catch(RestClientResponseException ex) {
+   int status=ex.getStatusCode().value();
+   if(status==429) return RecoveryDispatch.RATE_LIMITED;
+   return status>=500?RecoveryDispatch.UNAVAILABLE:RecoveryDispatch.REFUSED;
+  } catch(RestClientException ex) { return RecoveryDispatch.UNAVAILABLE; }
+ }
+ /** Troca o hash do link de recuperação por uma sessão do provedor (uso único no provedor). */
+ public TokenResponse verifyRecovery(String tokenHash) {
+  try {
+   TokenResponse result=client.post().uri(settings.authBase()+"/verify").header("apikey",settings.publishableKey())
+    .contentType(MediaType.APPLICATION_JSON).body(Map.of("type","recovery","token_hash",tokenHash))
+    .retrieve().body(TokenResponse.class);
+   return requireTokens(result);
+  } catch(RestClientResponseException ex) {
+   int status=ex.getStatusCode().value();
+   if(status==429) throw new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
+   if(status>=400 && status<500)
+    throw new BusinessProblem("RECOVERY_LINK_INVALID",400,"Link de recuperação inválido, expirado ou já utilizado. Solicite um novo link.");
+   throw unavailable();
+  } catch(RestClientException ex) { throw unavailable(); }
+ }
+ /** Define a nova senha com a sessão de recuperação. Recusa de política é distinguida de resultado incerto. */
+ public void updatePassword(String accessToken,String password) {
+  try {
+   client.put().uri(settings.authBase()+"/user").header("apikey",settings.publishableKey())
+    .header("Authorization","Bearer "+accessToken).contentType(MediaType.APPLICATION_JSON)
+    .body(Map.of("password",password)).retrieve().toBodilessEntity();
+  } catch(RestClientResponseException ex) {
+   int status=ex.getStatusCode().value();
+   if(status==400 || status==422)
+    throw new BusinessProblem("PASSWORD_REJECTED",422,"A senha não foi aceita. Use uma senha diferente da anterior e mais difícil de adivinhar.");
+   if(status==401)
+    throw new BusinessProblem("RECOVERY_SESSION_EXPIRED",401,"O prazo para definir a nova senha terminou. Solicite um novo link.");
+   if(status==403)
+    throw new BusinessProblem("RECOVERY_NOT_ALLOWED",403,"A troca de senha por este link não foi permitida. Solicite um novo link ou procure a gestão.");
+   if(status==429) throw new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
+   throw unavailable();
+  } catch(RestClientException ex) { throw unavailable(); }
+ }
+ /** Encerra todas as sessões do usuário no provedor. Devolve se o provedor confirmou o encerramento. */
+ public boolean signOutGlobal(String accessToken) {
+  try {
+   client.post().uri(settings.authBase()+"/logout?scope=global")
+    .header("apikey",settings.publishableKey()).header("Authorization","Bearer "+accessToken)
+    .retrieve().toBodilessEntity();
+   return true;
+  } catch(RestClientException ex) { return false; }
+ }
  public void signOutBestEffort(String accessToken) {
   try {
    client.post().uri(settings.authBase()+"/logout?scope=local")

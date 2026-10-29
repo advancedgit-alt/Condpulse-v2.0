@@ -498,6 +498,228 @@
         }
       }
     },
+    "/auth/recovery": {
+      "post": {
+        "operationId": "requestRecovery",
+        "security": [],
+        "x-feature-flag": "CP_BFF_RECOVERY_ENABLED",
+        "description": "Pede o e-mail de recuperação. Resposta sempre neutra (202) e com duração mínima, exista ou não a conta; o resultado do provedor nunca é revelado. Exige CP_BFF_ENABLED e CP_BFF_RECOVERY_ENABLED.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pedido registrado de forma neutra",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryRequested"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RECOVERY_REQUEST_INVALID: e-mail em formato inválido"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_RATE_LIMIT_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/auth/recovery/verify": {
+      "post": {
+        "operationId": "verifyRecovery",
+        "security": [],
+        "x-feature-flag": "CP_BFF_RECOVERY_ENABLED",
+        "description": "Troca o hash do link (lido do fragmento pela página) por uma tentativa de 10 minutos ligada ao cookie __Host-cp_recovery (HttpOnly, Secure, SameSite=Strict). O cookie nunca autentica a API. Informa se o código do autenticador será exigido.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryVerification"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tentativa criada; resposta sem tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryVerified"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RECOVERY_LINK_INVALID: link inválido, expirado ou já utilizado"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido; ACCOUNT_INACTIVE"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_PROVIDER_UNAVAILABLE ou AUTH_RATE_LIMIT_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/auth/recovery/complete": {
+      "post": {
+        "operationId": "completeRecovery",
+        "security": [],
+        "x-feature-flag": "CP_BFF_RECOVERY_ENABLED",
+        "description": "Define a nova senha com o cookie de recuperação (e o código TOTP quando exigido). Sucesso somente após confirmação do provedor: encerra as sessões da conta no provedor e na web e apaga os cookies de recuperação, sessão e CSRF. Recusa de código ou senha conta tentativa (até 5); resultado incerto encerra a tentativa e as sessões sem repetir.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryCompletion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PASSWORD_CHANGED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCompleted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PASSWORD_INVALID: política local (12 a 72 caracteres, ao menos 4 diferentes)"
+          },
+          "401": {
+            "description": "RECOVERY_SESSION_EXPIRED: cookie ausente, vencido ou tentativas esgotadas"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido; RECOVERY_NOT_ALLOWED"
+          },
+          "409": {
+            "description": "RECOVERY_IN_PROGRESS: conclusão concorrente da mesma tentativa"
+          },
+          "422": {
+            "description": "MFA_CODE_REQUIRED, MFA_CODE_REJECTED ou PASSWORD_REJECTED"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "RECOVERY_OUTCOME_UNKNOWN (troca não confirmada; sessões encerradas) ou dependência indisponível"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/units": {
       "get": {
         "operationId": "ownTenantUnits",
@@ -4192,6 +4414,104 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500
+          }
+        }
+      },
+      "RecoveryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        }
+      },
+      "RecoveryRequested": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "RECOVERY_REQUESTED"
+          }
+        }
+      },
+      "RecoveryVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tokenHash"
+        ],
+        "properties": {
+          "tokenHash": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,512}$",
+            "writeOnly": true
+          }
+        }
+      },
+      "RecoveryVerified": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mfaRequired",
+          "expiresAt"
+        ],
+        "properties": {
+          "mfaRequired": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RecoveryCompletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 72,
+            "writeOnly": true
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]{6}$",
+            "writeOnly": true
+          }
+        }
+      },
+      "RecoveryCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "otherSessionsEnded"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "PASSWORD_CHANGED"
+          },
+          "otherSessionsEnded": {
+            "type": "boolean"
           }
         }
       }

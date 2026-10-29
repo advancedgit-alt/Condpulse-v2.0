@@ -90,7 +90,8 @@ public class BffController {
  private void rotateCsrf(HttpServletRequest request,HttpServletResponse response) {
   var token=csrf.generateToken(request); csrf.saveToken(token,request,response);
  }
- private void requireAdmission(AuthRateLimiter.Admission admission,HttpServletResponse response) {
+ /** Recusa por limite sem chamar sessão ou provedor; compartilhada com a recuperação de acesso. */
+ static void requireAdmission(AuthRateLimiter.Admission admission,HttpServletResponse response) {
   if(!admission.allowed()) {
    response.setHeader("Retry-After",Long.toString(admission.retryAfterSeconds()));
    response.setHeader("Cache-Control","no-store");
