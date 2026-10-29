@@ -20,6 +20,8 @@ export interface ManagementState {
   managementRequests: string[];
   reservationStatus: string;
   membershipStatus: string;
+  /** Outro gestor já gravou a mesma decisão: o servidor devolve o estado atual sem aplicar esta. */
+  decisionAlreadyApplied?: boolean;
 }
 
 async function json(route: Route, status: number, body: unknown) {
@@ -91,7 +93,8 @@ export async function installManagementApi(page: Page, initial: Partial<Manageme
       const body = request.postDataJSON() as { decision: string; reason: string | null };
       state.decisions.push(body);
       state.reservationStatus = body.decision === 'APPROVE' ? 'CONFIRMED' : 'REJECTED';
-      await json(route, 200, pendingReservation(state));
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Cache-Control': 'no-store',
+        'Reservation-Decision-Applied': String(!state.decisionAlreadyApplied) }, body: JSON.stringify(pendingReservation(state)) });
       return;
     }
     if (request.method() === 'GET' && path === '/memberships') {

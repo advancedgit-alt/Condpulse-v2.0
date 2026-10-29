@@ -14,7 +14,7 @@ interface SyntheticParcel {
 }
 interface ParcelState {
   parcels: SyntheticParcel[]; receives: { key: string; body: unknown }[]; deliveries: { key: string; body: unknown }[]; voids: { key: string; body: unknown }[];
-  lists: string[]; deliveredElsewhere: boolean; suspectDuplicate: boolean; loseNextReceive: boolean;
+  lists: string[]; deliveredElsewhere: boolean; suspectDuplicate: boolean; loseNextReceive: boolean; failLists: boolean;
 }
 
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -29,7 +29,7 @@ const waiting = (overrides: Partial<SyntheticParcel> = {}): SyntheticParcel => (
 
 /** Identidade com portaria no condomínio A e API sintética das encomendas, registradas por último (precedência). */
 async function installParcelsApi(page: Page, api: ApiState, concierge: boolean): Promise<ParcelState> {
-  const state: ParcelState = { parcels: [], receives: [], deliveries: [], voids: [], lists: [], deliveredElsewhere: false, suspectDuplicate: false, loseNextReceive: false };
+  const state: ParcelState = { parcels: [], receives: [], deliveries: [], voids: [], lists: [], deliveredElsewhere: false, suspectDuplicate: false, loseNextReceive: false, failLists: false };
   if (concierge) {
     await page.route('**/v1/me', async (route) => {
       if (!api.authenticated) { await route.fallback(); return; }
@@ -47,6 +47,7 @@ async function installParcelsApi(page: Page, api: ApiState, concierge: boolean):
     }
     if (path === '/parcels' && request.method() === 'GET') {
       state.lists.push(url.search);
+      if (state.failLists) { await problem(route, 503, 'PARCEL_DEPENDENCY_UNAVAILABLE'); return; }
       const status = url.searchParams.get('status');
       const unit = url.searchParams.get('unitId');
       await json(route, 200, { parcels: state.parcels.filter((item) => (!status || item.status === status) && (!unit || item.unitId === unit)), truncated: false });
@@ -211,6 +212,22 @@ test('repetir um recebimento incerto confirmado como outra encomenda mantém a c
   expect(confirmations[1]!.key).toBe(confirmations[0]!.key);
   expect(state.receives.filter((item) => item.body.storageLocation === 'Armário 9' && !item.body.confirmDuplicate)).toHaveLength(1);
   expect(state.parcels.filter((item) => item.storageLocation === 'Armário 9')).toHaveLength(1);
+});
+
+test('atualização que falha mantém a fila na tela, mas avisa que ela pode estar desatualizada', async ({ page }) => {
+  const state = await openConcierge(page);
+  state.parcels.push(waiting());
+  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  const queue = page.getByRole('list', { name: 'Encomendas' });
+  await expect(queue.getByText('Armário 3', { exact: false })).toBeVisible();
+  await expect(page.getByText('O que aparece pode estar desatualizado', { exact: false })).toHaveCount(0);
+  state.failLists = true;
+  await page.getByRole('region', { name: 'Encomendas a retirar' }).getByRole('button', { name: 'Atualizar' }).click();
+  await expect(page.getByText('O que aparece pode estar desatualizado', { exact: false })).toBeVisible();
+  await expect(queue.getByText('Armário 3', { exact: false })).toBeVisible();
+  state.failLists = false;
+  await page.getByRole('button', { name: 'Tentar atualizar de novo' }).click();
+  await expect(page.getByText('O que aparece pode estar desatualizado', { exact: false })).toHaveCount(0);
 });
 
 test('registro indevido é anulado com motivo e a fila filtra por unidade', async ({ page }) => {

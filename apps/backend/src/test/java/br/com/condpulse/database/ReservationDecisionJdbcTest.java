@@ -99,8 +99,9 @@ class ReservationDecisionJdbcTest {
   assertEquals("BOOKING",item.kind()); assertEquals(area.name(),item.amenityName()); assertNotNull(item.expiresAt());
   var approved=management.decide(db.accountC,db.tenantA,AAL2,requested.reservationId(),approve(item.version()));
   assertEquals("CONFIRMED",approved.status()); assertNull(approved.expiresAt()); assertEquals(item.version()+1,approved.version());
-  var repeated=management.decide(db.accountC,db.tenantA,AAL2,requested.reservationId(),approve(item.version()));
-  assertEquals(approved.version(),repeated.version(),"Decisão repetida devolve o estado atual");
+  var repeated=management.decideOutcome(db.accountC,db.tenantA,AAL2,requested.reservationId(),approve(item.version()));
+  assertEquals(approved.version(),repeated.reservation().version(),"Decisão repetida devolve o estado atual");
+  assertFalse(repeated.applied(),"Decisão repetida não é apresentada como aplicada por esta chamada");
   assertEquals(1,events(requested.reservationId(),"RESERVATION_CONFIRMED"));
   assertEquals("1",db.adminString("select count(*) from cp.audit_log where resource_id=? and action='RESERVATION_APPROVED'",
    requested.reservationId()));
