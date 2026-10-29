@@ -8034,6 +8034,305 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/uploads/intents": {
+      "post": {
+        "operationId": "createUploadIntent",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FILES_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obrigatório quando a autenticação é a sessão web BFF."
+          }
+        ],
+        "description": "Reserva o envio de um anexo de pedido visível e aberto. Devolve URL assinada curta (15 minutos) para PUT direto no Storage privado; o arquivo só fica disponível depois de /complete. Fotos JPEG/PNG até 10 MB, PDF até 20 MB, até 10 anexos por pedido.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachmentIntent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Envio reservado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ATTACHMENT_PURPOSE_INVALID, ATTACHMENT_TYPE_INVALID, ATTACHMENT_TOO_LARGE ou ATTACHMENT_NAME_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND (inclusive de outra unidade ou condomínio) ou TENANT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "SERVICE_REQUEST_CLOSED ou ATTACHMENT_LIMIT_REACHED"
+          },
+          "503": {
+            "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/attachments/{attachmentId}/complete": {
+      "post": {
+        "operationId": "completeAttachment",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FILES_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obrigatório quando a autenticação é a sessão web BFF."
+          }
+        ],
+        "description": "Confere no Storage o tamanho, a assinatura do conteúdo e o hash. Válido vira AVAILABLE; tamanho ou tipo diferente vira REJECTED. Repetir não muda nada.",
+        "responses": {
+          "200": {
+            "description": "Estado do anexo",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attachment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ATTACHMENT_NOT_OWNER"
+          },
+          "404": {
+            "description": "ATTACHMENT_NOT_FOUND ou TENANT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "ATTACHMENT_NOT_UPLOADED (envie de novo dentro do prazo)"
+          },
+          "503": {
+            "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/attachments/{attachmentId}/download": {
+      "post": {
+        "operationId": "downloadAttachment",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FILES_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obrigatório quando a autenticação é a sessão web BFF."
+          }
+        ],
+        "description": "Revalida o acesso ao pedido, registra trilha e devolve link de download de 60 segundos. Nunca há URL permanente.",
+        "responses": {
+          "200": {
+            "description": "Link curto",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentDownload"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "ATTACHMENT_NOT_FOUND (inclusive de outra unidade ou condomínio) ou TENANT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "ATTACHMENT_NOT_AVAILABLE"
+          },
+          "503": {
+            "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/requests/{requestId}/attachments": {
+      "get": {
+        "operationId": "listRequestAttachments",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FILES_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Anexos liberados do pedido; pendentes e recusados só para quem enviou. Gestão precisa de requests.manage e segundo fator.",
+        "responses": {
+          "200": {
+            "description": "Anexos do pedido",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND ou TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12793,6 +13092,186 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "AttachmentIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purpose",
+          "entityId",
+          "fileName",
+          "mimeType",
+          "sizeBytes"
+        ],
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "const": "REQUEST_ATTACHMENT"
+          },
+          "entityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 260
+          },
+          "mimeType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "application/pdf"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20971520
+          }
+        }
+      },
+      "Attachment": {
+        "type": "object",
+        "required": [
+          "attachmentId",
+          "entityId",
+          "fileName",
+          "mimeType",
+          "sizeBytes",
+          "state",
+          "mine",
+          "createdAt"
+        ],
+        "properties": {
+          "attachmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "mimeType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "application/pdf"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "AVAILABLE",
+              "REJECTED"
+            ]
+          },
+          "rejection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "SIZE_MISMATCH",
+              "TYPE_MISMATCH",
+              "NOT_UPLOADED",
+              "UPLOAD_EXPIRED",
+              null
+            ]
+          },
+          "mine": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AttachmentUpload": {
+        "type": "object",
+        "required": [
+          "attachment",
+          "uploadUrl",
+          "method",
+          "contentType",
+          "expiresAt"
+        ],
+        "properties": {
+          "attachment": {
+            "$ref": "#/components/schemas/Attachment"
+          },
+          "uploadUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL assinada de uso único no Storage privado"
+          },
+          "method": {
+            "type": "string",
+            "const": "PUT"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "application/pdf"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AttachmentDownload": {
+        "type": "object",
+        "required": [
+          "url",
+          "expiresAt"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AttachmentPage": {
+        "type": "object",
+        "required": [
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
           }
         }
       }

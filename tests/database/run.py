@@ -1494,6 +1494,81 @@ def import_checks():
            "trilha da importacao exige lote existente")
     query(capable("units.manage", audit.format(rid=IMP)), tenant=TA, role="cp_api")
 
+def attachment_checks():
+    """V019: anexos privados de pedido; leitura so com o pedido visivel, conclusao so por quem enviou, sem apagar."""
+    OTHER, MGR2 = "10000000-0000-4000-8000-0000000000c1", "10000000-0000-4000-8000-0000000000c2"
+    UC = "20000000-0000-4000-8000-0000000000c3"
+    QA, QB, QC = ("7b000000-0000-4000-8000-000000000001", "7b000000-0000-4000-8000-000000000002",
+                  "7b000000-0000-4000-8000-000000000003")
+    F1, F2, F3 = ("7c000000-0000-4000-8000-000000000001", "7c000000-0000-4000-8000-000000000002",
+                  "7c000000-0000-4000-8000-000000000003")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{OTHER}','ACTIVE'),('{MGR2}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UC}','{TA}','FICTICIA ANEXOS');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{OTHER}','{UC}','MORADOR OUTRA UNIDADE','RESIDENT','ACTIVE'),('{TA}','{MGR2}',NULL,'GESTAO ANEXOS','MANAGER','ACTIVE');
+    """)
+    query(f"INSERT INTO cp.service_requests(id,tenant_id,unit_id,requester_id,category,title,description) "
+          f"VALUES('{QA}','{TA}','{UA}','{AA}','MAINTENANCE','Pedido com anexo','Foto do vazamento')", tenant=TA, role="cp_api")
+    query(f"INSERT INTO cp.service_requests(id,tenant_id,unit_id,requester_id,category,title,description) "
+          f"VALUES('{QB}','{TA}','{UC}','{OTHER}','MAINTENANCE','Pedido de outra unidade','Sem anexo')", tenant=TA, actor=OTHER, role="cp_api")
+    def attach(identifier, request=QA, mime="image/png", size=1024, key=None, tenant=TA, owner=AA):
+        object_key = key or f"{tenant}/{identifier}"
+        return (f"INSERT INTO cp.attachments(id,tenant_id,owner_id,purpose,entity_type,entity_id,file_name,mime_type,size_bytes,bucket,object_key) "
+                f"VALUES('{identifier}','{tenant}','{owner}','REQUEST_ATTACHMENT','SERVICE_REQUEST','{request}','foto.png','{mime}',{size},"
+                f"'cp-upload-quarantine','{object_key}')")
+    query(attach(F1), tenant=TA, role="cp_api")
+    expect(value(f"select state||'|'||(upload_expires_at-created_at)::text from cp.attachments where id='{F1}'") == "PENDING|00:15:00",
+           "anexo nasce pendente com prazo de envio do banco")
+    expect(error(attach(F2, request=QB), "42501", tenant=TA, role="cp_api"), "anexo nao entra em pedido de outra unidade")
+    expect(error(attach(F2, owner=OTHER), "42501", tenant=TA, role="cp_api"), "anexo so em nome da propria conta")
+    expect(error(attach(F2, key=f"{TA}/foto.png"), "23514", tenant=TA, role="cp_api"), "chave do objeto nao vem do nome enviado")
+    expect(error(attach(F2, mime="image/gif"), "23514", tenant=TA, role="cp_api"), "tipo fora da lista e recusado")
+    expect(error(attach(F2, size=10485761), "23514", tenant=TA, role="cp_api"), "imagem acima de 10 MB e recusada")
+    expect(value(f"select count(*) from cp.attachments where id='{F1}'", tenant=TA, actor=OTHER, role="cp_api") == "0",
+           "outra unidade nao ve o anexo nem pelo ID")
+    expect(value(f"select count(*) from cp.attachments where id='{F1}'", tenant=TB, actor=AB, role="cp_api") == "0",
+           "outro condominio nao ve o anexo")
+    expect(value(capable("requests.manage", f"select count(*) from cp.attachments where id='{F1}'"), tenant=TA, actor=MGR2, role="cp_api") == "1",
+           "gestao de pedidos ve o anexo do condominio")
+    expect(value(f"select count(*) from cp.attachments where id='{F1}'", tenant=TA, actor=MGR2, role="cp_api") == "0",
+           "gestao sem capacidade publicada nao ve o anexo")
+    expect(error(capable("requests.manage", f"UPDATE cp.attachments SET state='AVAILABLE',sha256=repeat('a',64) WHERE id='{F1}'"), "42501",
+                 tenant=TA, actor=MGR2, role="cp_api"), "so quem enviou conclui o anexo")
+    expect(error(f"UPDATE cp.attachments SET state='AVAILABLE' WHERE id='{F1}'", "23514", tenant=TA, role="cp_api"),
+           "disponivel exige hash conferido")
+    expect(error(f"UPDATE cp.attachments SET size_bytes=10 WHERE id='{F1}'", "42501", tenant=TA, role="cp_api"),
+           "tamanho declarado nao muda")
+    query(f"UPDATE cp.attachments SET state='AVAILABLE',sha256=repeat('b',64) WHERE id='{F1}'", tenant=TA, role="cp_api")
+    expect(value(f"select state||'|'||(completed_at is not null) from cp.attachments where id='{F1}'") == "AVAILABLE|true",
+           "conclusao grava horario do banco")
+    expect(error(f"UPDATE cp.attachments SET state='REJECTED',rejection='TYPE_MISMATCH',sha256=NULL WHERE id='{F1}'", "23514", tenant=TA, role="cp_api"),
+           "anexo disponivel nao volta a ser rejeitado")
+    query(attach(F2), tenant=TA, role="cp_api")
+    query(f"UPDATE cp.attachments SET state='REJECTED',rejection='TYPE_MISMATCH' WHERE id='{F2}'", tenant=TA, role="cp_api")
+    expect(error(f"DELETE FROM cp.attachments WHERE id='{F2}'", "42501", tenant=TA, role="cp_api"), "aplicacao nao apaga anexo")
+    for index in range(9):
+        query(attach(f"7c000000-0000-4000-8000-0000000001{index:02d}"), tenant=TA, role="cp_api")
+    expect(error(attach(F3), "23514", tenant=TA, role="cp_api"), "no maximo 10 anexos nao rejeitados por pedido")
+    query("SET session_replication_role=replica; UPDATE cp.attachments SET upload_expires_at=clock_timestamp()-interval '6 minutes' "
+          "WHERE id='7c000000-0000-4000-8000-000000000100'; SET session_replication_role=origin")
+    query(attach("7c000000-0000-4000-8000-000000000199"), tenant=TA, role="cp_api")
+    expect(value("select count(*) from cp.attachments where id='7c000000-0000-4000-8000-000000000199'") == "1",
+           "pendente vencido nao ocupa vaga do pedido")
+    expect(error(f"UPDATE cp.attachments SET state='AVAILABLE',sha256=repeat('c',64) WHERE id='7c000000-0000-4000-8000-000000000100'",
+                 "23514", tenant=TA, role="cp_api"), "pendente vencido nao e liberado")
+    query(f"UPDATE platform.accounts SET status='ACTIVE' WHERE id='{AA}'")
+    query(capable("requests.manage", f"UPDATE cp.service_requests SET state='CLOSED',version=version+1 WHERE id='{QA}'"), tenant=TA, actor=MGR2, role="cp_api")
+    query(f"INSERT INTO cp.service_requests(id,tenant_id,unit_id,requester_id,category,title,description) "
+          f"VALUES('{QC}','{TA}','{UA}','{AA}','MAINTENANCE','Outro pedido','Texto')", tenant=TA, role="cp_api")
+    query(capable("requests.manage", f"UPDATE cp.service_requests SET state='CLOSED',version=version+1 WHERE id='{QC}'"), tenant=TA, actor=MGR2, role="cp_api")
+    expect(error(attach(F3, request=QC), "42501", tenant=TA, role="cp_api"), "pedido fechado nao recebe anexo")
+    audit = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+             f"VALUES('{TA}','{{actor}}','ATTACHMENT_UPLOADED','ATTACHMENT','{F1}','{ROLL}')")
+    expect(error(audit.format(actor=AA), "42501", tenant=TA, actor=OTHER, role="cp_api"), "trilha do anexo so em nome da propria conta")
+    expect(error(audit.format(actor=OTHER), "42501", tenant=TA, actor=OTHER, role="cp_api"), "trilha exige anexo visivel")
+    query(audit.format(actor=AA), tenant=TA, role="cp_api")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1601,6 +1676,7 @@ def main():
     announcement_checks()
     request_checks()
     import_checks()
+    attachment_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
