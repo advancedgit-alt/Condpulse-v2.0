@@ -173,7 +173,10 @@ public class VisitService {
    return new VisitModels.ArrivalMutation(arrival,false,201);
   });
  }
- /** Confirmação assistida (interfone ou presencial) registrada pela portaria, com a origem anotada; dentro do prazo. */
+ /**
+  * Confirmação assistida (interfone ou presencial) registrada pela portaria, com a origem anotada. Vale também depois
+  * do prazo: sem resposta pelo aplicativo, a portaria segue o interfone ou o procedimento presencial e registra a origem.
+  */
  public VisitModels.Arrival assistedDecision(UUID actor,UUID tenant,AssuranceLevel assurance,UUID arrivalId,VisitModels.AssistedDecision request) {
   if(arrivalId==null) throw arrivalNotFound();
   String state=decision(request==null?null:request.decision());
@@ -185,7 +188,7 @@ public class VisitService {
    context.requireCapability(StaffCapability.OPERATE_CONCIERGE);
    var current=store.arrival(tenant,arrivalId);
    if(current==null) throw arrivalNotFound();
-   requireWaiting(current);
+   if(!"WAITING".equals(current.state()) && !"EXPIRED".equals(current.state())) throw closed(current);
    if(!store.decide(tenant,arrivalId,state,actor,source,note)) throw closed(store.arrival(tenant,arrivalId));
    return decided(tenant,actor,arrivalId,note);
   });

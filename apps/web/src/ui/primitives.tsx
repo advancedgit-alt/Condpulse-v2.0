@@ -9,7 +9,7 @@ export function Brand({ light = false }: { light?: boolean }) {
   </span>;
 }
 
-export function Icon({ name }: { name: 'home' | 'calendar' | 'arrow' | 'shield' | 'check' | 'exit' | 'clock' | 'box' }) {
+export function Icon({ name }: { name: 'home' | 'calendar' | 'arrow' | 'shield' | 'check' | 'exit' | 'clock' | 'box' | 'door' }) {
   const paths = {
     home: <><path d="m3 10 9-7 9 7v10H3z" /><path d="M9 20v-7h6v7" /></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 11h18m-13 5h3m3 0h2" /></>,
@@ -19,6 +19,7 @@ export function Icon({ name }: { name: 'home' | 'calendar' | 'arrow' | 'shield' 
     exit: <><path d="M9 4H4v16h5m5-4 4-4-4-4m-6 4h12" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     box: <><path d="m3 7 9-4 9 4v10l-9 4-9-4z" /><path d="m3 7 9 4 9-4M12 11v10" /></>,
+    door: <><path d="M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21" /><path d="M3 21h18M14.5 12.5v.01" /></>,
   };
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

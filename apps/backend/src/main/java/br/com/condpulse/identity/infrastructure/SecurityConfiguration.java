@@ -75,6 +75,12 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*","/v1/tenants/*/units/*/parcels",
       "/v1/tenants/*/concierge/units","/v1/tenants/*/parcels/*/recipients").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*/handoff","/v1/tenants/*/parcels/*/void").authenticated()
+    // Visitas e chegadas: autenticação aqui; vínculo da unidade (com permissão do dependente) ou capacidade da
+    // portaria (AAL2) no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/permits","/v1/tenants/*/units/*/arrivals","/v1/tenants/*/concierge/permits",
+      "/v1/tenants/*/arrivals").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/permits","/v1/tenants/*/permits/*/revoke","/v1/tenants/*/arrivals",
+      "/v1/tenants/*/arrivals/*/decision","/v1/tenants/*/arrivals/*/assisted-decision","/v1/tenants/*/arrivals/*/cancel").authenticated()
     // Painel master: autenticação aqui; papel de plataforma vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/session","/v1/platform/tenants","/v1/platform/audit-events").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()

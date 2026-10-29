@@ -48,6 +48,13 @@ export function dateInZone(timeZone: string, instant = new Date()): string {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+/** Data e hora locais do condomínio (AAAA-MM-DDTHH:MM), para campos datetime-local que não usam o fuso do navegador. */
+export function wallTimeInZone(timeZone: string, instant = new Date()): string {
+  const [year, month, day, hour, minute] = wallParts(instant, timeZone);
+  const pad = (value: number | undefined, size = 2) => String(value).padStart(size, '0');
+  return `${pad(year, 4)}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+}
+
 export function addDays(date: string, days: number): string {
   if (!datePattern.test(date)) throw new Error('Informe uma data válida.');
   const value = new Date(utc(date.split('-').map(Number)));

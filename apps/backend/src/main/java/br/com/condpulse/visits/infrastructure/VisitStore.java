@@ -35,7 +35,8 @@ public class VisitStore {
 
  private static final String PERMIT_SELECT="""
   select p.id,p.unit_id,u.label as unit_label,b.name as block_name,v.full_name,v.document_last4,p.purpose,p.valid_from,p.valid_until,
-    case when p.state='ACTIVE' and p.valid_until<=clock_timestamp() then 'EXPIRED' else p.state end as effective_state,
+    case when p.state='ACTIVE' and p.valid_until<=clock_timestamp() then 'EXPIRED'
+     when p.state='ACTIVE' and p.valid_from>clock_timestamp() then 'SCHEDULED' else p.state end as effective_state,
     p.created_by=platform.current_actor_id() as created_by_me,p.revoked_at,p.revoke_reason,p.version,p.created_at
   from cp.visit_permits p
   join cp.visitors v on v.tenant_id=p.tenant_id and v.id=p.visitor_id
@@ -127,12 +128,15 @@ public class VisitStore {
   jdbc.update("insert into cp.arrival_requests(id,tenant_id,unit_id,visitor_id,permit_id,created_by) values(?,?,?,?,?,?)",
    id,tenant,unit,visitor,permit,actor);
  }
- /** Primeira decisão válida dentro do prazo: a mudança condicional só acontece uma vez. */
+ /**
+  * Primeira decisão válida: a mudança condicional só acontece uma vez. Pelo aplicativo, só dentro do prazo; a
+  * confirmação assistida da portaria vale também depois dele (o banco aplica a mesma regra).
+  */
  public boolean decide(UUID tenant,UUID arrival,String state,UUID actor,String source,String note) {
   return jdbc.update("""
    update cp.arrival_requests set state=?,decided_by=?,decision_source=?,decision_note=?,version=version+1
-   where tenant_id=? and id=? and state='WAITING' and expires_at>clock_timestamp()
-   """,state,actor,source,note,tenant,arrival)==1;
+   where tenant_id=? and id=? and state='WAITING' and (?::text<>'APP' or expires_at>clock_timestamp())
+   """,state,actor,source,note,tenant,arrival,source)==1;
  }
  /** A portaria encerra a chegada ainda aguardando (registrada por engano, pessoa foi embora ou prazo vencido). */
  public boolean cancel(UUID tenant,UUID arrival,UUID actor,String reason) {

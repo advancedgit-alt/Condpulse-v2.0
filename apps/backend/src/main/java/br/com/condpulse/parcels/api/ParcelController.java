@@ -32,11 +32,6 @@ public class ParcelController {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore())
    .body(service.list(account(jwt),tenantId,assurance(jwt),status,unitId,location));
  }
- @GetMapping("/v1/tenants/{tenantId}/concierge/units")
- public ResponseEntity<List<ParcelModels.UnitOption>> units(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
-     @RequestParam(required=false) String q) {
-  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.units(account(jwt),tenantId,assurance(jwt),q));
- }
  @GetMapping("/v1/tenants/{tenantId}/parcels/{parcelId}")
  public ResponseEntity<ParcelModels.Parcel> parcel(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID parcelId) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.parcel(account(jwt),tenantId,assurance(jwt),parcelId));

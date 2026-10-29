@@ -159,8 +159,10 @@ CREATE TRIGGER visit_permits_insert_guard BEFORE INSERT ON cp.visit_permits
 CREATE TRIGGER arrival_requests_insert_guard BEFORE INSERT ON cp.arrival_requests
  FOR EACH ROW EXECUTE FUNCTION cp.visit_insert_guard();
 
--- Transições: convite ACTIVE -> REVOKED; chegada WAITING -> APPROVED/DENIED (só dentro do prazo) ou CANCELLED. Versão
--- avança uma unidade e horários vêm do banco; estados finais não mudam mais (resposta atrasada não decide).
+-- Transições: convite ACTIVE -> REVOKED; chegada WAITING -> APPROVED/DENIED ou CANCELLED. Resposta pelo aplicativo só
+-- vale dentro do prazo (resposta atrasada não decide); a confirmação assistida pela portaria (interfone/presencial,
+-- com a origem anotada) também vale depois dele. Versão avança uma unidade, horários vêm do banco e estados finais não
+-- mudam mais.
 CREATE FUNCTION cp.visit_transition_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
@@ -171,7 +173,7 @@ BEGIN
   NEW.revoked_at := clock_timestamp();
  ELSE
   IF OLD.state<>'WAITING' OR NEW.state NOT IN ('APPROVED','DENIED','CANCELLED') OR NEW.version<>OLD.version+1
-     OR (NEW.state IN ('APPROVED','DENIED') AND OLD.expires_at<=clock_timestamp()) THEN
+     OR (NEW.state IN ('APPROVED','DENIED') AND NEW.decision_source='APP' AND OLD.expires_at<=clock_timestamp()) THEN
    RAISE EXCEPTION 'Transição de chegada não permitida.' USING ERRCODE='23514';
   END IF;
   NEW.decided_at := clock_timestamp();

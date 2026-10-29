@@ -12,6 +12,7 @@ import jakarta.servlet.Filter;
 import jakarta.servlet.http.Cookie;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.identity.infrastructure.SecurityConfiguration;
+import br.com.condpulse.parcels.api.ConciergeUnitsController;
 import br.com.condpulse.parcels.api.ParcelController;
 import br.com.condpulse.parcels.application.ParcelModels;
 import br.com.condpulse.parcels.application.ParcelService;
@@ -182,6 +183,7 @@ class ParcelSecurityIntegrationTest {
  @Test void routesStayAbsentWhileTheFlagIsOff() throws Exception {
   start(false);
   assertTrue(context.getBeansOfType(ParcelController.class).isEmpty());
+  assertTrue(context.getBeansOfType(ConciergeUnitsController.class).isEmpty());
   String route="/v1/tenants/"+TENANT+"/parcels";
   var response=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,session("aal2"))))
    .andReturn().getResponse();
@@ -190,7 +192,7 @@ class ParcelSecurityIntegrationTest {
 
  @Configuration(proxyBeanMethods=false)
  @EnableWebMvc @EnableWebSecurity
- @Import({SecurityConfiguration.class,ParcelController.class,ProblemHandler.class})
+ @Import({SecurityConfiguration.class,ParcelController.class,ConciergeUnitsController.class,ProblemHandler.class})
  static class TestConfiguration {
   @Bean WebSessionService testSessions() { return mock(WebSessionService.class); }
   @Bean ParcelService testParcels() { return mock(ParcelService.class); }

@@ -10,7 +10,10 @@ import java.util.UUID;
  */
 public final class VisitModels {
  private VisitModels() {}
- /** Convite da unidade. state efetivo: ACTIVE, REVOKED ou EXPIRED (vigência encerrada, calculada na leitura). */
+ /**
+  * Convite da unidade. state efetivo, pelo relógio do banco na leitura: SCHEDULED (ainda não começou), ACTIVE (vale
+  * agora), REVOKED ou EXPIRED (vigência encerrada). Fora do período o convite não autoriza a entrada.
+  */
  public record Permit(UUID permitId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,String purpose,
    Instant validFrom,Instant validUntil,String state,boolean createdByMe,Instant revokedAt,String revokeReason,long version,Instant createdAt) {}
  public record PermitPage(List<Permit> permits,boolean truncated) {

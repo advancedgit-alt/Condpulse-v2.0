@@ -4766,7 +4766,7 @@
             "webSession": []
           }
         ],
-        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "x-feature-flag": "CP_PARCELS_ENABLED|CP_VISITS_ENABLED",
         "parameters": [
           {
             "name": "tenantId",
@@ -4788,7 +4788,7 @@
             }
           }
         ],
-        "description": "Unidades ativas para o recebimento pela portaria; busca por trecho do rótulo ou do bloco.",
+        "description": "Unidades ativas para o recebimento pela portaria; busca por trecho do rótulo ou do bloco. Existe com CP_PARCELS_ENABLED ou CP_VISITS_ENABLED (recebimento de encomenda e registro de chegada).",
         "responses": {
           "200": {
             "description": "Resultado autorizado",
@@ -4831,6 +4831,910 @@
           },
           "503": {
             "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/permits": {
+      "get": {
+        "operationId": "listUnitPermits",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Convites da unidade: adulto vê todos; dependente só os que criou (com permissions.visits.create).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermitPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "VISIT_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createVisitPermit",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Convite da unidade com vigência obrigatória (até 7 dias), chave de idempotência e auditoria.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitPermitCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermit"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VISITOR_NAME_INVALID, VISITOR_DOCUMENT_INVALID, VISIT_PURPOSE_INVALID, VISIT_PERIOD_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "VISIT_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (sem vínculo ou dependente sem permissão)"
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/permits/{permitId}/revoke": {
+      "post": {
+        "operationId": "revokeVisitPermit",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "permitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Revogação pela versão lida, com motivo; convite expirado não é revogado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitPermitRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermit"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VISIT_REVOKE_REASON_REQUIRED ou VISIT_VERSION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "VISIT_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "VISIT_PERMIT_NOT_FOUND"
+          },
+          "409": {
+            "description": "VISIT_PERMIT_REVOKED, VISIT_PERMIT_EXPIRED ou VISIT_PERMIT_CHANGED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/arrivals": {
+      "get": {
+        "operationId": "listUnitArrivals",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Chegadas da unidade nos últimos 7 dias (dependente só com permissions.visits.decide).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrivalPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "VISIT_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/arrivals/{arrivalId}/decision": {
+      "post": {
+        "operationId": "decideArrival",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Resposta da unidade pelo aplicativo: vale a primeira, dentro do prazo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrivalDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Arrival"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ARRIVAL_DECISION_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "VISIT_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "ARRIVAL_NOT_FOUND"
+          },
+          "409": {
+            "description": "ARRIVAL_ALREADY_DECIDED, ARRIVAL_EXPIRED ou ARRIVAL_CANCELLED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/permits": {
+      "get": {
+        "operationId": "listExpectedVisits",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "description": "Visitas previstas para a portaria (AAL2): convites ativos que valem agora ou começam nas próximas 24 horas, busca por nome sem curingas.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermitPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VISIT_FILTER_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_VISITS_ENABLED=false"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/arrivals": {
+      "get": {
+        "operationId": "listArrivals",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "WAITING",
+                "APPROVED",
+                "DENIED",
+                "EXPIRED",
+                "CANCELLED"
+              ]
+            }
+          }
+        ],
+        "description": "Fila de chegadas da portaria nas últimas 24 horas.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrivalPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ARRIVAL_FILTER_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_VISITS_ENABLED=false"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "registerArrival",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Pessoa aguardando na portaria: prazo de 5 minutos do banco para a unidade responder; sem resposta, nada é liberado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrivalRegister"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Arrival"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ARRIVAL_UNIT_REQUIRED, VISITOR_NAME_INVALID, VISITOR_DOCUMENT_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ARRIVAL_UNIT_UNAVAILABLE"
+          },
+          "409": {
+            "description": "ARRIVAL_PERMIT_INVALID, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/arrivals/{arrivalId}/assisted-decision": {
+      "post": {
+        "operationId": "assistedArrivalDecision",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Confirmação assistida pela portaria (interfone ou presencial), com a origem e a nota anotadas; vale também depois do prazo de resposta pelo aplicativo, enquanto a chegada não foi decidida nem encerrada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrivalAssistedDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Arrival"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ARRIVAL_DECISION_INVALID, ARRIVAL_SOURCE_INVALID ou ARRIVAL_NOTE_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ARRIVAL_NOT_FOUND"
+          },
+          "409": {
+            "description": "ARRIVAL_ALREADY_DECIDED, ARRIVAL_EXPIRED ou ARRIVAL_CANCELLED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/arrivals/{arrivalId}/cancel": {
+      "post": {
+        "operationId": "cancelArrival",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Encerramento pela portaria da chegada ainda aguardando, inclusive vencida.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrivalCancel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Arrival"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ARRIVAL_CANCEL_REASON_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "ARRIVAL_NOT_FOUND"
+          },
+          "409": {
+            "description": "ARRIVAL_ALREADY_DECIDED ou ARRIVAL_CANCELLED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
           }
         }
       }
@@ -7591,6 +8495,417 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "VisitPermit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "permitId",
+          "unitId",
+          "unitLabel",
+          "blockName",
+          "visitorName",
+          "documentLast4",
+          "purpose",
+          "validFrom",
+          "validUntil",
+          "state",
+          "createdByMe",
+          "revokedAt",
+          "revokeReason",
+          "version",
+          "createdAt"
+        ],
+        "description": "Convite (visita prevista) da unidade: autorização temporal, não prova de identidade nem de entrada.",
+        "properties": {
+          "permitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Z]{2,4}$",
+            "description": "Somente o final do documento, quando informado."
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "ACTIVE",
+              "REVOKED",
+              "EXPIRED"
+            ],
+            "description": "Pelo relógio do banco na leitura: SCHEDULED antes do início, ACTIVE dentro do período, REVOKED ou EXPIRED. Fora do período o convite não autoriza a entrada."
+          },
+          "createdByMe": {
+            "type": "boolean"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokeReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "VisitPermitPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "permits",
+          "truncated"
+        ],
+        "properties": {
+          "permits": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/VisitPermit"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "VisitPermitCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "visitorName",
+          "validFrom",
+          "validUntil"
+        ],
+        "properties": {
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Za-z]{2,4}$"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "A partir de agora (tolerância de 10 minutos) e até 90 dias à frente."
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Depois do início, no futuro e em até 7 dias."
+          }
+        }
+      },
+      "VisitPermitRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Arrival": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arrivalId",
+          "unitId",
+          "unitLabel",
+          "blockName",
+          "visitorName",
+          "documentLast4",
+          "permitId",
+          "state",
+          "expiresAt",
+          "decidedAt",
+          "decisionSource",
+          "decisionNote",
+          "decidedByMe",
+          "version",
+          "createdAt"
+        ],
+        "description": "Chegada sem convite: espera a primeira decisão válida até o prazo; sem resposta não há autorização automática.",
+        "properties": {
+          "arrivalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Z]{2,4}$"
+          },
+          "permitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "WAITING",
+              "APPROVED",
+              "DENIED",
+              "EXPIRED",
+              "CANCELLED"
+            ],
+            "description": "EXPIRED: prazo vencido sem decisão, calculado na leitura."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "decisionSource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "APP",
+              "INTERCOM",
+              "IN_PERSON",
+              "CONCIERGE",
+              null
+            ],
+            "description": "APP: unidade pelo aplicativo; INTERCOM/IN_PERSON: confirmação assistida pela portaria; CONCIERGE: encerrada pela portaria."
+          },
+          "decisionNote": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "decidedByMe": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ArrivalPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arrivals",
+          "truncated"
+        ],
+        "properties": {
+          "arrivals": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Arrival"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArrivalRegister": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "visitorName"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Za-z]{2,4}$"
+          },
+          "permitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ArrivalDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "DENY"
+            ]
+          }
+        }
+      },
+      "ArrivalAssistedDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "source",
+          "note"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "DENY"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "INTERCOM",
+              "IN_PERSON"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Quem confirmou e como."
+          }
+        }
+      },
+      "ArrivalCancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
           }
         }
       }

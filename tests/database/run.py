@@ -840,8 +840,11 @@ def visit_checks():
     query(f"SET session_replication_role=replica; UPDATE cp.arrival_requests SET expires_at=now()-interval '1 minute',"
           f"created_at=now()-interval '10 minutes' WHERE id='{A3}'")
     expect(error(decide(A3, "APPROVED", where=""), "23514", tenant=TA, role="cp_api"), "resposta depois do prazo nao decide")
-    query(concierge + decide(A3, "CANCELLED", actor=CONC, source="CONCIERGE"), tenant=TA, actor=CONC, role="cp_api")
-    expect(value(f"select state from cp.arrival_requests where id='{A3}'") == "CANCELLED", "portaria encerra chegada vencida")
+    expect(value(concierge + f"WITH u AS ({decide(A3, 'APPROVED', actor=CONC, source='IN_PERSON', note=chr(39)+'Morador confirmou na portaria'+chr(39))} "
+                 "RETURNING state) SELECT state FROM u", tenant=TA, actor=CONC, role="cp_api") == "APPROVED",
+           "confirmacao assistida vale depois do prazo, com a origem anotada")
+    expect(error(concierge + decide(A3, "CANCELLED", actor=CONC, source="CONCIERGE", where=""), "23514", tenant=TA, actor=CONC, role="cp_api"),
+           "chegada decidida nao e encerrada")
     # Dependente com permissao de decidir.
     query(f"UPDATE cp.memberships SET permissions='{{\"visits\":{{\"create\":true,\"decide\":true}}}}' WHERE account_id='{DEP}'")
     query(concierge + visitor("70000000-0000-4000-8000-000000000022", actor=CONC) + "; "
