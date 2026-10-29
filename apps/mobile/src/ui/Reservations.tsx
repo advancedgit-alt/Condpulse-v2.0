@@ -49,9 +49,12 @@ function Notice({ tone, children }: { tone: 'error' | 'info' | 'success' | 'warn
   return <Text accessibilityRole="alert" style={[styles.notice, styles[tone]]}>{children}</Text>;
 }
 
-export function Reservations({ api, accountId, membership, newKey, now = () => new Date(), pending = new Map() }: {
+export function Reservations({ api, accountId, membership, newKey, now = () => new Date(), pending: sharedPending }: {
   api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date; pending?: PendingStore;
 }) {
+  // Sem mapa compartilhado (testes, uso isolado), um próprio que dura enquanto a tela existir (não um novo a cada desenho).
+  const [ownPending] = useState<PendingStore>(() => new Map());
+  const pending = sharedPending ?? ownPending;
   const { tenantId, unitId, timeZone } = membership;
   const scope = ['private', accountId, 'tenant', tenantId, 'unit', unitId] as const;
   const amenities = useQuery({ queryKey: [...scope, 'amenities'], queryFn: ({ signal }) => api.amenities(tenantId, signal) });
@@ -70,7 +73,12 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   const pendingScope = `${accountId}|${tenantId}|${unitId}`;
   const [areaId, setAreaId] = useState<string | null>(() => pending.get(pendingScope)?.areaId ?? null);
   const [outcome, setOutcome] = useState<{ tone: 'success' | 'info'; text: string } | null>(null);
-  const area = amenities.data?.find((item) => item.amenityId === areaId) ?? null;
+  const listed = amenities.data?.find((item) => item.amenityId === areaId) ?? null;
+  const area = listed && listed.policy ? listed : null;
+  const [, refresh] = useState(0);
+  // Pedido incerto cuja área sumiu da lista (desativada) ou perdeu as regras: a confirmação continua, sem a área.
+  const orphan = !area ? pending.get(pendingScope) ?? null : null;
+  const blocked = pending.has(pendingScope);
   const names = new Map((amenities.data ?? []).map((item) => [item.amenityId, item.name]));
 
   return <View style={styles.section}>
@@ -86,6 +94,11 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
         const offset = Math.floor((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / (86_400_000 * PERIOD_DAYS));
         setPeriod(Math.max(0, offset));
       }} />
+      : orphan && !amenities.isPending ? <PendingConfirmation api={api} scope={scope} tenantId={tenantId} timeZone={timeZone} saved={orphan}
+        settle={(result) => {
+          pending.delete(pendingScope); setAreaId(null); refresh((value) => value + 1);
+          if (result) setOutcome(result);
+        }} />
       : amenities.isPending ? <ActivityIndicator accessibilityLabel="Carregando as áreas" />
         : amenities.isError ? <View><Notice tone="error">{message(amenities.error)}</Notice>
           <Button label="Tentar novamente" secondary onPress={() => void amenities.refetch()} /></View>
@@ -95,7 +108,8 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
               return <View key={item.amenityId} style={styles.card}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
                 <Text style={styles.body}>{`Até ${item.capacity} pessoas · taxa informativa ${money(item.feeCents)}${item.approvalRequired ? ' · sujeita a aprovação' : ''}`}</Text>
-                {ready ? <Button label="Ver horários" accessibilityLabel={`Ver horários de ${item.name}`} onPress={() => { setOutcome(null); setAreaId(item.amenityId); }} />
+                {ready ? <Button label="Ver horários" accessibilityLabel={`Ver horários de ${item.name}`} disabled={blocked}
+                  onPress={() => { setOutcome(null); setAreaId(item.amenityId); }} />
                   : <Text style={styles.body}>A gestão ainda precisa configurar as regras desta área.</Text>}
               </View>;
             })}</View>}
@@ -123,6 +137,38 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
       </View>;
     })() : null}
     {cursor ? <Button label="Voltar ao início do período" secondary onPress={() => setCursor(null)} /> : null}
+  </View>;
+}
+
+/** Confirmação de pedido incerto sem a área na lista: mesma chave e mesmo corpo; nenhum outro pedido antes de resolver. */
+function PendingConfirmation({ api, scope, tenantId, timeZone, saved, settle }: {
+  api: CondPulseApi; scope: readonly unknown[]; tenantId: string; timeZone: string; saved: PendingCreate;
+  settle(result: { tone: 'success' | 'info'; text: string } | null): void;
+}) {
+  const queries = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  async function confirm() {
+    if (busy) return;
+    setBusy(true); setFailure(null);
+    try {
+      const result = await api.createReservation(tenantId, saved.body, saved.key);
+      void queries.invalidateQueries({ queryKey: [...scope] });
+      const when = `${formatWhen(result.reservation.startsAt, timeZone)} às ${formatTime(result.reservation.endsAt, timeZone)}`;
+      settle({ tone: result.reservation.status === 'CONFIRMED' ? 'success' : 'info',
+        text: `Pedido confirmado pelo servidor (${statusLabels[result.reservation.status]}): ${when}.` });
+    } catch (error) {
+      if (uncertain(error)) setFailure(error);
+      else {
+        void queries.invalidateQueries({ queryKey: [...scope] });
+        settle({ tone: 'info', text: `${message(error)} O pedido anterior não foi gravado; confira em Minhas reservas.` });
+      }
+    } finally { setBusy(false); }
+  }
+  return <View style={styles.card} accessibilityLabel="Pedido com resultado incerto">
+    <Notice tone="warning">{`Há um pedido de reserva para ${formatWhen(saved.body.startsAt, timeZone)} com resultado ainda não confirmado, e a área não aparece mais na lista. Confirme o mesmo pedido antes de fazer outro.`}</Notice>
+    {failure ? <Notice tone="warning">{message(failure)}</Notice> : null}
+    <Button label={busy ? 'Enviando…' : 'Tentar confirmar o mesmo pedido'} disabled={busy} onPress={() => void confirm()} />
   </View>;
 }
 

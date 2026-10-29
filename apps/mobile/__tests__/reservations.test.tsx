@@ -242,6 +242,41 @@ describe('reservas no celular', () => {
     expect(pending.size).toBe(0);
   });
 
+  it('área desativada depois de resultado incerto mantém a confirmação do mesmo pedido e bloqueia outro', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    expect(await screen.findByText(/o mesmo pedido não é gravado duas vezes/)).toBeTruthy();
+    // A gestão desativa o salão: a lista de áreas deixa de trazê-lo.
+    fake.mocks.amenities.mockImplementation(async () => [quadra]);
+    await act(async () => { await fake.queries.invalidateQueries(); });
+    expect(await screen.findByText(/a área não aparece mais na lista/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Ver horários/ })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/Pedido confirmado pelo servidor \(Aguardando aprovação\)/)).toBeTruthy();
+    expect(fake.state.creates).toHaveLength(2);
+    expect(fake.state.creates[1]).toEqual(fake.state.creates[0]);
+    expect(screen.queryByText(/a área não aparece mais na lista/)).toBeNull();
+  });
+
+  it('recusa definitiva da confirmação sem área libera novos pedidos e avisa que nada foi gravado', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    await screen.findByText(/o mesmo pedido não é gravado duas vezes/);
+    fake.mocks.amenities.mockImplementation(async () => [quadra, { ...salao, amenityId: '30000000-0000-4000-8000-000000000003', name: 'Churrasqueira fictícia' }]);
+    await act(async () => { await fake.queries.invalidateQueries(); });
+    await screen.findByText(/a área não aparece mais na lista/);
+    fake.state.createError = new ApiError(404, 'RESERVATION_RESOURCE_UNAVAILABLE', 'A reserva ou a área não está disponível para esta operação.');
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/O pedido anterior não foi gravado/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ver horários de Churrasqueira fictícia' })).toBeEnabled();
+  });
+
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {
     const fake = await mount();
     fake.state.reservations = [{ reservationId: '41000000-0000-4000-8000-000000000009', unitId: UNIT, amenityId: SALAO, status: 'CONFIRMED',
