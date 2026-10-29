@@ -104,8 +104,10 @@ operationId/principal, apagar recibo ou sobrescrever dados para obter elegibilid
 ## Execução e saída
 
 Build e extração do JAR acontecem antes do passo com credenciais. O SHA256 do JAR
-é registrado. A CA pública é buscada por HTTPS, conferida pelo SHA256 fixado e por
-OpenSSL, e instalada no caminho fixo usado pelo JDBC com `sslmode=verify-full`.
+é registrado. A CA pública é buscada por HTTPS e conferida pelo SHA256 fixado da
+representação DER do certificado, não pelo hash do arquivo PEM. OpenSSL também
+confere certificado único, validade, CA e autossinatura. A CA é instalada no caminho
+fixo usado pelo JDBC com `sslmode=verify-full`.
 Rotação dessa CA exige revisão do hash; não remover a validação para contornar erro.
 
 O manifesto é escrito byte a byte em arquivo exclusivo0600, dentro de diretório

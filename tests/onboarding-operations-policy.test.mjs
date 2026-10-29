@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, mkdtempSync, writeFileSync, rmSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {createHash, X509Certificate} from 'node:crypto';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 const workflow=readFileSync(new URL('../.github/workflows/onboarding-operations.yml',import.meta.url),'utf8');
 const foundation=readFileSync(new URL('../.github/workflows/foundation.yml',import.meta.url),'utf8');
@@ -47,3 +51,65 @@ test('CI exercises onboarding boundary tests and real Java protocol without mana
   assert.match(workflow,/807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa/);
   assert.match(workflow,/ssl|PostgreSQL CA/);
 });
+
+
+test('the actual onboarding CA gate pins the DER certificate and rejects other trust anchors', async t=>{
+  const match=workflow.match(/^ {10}# BEGIN AUDITABLE_ONBOARDING_CA_VALIDATION\n([\s\S]*?)^ {10}# END AUDITABLE_ONBOARDING_CA_VALIDATION$/m);
+  assert.ok(match,'The workflow must expose its actual CA validation block to this offline regression.');
+  const validation=match[1].split('\n').map(line=>line.replace(/^ {10}/,'')).join('\n');
+  const pin='807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa';
+  assert.equal(validation.split(pin).length-1,1,'Exactly one reviewed certificate fingerprint must be pinned.');
+  const officialPem=readFileSync(new URL('./fixtures/supabase-prod-ca-2021.crt',import.meta.url));
+  const fingerprint=pem=>createHash('sha256').update(new X509Certificate(pem).raw).digest('hex');
+  assert.equal(fingerprint(officialPem),pin);
+  assert.notEqual(createHash('sha256').update(officialPem).digest('hex'),pin,
+    'The fixture must distinguish the DER fingerprint from the hash of PEM text.');
+  const temporary=mkdtempSync(join(tmpdir(),'condpulse-onboarding-ca-'));
+  const environment={PATH:process.env.PATH};
+
+  function validate(certificate,expectedSuccess,script=validation) {
+    const result=spawnSync('bash',['-euo','pipefail','-c',script],{
+      env:{...environment,ca:certificate},encoding:'utf8',timeout:10000,maxBuffer:65536
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal,null,'Certificate verification must finish normally.');
+    assert.equal(typeof result.status,'number');
+    if(expectedSuccess) assert.equal(result.status,0,result.stderr||result.stdout);
+    else assert.notEqual(result.status,0,'An untrusted or malformed certificate must be rejected.');
+  }
+
+  try {
+    const official=join(temporary,'official.crt');
+    writeFileSync(official,officialPem,{mode:0o600});
+    await t.test('accepts the official public PEM certificate',()=>validate(official,true));
+
+    const reformatted=join(temporary,'extra-newline.crt');
+    writeFileSync(reformatted,Buffer.concat([officialPem,Buffer.from('\n')]),{mode:0o600});
+    await t.test('accepts the same certificate with a harmless trailing newline',()=>validate(reformatted,true));
+
+    const malformed=join(temporary,'malformed.crt');
+    writeFileSync(malformed,'not an X.509 certificate\n',{mode:0o600});
+    await t.test('rejects malformed input',()=>validate(malformed,false));
+
+    const other=join(temporary,'other.crt');
+    const generated=spawnSync('openssl',['req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:P-256',
+      '-nodes','-days','2','-subj','/CN=CondPulse offline regression unrelated CA',
+      '-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign,cRLSign',
+      '-keyout',join(temporary,'ephemeral-test-key.pem'),'-out',other],{
+      env:environment,encoding:'utf8',timeout:10000,maxBuffer:65536
+    });
+    assert.ifError(generated.error);
+    assert.equal(generated.signal,null);
+    assert.equal(generated.status,0,'Offline synthetic CA generation must succeed.');
+    const otherFingerprint=fingerprint(readFileSync(other));
+    assert.notEqual(otherFingerprint,pin);
+    await t.test('rejects a different valid self-signed CA with the production pin',()=>validate(other,false));
+    // Test-only positive control: the same synthetic CA satisfies the other real checks.
+    // Its fingerprint is never written back to the workflow or used with managed credentials.
+    await t.test('proves the different CA was rejected by the pin',()=>
+      validate(other,true,validation.replace(pin,otherFingerprint)));
+  } finally {
+    rmSync(temporary,{recursive:true,force:true});
+  }
+});
+
