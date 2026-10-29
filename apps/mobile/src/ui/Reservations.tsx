@@ -14,6 +14,8 @@ import { colors, touch } from './theme';
  * A chave de envio é a mesma ao repetir depois de resultado incerto: nada é reservado duas vezes.
  */
 export type KeyFactory = () => string;
+/** Antecedência máxima aceita pelo servidor em qualquer regra (ReservationPolicy). */
+export const MAX_ADVANCE_DAYS = 366;
 /**
  * Pedido de reserva com resultado ainda não confirmado, guardado fora da tela (só em memória, por conta, condomínio e
  * unidade): trocar de vínculo e voltar restaura a confirmação do mesmo pedido, com a mesma chave e o mesmo corpo.
@@ -64,7 +66,9 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   // Lista cortada pelo servidor (mais de 100 no período): continuar a partir do início da última mostrada.
   const [cursor, setCursor] = useState<string | null>(null);
   const setPeriod = (next: number) => { setCursor(null); setPeriodState(next); };
-  const lastPeriod = Math.floor(Math.max(0, ...(amenities.data ?? []).map((item) => item.policy?.maximumAdvanceDays ?? 0)) / PERIOD_DAYS);
+  // Navegação pelo maior limite que o servidor aceita em qualquer regra (366 dias), não pela regra atual: reservas feitas
+  // antes de a gestão reduzir a antecedência continuam válidas e precisam ser alcançáveis para consulta e cancelamento.
+  const lastPeriod = Math.floor(MAX_ADVANCE_DAYS / PERIOD_DAYS);
   const periodStart = addDays(today, period * PERIOD_DAYS);
   const periodEnd = addDays(periodStart, PERIOD_DAYS);
   const range = useMemo(() => ({ from: cursor ?? toInstant(`${periodStart}T00:00`, timeZone), until: toInstant(`${periodEnd}T00:00`, timeZone) }),
@@ -117,7 +121,7 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
     <Text style={styles.small}>{`De ${formatDay(periodStart, timeZone)} a ${formatDay(addDays(periodEnd, -1), timeZone)}`}</Text>
     <View style={styles.row}>
       <Chip label="Período anterior" selected={false} disabled={period === 0} onPress={() => setPeriod(period - 1)} />
-      <Chip label="Próximo período" selected={false} disabled={period >= Math.max(lastPeriod, period)} onPress={() => setPeriod(period + 1)} />
+      <Chip label="Próximo período" selected={false} disabled={period >= lastPeriod} onPress={() => setPeriod(period + 1)} />
     </View>
     {mine.isPending ? <ActivityIndicator accessibilityLabel="Carregando suas reservas" />
       : mine.isError ? <View><Notice tone="error">{message(mine.error)}</Notice>

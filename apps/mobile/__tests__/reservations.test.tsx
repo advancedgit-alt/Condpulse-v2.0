@@ -367,9 +367,28 @@ describe('reservas no celular', () => {
     await fireEvent.press(within(list).getByRole('button', { name: /^Retirar pedido/ }));
     await fireEvent.press(within(list).getByRole('button', { name: 'Confirmar retirada' }));
     await waitFor(() => expect(within(screen.getByLabelText('Reservas da unidade')).getByText('Cancelada')).toBeTruthy());
-    // 90 dias de antecedência: três períodos à frente, não mais.
-    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    // A navegação vai até o limite do servidor (366 dias = 12 períodos à frente), mesmo que a regra atual seja menor.
+    for (let index = 1; index < 12; index += 1) await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
     expect(screen.getByRole('button', { name: 'Próximo período' })).toBeDisabled();
+  });
+
+  it('reserva antiga além da antecedência atual continua alcançável depois de a gestão reduzir a regra', async () => {
+    const fake = fakeApi();
+    fake.mocks.amenities.mockImplementation(async () => [{ ...salao, policy: { ...policy, maximumAdvanceDays: 10 } }, quadra]);
+    fake.state.reservations = [{ reservationId: '41000000-0000-4000-8000-000000000031', unitId: UNIT, amenityId: SALAO, status: 'CONFIRMED',
+      startsAt: '2030-03-08T13:00:00.000Z', endsAt: '2030-03-08T14:00:00.000Z', occupiedFrom: '2030-03-08T13:00:00.000Z',
+      occupiedUntil: '2030-03-08T14:00:00.000Z', acceptedPolicyVersion: 2, feeCents: 0, version: 0, decisionReason: null }];
+    const queries = newQueryClient(Infinity); clients.push(queries);
+    await render(<QueryClientProvider client={queries}>
+      <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => 'test:key-period-000002'}
+        membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+          timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
+    </QueryClientProvider>);
+    expect(await screen.findByText('Nenhuma reserva da unidade neste período.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    const list = await screen.findByLabelText('Reservas da unidade');
+    expect(within(list).getByText('Confirmada')).toBeTruthy();
+    expect(within(list).getByRole('button', { name: /^Cancelar reserva/ })).toBeTruthy();
   });
 });
