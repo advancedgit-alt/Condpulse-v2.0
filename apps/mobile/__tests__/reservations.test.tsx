@@ -27,7 +27,8 @@ function fakeApi() {
       state.availabilityCalls += 1;
       return { amenityId, from: range.from, until: range.until, observedAt: now().toISOString(), blockedIntervals: state.blocked };
     }),
-    reservations: jest.fn(async () => ({ reservations: state.reservations, truncated: false })),
+    reservations: jest.fn(async (_tenant: string, _unit: string, range: { from: string; until: string }) => ({
+      reservations: state.reservations.filter((item) => item.startsAt >= range.from && item.startsAt < range.until), truncated: false })),
     createReservation: jest.fn(async (_tenant: string, body: { unitId: string; amenityId: string; startsAt: string; endsAt: string; acceptedPolicyVersion: number }, key: string) => {
       state.creates.push({ body, key });
       if (state.createError) { const error = state.createError; state.createError = null; throw error; }
@@ -193,5 +194,31 @@ describe('reservas no celular', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Próximos dias' }));
     expect(screen.getByRole('button', { name: 'Próximos dias' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /6 de fev/ })).toBeTruthy();
+  });
+
+  it('reservas além dos próximos 30 dias aparecem navegando por período e podem ser canceladas', async () => {
+    const fake = fakeApi();
+    fake.mocks.amenities.mockImplementation(async () => [{ ...salao, policy: { ...policy, maximumAdvanceDays: 90 } }, quadra]);
+    fake.state.reservations = [{ reservationId: '41000000-0000-4000-8000-000000000020', unitId: UNIT, amenityId: SALAO, status: 'PENDING_APPROVAL',
+      startsAt: '2030-02-20T13:00:00.000Z', endsAt: '2030-02-20T14:00:00.000Z', occupiedFrom: '2030-02-20T13:00:00.000Z',
+      occupiedUntil: '2030-02-20T14:00:00.000Z', acceptedPolicyVersion: 3, feeCents: 15000, version: 0, decisionReason: null }];
+    const queries = newQueryClient(Infinity); clients.push(queries);
+    await render(<QueryClientProvider client={queries}>
+      <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => 'test:key-period-000001'}
+        membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+          timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
+    </QueryClientProvider>);
+    expect(await screen.findByText('Nenhuma reserva da unidade neste período.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Período anterior' })).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    const list = await screen.findByLabelText('Reservas da unidade');
+    expect(within(list).getByText('Aguardando aprovação')).toBeTruthy();
+    await fireEvent.press(within(list).getByRole('button', { name: /^Retirar pedido/ }));
+    await fireEvent.press(within(list).getByRole('button', { name: 'Confirmar retirada' }));
+    await waitFor(() => expect(within(screen.getByLabelText('Reservas da unidade')).getByText('Cancelada')).toBeTruthy());
+    // 90 dias de antecedência: três períodos à frente, não mais.
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    expect(screen.getByRole('button', { name: 'Próximo período' })).toBeDisabled();
   });
 });

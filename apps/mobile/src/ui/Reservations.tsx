@@ -15,6 +15,7 @@ import { colors, touch } from './theme';
  */
 export type KeyFactory = () => string;
 const DATES_PER_PAGE = 14;
+const PERIOD_DAYS = 30;
 const statusLabels: Record<ReservationStatus, string> = {
   CONFIRMED: 'Confirmada', PENDING_APPROVAL: 'Aguardando aprovação', HELD: 'Em retenção', REJECTED: 'Não aprovada',
   CANCELLED: 'Cancelada', EXPIRED: 'Expirada',
@@ -48,7 +49,13 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   const scope = ['private', accountId, 'tenant', tenantId, 'unit', unitId] as const;
   const amenities = useQuery({ queryKey: [...scope, 'amenities'], queryFn: ({ signal }) => api.amenities(tenantId, signal) });
   const today = dateInZone(timeZone, now());
-  const range = useMemo(() => ({ from: toInstant(`${today}T00:00`, timeZone), until: toInstant(`${addDays(today, 30)}T00:00`, timeZone) }), [today, timeZone]);
+  // Períodos de 30 dias a partir de hoje (a API aceita até 31 por consulta), até cobrir a maior antecedência permitida.
+  const [period, setPeriod] = useState(0);
+  const lastPeriod = Math.floor(Math.max(0, ...(amenities.data ?? []).map((item) => item.policy?.maximumAdvanceDays ?? 0)) / PERIOD_DAYS);
+  const periodStart = addDays(today, period * PERIOD_DAYS);
+  const periodEnd = addDays(periodStart, PERIOD_DAYS);
+  const range = useMemo(() => ({ from: toInstant(`${periodStart}T00:00`, timeZone), until: toInstant(`${periodEnd}T00:00`, timeZone) }),
+    [periodStart, periodEnd, timeZone]);
   const mine = useQuery({ queryKey: [...scope, 'reservations', range.from], queryFn: ({ signal }) => api.reservations(tenantId, unitId, range, signal) });
   const [areaId, setAreaId] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ tone: 'success' | 'info'; text: string } | null>(null);
@@ -59,7 +66,15 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
     <Text accessibilityRole="header" style={styles.heading}>Reservas</Text>
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {area ? <Booking api={api} scope={scope} membership={membership} area={area} newKey={newKey} now={now}
-      close={(result) => { setAreaId(null); if (result) setOutcome(result); }} />
+      close={(result) => {
+        setAreaId(null);
+        if (!result) return;
+        setOutcome(result);
+        // Leva a lista ao período da reserva recém-feita, mesmo além dos próximos 30 dias.
+        const day = dateInZone(timeZone, new Date(result.startsAt));
+        const offset = Math.floor((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / (86_400_000 * PERIOD_DAYS));
+        setPeriod(Math.max(0, offset));
+      }} />
       : amenities.isPending ? <ActivityIndicator accessibilityLabel="Carregando as áreas" />
         : amenities.isError ? <View><Notice tone="error">{message(amenities.error)}</Notice>
           <Button label="Tentar novamente" secondary onPress={() => void amenities.refetch()} /></View>
@@ -73,7 +88,12 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
                   : <Text style={styles.body}>A gestão ainda precisa configurar as regras desta área.</Text>}
               </View>;
             })}</View>}
-    <Text accessibilityRole="header" style={styles.subheading}>Minhas reservas (próximos 30 dias)</Text>
+    <Text accessibilityRole="header" style={styles.subheading}>Minhas reservas</Text>
+    <Text style={styles.small}>{`De ${formatDay(periodStart, timeZone)} a ${formatDay(addDays(periodEnd, -1), timeZone)}`}</Text>
+    <View style={styles.row}>
+      <Chip label="Período anterior" selected={false} disabled={period === 0} onPress={() => setPeriod(period - 1)} />
+      <Chip label="Próximo período" selected={false} disabled={period >= Math.max(lastPeriod, period)} onPress={() => setPeriod(period + 1)} />
+    </View>
     {mine.isPending ? <ActivityIndicator accessibilityLabel="Carregando suas reservas" />
       : mine.isError ? <View><Notice tone="error">{message(mine.error)}</Notice>
         <Button label="Atualizar reservas" secondary onPress={() => void mine.refetch()} /></View>
@@ -87,7 +107,7 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
 
 function Booking({ api, scope, membership, area, newKey, now, close }: {
   api: CondPulseApi; scope: readonly unknown[]; membership: Membership & { unitId: string }; area: Amenity; newKey: KeyFactory;
-  now: () => Date; close(result: { tone: 'success' | 'info'; text: string } | null): void;
+  now: () => Date; close(result: { tone: 'success' | 'info'; text: string; startsAt: string } | null): void;
 }) {
   const queries = useQueryClient();
   const { tenantId, unitId, timeZone } = membership;
@@ -124,11 +144,12 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
       setPendingKey(null);
       void queries.invalidateQueries({ queryKey: [...scope] });
       const when = `${formatWhen(result.reservation.startsAt, timeZone)} às ${formatTime(result.reservation.endsAt, timeZone)}`;
+      const startsAt = result.reservation.startsAt;
       close(result.reservation.status === 'CONFIRMED'
-        ? { tone: 'success', text: `Reserva confirmada: ${area.name}, ${when}.` }
+        ? { tone: 'success', text: `Reserva confirmada: ${area.name}, ${when}.`, startsAt }
         : result.reservation.status === 'PENDING_APPROVAL'
-          ? { tone: 'info', text: `Pedido enviado: ${area.name}, ${when}. Aguardando aprovação da gestão — ainda não é uma reserva confirmada.` }
-          : { tone: 'info', text: `Pedido registrado com a situação "${statusLabels[result.reservation.status]}". Confira em Minhas reservas.` });
+          ? { tone: 'info', text: `Pedido enviado: ${area.name}, ${when}. Aguardando aprovação da gestão — ainda não é uma reserva confirmada.`, startsAt }
+          : { tone: 'info', text: `Pedido registrado com a situação "${statusLabels[result.reservation.status]}". Confira em Minhas reservas.`, startsAt });
     } catch (error) {
       setFailure(error);
       if (error instanceof ApiError && !error.uncertain) setPendingKey(null);
