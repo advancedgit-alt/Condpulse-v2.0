@@ -187,7 +187,7 @@ class VisitJdbcTest {
   visits.revokePermit(db.accountA,db.tenantA,permit.permitId(),new VisitModels.RevokePermit("Visita cancelada",0L));
   assertEquals("VISIT_PERMIT_REVOKED",assertThrows(BusinessProblem.class,()->visits.register(concierge,db.tenantA,AAL2,key(),
    new VisitModels.RegisterArrival(db.unitA,"Visita Vinculada","9Z",permit.permitId()))).code(),"Revogado é recusado com o estado atual");
-  var ended=permit("Visita Encerrada");
+  var ended=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),permit("Visita Encerrada")).permit();
   db.adminUpdateWithoutTriggers("update cp.visit_permits set valid_from=now()-interval '3 hours',valid_until=now()-interval '1 hour' where id=?",
    ended.permitId());
   assertEquals("VISIT_PERMIT_EXPIRED",assertThrows(BusinessProblem.class,()->visits.register(concierge,db.tenantA,AAL2,key(),
