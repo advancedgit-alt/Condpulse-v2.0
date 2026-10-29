@@ -95,14 +95,15 @@ monitoramento e recuperação. Não copiar credenciais ou dados de homologação
 preencher o projeto de produção, nem ligar a aplicação existente ao projeto novo
 como atalho.
 
-O projeto novo está reservado para produção futura. Não há neste registro
-origem de aplicação de produção, runtime Vercel conectado, credenciais de execução,
-migrations, cadastro operacional ou jornada Auth. `ACTIVE_HEALTHY` descreve o
+O projeto novo está reservado para produção futura. Em 29/10/2026 recebeu V001-V017
+pelo Flyway normal, sem baseline (migrate 40884195154; ver [STATUS.md](STATUS.md)).
+Não há origem de aplicação de produção, runtime Vercel conectado, credenciais de
+execução, cadastro operacional ou jornada Auth. `ACTIVE_HEALTHY` descreve o
 projeto Supabase, não um painel CondPulse utilizável.
 
 ## Próximos gates por ambiente
 
-1. Manter o alvo atual de homologação (V006 a V015 aplicadas e flags dos módulos,
+1. Manter o alvo atual de homologação (V006 a V017 aplicadas, onboarding aplicado e flags dos módulos,
    BFF e reservas ligadas em 29/10/2026 com autorização do responsável; ver
    [STATUS.md](STATUS.md)). Concluir no alvo
    restrito o cadastro aprovado, principal operacional/cofre e jornadas do
@@ -110,7 +111,9 @@ projeto Supabase, não um painel CondPulse utilizável.
 2. Revisar o suporte ao novo alvo em executores e inventários. Os guards atuais
    fixam `rpnrqfrfwywglvyykgrg`; não substituir IDs manualmente para contorná-los.
    Novos alvos exigem revisão/CI, CA/TLS e credenciais próprios, antes de execução.
-3. No banco novo, executar **Flyway migrate normal desde V001 até V005** a partir
+3. Feito em 29/10/2026 para V001-V017 (migrate 40884195154); novas migrations seguem
+   o mesmo executor de produção, com OK do responsável. Registro original do gate:
+   no banco novo, executar **Flyway migrate normal desde V001 até V005** a partir
    da release revisada. Não executar baseline002, não copiar o histórico do alvo
    antigo e não repetir a exceção de bootstrap da ADR-0003. Se
    `createSchemas(true)` gerar um marcador nativo `SCHEMA`, preservar esse registro

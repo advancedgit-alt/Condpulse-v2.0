@@ -1,5 +1,25 @@
 # Estado verificável - 29/10/2026
 
+## Situação atual (29/10/2026, fim da tarde)
+
+Esta seção resume o estado vigente; as seções seguintes são o histórico de cada entrega como estava na época e não devem ser lidas como estado atual.
+
+- **Homologação** (`rpnrqfrfwywglvyykgrg`): V001-V017 no histórico Flyway (baseline 002 + SQL 003-017), 33 tabelas da aplicação com ENABLE/FORCE RLS. Onboarding aplicado (inspect 40917252737, apply 40917560570): um condomínio, unidade 101, uma conta com vínculos de gestão e morador até 28/11/2026, área "Salão de festas". Nenhum papel de plataforma. Registro: [evidence/onboarding-hml-20261029.md](evidence/onboarding-hml-20261029.md).
+- **Vercel Production do projeto `condpulse`** aponta para a homologação, com BFF, reservas, gestão, plataforma, cobrança, encomendas, visitas, caixa interna, avisos e pedidos ligados. Recuperação por e-mail (sem SMTP) e worker do outbox (não implantado) desligados. Smoke público verde depois de cada merge; o readiness tinha 503 `OUT_OF_SERVICE` na primeira consulta após início a frio — causa e correção em [READINESS_VERCEL.md](READINESS_VERCEL.md) (PR #52).
+- **Produção** (`tkxcujckpsuawnzkvpjg`): só o schema V001-V017 (migrate 40884195154, sem baseline). Sem login runtime, Auth, Storage, origem ou aplicação ligada. Nenhuma escrita nova sem OK do responsável.
+- **Código mergeado hoje (web e operação)**: #47 (outbox dos pedidos sem 503), #48 (docs de onboarding/produção), #49 (relatório TAP no CI), #50 (pendência de envio isolada por conta, presa durante o envio e sem reenvio após conclusão), #51 (aviso de dado desatualizado, decisão de reserva já aplicada por outro gestor, versão lida no rascunho de aviso, navegação tardia da caixa) e #52 (guarda da role antes de abrir a porta). Smoke público 40946300912 verde no merge do #52 (`f5ba73f`); o status inicial do readiness passa a ser anotado pelo #54.
+- **Testes automatizados** (sintéticos, sem serviços reais): Vitest 129 e Playwright 83 na web local da branch do #51; CI `foundation`/`web`/`release-config` por PR. Isso é "implementado e testado em CI", não homologado.
+- **Nada foi homologado com login real**: o ensaio de gestão em AAL2, reservas, avisos e pedidos depende do TOTP do titular.
+
+### Bloqueios
+
+- BLOQUEADO: cadastro do TOTP da conta de gestão da homologação — titular da conta — tela de segurança da aplicação na URL de homologação. Destrava as jornadas reais (item 5).
+- BLOQUEADO: contas de teste extras (outra unidade e outro condomínio) para as negações reais — responsável — novo manifesto de onboarding aprovado.
+- BLOQUEADO: escolha e credencial do provedor SMTP — responsável — painel do Supabase Auth/cofre. Destrava recuperação por e-mail e envio de convites.
+- BLOQUEADO: credencial `cp_worker` e hospedagem do worker contínuo — responsável — decisão de hospedagem (custo) e cofre.
+- BLOQUEADO: aprovação da conta que recebe o primeiro papel de plataforma — responsável — por escrito, nomeando a conta.
+- BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
+
 ## Pedidos da unidade e conversa vinculada — CP-033 (sem anexos)
 
 - Atrás de `CP_REQUESTS_ENABLED` (padrão `false`). Na homologação, V017 aplicada em 29/10/2026 (migrate 40868152258; repetição 40868416867 sem linha nova) e flag criada às 11:49Z, ativa no deployment do merge do PR #43 (`9fc9ff5`; smoke público 40875590209 aprovado); produção sem migrations. Morador ou responsável com vínculo vigente em unidade ativa abre pedido para a própria unidade (categoria, título e descrição, com chave de idempotência), acompanha o andamento e conversa nele; a gestão (capacidade `requests.manage` com AAL2) vê os pedidos do condomínio com filtro, define responsável da equipe vigente (gestão ou portaria) e prazo comunicado, muda o andamento pela versão lida e registra a resolução, que entra também na conversa. Comentário interno é sempre da equipe e nunca aparece para a unidade; mensagens não mudam nem são apagadas, cada uma presa ao pedido em que foi gravada, com nome e horário gravados pelo banco; fechado é final e não recebe mensagem (mensagem e fechamento em série pela trava do pedido). Pedido de outra unidade é negado mesmo pelo ID. Telas: seção Pedidos no início do morador e na gestão. Detalhes em [PEDIDOS.md](PEDIDOS.md).

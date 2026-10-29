@@ -685,6 +685,18 @@
             "npm run test:e2e"
           ],
           "scope": "Primeiro acesso por convite pela web atrás de CP_BFF_ENABLED/CP_MANAGEMENT_ENABLED: senha do provedor e token juntos, aceite antes da sessão, recusa encerra a sessão no provedor, espera do limite compartilhada com o login, resultado incerto como estado final e sessão anterior substituída ou removida. Provedor simulado; Auth real, SMTP e conferência de email_verified pendentes: não constitui aceite de CP-020."
+        },
+        {
+          "batch": "onboarding-hml-20261029",
+          "commit": "519d895c455523021c67a399a5355055f9113475",
+          "environment": "Homologacao rpnrqfrfwywglvyykgrg via workflow protegido de onboarding",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40917560570",
+          "commands": [
+            "inspect 40917252737",
+            "apply 40917560570"
+          ],
+          "result": "REMOTE_ONBOARDING_APPLIED_LOGIN_REAL_PENDING",
+          "scope": "Onboarding aprovado pelo responsavel: um condominio, unidade 101, uma conta com vinculos de gestao e morador ate 28/11/2026 e area com politica aprovada; recibo conferido. Sem papel de plataforma. Nao comprova login real, MFA nem aceite das jornadas. Registro: docs/evidence/onboarding-hml-20261029.md."
         }
       ]
     },
