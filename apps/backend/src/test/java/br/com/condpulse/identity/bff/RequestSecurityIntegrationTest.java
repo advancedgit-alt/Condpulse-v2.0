@@ -113,16 +113,16 @@ class RequestSecurityIntegrationTest {
   assertEquals(201,created.getStatus()); assertEquals("false",created.getHeader("Idempotency-Replayed"));
   assertTrue(created.getContentAsString().contains("\"authorName\":null"),"Equipe sem nome na visão da unidade");
   String detail="/v1/tenants/"+TENANT+"/requests/"+REQUEST;
-  when(service().unitRequest(ACCOUNT,TENANT,REQUEST)).thenThrow(new BusinessProblem("REQUEST_NOT_FOUND",404,"Pedido não encontrado."));
+  when(service().unitRequest(ACCOUNT,TENANT,REQUEST)).thenThrow(new BusinessProblem("SERVICE_REQUEST_NOT_FOUND",404,"Pedido não encontrado."));
   var missing=mvc.perform(get(detail).servletPath(detail).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
-  assertEquals(404,missing.getStatus()); assertTrue(missing.getContentAsString().contains("REQUEST_NOT_FOUND"));
+  assertEquals(404,missing.getStatus()); assertTrue(missing.getContentAsString().contains("SERVICE_REQUEST_NOT_FOUND"));
   String messages=detail+"/messages";
   when(service().unitMessage(ACCOUNT,TENANT,REQUEST,KEY,new RequestModels.UnitMessage("Obrigado.")))
-   .thenThrow(new BusinessProblem("REQUEST_CLOSED",409,"O pedido foi encerrado; abra um novo pedido se precisar."));
+   .thenThrow(new BusinessProblem("SERVICE_REQUEST_CLOSED",409,"O pedido foi encerrado; abra um novo pedido se precisar."));
   var closed=mvc.perform(post(messages).servletPath(messages).secure(true).header("Origin",ORIGIN).header("Idempotency-Key",KEY)
    .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
    .contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"Obrigado.\"}")).andReturn().getResponse();
-  assertEquals(409,closed.getStatus()); assertTrue(closed.getContentAsString().contains("REQUEST_CLOSED"));
+  assertEquals(409,closed.getStatus()); assertTrue(closed.getContentAsString().contains("SERVICE_REQUEST_CLOSED"));
  }
  @Test void managementReadsAndUpdatesWithAal2Csrf() throws Exception {
   start(true);
@@ -139,11 +139,11 @@ class RequestSecurityIntegrationTest {
   verify(service(),never()).update(any(),any(),any(),any(),any());
   var csrf=csrf();
   when(service().update(ACCOUNT,TENANT,AssuranceLevel.AAL2,REQUEST,new RequestModels.Update("TRIAGED",null,java.time.LocalDate.parse("2026-11-02"),
-   null,0L))).thenThrow(new BusinessProblem("REQUEST_CHANGED",409,"O pedido foi alterado. Atualize antes de continuar."));
+   null,0L))).thenThrow(new BusinessProblem("SERVICE_REQUEST_CHANGED",409,"O pedido foi alterado. Atualize antes de continuar."));
   var conflict=mvc.perform(post(update).servletPath(update).secure(true).header("Origin",ORIGIN)
    .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
    .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
-  assertEquals(409,conflict.getStatus()); assertTrue(conflict.getContentAsString().contains("REQUEST_CHANGED"));
+  assertEquals(409,conflict.getStatus()); assertTrue(conflict.getContentAsString().contains("SERVICE_REQUEST_CHANGED"));
   String messages=route+"/"+REQUEST+"/messages";
   when(service().staffMessage(ACCOUNT,TENANT,AssuranceLevel.AAL2,REQUEST,KEY,new RequestModels.StaffMessage("Comentário interno.","INTERNAL")))
    .thenReturn(new RequestModels.MessageResult(new RequestModels.Message(MESSAGE,"STAFF","GESTÃO FICTÍCIA",true,"INTERNAL","Comentário interno.",NOW),

@@ -1,0 +1,183 @@
+import { test, expect, type Page, type Route } from '@playwright/test';
+import { TENANT_A, UNIT_A, installSyntheticApi, signIn } from './fixtures';
+import { installManagementApi } from './management-fixtures';
+
+test.use({ timezoneId: 'UTC' });
+
+const REQUEST = '96000000-0000-4000-8000-000000000001';
+const PORTER = '98000000-0000-4000-8000-000000000001';
+const minutes = (value: number) => new Date(Date.now() + value * 60_000).toISOString();
+const civil = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
+interface Message { messageId: string; authorRole: 'UNIT' | 'STAFF'; authorName: string; mine: boolean; visibility: 'RESIDENT' | 'INTERNAL'; body: string; createdAt: string }
+interface Request {
+  requestId: string; unitId: string; category: string; title: string; description: string; state: string; assigneeMembershipId: string | null;
+  dueOn: string | null; resolution: string | null; requesterName: string; createdAt: string; updatedAt: string; resolvedAt: string | null;
+  closedAt: string | null; version: number; messages: Message[];
+}
+async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
+  await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store', ...headers }, body: JSON.stringify(body) });
+}
+const unitView = (item: Request) => ({
+  requestId: item.requestId, unitId: item.unitId, category: item.category, title: item.title, description: item.description, state: item.state,
+  assigned: item.assigneeMembershipId !== null, dueOn: item.dueOn, resolution: item.resolution, requesterName: item.requesterName, openedByMe: true,
+  createdAt: item.createdAt, updatedAt: item.updatedAt, resolvedAt: item.resolvedAt, closedAt: item.closedAt, messagesTruncated: false,
+  messages: item.messages.filter((message) => message.visibility === 'RESIDENT')
+    .map((message) => ({ ...message, authorName: message.authorRole === 'STAFF' ? null : message.authorName, mine: message.authorRole === 'UNIT' })),
+});
+const managedView = (item: Request) => ({
+  requestId: item.requestId, unitId: item.unitId, unitLabel: 'FICTÍCIA 101', category: item.category, title: item.title, description: item.description,
+  state: item.state, assigneeMembershipId: item.assigneeMembershipId, assigneeName: item.assigneeMembershipId ? 'PORTARIA FICTÍCIA' : null,
+  dueOn: item.dueOn, resolution: item.resolution, requesterName: item.requesterName, createdAt: item.createdAt, updatedAt: item.updatedAt,
+  resolvedAt: item.resolvedAt, closedAt: item.closedAt, version: item.version, messagesTruncated: false,
+  messages: item.messages.map((message) => ({ ...message, mine: message.authorRole === 'STAFF' })),
+  team: [{ membershipId: PORTER, name: 'PORTARIA FICTÍCIA', role: 'CONCIERGE' }],
+});
+const summary = (view: ReturnType<typeof managedView>) => {
+  const { description: _description, resolution: _resolution, requesterName: _requester, resolvedAt: _resolved, closedAt: _closed,
+    messages: _messages, messagesTruncated: _truncated, team: _team, ...rest } = view;
+  return rest;
+};
+
+/** API sintética dos pedidos (unidade e gestão), registrada depois da API base. */
+async function installRequestsApi(page: Page) {
+  const state = { items: [] as Request[], opens: [] as { key: string; body: unknown }[], messages: [] as { key: string; body: unknown }[],
+    updates: [] as unknown[], loseNextOpen: false, keys: new Map<string, Request>() };
+  await page.route(`**/v1/tenants/${TENANT_A}/units/${UNIT_A}/requests`, async (route) => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      await json(route, 200, { requests: state.items.map((item) => { const view = unitView(item);
+        return { requestId: view.requestId, unitId: view.unitId, category: view.category, title: view.title, state: view.state, assigned: view.assigned,
+          dueOn: view.dueOn, createdAt: view.createdAt, updatedAt: view.updatedAt }; }), truncated: false });
+      return;
+    }
+    const key = request.headers()['idempotency-key']!;
+    const body = request.postDataJSON() as { category: string; title: string; description: string };
+    state.opens.push({ key, body });
+    const previous = state.keys.get(key);
+    if (previous) { await json(route, 201, unitView(previous), { 'Idempotency-Replayed': 'true' }); return; }
+    const item: Request = { requestId: REQUEST, unitId: UNIT_A, ...body, state: 'OPEN', assigneeMembershipId: null, dueOn: null, resolution: null,
+      requesterName: 'PESSOA FICTÍCIA', createdAt: minutes(0), updatedAt: minutes(0), resolvedAt: null, closedAt: null, version: 0,
+      messages: [{ messageId: '97000000-0000-4000-8000-000000000001', authorRole: 'STAFF', authorName: 'GESTÃO FICTÍCIA', mine: false,
+        visibility: 'INTERNAL', body: 'Comentário interno fictício', createdAt: minutes(0) }] };
+    state.keys.set(key, item); state.items.unshift(item);
+    if (state.loseNextOpen) { state.loseNextOpen = false; await route.abort('connectionreset'); return; }
+    await json(route, 201, unitView(item), { 'Idempotency-Replayed': 'false' });
+  });
+  await page.route(`**/v1/tenants/${TENANT_A}/requests/**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname.replace(`/v1/tenants/${TENANT_A}/requests/`, '');
+    const item = state.items.find((candidate) => candidate.requestId === path.split('/')[0]);
+    if (!item) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
+    if (request.method() === 'GET') { await json(route, 200, unitView(item)); return; }
+    const body = request.postDataJSON() as { body: string };
+    state.messages.push({ key: request.headers()['idempotency-key']!, body });
+    const message: Message = { messageId: `97000000-0000-4000-8000-00000000000${item.messages.length + 2}`, authorRole: 'UNIT', authorName: 'PESSOA FICTÍCIA',
+      mine: true, visibility: 'RESIDENT', body: body.body, createdAt: minutes(0) };
+    item.messages.push(message);
+    await json(route, 201, message, { 'Idempotency-Replayed': 'false' });
+  });
+  await page.route(`**/v1/tenants/${TENANT_A}/management/requests**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname.replace(`/v1/tenants/${TENANT_A}/management/requests`, '');
+    if (request.method() === 'GET' && path === '') { await json(route, 200, { requests: state.items.map((item) => summary(managedView(item))), truncated: false }); return; }
+    const item = state.items.find((candidate) => candidate.requestId === path.split('/')[1]);
+    if (!item) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
+    if (request.method() === 'GET') { await json(route, 200, managedView(item)); return; }
+    if (path.endsWith('/messages')) {
+      const body = request.postDataJSON() as { body: string; visibility: 'RESIDENT' | 'INTERNAL' };
+      const message: Message = { messageId: `97000000-0000-4000-8000-00000000001${item.messages.length}`, authorRole: 'STAFF', authorName: 'GESTÃO FICTÍCIA',
+        mine: true, visibility: body.visibility, body: body.body, createdAt: minutes(0) };
+      item.messages.push(message);
+      await json(route, 201, message, { 'Idempotency-Replayed': 'false' });
+      return;
+    }
+    const body = request.postDataJSON() as { state: string; assigneeMembershipId: string | null; dueOn: string | null; resolution: string | null; expectedVersion: number };
+    state.updates.push(body);
+    item.state = body.state; item.assigneeMembershipId = body.assigneeMembershipId; item.dueOn = body.dueOn; item.version += 1;
+    if (body.state === 'RESOLVED') {
+      item.resolution = body.resolution; item.resolvedAt = minutes(0);
+      item.messages.push({ messageId: '97000000-0000-4000-8000-000000000099', authorRole: 'STAFF', authorName: 'GESTÃO FICTÍCIA', mine: true,
+        visibility: 'RESIDENT', body: `Resolução: ${body.resolution}`, createdAt: minutes(0) });
+    }
+    await json(route, 200, managedView(item));
+  });
+  return state;
+}
+
+test('unidade abre pedido com chave pendente, conversa no próprio pedido e não vê comentário interno', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installRequestsApi(page);
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await expect(page.getByRole('heading', { name: 'Pedidos', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir pedido' }).click();
+  const form = page.getByRole('form', { name: 'Abrir pedido' });
+  await form.getByLabel('Categoria').selectOption('MAINTENANCE');
+  await form.getByLabel('Título').fill('  Vazamento   no banheiro ');
+  await form.getByLabel('Descrição').fill('Água no teto <b>forte</b>.\n\n\nDesde ontem.\n');
+  state.loseNextOpen = true;
+  await form.getByRole('button', { name: 'Enviar pedido' }).click();
+  await expect(form.getByText('O resultado não foi confirmado e o pedido ficou travado', { exact: false })).toBeVisible();
+  await form.getByRole('button', { name: 'Voltar' }).click();
+  await page.getByRole('button', { name: 'Abrir pedido' }).click();
+  await expect(page.getByRole('form', { name: 'Abrir pedido' }).getByLabel('Título')).toHaveValue('Vazamento no banheiro');
+  await page.getByRole('form', { name: 'Abrir pedido' }).getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }).click();
+  await expect(page.getByText('Este pedido já estava aberto: Vazamento no banheiro', { exact: false })).toBeVisible();
+  expect(state.opens.map((item) => item.body)).toEqual([
+    { category: 'MAINTENANCE', title: 'Vazamento no banheiro', description: 'Água no teto <b>forte</b>.\n\nDesde ontem.' },
+    { category: 'MAINTENANCE', title: 'Vazamento no banheiro', description: 'Água no teto <b>forte</b>.\n\nDesde ontem.' }]);
+  expect(state.opens[1]!.key).toBe(state.opens[0]!.key);
+  const row = page.getByRole('list', { name: 'Pedidos da unidade' }).getByRole('listitem').filter({ hasText: 'Vazamento no banheiro' });
+  await expect(row.getByText('Enviado', { exact: true })).toBeVisible();
+  await expect(row.locator('.request-detail .announcement-body').first()).toHaveText('Água no teto <b>forte</b>.\n\nDesde ontem.', { useInnerText: false });
+  await expect(row.locator('.request-detail b')).toHaveCount(0);
+  await expect(page.getByText('Comentário interno fictício')).toHaveCount(0);
+  await row.getByLabel('Mensagem para a gestão').fill('Pode vir à tarde.');
+  await row.getByRole('button', { name: 'Enviar mensagem' }).click();
+  await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Pode vir à tarde.')).toBeVisible();
+  await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Você')).toBeVisible();
+  expect(state.messages.map((item) => item.body)).toEqual([{ body: 'Pode vir à tarde.' }]);
+});
+
+test('gestão registra comentário interno, define responsável e prazo e conclui com resolução visível', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const state = await installRequestsApi(page);
+  state.items.push({ requestId: REQUEST, unitId: UNIT_A, category: 'NOISE', title: 'Barulho fictício', description: 'Barulho depois das 22h.',
+    state: 'OPEN', assigneeMembershipId: null, dueOn: null, resolution: null, requesterName: 'PESSOA FICTÍCIA', createdAt: minutes(-30),
+    updatedAt: minutes(-30), resolvedAt: null, closedAt: null, version: 0, messages: [] });
+  await signIn(page);
+  await page.goto(`/gestao/${TENANT_A}/pedidos`);
+  await expect(page.getByRole('heading', { name: 'Pedidos das unidades' })).toBeVisible();
+  const row = page.getByRole('list', { name: 'Pedidos das unidades' }).getByRole('listitem').filter({ hasText: 'Barulho fictício' });
+  await row.getByRole('button', { name: 'Abrir pedido' }).click();
+  await row.getByLabel('Mensagem', { exact: true }).fill('Conferir câmera do corredor.');
+  await row.getByLabel('Comentário interno (não aparece para a unidade)').check();
+  await row.getByRole('button', { name: 'Registrar comentário interno' }).click();
+  await expect(row.getByText('comentário interno, não aparece para a unidade', { exact: false })).toBeVisible();
+  const update = row.getByRole('form', { name: 'Atualizar pedido Barulho fictício' });
+  await update.getByLabel('Andamento').selectOption('TRIAGED');
+  await update.getByLabel('Responsável da equipe').selectOption(PORTER);
+  await update.getByLabel('Prazo comunicado à unidade (opcional)').fill(civil(3));
+  await update.getByRole('button', { name: 'Salvar andamento' }).click();
+  await expect(row.getByText('Pedido atualizado.', { exact: true })).toBeVisible();
+  expect(state.updates).toEqual([{ state: 'TRIAGED', assigneeMembershipId: PORTER, dueOn: civil(3), resolution: null, expectedVersion: 0 }]);
+  await update.getByLabel('Andamento').selectOption('RESOLVED');
+  await expect(update.getByRole('button', { name: 'Salvar andamento' })).toBeDisabled();
+  await update.getByLabel('Resolução (aparece para a unidade)').fill('Morador orientado.');
+  await update.getByRole('button', { name: 'Salvar andamento' }).click();
+  await expect(row.getByText('Pedido concluído; a resolução também foi enviada na conversa.')).toBeVisible();
+  expect(state.updates.at(-1)).toEqual({ state: 'RESOLVED', assigneeMembershipId: PORTER, dueOn: civil(3), resolution: 'Morador orientado.', expectedVersion: 1 });
+  await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Resolução: Morador orientado.')).toBeVisible();
+});
+
+test('pedidos desligados no ambiente não aparecem para a unidade nem mostram erro técnico', async ({ page }) => {
+  await installSyntheticApi(page);
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await expect(page.getByRole('heading', { name: 'Um espaço para a sua rotina.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Pedidos/ })).toHaveCount(0);
+  await expect(page.getByText('Esta função ainda não está disponível', { exact: false })).toHaveCount(0);
+});

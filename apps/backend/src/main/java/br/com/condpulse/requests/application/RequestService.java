@@ -58,12 +58,12 @@ public class RequestService {
  }
  public RequestModels.OpenResult open(UUID actor,UUID tenant,UUID unit,String key,RequestModels.Open request) {
   requireKey(key);
-  if(request==null) throw invalid("REQUEST_INPUT_INVALID","Informe a categoria, o título e a descrição do pedido.");
+  if(request==null) throw invalid("SERVICE_REQUEST_INPUT_INVALID","Informe a categoria, o título e a descrição do pedido.");
   String category=category(request.category());
   String title=title(request.title());
-  String description=multiline(request.description(),2000,"REQUEST_DESCRIPTION_INVALID",
+  String description=multiline(request.description(),2000,"SERVICE_REQUEST_DESCRIPTION_INVALID",
    "Descreva o pedido com até 2.000 caracteres, sem caracteres invisíveis.");
-  String hash=hash("REQUEST_OPEN",category,title,description);
+  String hash=hash("SERVICE_REQUEST_OPEN",category,title,description);
   String route="/v1/tenants/"+tenant+"/units/"+unit+"/requests";
   return resident(actor,tenant,Map.of("42501",RequestService::unitDenied),context->{
    requireMember(tenant,unit);
@@ -96,7 +96,7 @@ public class RequestService {
   String body=body(request==null?null:request.body());
   String route="/v1/tenants/"+tenant+"/requests/"+requestId+"/messages";
   return resident(actor,tenant,Map.of("23514",RequestService::closed,"42501",RequestService::notFound),context->{
-   var previous=store.begin(tenant,actor,route,key,hash("REQUEST_UNIT_MESSAGE",body));
+   var previous=store.begin(tenant,actor,route,key,hash("SERVICE_REQUEST_UNIT_MESSAGE",body));
    if(!previous.fresh()) return replayedMessage(tenant,previous,false);
    var found=store.unitRequest(tenant,requestId);
    if(found==null) throw notFound();
@@ -112,7 +112,7 @@ public class RequestService {
  // Gestão.
  public RequestModels.ManagedPage managed(UUID actor,UUID tenant,AssuranceLevel assurance,String filter) {
   String normalized=filter==null || filter.isBlank()?"ACTIVE":filter;
-  if(!FILTERS.contains(normalized)) throw invalid("REQUEST_FILTER_INVALID","Filtro de andamento inválido.");
+  if(!FILTERS.contains(normalized)) throw invalid("SERVICE_REQUEST_FILTER_INVALID","Filtro de andamento inválido.");
   return staff(actor,tenant,assurance,Map.of(),context->store.managed(tenant,normalized));
  }
  public RequestModels.ManagedRequest managedRequest(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId) {
@@ -130,10 +130,10 @@ public class RequestService {
   String body=body(request==null?null:request.body());
   String visibility=request==null?null:request.visibility();
   if(!"RESIDENT".equals(visibility) && !"INTERNAL".equals(visibility))
-   throw invalid("REQUEST_VISIBILITY_INVALID","Escolha se a mensagem é visível para a unidade ou comentário interno.");
+   throw invalid("SERVICE_REQUEST_VISIBILITY_INVALID","Escolha se a mensagem é visível para a unidade ou comentário interno.");
   String route="/v1/tenants/"+tenant+"/management/requests/"+requestId+"/messages";
   return staff(actor,tenant,assurance,Map.of("23514",RequestService::closed),context->{
-   var previous=store.begin(tenant,actor,route,key,hash("REQUEST_STAFF_MESSAGE",visibility,body));
+   var previous=store.begin(tenant,actor,route,key,hash("SERVICE_REQUEST_STAFF_MESSAGE",visibility,body));
    if(!previous.fresh()) return replayedMessage(tenant,previous,true);
    var head=store.head(tenant,requestId);
    if(head==null) throw notFound();
@@ -153,11 +153,11 @@ public class RequestService {
  public RequestModels.ManagedRequest update(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,RequestModels.Update request) {
   if(requestId==null) throw notFound();
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
-   throw invalid("REQUEST_VERSION_REQUIRED","Atualize o pedido antes de salvar.");
+   throw invalid("SERVICE_REQUEST_VERSION_REQUIRED","Atualize o pedido antes de salvar.");
   String state=request.state();
-  if(state==null || !RequestModels.STATES.contains(state)) throw invalid("REQUEST_STATE_INVALID","Escolha um andamento válido.");
+  if(state==null || !RequestModels.STATES.contains(state)) throw invalid("SERVICE_REQUEST_STATE_INVALID","Escolha um andamento válido.");
   String resolution=request.resolution()==null || DisplayText.collapse(request.resolution()).isEmpty()?null
-   :multiline(request.resolution(),1000,"REQUEST_RESOLUTION_INVALID","Use até 1.000 caracteres na resolução, sem caracteres invisíveis.");
+   :multiline(request.resolution(),1000,"SERVICE_REQUEST_RESOLUTION_INVALID","Use até 1.000 caracteres na resolução, sem caracteres invisíveis.");
   return staff(actor,tenant,assurance,Map.of("23514",RequestService::changed,"23503",RequestService::assigneeInvalid),context->{
    var head=store.head(tenant,requestId);
    if(head==null) throw notFound();
@@ -165,10 +165,10 @@ public class RequestService {
    if(head.version()!=request.expectedVersion()) throw changed();
    boolean stateChanged=!state.equals(head.state());
    if(stateChanged && !TRANSITIONS.get(head.state()).contains(state))
-    throw new BusinessProblem("REQUEST_TRANSITION_INVALID",409,"Este andamento não pode ir para o escolhido. Atualize o pedido.");
+    throw new BusinessProblem("SERVICE_REQUEST_TRANSITION_INVALID",409,"Este andamento não pode ir para o escolhido. Atualize o pedido.");
    boolean resolving=stateChanged && "RESOLVED".equals(state);
    if(resolving && resolution==null)
-    throw invalid("REQUEST_RESOLUTION_REQUIRED","Informe a resolução para concluir o pedido.");
+    throw invalid("SERVICE_REQUEST_RESOLUTION_REQUIRED","Informe a resolução para concluir o pedido.");
    // Fora da conclusão a resolução enviada não vale: resolvido mantém a registrada; os outros andamentos não têm.
    String nextResolution=resolving?resolution:"RESOLVED".equals(state)?head.resolution():null;
    UUID assignee=request.assigneeMembershipId();
@@ -178,10 +178,10 @@ public class RequestService {
    if(due!=null && !due.equals(head.dueOn())) {
     LocalDate today=LocalDate.now(context.timeZone());
     if(due.isBefore(today) || due.isAfter(today.plusYears(1)))
-     throw invalid("REQUEST_DUE_INVALID","O prazo comunicado vai de hoje até um ano.");
+     throw invalid("SERVICE_REQUEST_DUE_INVALID","O prazo comunicado vai de hoje até um ano.");
    }
    boolean assignmentChanged=!Objects.equals(assignee,head.assigneeMembershipId()) || !Objects.equals(due,head.dueOn());
-   if(!stateChanged && !assignmentChanged) throw invalid("REQUEST_UNCHANGED","Nada mudou no pedido.");
+   if(!stateChanged && !assignmentChanged) throw invalid("SERVICE_REQUEST_UNCHANGED","Nada mudou no pedido.");
    if(!store.update(tenant,requestId,head.version(),state,assignee,due,nextResolution)) throw changed();
    long version=head.version()+1;
    if(stateChanged) audit.record(tenant,actor,"REQUEST_STATE_CHANGED","SERVICE_REQUEST",requestId,null);
@@ -206,17 +206,17 @@ public class RequestService {
   if(unit==null || !store.unitMember(tenant,unit)) throw unitDenied();
  }
  private static String category(String value) {
-  if(value==null || !RequestModels.CATEGORIES.contains(value)) throw invalid("REQUEST_CATEGORY_INVALID","Escolha uma categoria válida.");
+  if(value==null || !RequestModels.CATEGORIES.contains(value)) throw invalid("SERVICE_REQUEST_CATEGORY_INVALID","Escolha uma categoria válida.");
   return value;
  }
  private static String title(String value) {
   String normalized=DisplayText.normalize(value,120);
   if(normalized==null || normalized.codePointCount(0,normalized.length())<3)
-   throw invalid("REQUEST_TITLE_INVALID","Informe o título do pedido, de 3 a 120 caracteres.");
+   throw invalid("SERVICE_REQUEST_TITLE_INVALID","Informe o título do pedido, de 3 a 120 caracteres.");
   return normalized;
  }
  private static String body(String value) {
-  return multiline(value,2000,"REQUEST_MESSAGE_INVALID","Escreva a mensagem com até 2.000 caracteres, sem caracteres invisíveis.");
+  return multiline(value,2000,"SERVICE_REQUEST_MESSAGE_INVALID","Escreva a mensagem com até 2.000 caracteres, sem caracteres invisíveis.");
  }
  private static String multiline(String value,int maximum,String code,String message) {
   String normalized=DisplayText.normalizeMultiline(value,maximum);
@@ -274,20 +274,20 @@ public class RequestService {
   }
  }
  private static BusinessProblem unavailable() {
-  return new BusinessProblem("REQUEST_DEPENDENCY_UNAVAILABLE",503,"Não foi possível concluir a operação. Atualize e confira antes de repetir.");
+  return new BusinessProblem("SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE",503,"Não foi possível concluir a operação. Atualize e confira antes de repetir.");
  }
- private static BusinessProblem notFound() { return new BusinessProblem("REQUEST_NOT_FOUND",404,"Pedido não encontrado."); }
+ private static BusinessProblem notFound() { return new BusinessProblem("SERVICE_REQUEST_NOT_FOUND",404,"Pedido não encontrado."); }
  private static BusinessProblem unitDenied() {
   return new BusinessProblem("UNIT_ACCESS_DENIED",404,"Unidade não disponível para esta operação.");
  }
  private static BusinessProblem closed() {
-  return new BusinessProblem("REQUEST_CLOSED",409,"O pedido foi encerrado; abra um novo pedido se precisar.");
+  return new BusinessProblem("SERVICE_REQUEST_CLOSED",409,"O pedido foi encerrado; abra um novo pedido se precisar.");
  }
  private static BusinessProblem changed() {
-  return new BusinessProblem("REQUEST_CHANGED",409,"O pedido foi alterado. Atualize antes de continuar.");
+  return new BusinessProblem("SERVICE_REQUEST_CHANGED",409,"O pedido foi alterado. Atualize antes de continuar.");
  }
  private static BusinessProblem assigneeInvalid() {
-  return new BusinessProblem("REQUEST_ASSIGNEE_INVALID",400,"Escolha como responsável alguém da equipe com vínculo vigente.");
+  return new BusinessProblem("SERVICE_REQUEST_ASSIGNEE_INVALID",400,"Escolha como responsável alguém da equipe com vínculo vigente.");
  }
  private static BusinessProblem invalid(String code,String message) { return new BusinessProblem(code,400,message); }
 }

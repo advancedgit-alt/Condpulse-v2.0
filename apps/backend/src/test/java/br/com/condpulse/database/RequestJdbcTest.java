@@ -84,9 +84,9 @@ class RequestJdbcTest {
   assertEquals(List.of(created.requestId()),requests.unitRequests(responsible,db.tenantA,db.unitA).requests().stream()
    .map(RequestModels.UnitSummary::requestId).toList());
   assertEquals("UNIT_ACCESS_DENIED",code(()->requests.unitRequests(db.accountC,db.tenantA,db.unitA)));
-  assertEquals("REQUEST_NOT_FOUND",code(()->requests.unitRequest(db.accountC,db.tenantA,created.requestId())));
-  assertEquals("REQUEST_NOT_FOUND",code(()->unitSays(db.accountC,created.requestId(),"Mensagem de outra unidade")));
-  assertEquals("REQUEST_NOT_FOUND",code(()->requests.unitRequest(db.accountB,db.tenantB,created.requestId())));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.unitRequest(db.accountC,db.tenantA,created.requestId())));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->unitSays(db.accountC,created.requestId(),"Mensagem de outra unidade")));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.unitRequest(db.accountB,db.tenantB,created.requestId())));
   assertEquals("UNIT_ACCESS_DENIED",code(()->requests.open(db.accountC,db.tenantA,db.unitA,key(),payload)),"Outra unidade não abre pela unidade");
   // A conversa fica no pedido em que foi gravada.
   var other=open(db.accountA,"Lâmpada queimada no hall");
@@ -97,10 +97,10 @@ class RequestJdbcTest {
   assertTrue(requests.unitRequest(db.accountA,db.tenantA,other.requestId()).messages().isEmpty(),"Mensagem não aparece em outro pedido");
   assertEquals("1",db.adminString("select count(*) from cp.request_messages where request_id=?",created.requestId()));
   assertEquals("0",db.adminString("select count(*) from cp.request_messages where request_id=?",other.requestId()));
-  assertEquals("REQUEST_TITLE_INVALID",code(()->open(db.accountA,"Oi")));
-  assertEquals("REQUEST_CATEGORY_INVALID",code(()->requests.open(db.accountA,db.tenantA,db.unitA,key(),
+  assertEquals("SERVICE_REQUEST_TITLE_INVALID",code(()->open(db.accountA,"Oi")));
+  assertEquals("SERVICE_REQUEST_CATEGORY_INVALID",code(()->requests.open(db.accountA,db.tenantA,db.unitA,key(),
    new RequestModels.Open("PLUMBING","Categoria inexistente","Texto."))));
-  assertEquals("REQUEST_DESCRIPTION_INVALID",code(()->requests.open(db.accountA,db.tenantA,db.unitA,key(),
+  assertEquals("SERVICE_REQUEST_DESCRIPTION_INVALID",code(()->requests.open(db.accountA,db.tenantA,db.unitA,key(),
    new RequestModels.Open("OTHER","Texto invisível","Texto​escondido"))));
   db.assertEmptyContext();
  }
@@ -127,17 +127,17 @@ class RequestJdbcTest {
   // Triagem com responsável da equipe e prazo comunicado, pela versão lida.
   LocalDate today=LocalDate.now(ZoneId.of("America/Sao_Paulo"));
   UUID porter=membership(concierge);
-  assertEquals("REQUEST_ASSIGNEE_INVALID",code(()->update(request.requestId(),"TRIAGED",membership(db.accountA),null,null,0)));
-  assertEquals("REQUEST_DUE_INVALID",code(()->update(request.requestId(),"TRIAGED",porter,today.minusDays(1),null,0)));
-  assertEquals("REQUEST_TRANSITION_INVALID",code(()->update(request.requestId(),"RESOLVED",porter,null,"Resolvido",0)));
+  assertEquals("SERVICE_REQUEST_ASSIGNEE_INVALID",code(()->update(request.requestId(),"TRIAGED",membership(db.accountA),null,null,0)));
+  assertEquals("SERVICE_REQUEST_DUE_INVALID",code(()->update(request.requestId(),"TRIAGED",porter,today.minusDays(1),null,0)));
+  assertEquals("SERVICE_REQUEST_TRANSITION_INVALID",code(()->update(request.requestId(),"RESOLVED",porter,null,"Resolvido",0)));
   var triaged=update(request.requestId(),"TRIAGED",porter,today.plusDays(3),null,0);
   assertEquals("TRIAGED",triaged.state()); assertEquals(1,triaged.version());
   assertEquals("PORTARIA PEDIDOS JDBC",triaged.assigneeName()); assertEquals(today.plusDays(3),triaged.dueOn());
   var resident=requests.unitRequest(db.accountA,db.tenantA,request.requestId());
   assertTrue(resident.assigned()); assertEquals(today.plusDays(3),resident.dueOn());
-  assertEquals("REQUEST_CHANGED",code(()->update(request.requestId(),"IN_PROGRESS",porter,today.plusDays(3),null,0)),"Versão lida");
-  assertEquals("REQUEST_UNCHANGED",code(()->update(request.requestId(),"TRIAGED",porter,today.plusDays(3),null,1)));
-  assertEquals("REQUEST_RESOLUTION_REQUIRED",code(()->update(request.requestId(),"RESOLVED",porter,today.plusDays(3),null,1)));
+  assertEquals("SERVICE_REQUEST_CHANGED",code(()->update(request.requestId(),"IN_PROGRESS",porter,today.plusDays(3),null,0)),"Versão lida");
+  assertEquals("SERVICE_REQUEST_UNCHANGED",code(()->update(request.requestId(),"TRIAGED",porter,today.plusDays(3),null,1)));
+  assertEquals("SERVICE_REQUEST_RESOLUTION_REQUIRED",code(()->update(request.requestId(),"RESOLVED",porter,today.plusDays(3),null,1)));
   var resolved=update(request.requestId(),"RESOLVED",porter,today.plusDays(3),"Roldana trocada.",1);
   assertEquals("RESOLVED",resolved.state()); assertEquals("Roldana trocada.",resolved.resolution()); assertNotNull(resolved.resolvedAt());
   assertTrue(requests.unitRequest(db.accountA,db.tenantA,request.requestId()).messages().stream()
@@ -149,9 +149,9 @@ class RequestJdbcTest {
   // Encerrado preserva o histórico e encerra a conversa.
   var closed=update(request.requestId(),"CLOSED",porter,today.plusDays(3),null,3);
   assertEquals("CLOSED",closed.state()); assertNotNull(closed.closedAt());
-  assertEquals("REQUEST_CLOSED",code(()->unitSays(db.accountA,request.requestId(),"Ainda faz barulho.")));
-  assertEquals("REQUEST_CLOSED",code(()->staffSays(request.requestId(),"Mais uma mensagem.","RESIDENT")));
-  assertEquals("REQUEST_CLOSED",code(()->update(request.requestId(),"IN_PROGRESS",porter,null,null,4)));
+  assertEquals("SERVICE_REQUEST_CLOSED",code(()->unitSays(db.accountA,request.requestId(),"Ainda faz barulho.")));
+  assertEquals("SERVICE_REQUEST_CLOSED",code(()->staffSays(request.requestId(),"Mais uma mensagem.","RESIDENT")));
+  assertEquals("SERVICE_REQUEST_CLOSED",code(()->update(request.requestId(),"IN_PROGRESS",porter,null,null,4)));
   assertEquals(2,requests.unitRequest(db.accountA,db.tenantA,request.requestId()).messages().size(),
    "Unidade continua vendo a conversa visível: mensagem e resolução, sem o comentário interno");
   assertEquals(3,requests.managedRequest(manager,db.tenantA,AAL2,request.requestId()).messages().size());
@@ -166,11 +166,11 @@ class RequestJdbcTest {
   assertEquals("MFA_REQUIRED",code(()->requests.managed(manager,db.tenantA,AssuranceLevel.AAL1,null)));
   assertEquals("STAFF_ACCESS_DENIED",code(()->requests.managed(db.accountA,db.tenantA,AAL2,null)));
   assertEquals("STAFF_ACCESS_DENIED",code(()->requests.managedRequest(concierge,db.tenantA,AAL2,request.requestId())),"Portaria não gerencia pedidos");
-  assertEquals("REQUEST_FILTER_INVALID",code(()->requests.managed(manager,db.tenantA,AAL2,"PENDING")));
+  assertEquals("SERVICE_REQUEST_FILTER_INVALID",code(()->requests.managed(manager,db.tenantA,AAL2,"PENDING")));
   assertEquals(List.of(request.requestId()),requests.managed(manager,db.tenantA,AAL2,"OPEN").requests().stream()
    .map(RequestModels.ManagedSummary::requestId).toList());
   assertTrue(requests.managed(manager,db.tenantA,AAL2,"CLOSED").requests().isEmpty());
-  assertEquals("REQUEST_NOT_FOUND",code(()->requests.managedRequest(manager,db.tenantA,AAL2,UUID.randomUUID())));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.managedRequest(manager,db.tenantA,AAL2,UUID.randomUUID())));
   String key=key();
   var first=requests.unitMessage(db.accountA,db.tenantA,request.requestId(),key,new RequestModels.UnitMessage("Começou às 22h."));
   var again=requests.unitMessage(db.accountA,db.tenantA,request.requestId(),key,new RequestModels.UnitMessage("Começou às 22h."));
@@ -178,8 +178,8 @@ class RequestJdbcTest {
   assertEquals("IDEMPOTENCY_KEY_REUSED",code(()->requests.unitMessage(db.accountA,db.tenantA,request.requestId(),key,
    new RequestModels.UnitMessage("Outro texto."))));
   assertEquals("1",db.adminString("select count(*) from cp.request_messages where request_id=?",request.requestId()));
-  assertEquals("REQUEST_VISIBILITY_INVALID",code(()->staffSays(request.requestId(),"Sem visibilidade.","PUBLIC")));
-  assertEquals("REQUEST_MESSAGE_INVALID",code(()->unitSays(db.accountA,request.requestId(),"   ")));
+  assertEquals("SERVICE_REQUEST_VISIBILITY_INVALID",code(()->staffSays(request.requestId(),"Sem visibilidade.","PUBLIC")));
+  assertEquals("SERVICE_REQUEST_MESSAGE_INVALID",code(()->unitSays(db.accountA,request.requestId(),"   ")));
   db.assertEmptyContext();
  }
 }
