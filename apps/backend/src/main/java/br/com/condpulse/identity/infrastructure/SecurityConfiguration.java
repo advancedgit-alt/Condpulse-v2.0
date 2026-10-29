@@ -72,7 +72,8 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/amenities/*/maintenance-blocks").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/units/*","/v1/tenants/*/management/amenities/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
-    .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify").permitAll()
+    .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify",
+      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete").permitAll()
     .anyRequest().denyAll())
    .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults())
     .authenticationEntryPoint((req,res,ex)->problem(res,401))

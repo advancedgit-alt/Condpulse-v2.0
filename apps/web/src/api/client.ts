@@ -1,6 +1,7 @@
 import type {
   Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, Membership,
-  MfaStatus, MutationResult, Reservation, ReservationPage, ReservationPolicy, Session, TotpEnrollment, Unit,
+  MfaStatus, MutationResult, RecoveryCompleted, RecoveryVerified, Reservation, ReservationPage, ReservationPolicy, Session,
+  TotpEnrollment, Unit,
 } from './types';
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 import { instantMicros } from './instant';
@@ -12,6 +13,19 @@ const messages: Record<string, string> = {
   AUTH_CREDENTIALS_REJECTED: 'Não foi possível validar seu e-mail e sua senha.',
   INVALID_LOGIN_REQUEST: 'Informe seu e-mail e sua senha.',
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
+  RECOVERY_REQUEST_INVALID: 'Informe um e-mail válido.',
+  RECOVERY_LINK_INVALID: 'Link de recuperação inválido, expirado ou já utilizado. Solicite um novo link.',
+  RECOVERY_SESSION_EXPIRED: 'O prazo para definir a nova senha terminou. Solicite um novo link.',
+  RECOVERY_IN_PROGRESS: 'A troca de senha já está em andamento. Aguarde alguns segundos.',
+  RECOVERY_NOT_ALLOWED: 'A troca de senha por este link não foi permitida. Solicite um novo link ou procure a gestão.',
+  RECOVERY_OUTCOME_UNKNOWN: 'Não foi possível confirmar a troca da senha. Tente entrar com a nova senha; se não funcionar, solicite um novo link.',
+  RECOVERY_ATTEMPTS_EXHAUSTED: 'Tentativas esgotadas para este link. Solicite um novo link.',
+  RECOVERY_FACTOR_UNSUPPORTED: 'A recuperação pela web não está disponível para esta conta. Procure a gestão do condomínio.',
+  RECOVERY_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Tente novamente em instantes.',
+  RECOVERY_LINK_UNCERTAIN: 'Não foi possível confirmar a validação do link. Solicite um novo link.',
+  PASSWORD_INVALID: 'Use de 12 a 72 caracteres (letras acentuadas contam em dobro), com pelo menos 4 caracteres diferentes.',
+  PASSWORD_REJECTED: 'A senha não foi aceita. Use uma senha diferente da anterior e mais difícil de adivinhar.',
+  MFA_CODE_REQUIRED: 'Informe o código de 6 dígitos do aplicativo autenticador.',
   AUTH_PROVIDER_UNAVAILABLE: 'O acesso está temporariamente indisponível. Tente novamente mais tarde.',
   AUTH_RATE_LIMITED: 'Aguarde um pouco antes de tentar novamente.',
   AUTH_RATE_LIMIT_UNAVAILABLE: 'Não foi possível verificar o acesso agora. Tente novamente mais tarde.',
@@ -170,6 +184,23 @@ function totpEnrollment(value: unknown): TotpEnrollment {
   return { factorId: value.factorId, otpauthUri: value.otpauthUri, secret: value.secret,
     qrCodeDataUri: isString(value.qrCodeDataUri) ? value.qrCodeDataUri : null };
 }
+
+function recoveryVerified(value: unknown): RecoveryVerified {
+  if (!record(value) || typeof value.mfaRequired !== 'boolean' || !isDate(value.expiresAt)) throw invalidResponse();
+  return { mfaRequired: value.mfaRequired, expiresAt: value.expiresAt };
+}
+function recoveryCompleted(value: unknown): RecoveryCompleted {
+  if (!record(value) || value.status !== 'PASSWORD_CHANGED' || typeof value.otherSessionsEnded !== 'boolean') throw invalidResponse(true);
+  return { status: 'PASSWORD_CHANGED', otherSessionsEnded: value.otherSessionsEnded };
+}
+/** Mesma política local do servidor: 12 a 72 caracteres, até 72 bytes e ao menos 4 caracteres diferentes. */
+export function passwordProblem(password: string): string | null {
+  const characters = Array.from(password);
+  if (characters.length < 12 || characters.length > 72 || new TextEncoder().encode(password).length > 72
+    || password.trim() === '' || new Set(characters).size < 4) return messages.PASSWORD_INVALID!;
+  return null;
+}
+export const RECOVERY_LINK = /^[A-Za-z0-9_-]{16,512}$/;
 
 function invitationAccepted(value: unknown): InvitationAccepted {
   if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== 'PENDING') throw invalidResponse(true);
@@ -564,6 +595,46 @@ export class CondPulseApi {
     const reply = await this.request('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ factorId, code }), ...(signal ? { signal } : {}) });
     const result = session(reply.value);
     this.csrfFlight = undefined;
+    return result;
+  }
+  /**
+   * Recuperação de acesso: chamadas anônimas com CSRF, sem renovação de sessão nem expiração do contexto
+   * autenticado. O pedido é neutro; a conclusão encerra sessão e CSRF no servidor.
+   */
+  async requestRecovery(email: string, signal?: AbortSignal): Promise<void> {
+    const reply = await this.send('/auth/recovery', { method: 'POST', body: JSON.stringify({ email }), ...(signal ? { signal } : {}) },
+      this.generation);
+    if (reply.response.status !== 202 || !record(reply.value) || reply.value.status !== 'RECOVERY_REQUESTED') throw invalidResponse(true);
+  }
+  async verifyRecovery(tokenHash: string, signal?: AbortSignal): Promise<RecoveryVerified> {
+    if (!RECOVERY_LINK.test(tokenHash)) throw new ApiError(400, 'RECOVERY_LINK_INVALID', messages.RECOVERY_LINK_INVALID!);
+    // O link é de uso único no provedor: resposta perdida ou inválida encerra a tentativa nesta tela.
+    try {
+      const reply = await this.send('/auth/recovery/verify', { method: 'POST', body: JSON.stringify({ tokenHash }),
+        ...(signal ? { signal } : {}) }, this.generation);
+      return recoveryVerified(reply.value);
+    } catch (error) {
+      if (error instanceof ApiError && (error.uncertain || error.code === 'INVALID_API_RESPONSE'))
+        throw new ApiError(error.status, 'RECOVERY_LINK_UNCERTAIN', messages.RECOVERY_LINK_UNCERTAIN!, true);
+      throw error;
+    }
+  }
+  async completeRecovery(password: string, code: string | null, signal?: AbortSignal): Promise<RecoveryCompleted> {
+    const problem = passwordProblem(password);
+    if (problem) throw new ApiError(400, 'PASSWORD_INVALID', problem);
+    if (code !== null && !/^[0-9]{6}$/.test(code)) throw new ApiError(400, 'MFA_CODE_FORMAT', 'Digite os 6 números exibidos no aplicativo autenticador.');
+    // Sem confirmação explícita a troca pode ou não ter ocorrido: orientar a entrar com a nova senha, sem repetir.
+    let result: RecoveryCompleted;
+    try {
+      const reply = await this.send('/auth/recovery/complete', { method: 'POST', body: JSON.stringify({ password, code }),
+        ...(signal ? { signal } : {}) }, this.generation);
+      result = recoveryCompleted(reply.value);
+    } catch (error) {
+      if (error instanceof ApiError && (error.uncertain || error.code === 'INVALID_API_RESPONSE'))
+        throw new ApiError(error.status, 'RECOVERY_OUTCOME_UNKNOWN', messages.RECOVERY_OUTCOME_UNKNOWN!, true);
+      throw error;
+    }
+    this.clearSession();
     return result;
   }
   async acceptInvitation(token: string, signal?: AbortSignal): Promise<InvitationAccepted> {

@@ -310,6 +310,68 @@ def decision_checks():
     expect(error(capable("reservations.decide", revive), "23514", tenant=TA, role="cp_api"), "pedido expirado nao e confirmado nem pelo decisor")
     expect(error(revive, "23514"), "transicao invalida e recusada tambem fora do papel da aplicacao")
 
+def recovery_checks():
+    """V009: tentativa de recuperacao visivel so pelo proprio hash; sessoes por conta so na transacao de recuperacao."""
+    h1, h2 = "a" * 64, "b" * 64
+    def with_hash(h, statement):
+        return f"SET LOCAL app.recovery_hash='{h}'; {statement}"
+    insert = ("INSERT INTO platform.recovery_attempts(id,token_hash,account_id,encrypted_access_token,mfa_required,expires_at) "
+              f"VALUES(gen_random_uuid(),'{h1}','{AA}','v1.ficticio',false,clock_timestamp()+interval '10 minutes')")
+    expect(error(insert, "42501", role="cp_api"), "tentativa de recuperacao exige o hash no contexto")
+    expect(error(with_hash(h1, insert.replace(f"'{AA}'", f"'{AB}'")), "42501", role="cp_api"),
+           "tentativa pertence somente ao ator publicado")
+    query(with_hash(h1, insert), role="cp_api")
+    expect(value("select count(*) from platform.recovery_attempts", role="cp_api") == "0", "sem hash nenhuma tentativa e visivel")
+    expect(value(with_hash(h2, "select count(*) from platform.recovery_attempts"), role="cp_api") == "0",
+           "outro hash nao le a tentativa")
+    expect(value(with_hash(h1, "select count(*) from platform.recovery_attempts"), role="cp_api") == "1",
+           "o proprio hash le a tentativa")
+    expect(error(with_hash(h1, f"UPDATE platform.recovery_attempts SET account_id='{AB}'"), "42501", role="cp_api"),
+           "conta da tentativa e imutavel para a aplicacao")
+    expect(error(with_hash(h1, "UPDATE platform.recovery_attempts SET expires_at=expires_at+interval '1 hour'"), "42501", role="cp_api"),
+           "prazo da tentativa e imutavel para a aplicacao")
+    expect(error(with_hash(h1, "UPDATE platform.recovery_attempts SET failures=6"), "23514", role="cp_api"),
+           "tentativas tem limite no banco")
+    expect(error(with_hash(h2, insert.replace("'10 minutes'", "'16 minutes'").replace(h1, h2)), "23514", role="cp_api"),
+           "tentativa dura no maximo 15 minutos")
+    expect(error(with_hash(h2, insert.replace("false", "true").replace(h1, h2)), "23514", role="cp_api"),
+           "segundo fator exigido sempre aponta o fator")
+    forged = ("INSERT INTO platform.recovery_attempts(id,token_hash,account_id,encrypted_access_token,mfa_required,created_at,expires_at) "
+              f"VALUES(gen_random_uuid(),'{h2}','{AA}','v1.ficticio',false,clock_timestamp()+interval '30 days',"
+              "clock_timestamp()+interval '30 days 10 minutes')")
+    expect(error(with_hash(h2, forged), "42501", role="cp_api"), "aplicacao nao escolhe created_at para estender o prazo")
+    expect(error(with_hash(h2, insert.replace("mfa_required,", "mfa_required,failures,").replace("false,", "false,0,").replace(h1, h2)),
+                 "42501", role="cp_api"), "aplicacao nao define falhas na criacao")
+    other = with_hash(h2, f"WITH u AS (UPDATE platform.recovery_attempts SET failures=failures+1 WHERE token_hash='{h1}' RETURNING 1) "
+                          "SELECT count(*) FROM u")
+    expect(value(other, role="cp_api") == "0", "outro hash nao altera a tentativa")
+    removed = with_hash(h2, f"WITH d AS (DELETE FROM platform.recovery_attempts WHERE token_hash='{h1}' RETURNING 1) SELECT count(*) FROM d")
+    expect(value(removed, role="cp_api") == "0", "outro hash nao remove a tentativa")
+    query(with_hash(h1, "UPDATE platform.recovery_attempts SET failures=2"), role="cp_api")
+    expect(error(with_hash(h1, "UPDATE platform.recovery_attempts SET failures=1"), "42501", role="cp_api"),
+           "falhas da tentativa nao diminuem")
+    mfa = ("INSERT INTO platform.recovery_attempts(id,token_hash,account_id,encrypted_access_token,factor_id,mfa_required,expires_at) "
+           f"VALUES(gen_random_uuid(),'{h2}','{AA}','v1.aal1',gen_random_uuid(),true,clock_timestamp()+interval '10 minutes')")
+    query(with_hash(h2, mfa), role="cp_api")
+    expect(error(with_hash(h2, "UPDATE platform.recovery_attempts SET mfa_required=false"), "42501", role="cp_api"),
+           "segundo fator nao e dispensado sem novo acesso elevado")
+    query(with_hash(h2, "UPDATE platform.recovery_attempts SET mfa_required=false,encrypted_access_token='v1.aal2'"), role="cp_api")
+    expect(error(with_hash(h2, "UPDATE platform.recovery_attempts SET mfa_required=true,encrypted_access_token='v1.outro'"), "42501",
+                 role="cp_api"), "exigencia do segundo fator nao volta depois de dispensada")
+    sessions = ("INSERT INTO platform.web_sessions(token_hash,account_id,encrypted_access_token,encrypted_refresh_token,"
+                "access_expires_at,expires_at) VALUES"
+                + ",".join(f"('{h}','{account}','v1.ficticio','v1.ficticio',now()+interval '5 minutes',now()+interval '1 hour')"
+                           for h, account in (("c" * 64, AA), ("d" * 64, AA), ("e" * 64, AB))))
+    query(sessions)
+    purge = f"WITH d AS (DELETE FROM platform.web_sessions WHERE account_id='{AA}' RETURNING 1) SELECT count(*) FROM d"
+    expect(value(purge, role="cp_api") == "0", "sessoes da conta nao sao removidas fora da recuperacao")
+    marker = "SET LOCAL app.recovery_purge='on'; "
+    expect(value(marker + purge, role="cp_api", actor=AB) == "0", "marcador de recuperacao nao alcanca outra conta")
+    expect(value(marker + purge, role="cp_api") == "2", "recuperacao remove todas as sessoes da propria conta")
+    expect(value(f"select count(*) from platform.web_sessions where account_id='{AB}'") == "1",
+           "sessao de outra conta permanece")
+    query(f"DELETE FROM platform.web_sessions WHERE account_id='{AB}'; DELETE FROM platform.recovery_attempts")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -402,6 +464,7 @@ def main():
     manage_checks()
     invitation_checks()
     decision_checks()
+    recovery_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

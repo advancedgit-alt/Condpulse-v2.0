@@ -138,6 +138,29 @@ public final class SupabaseAuthClient {
    return new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
   return unavailable();
  }
+ /**
+  * Fatores da conta para a recuperação: o TOTP verificado (se houver) e se existe fator verificado de outro tipo
+  * (telefone, webauthn), que a web não sabe exigir. A conta devolvida pelo provedor é conferida com o token.
+  */
+ public RecoveryFactors recoveryFactors(String accessToken) {
+  try {
+   UserResponse user=client.get().uri(settings.authBase()+"/user")
+    .header("apikey",settings.publishableKey()).header("Authorization","Bearer "+accessToken)
+    .retrieve().body(UserResponse.class);
+   if(user==null || (user.factors()!=null && user.factors().size()>20)) throw unavailable();
+   UUID account=requireUuid(user.id());
+   UUID totp=null; boolean other=false;
+   for(var factor:user.factors()==null?List.<FactorResponse>of():user.factors()) {
+    if(factor==null) throw unavailable();
+    if(!"verified".equals(factor.status())) continue;
+    if("totp".equals(factor.factor_type())) { if(totp==null) totp=requireUuid(factor.id()); }
+    else other=true;
+   }
+   return new RecoveryFactors(account,totp,other);
+  } catch(RestClientResponseException ex) { throw mfaProblem(ex); }
+  catch(RestClientException ex) { throw unavailable(); }
+ }
+ public record RecoveryFactors(UUID accountId,UUID verifiedTotp,boolean otherVerified) {}
  private static BusinessProblem unavailable() {
   return new BusinessProblem("AUTH_PROVIDER_UNAVAILABLE",503,"Autenticação temporariamente indisponível.");
  }
@@ -147,6 +170,71 @@ public final class SupabaseAuthClient {
    if(!parsed.toString().equalsIgnoreCase(value)) throw unavailable();
    return parsed;
   } catch(IllegalArgumentException | NullPointerException ex) { throw unavailable(); }
+ }
+ /** Resultado do pedido de e-mail de recuperação, usado só para decidir a resposta neutra. */
+ public enum RecoveryDispatch { ACCEPTED, REFUSED, RATE_LIMITED, UNAVAILABLE }
+ /**
+  * Pede ao provedor o e-mail de recuperação. Nunca lança por resposta do provedor: conta inexistente, envio
+  * recusado ou limite do provedor não podem mudar a resposta devolvida ao navegador.
+  */
+ public RecoveryDispatch recover(String email) {
+  try {
+   client.post().uri(settings.authBase()+"/recover").header("apikey",settings.publishableKey())
+    .contentType(MediaType.APPLICATION_JSON).body(Map.of("email",email)).retrieve().toBodilessEntity();
+   return RecoveryDispatch.ACCEPTED;
+  } catch(RestClientResponseException ex) {
+   int status=ex.getStatusCode().value();
+   if(status==429) return RecoveryDispatch.RATE_LIMITED;
+   return status>=500?RecoveryDispatch.UNAVAILABLE:RecoveryDispatch.REFUSED;
+  } catch(RestClientException ex) { return RecoveryDispatch.UNAVAILABLE; }
+ }
+ /** Troca o hash do link de recuperação por uma sessão do provedor (uso único no provedor). */
+ public TokenResponse verifyRecovery(String tokenHash) {
+  try {
+   TokenResponse result=client.post().uri(settings.authBase()+"/verify").header("apikey",settings.publishableKey())
+    .contentType(MediaType.APPLICATION_JSON).body(Map.of("type","recovery","token_hash",tokenHash))
+    .retrieve().body(TokenResponse.class);
+   return requireTokens(result);
+  } catch(RestClientResponseException ex) {
+   int status=ex.getStatusCode().value();
+   if(status==429) throw new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
+   if(status>=400 && status<500)
+    throw new BusinessProblem("RECOVERY_LINK_INVALID",400,"Link de recuperação inválido, expirado ou já utilizado. Solicite um novo link.");
+   throw unavailable();
+  } catch(RestClientException ex) { throw unavailable(); }
+ }
+ /**
+  * Define a nova senha com a sessão de recuperação. Só 200 com a mesma conta confirma a troca; qualquer outra
+  * resposta sem erro (2xx diferente, 3xx) é resultado incerto. Recusa de política é distinguida de resultado incerto.
+  */
+ public void updatePassword(String accessToken,String password,UUID expectedAccount) {
+  try {
+   var response=client.put().uri(settings.authBase()+"/user").header("apikey",settings.publishableKey())
+    .header("Authorization","Bearer "+accessToken).contentType(MediaType.APPLICATION_JSON)
+    .body(Map.of("password",password)).retrieve().toEntity(UserResponse.class);
+   if(response.getStatusCode().value()!=200 || response.getBody()==null || response.getBody().id()==null
+      || !expectedAccount.toString().equalsIgnoreCase(response.getBody().id()))
+    throw unavailable();
+  } catch(RestClientResponseException ex) {
+   int status=ex.getStatusCode().value();
+   if(status==400 || status==422)
+    throw new BusinessProblem("PASSWORD_REJECTED",422,"A senha não foi aceita. Use uma senha diferente da anterior e mais difícil de adivinhar.");
+   if(status==401)
+    throw new BusinessProblem("RECOVERY_SESSION_EXPIRED",401,"O prazo para definir a nova senha terminou. Solicite um novo link.");
+   if(status==403)
+    throw new BusinessProblem("RECOVERY_NOT_ALLOWED",403,"A troca de senha por este link não foi permitida. Solicite um novo link ou procure a gestão.");
+   if(status==429) throw new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
+   throw unavailable();
+  } catch(RestClientException ex) { throw unavailable(); }
+ }
+ /** Encerra todas as sessões do usuário no provedor. Devolve se o provedor confirmou o encerramento. */
+ public boolean signOutGlobal(String accessToken) {
+  try {
+   int status=client.post().uri(settings.authBase()+"/logout?scope=global")
+    .header("apikey",settings.publishableKey()).header("Authorization","Bearer "+accessToken)
+    .retrieve().toBodilessEntity().getStatusCode().value();
+   return status==204 || status==200;
+  } catch(RestClientException ex) { return false; }
  }
  public void signOutBestEffort(String accessToken) {
   try {
@@ -166,7 +254,7 @@ public final class SupabaseAuthClient {
   @Override public String toString() { return "TotpEnrollment[factorId="+factorId+",secret=REDACTED]"; }
  }
  @JsonIgnoreProperties(ignoreUnknown=true)
- public record UserResponse(List<FactorResponse> factors) {}
+ public record UserResponse(String id,List<FactorResponse> factors) {}
  @JsonIgnoreProperties(ignoreUnknown=true)
  public record FactorResponse(String id,String factor_type,String status,String friendly_name) {}
  @JsonIgnoreProperties(ignoreUnknown=true)

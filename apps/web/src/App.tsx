@@ -6,6 +6,7 @@ import { OperationsProvider, useOperations } from './ui/Operations';
 import { ContextPage, ReservationsPage } from './ui/Residence';
 import { DashboardPage } from './ui/Dashboard';
 import { InvitationPage } from './ui/Invitation';
+import { RecoveryPage } from './ui/Recovery';
 import { ManagementPage, managementSections } from './ui/management/ManagementPage';
 import { Brand, Icon, OfflineNotice } from './ui/primitives';
 import './styles.css';
@@ -17,7 +18,7 @@ export default function App() {
   } }));
   return <QueryClientProvider client={queries}><BrowserRouter><AuthProvider>
     <a href="#main-content" className="skip-link">Ir para o conteúdo</a><OfflineNotice />
-    <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route element={<ProtectedShell />}>
+    <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route path="/recuperar-acesso" element={<RecoveryPage />} /><Route element={<ProtectedShell />}>
       <Route path="/contextos" element={<ContextPage />} />
       <Route path="/morador/:tenantId/:unitId/inicio" element={<DashboardPage />} />
       <Route path="/morador/:tenantId/:unitId/reservas" element={<ReservationsPage />} />

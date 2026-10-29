@@ -71,6 +71,7 @@ Todas as respostas /auth são no-store. Nenhum localStorage, token em URL ou con
 - Store e pool real já exercitados no PostgreSQL descartável do CI; falta ensaio do pooler/TLS gerenciado no ambiente de destino. Ver tests/database/JDBC.md e STATUS.
 - Teste de refresh/logout concorrente com Auth real e interrupção de rede controlada.
 - Rate limiting de login/recuperação por mecanismo de produção e observabilidade sem credenciais.
-- Portal web residencial integrado na PR#4; MFA CP-013, onboarding/recuperação CP-020 e demais telas
-  permanecem pendentes, com aceite por ticket separado.
+- Portal web residencial integrado na PR#4. MFA (CP-013) e recuperação de acesso (CP-020, ver
+  RECUPERACAO_ACESSO.md) implementados atrás de flags, sem homologação com Auth e e-mail reais; onboarding e
+  demais telas seguem com aceite por ticket separado.
 Não marcar CP-011 homologado ou ativar login público só porque o código compila.

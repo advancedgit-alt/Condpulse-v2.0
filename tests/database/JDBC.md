@@ -37,3 +37,8 @@ retries sem duplicar auditoria/outbox; outro morador da mesma unidade sem poder 
 a reserva do autor; revogação negando replay; unidade e área alheias
 sem acesso; cancelamento pelas regras aceitas mesmo após alteração da política atual.
 A consulta administrativa de contagens confirma o estado efetivamente commitado.
+
+Recuperação de acesso (V009, RecoveryStoreJdbcTest): tentativa visível só pelo hash do próprio cookie e nunca
+como sessão da API; conta inativa e ator divergente recusados; reserva concorrente, segundo fator guardado como
+AAL2, falhas até esgotar e remoção da linha; reserva vencida ou prazo vencido removem a tentativa sem reuso;
+remoção de todas as sessões web da conta somente na transação de recuperação, preservando outras contas.

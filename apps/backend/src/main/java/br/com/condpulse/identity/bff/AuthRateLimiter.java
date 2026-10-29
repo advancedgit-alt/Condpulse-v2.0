@@ -55,6 +55,19 @@ public final class AuthRateLimiter {
  public Admission mfaVerify(java.util.UUID account) { return admit("mfa-verify",accountPrincipal(account),300,5,900); }
  public Admission mfaEnroll(java.util.UUID account) { return admit("mfa-enroll",accountPrincipal(account),300,5,900); }
  public Admission mfaStatus(java.util.UUID account) { return admit("mfa-status",accountPrincipal(account),600,30,60); }
+ /** Recuperação: pedido por e-mail (3 a cada 15 min), link por hash e conclusão por cookie próprio. */
+ public Admission recoveryRequest(String email) {
+  String principal=email==null || email.length()>320 ? "invalid" : email.strip().toLowerCase(Locale.ROOT);
+  return admit("recovery-request",principal,60,3,900);
+ }
+ public Admission recoveryVerify(String tokenHash) {
+  String principal=tokenHash!=null && tokenHash.length()<=512 ? tokenHash : "invalid";
+  return admit("recovery-verify",principal,120,5,900);
+ }
+ public Admission recoveryComplete(String opaqueRecovery) {
+  String principal=opaqueRecovery!=null && opaqueRecovery.matches("[A-Za-z0-9_-]{43}") ? opaqueRecovery : "anonymous";
+  return admit("recovery-complete",principal,120,10,900);
+ }
  private static String accountPrincipal(java.util.UUID account) {
   if(account==null) throw new IllegalArgumentException("Conta obrigatoria para limite de segundo fator.");
   return account.toString();

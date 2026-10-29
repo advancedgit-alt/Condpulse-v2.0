@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import type { CurrentIdentity } from '../api/types';
 import { Brand, ErrorState, Icon, Loading, Notice, RateLimitNotice, errorMessage } from './primitives';
@@ -155,7 +155,8 @@ export function LoginPage() {
         {!failure && unavailable && auth.error instanceof ApiError && auth.error.status === 429 ? <RateLimitNotice error={auth.error} remaining={remaining} /> : null}
         <button className="button button-wide" type="submit" disabled={pending || unavailable || remaining > 0}>{pending ? 'Entrando…' : remaining > 0 ? 'Aguarde para entrar' : 'Entrar'}<Icon name="arrow" /></button>
       </form>
-      <p className="login-help">Precisa de acesso ou de ajuda com a senha?<br />Fale com a gestão do seu condomínio.</p>
+      <Link className="text-button" to="/recuperar-acesso">Esqueci minha senha</Link>
+      <p className="login-help">Precisa de acesso ao condomínio?<br />Fale com a gestão do seu condomínio.</p>
       <div className="security-caption"><Icon name="shield" /><span>Seu acesso é pessoal. Não compartilhe sua senha.</span></div>
     </div><p className="login-footer">CondPulse · Portal do morador</p></section>
   </main>;
