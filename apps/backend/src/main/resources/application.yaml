@@ -54,6 +54,10 @@ condpulse:
     enabled: ${CP_ANNOUNCEMENTS_ENABLED:false}
   requests:
     enabled: ${CP_REQUESTS_ENABLED:false}
+  files:
+    enabled: ${CP_FILES_ENABLED:false}
+    service-key: ${CP_STORAGE_SERVICE_KEY:}
+    bucket: ${CP_STORAGE_BUCKET:cp-upload-quarantine}
   worker:
     outbox-enabled: ${CP_WORKER_OUTBOX_ENABLED:false}
     poll-millis: ${CP_WORKER_POLL_MILLIS:2000}

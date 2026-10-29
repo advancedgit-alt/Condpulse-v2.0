@@ -90,6 +90,10 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/announcements","/v1/tenants/*/management/announcements/*/publish",
       "/v1/tenants/*/management/announcements/*/archive","/v1/tenants/*/announcements/*/open").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/announcements/*").authenticated()
+    // Anexos privados de pedido: autenticação aqui; visibilidade do pedido no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/requests/*/attachments").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/uploads/intents","/v1/tenants/*/attachments/*/complete",
+      "/v1/tenants/*/attachments/*/download").authenticated()
     // Importação de unidades em staging: autenticação aqui; units.manage com AAL2 no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/imports","/v1/tenants/*/management/imports/*").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/imports","/v1/tenants/*/management/imports/*/approve",
