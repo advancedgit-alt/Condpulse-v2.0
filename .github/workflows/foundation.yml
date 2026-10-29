@@ -33,6 +33,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
@@ -40,6 +42,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.0"
+      - name: TEMPORARY annotation probe
+        run: |
+          printf '%s\n' '[ERROR] probe maven line' 'not ok 1 - probe node test' '  symbol:   class ProbeSymbol'
       - name: Foundation and contract checks
         run: node --test tests/foundation.test.mjs tests/spec-package.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
       - name: Specification package structural validation on a temporary copy
@@ -145,6 +150,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.0"
@@ -174,6 +181,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.0"
