@@ -1,11 +1,19 @@
 # Estado verificável - 29/10/2026
 
+## Gestão local de unidades, áreas e auditoria — CP-014/CP-018/CP-021
+
+- V006 cria `platform.has_capability` e políticas RLS restritivas: inserir/atualizar blocos, unidades e áreas e ler auditoria exige a capacidade publicada pelo executor após vínculo vigente e AAL2. Sem `DELETE`; nomes de área únicos por condomínio.
+- API `/v1/tenants/{id}/management/*` (blocos, unidades, áreas/regras e auditoria paginada) atrás de `CP_MANAGEMENT_ENABLED=false`, inclusive na Vercel. Mudança de regra cria nova `policyVersion` sem reescrever reservas; inativar unidade bloqueia os moradores na hora. Detalhes em [GESTAO_LOCAL.md](GESTAO_LOCAL.md).
+- CI 40805310227 verde (head `58f559c`) com `LocalManagementJdbcTest` em PostgreSQL real e 13 verificações SQL novas. O run 40804489500 falhou uma vez na etapa SQL sem log acessível e não se repetiu sem mudança SQL; o CI agora anota o final do log das etapas Maven/SQL/JDBC.
+- V006 não foi aplicada ao banco remoto (executor fixado em V003–V005). Telas web pendentes.
+
 ## MFA de equipe e capacidades — CP-013/CP-014
 
 - PR com capacidades por papel: `MANAGER` (unidades, vínculos, áreas, decisões de reserva, auditoria) e `CONCIERGE` (portaria). `SUPPORT` e papéis residenciais não recebem capacidade. Toda capacidade exige token `aal2`; AAL1 recebe `403 MFA_REQUIRED` sem alteração.
 - O executor de tenant publica `app.capabilities` no contexto local somente após conta ativa, vínculo vigente e AAL2; o ensaio JDBC confirma ausência de vazamento no pool.
 - BFF: `GET /auth/mfa`, `POST /auth/mfa/enroll` e `POST /auth/mfa/verify` (CSRF/Origin, 10 tentativas por sessão em 5 min, nova sessão opaca AAL2 com o mesmo limite absoluto). Procedimento de recuperação manual em [OPERACAO_MFA.md](OPERACAO_MFA.md).
-- CI 40803199004 verde nos três jobs no head `c78ff1a`. Testes com provedor sintético; Supabase Auth real, telas web e códigos de recuperação pendentes. Flags remotas inalteradas.
+- Revisão independente apontou falha não fechada após verificação incerta e limite apenas por sessão. Corrigido: a sessão é reservada antes do provedor; recusa definitiva libera a reserva; resultado incerto encerra a sessão local e no provedor; a troca para AAL2 é atômica (DELETE+INSERT na mesma transação, ensaiada em PostgreSQL real). Limites por conta: 5 verificações e 5 cadastros a cada 15 min.
+- CI 40803199004 (head `c78ff1a`) e CI 40805244326 (head `9a46a54`, correções) verdes nos três jobs. Provedor sintético; Supabase Auth real, telas web, códigos de recuperação e prova adicional no primeiro cadastro pendentes (risco e mitigação em OPERACAO_MFA.md). Flags remotas inalteradas.
 
 ## Pacote de especificação versionado — CP-001/CP-002
 
