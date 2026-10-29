@@ -170,4 +170,28 @@ describe('sessão nativa', () => {
     await manager.revoking;
     expect(fake.state.revoked).toEqual([token]);
   });
+
+  it('renovação automática atualiza o token que a saída revoga', async () => {
+    const { fake, manager } = setup();
+    await manager.start();
+    await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    const first = fake.state.session!.access_token;
+    // A biblioteca renova sozinha e avisa; nenhuma chamada da API passa pelo manager.
+    fake.state.session = { access_token: 'synthetic-access-renovado', user: { id: A } };
+    fake.emit('TOKEN_REFRESHED');
+    await manager.signOut();
+    await manager.revoking;
+    expect(fake.state.revoked).toEqual(['synthetic-access-renovado']);
+    expect(fake.state.revoked).not.toContain(first);
+    // Aviso de outra conta não troca o token desta.
+    const other = setup();
+    await other.manager.start();
+    await other.manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    const own = other.fake.state.session!.access_token;
+    other.fake.state.session = { access_token: 'synthetic-access-outra-conta', user: { id: B } };
+    other.fake.emit('TOKEN_REFRESHED');
+    await other.manager.signOut();
+    await other.manager.revoking;
+    expect(other.fake.state.revoked).toEqual([own]);
+  });
 });

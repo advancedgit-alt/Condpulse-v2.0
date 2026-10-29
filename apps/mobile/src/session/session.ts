@@ -77,7 +77,11 @@ export class SessionManager {
   }
 
   async start(): Promise<void> {
-    this.subscription ??= this.auth.onAuthStateChange((event) => {
+    this.subscription ??= this.auth.onAuthStateChange((event, session) => {
+      // Renovação automática: guarda o token novo em memória para a revogação na saída (sem leitura de rede depois).
+      if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'MFA_CHALLENGE_VERIFIED') && session && this.ending === null
+          && (this.state.status === 'signedIn' || this.state.status === 'mfaRequired') && session.user.id === this.state.accountId)
+        this.lastToken = session.access_token;
       // A biblioteca avisa SIGNED_OUT quando a renovação é recusada: a sessão acabou de fato. Fora do callback para
       // não chamar o Auth de dentro do próprio aviso.
       if (event === 'SIGNED_OUT' && this.ending === null && (this.state.status === 'signedIn' || this.state.status === 'mfaRequired'))
