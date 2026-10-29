@@ -19,7 +19,7 @@ public final class DatabaseOperationsHarness {
     private static int latest;
     private static String host, port;
     private static void require(boolean ok) { if (!ok) throw new AssertionError("DISPOSABLE_GUARD_OR_ASSERTION_FAILED"); }
-    private static void databaseName(String value) { require(value != null && value.matches("condpulse_dbops_[a-f0-9]{12}_(positive|normal|checksum|above|gap)")); }
+    private static void databaseName(String value) { require(value != null && value.matches("condpulse_dbops_[a-f0-9]{12}_(positive|normal|checksum|above|gap|resume)")); }
     /** Todas as migrations versionadas do JAR revisado, em ordem; a ultima define o alvo do guard. */
     private static List<String> sources() throws Exception {
         var location = DatabaseOperationsHarness.class.getResource("/db/migration");
@@ -51,7 +51,7 @@ public final class DatabaseOperationsHarness {
         databaseName(database);
         return Flyway.configure().dataSource(url(database), USER, PASSWORD)
             .defaultSchema("platform").schemas("platform", "cp").createSchemas(false)
-            .locations(location).baselineOnMigrate(false).baselineVersion("002").cleanDisabled(true)
+            .locations(location).baselineOnMigrate(false).baselineVersion("002").cleanDisabled(true).skipDefaultCallbacks(true)
             .validateMigrationNaming(true).validateOnMigrate(true).outOfOrder(false).target(target)
             .loggers(BootstrapBaseline.QuietLogCreator.class.getName()).load();
     }
@@ -65,9 +65,10 @@ public final class DatabaseOperationsHarness {
     private static int execute(String database, Flyway flyway, int from, int to) throws Exception {
         try (var c = open(database)) { return DatabaseOperationsMigrateGuard.execute(c, flyway, from, to); }
     }
+    /** Recusa pelas regras do guard (IllegalStateException), nunca por outro erro. */
     private static void rejected(String database, Flyway flyway, int from, int to) throws Exception {
         boolean denied = false;
-        try { execute(database, flyway, from, to); } catch (Exception expected) { denied = true; }
+        try { execute(database, flyway, from, to); } catch (IllegalStateException expected) { denied = true; }
         require(denied);
     }
     private static void copySources(Path directory) throws Exception {
@@ -88,6 +89,16 @@ public final class DatabaseOperationsHarness {
         require(flyway(database, "classpath:db/migration", "002").migrate().migrationsExecuted == 2);
         rejected(database, flyway(database, "classpath:db/migration", head()), 3, latest);
         require(!relation(database, "platform.web_sessions"));
+    }
+    /** Estado real da homologacao: baseline + 003-005; faixa 006-ATE aplica o resto, repete com zero e 007-ATE e recusada. */
+    private static void resume(String database) throws Exception {
+        legacy(database); require(flyway(database, "classpath:db/migration", "5").migrate().migrationsExecuted == 3);
+        var flyway = flyway(database, "classpath:db/migration", head());
+        rejected(database, flyway, 7, latest);
+        require(execute(database, flyway, 6, latest) == latest - 5);
+        require(execute(database, flyway, 6, latest) == 0);
+        // ACK alem da ultima migration do JAR, mesmo com o banco em dia, e recusado.
+        rejected(database, flyway(database, "classpath:db/migration", head()), 6, latest + 1);
     }
     private static void gap(String database) throws Exception {
         // Faixa que pula versoes ainda nao aplicadas (004 sem 003) e recusada sem escrever.
@@ -138,13 +149,13 @@ public final class DatabaseOperationsHarness {
                 require(rows.next() && "condpulse_ci".equals(rows.getString(1)) && USER.equals(rows.getString(2)));
             }
             try {
-                for (String suffix : List.of("positive", "normal", "checksum", "above", "gap")) {
+                for (String suffix : List.of("positive", "normal", "checksum", "above", "gap", "resume")) {
                     String database = prefix + "_" + suffix; databaseName(database);
                     sql(admin, "CREATE DATABASE \"" + database + "\""); created.add(database);
                 }
                 positive(prefix + "_positive"); noBaseline(prefix + "_normal");
                 checksum(prefix + "_checksum", fixture.resolve("checksum")); above(prefix + "_above", fixture.resolve("above"));
-                gap(prefix + "_gap");
+                gap(prefix + "_gap"); resume(prefix + "_resume");
             } finally {
                 for (String database : created.reversed()) {
                     databaseName(database); require(database.startsWith(prefix + "_"));
@@ -154,6 +165,6 @@ public final class DatabaseOperationsHarness {
             }
         }
         System.out.println("{\"passed\":true,\"positive\":" + (latest - 2) + ",\"replay\":0,\"missingBaselineDenied\":true,\"checksumDriftDenied\":true,"
-            + "\"aboveHeadDenied\":true,\"gapDenied\":true,\"shortRangeDenied\":true}");
+            + "\"aboveHeadDenied\":true,\"gapDenied\":true,\"shortRangeDenied\":true,\"resumeFrom006\":" + (latest - 5) + "}");
     }
 }

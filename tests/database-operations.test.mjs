@@ -56,7 +56,7 @@ test('operation child has fixed target, secret only in environment and no inheri
   assert.equal(invocation.env.DATABASE_PASSWORD,secret);assert.ok(!invocation.args.join(' ').includes(secret));
   assert.match(invocation.env.DATABASE_URL,/^jdbc:postgresql:\/\/aws-1-sa-east-1\.pooler\.supabase\.com:5432\/postgres\?sslmode=verify-full&sslrootcert=\/run\/secrets\/db-ca\.crt$/);
   assert.equal(invocation.env.DATABASE_USER,`postgres.${project}`);
-  assert.deepEqual(Object.keys(invocation.env).sort(),['PATH','JAVA_HOME','DATABASE_URL','DATABASE_USER','DATABASE_PASSWORD','CP_BASELINE_PROJECT_REF','CP_BASELINE_ACK','CP_MIGRATION_ACK'].sort());
+  assert.deepEqual(Object.keys(invocation.env).sort(),['PATH','JAVA_HOME','DATABASE_URL','DATABASE_USER','DATABASE_PASSWORD','CP_BASELINE_PROJECT_REF','CP_BASELINE_ACK','CP_MIGRATION_ACK','CP_EXPECTED_COMMIT'].sort());
   assert.equal(launcher.operationInvocation({...source,REQUEST_OPERATION:'migrate',CP_MIGRATION_ACK:`${project}:006-015:${sha}`}).env.CP_MIGRATION_ACK,
     `${project}:006-015:${sha}`);
   assert.deepEqual(invocation.args.slice(-2),['br.com.condpulse.bootstrap.BootstrapBaseline','inspect']);
@@ -85,7 +85,9 @@ test('migration guard only reads history then validates source before official m
   assert.match(java,/version == 2 && "BASELINE"\.equals/);
   assert.match(java,/version >= 3 && version <= to/);assert.match(java,/r\.getBoolean\("success"\)/);
   assert.match(java,/require\(last >= from - 1 && last <= to\)/);assert.match(java,/require\(latest == to\)/);
-  assert.match(java,/\^rpnrqfrfwywglvyykgrg:\(\[0-9\]\{3\}\)-\(\[0-9\]\{3\}\):\[a-f0-9\]\{40\}\$/);
+  assert.match(java,/migration\.getState\(\)\.isResolved\(\)/);assert.match(java,/ack\.endsWith\(":" \+ commit\)/);
+  assert.match(java,/skipDefaultCallbacks\(true\)/);
+  assert.match(java,/\^rpnrqfrfwywglvyykgrg:\(\[0-9\]\{3\}\)-\(\[0-9\]\{3\}\):\(\[a-f0-9\]\{40\}\)\$/);
   assert.match(java,/r\.getObject\("checksum"\) != null/);assert.match(java,/current_user,pg_try_advisory_lock/);
   assert.match(java,/pg_get_userbyid\(c\.relowner\)<>'postgres'/);
   assert.match(java,/baselineOnMigrate\(false\)\.cleanDisabled\(true\)/);
@@ -158,7 +160,7 @@ test('exact migration guard applies official legacy baseline then replays and bl
     assert.equal(run.status,0,`Disposable guard scenarios: ${run.stderr}`);
     const versions=readdirSync(join(root,'db/migrations')).filter(name=>/^V[0-9]{3}__.+\.sql$/.test(name)).length;
     assert.deepEqual(JSON.parse(run.stdout.trim()),{passed:true,positive:versions-2,replay:0,missingBaselineDenied:true,checksumDriftDenied:true,
-      aboveHeadDenied:true,gapDenied:true,shortRangeDenied:true});
+      aboveHeadDenied:true,gapDenied:true,shortRangeDenied:true,resumeFrom006:versions-5});
     assert.equal(run.stderr.trim(),'');
   } finally {
     const actual=realpathSync(temporary),base=realpathSync(tmpdir());

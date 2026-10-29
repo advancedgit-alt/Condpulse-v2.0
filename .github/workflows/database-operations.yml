@@ -132,12 +132,12 @@ jobs:
           import org.flywaydb.core.api.CoreErrorCode;
           import org.flywaydb.core.api.logging.LogFactory;
           public final class DatabaseOperationsMigrateGuard {
-            private static final Pattern ACK = Pattern.compile("^rpnrqfrfwywglvyykgrg:([0-9]{3})-([0-9]{3}):[a-f0-9]{40}$");
+            private static final Pattern ACK = Pattern.compile("^rpnrqfrfwywglvyykgrg:([0-9]{3})-([0-9]{3}):([a-f0-9]{40})$");
             private static void require(boolean value) { if (!value) throw new IllegalStateException(); }
-            /** Faixa DE-ATE reconhecida pelo operador; o gate ja ligou o ACK ao commit revisado. */
-            static int[] range(String ack) {
+            /** Faixa DE-ATE reconhecida pelo operador, ligada ao commit revisado (conferido no gate e de novo aqui). */
+            static int[] range(String ack, String commit) {
               var match = ACK.matcher(ack == null ? "" : ack);
-              require(match.matches());
+              require(match.matches() && commit != null && commit.matches("[a-f0-9]{40}") && ack.endsWith(":" + commit));
               int from = Integer.parseInt(match.group(1)), to = Integer.parseInt(match.group(2));
               require(from >= 3 && to >= from);
               return new int[]{from, to};
@@ -164,7 +164,6 @@ jobs:
               boolean locked=false;
               try {
                   require(c.getAutoCommit());
-                  c.setReadOnly(true);
                   try (var q = c.prepareStatement("select current_user,pg_try_advisory_lock(?)")) {
                     q.setQueryTimeout(10); q.setLong(1, BootstrapBaseline.LOCK_KEY);
                     try (var r = q.executeQuery()) {
@@ -186,7 +185,8 @@ jobs:
                   require(last >= from - 1 && last <= to);
                   // ATE precisa ser a ultima migration do JAR revisado: nada fica acima do alvo sem reconhecimento.
                   int latest = 0;
-                  for (var migration : flyway.info().all()) if (migration.getVersion() != null) latest = Math.max(latest, version(migration.getVersion()));
+                  for (var migration : flyway.info().all())
+                    if (migration.getVersion() != null && migration.getState().isResolved()) latest = Math.max(latest, version(migration.getVersion()));
                   require(latest == to);
                   Set<Integer> expected = new TreeSet<>();
                   for (int version = last + 1; version <= to; version++) expected.add(version);
@@ -222,7 +222,7 @@ jobs:
                 BootstrapBaseline.productionConfig(System.getenv());
                 require(BootstrapManifest.sourceCodes(BootstrapManifest.load()).isEmpty());
                 require("postgres.rpnrqfrfwywglvyykgrg".equals(System.getenv("DATABASE_USER")));
-                int[] range = range(System.getenv("CP_MIGRATION_ACK"));
+                int[] range = range(System.getenv("CP_MIGRATION_ACK"), System.getenv("CP_EXPECTED_COMMIT"));
                 var properties = new Properties();
                 properties.setProperty("user", System.getenv("DATABASE_USER"));
                 properties.setProperty("password", System.getenv("DATABASE_PASSWORD"));
@@ -230,7 +230,7 @@ jobs:
                 try (var c = DriverManager.getConnection(System.getenv("DATABASE_URL"), properties)) {
                   var flyway = Flyway.configure().dataSource(System.getenv("DATABASE_URL"), System.getenv("DATABASE_USER"), System.getenv("DATABASE_PASSWORD"))
                     .defaultSchema("platform").schemas("platform", "cp").createSchemas(false)
-                    .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true)
+                    .locations("classpath:db/migration").baselineOnMigrate(false).cleanDisabled(true).skipDefaultCallbacks(true)
                     .validateMigrationNaming(true).validateOnMigrate(true).outOfOrder(false).target(String.valueOf(range[1]))
                     .loggers(BootstrapBaseline.QuietLogCreator.class.getName()).load();
                   int executed=execute(c,flyway,range[0],range[1]);
@@ -252,6 +252,7 @@ jobs:
           REQUEST_OPERATION: ${{ inputs.operation }}
           CP_BASELINE_ACK: ${{ inputs.baseline_ack }}
           CP_MIGRATION_ACK: ${{ inputs.migration_ack }}
+          CP_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: |
           node --input-type=module <<'EXECUTE'
           import {spawnSync} from 'node:child_process';
@@ -268,7 +269,7 @@ jobs:
               DATABASE_URL:'jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt',
               DATABASE_USER:'postgres.rpnrqfrfwywglvyykgrg',DATABASE_PASSWORD:source.DATABASE_PASSWORD,
               CP_BASELINE_PROJECT_REF:'rpnrqfrfwywglvyykgrg',CP_BASELINE_ACK:source.CP_BASELINE_ACK??'',
-              CP_MIGRATION_ACK:source.CP_MIGRATION_ACK??''};
+              CP_MIGRATION_ACK:source.CP_MIGRATION_ACK??'',CP_EXPECTED_COMMIT:source.CP_EXPECTED_COMMIT??''};
             return {executable:join(source.JAVA_HOME,'bin/java'),args:['-Xmx768m',
               `-Dlogback.configurationFile=${base}/classes/bootstrap/logback-baseline.xml`,
               '-cp',`${base}/classes:${base}/lib/*`,...commands[operation]],env};
