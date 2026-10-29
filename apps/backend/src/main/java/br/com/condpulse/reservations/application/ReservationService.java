@@ -70,10 +70,13 @@ public class ReservationService {
     throw new BusinessProblem("AMENITY_POLICY_CHANGED",409,"As regras da área mudaram. Revise-as antes de tentar novamente.");
    Instant now=store.currentTime();
    var window=book(amenity,request,now,context);
+   // Pedidos e retenções vencidos não podem ocupar cota nem período: expiram sob a mesma trava.
+   store.expireStale(tenant,request.unitId(),request.amenityId(),window.occupiedFrom(),window.occupiedUntil());
    if(store.activeCount(tenant,request.unitId(),now)>=amenity.policy().maximumActivePerUnit())
     throw new BusinessProblem("UNIT_RESERVATION_QUOTA_REACHED",409,"A unidade atingiu o limite de reservas ativas para esta regra.");
    var reservation=store.create(tenant,actor,request,amenity,window,context.timeZone().getId());
-   store.record(tenant,actor,reservation,"RESERVATION_CREATED",UUID.randomUUID());
+   store.record(tenant,actor,reservation,"PENDING_APPROVAL".equals(reservation.status())
+    ?"RESERVATION_REQUESTED":"RESERVATION_CREATED",UUID.randomUUID());
    store.finish(tenant,actor,route,key,reservation,201);
    return new ReservationModels.Mutation(reservation,false,201);
   });
@@ -88,19 +91,32 @@ public class ReservationService {
    if(!previous.fresh()) return new ReservationModels.Mutation(previous.reservation(),true,previous.responseStatus());
    // Mesma ordem global da criação: idempotência -> unidade -> linha da reserva.
    store.lockUnit(tenant,request.unitId());
-   var stored=store.ownForUpdate(tenant,request.unitId(),actor,reservationId);
+   var stored=store.unitReservationForUpdate(tenant,request.unitId(),reservationId);
+   // Cancelamento residencial é do autor. Outra pessoa da unidade vê a reserva, então a recusa é explícita.
+   if(!actor.equals(stored.createdBy()))
+    throw new BusinessProblem("RESERVATION_AUTHOR_REQUIRED",403,"Somente quem fez a reserva pode cancelá-la pelo aplicativo.");
    var current=stored.view();
    if("CANCELLED".equals(current.status())) {
+    // Repetição do próprio cancelamento devolve o estado. Cancelamento feito pela gestão não vira sucesso do autor:
+    // a unidade precisa atualizar a agenda e ver o motivo informado.
+    if(!ReservationStore.AUTHOR_CANCELLED_REASON.equals(current.decisionReason()))
+     throw new BusinessProblem("RESERVATION_CHANGED",409,"A reserva foi alterada. Atualize os dados.");
     store.finish(tenant,actor,route,key,current,200);
     return new ReservationModels.Mutation(current,false,200);
    }
-   if(!"CONFIRMED".equals(current.status()) || current.version()!=request.expectedVersion())
+   boolean pending="PENDING_APPROVAL".equals(current.status());
+   if(!("CONFIRMED".equals(current.status()) || pending) || current.version()!=request.expectedVersion())
     throw new BusinessProblem("RESERVATION_CHANGED",409,"A reserva foi alterada. Atualize os dados.");
-   if(stored.cancellationLeadMinutes()==null)
-    throw new BusinessProblem("RESERVATION_RULE_SNAPSHOT_INVALID",503,"As regras aceitas desta reserva precisam ser revisadas.");
    Instant now=store.currentTime();
-   if(!now.isBefore(current.startsAt()) || now.isAfter(current.startsAt().minus(Duration.ofMinutes(stored.cancellationLeadMinutes()))))
+   if(!now.isBefore(current.startsAt()))
     throw new BusinessProblem("RESERVATION_CANCELLATION_CLOSED",409,"O prazo de cancelamento desta reserva terminou.");
+   // Pedido ainda pendente pode ser retirado pelo autor até o início; prazo de cancelamento vale para confirmadas.
+   if(!pending) {
+    if(stored.cancellationLeadMinutes()==null)
+     throw new BusinessProblem("RESERVATION_RULE_SNAPSHOT_INVALID",503,"As regras aceitas desta reserva precisam ser revisadas.");
+    if(now.isAfter(current.startsAt().minus(Duration.ofMinutes(stored.cancellationLeadMinutes()))))
+     throw new BusinessProblem("RESERVATION_CANCELLATION_CLOSED",409,"O prazo de cancelamento desta reserva terminou.");
+   }
    var cancelled=store.cancel(tenant,actor,current);
    store.record(tenant,actor,cancelled,"RESERVATION_CANCELLED",UUID.randomUUID());
    store.finish(tenant,actor,route,key,cancelled,200);
@@ -117,8 +133,6 @@ public class ReservationService {
  private static void requireAvailable(ReservationStore.AmenityData amenity) {
   if(amenity.policy()==null)
    throw new BusinessProblem("AMENITY_POLICY_NOT_CONFIGURED",503,"As regras desta área precisam ser configuradas antes da reserva.");
-  if(amenity.approvalRequired())
-   throw new BusinessProblem("AMENITY_APPROVAL_UNAVAILABLE",503,"Esta área exige aprovação e ainda não está disponível neste fluxo.");
  }
  private static void requireReadable(TenantContext context,UUID unit) {
   if(unit==null || context.memberships().stream().noneMatch(m->unit.equals(m.unitId()) && (m.canCreateReservation() || m.canCancelReservation())))

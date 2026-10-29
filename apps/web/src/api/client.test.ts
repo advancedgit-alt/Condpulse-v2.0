@@ -14,7 +14,7 @@ const create: CreateReservation = { unitId: unit, amenityId: amenity, startsAt: 
 const reservation: Reservation = { reservationId: '50000000-0000-4000-8000-000000000001', unitId: unit,
   amenityId: amenity, status: 'CONFIRMED', startsAt: create.startsAt, endsAt: create.endsAt,
   occupiedFrom: create.startsAt, occupiedUntil: '2030-01-01T16:15:00Z', acceptedPolicyVersion: 1,
-  feeCents: 0, version: 0 };
+  feeCents: 0, version: 0, decisionReason: null };
 const key = 'web:synthetic-intention-000001';
 const csrf = (token = 'synthetic-csrf') => json({ headerName: 'X-CSRF-Token', token });
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -26,6 +26,34 @@ function deferred<T>() {
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
+
+const policy = { schemaVersion: 1, weekDays: [1, 2, 3, 4, 5, 6, 7], opensAt: '08:00', closesAt: '22:00',
+  minimumLeadMinutes: 0, maximumAdvanceDays: 30, maximumDurationMinutes: 240, maximumActivePerUnit: 2, cancellationLeadMinutes: 60 };
+const area = (bookingState: string, approvalRequired: boolean) => ({ amenityId: amenity, name: 'Salão sintético', capacity: 20,
+  policyVersion: 3, feeCents: 5000, bufferMinutes: 30, approvalRequired, bookingState, policy });
+
+describe('pedidos de área com aprovação', () => {
+  it('preserva estado de pedido e motivo de decisão; rejeita estado de catálogo removido', async () => {
+    const fetcher = mockFetch();
+    fetcher.mockImplementation(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/amenities')) return json([area('AVAILABLE_FOR_APPROVAL_REQUEST', true)]);
+      return json({ reservations: [{ ...reservation, status: 'PENDING_APPROVAL' },
+        { ...reservation, reservationId: '50000000-0000-4000-8000-000000000002', status: 'REJECTED', decisionReason: 'Manutenção da área' },
+        { ...reservation, reservationId: '50000000-0000-4000-8000-000000000003', decisionReason: undefined }], truncated: false });
+    });
+    const client = new CondPulseApi({ fetch: fetcher });
+    expect((await client.amenities(tenant))[0]?.bookingState).toBe('AVAILABLE_FOR_APPROVAL_REQUEST');
+    const page = await client.reservations(tenant, unit, { from: '2030-01-01T00:00:00Z', until: '2030-01-31T00:00:00Z' });
+    expect(page.reservations.map(item => [item.status, item.decisionReason])).toEqual([
+      ['PENDING_APPROVAL', null], ['REJECTED', 'Manutenção da área'], ['CONFIRMED', null]]);
+    fetcher.mockImplementation(async () => json([area('APPROVAL_UNAVAILABLE', true)]));
+    await expect(client.amenities(tenant)).rejects.toBeInstanceOf(ApiError);
+    fetcher.mockImplementation(async () => json({ reservations: [{ ...reservation, decisionReason: 42 }], truncated: false }));
+    await expect(client.reservations(tenant, unit, { from: '2030-01-01T00:00:00Z', until: '2030-01-31T00:00:00Z' }))
+      .rejects.toBeInstanceOf(ApiError);
+  });
+});
 
 describe('cliente BFF same-origin', () => {
   it('envia cookies/CSRF, bloqueia redirects e busca CSRF novo após login, sem headerOrigin/Authorization', async () => {

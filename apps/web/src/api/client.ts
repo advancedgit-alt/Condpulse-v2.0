@@ -24,12 +24,12 @@ const messages: Record<string, string> = {
   RESERVATION_ACCESS_DENIED: 'Seu vínculo não permite acessar as reservas.',
   RESERVATION_RESOURCE_UNAVAILABLE: 'A reserva ou a área não está disponível para esta operação.',
   AMENITY_POLICY_NOT_CONFIGURED: 'As regras desta área ainda precisam ser configuradas.',
-  AMENITY_APPROVAL_UNAVAILABLE: 'Esta área exige aprovação e ainda não está disponível neste fluxo.',
   AMENITY_POLICY_CHANGED: 'As regras da área mudaram. Atualize e revise as condições antes de reservar.',
   RESERVATION_CONFLICT: 'O período foi ocupado. Atualize os dados e escolha outro horário.',
   UNIT_RESERVATION_QUOTA_REACHED: 'A unidade atingiu o limite de reservas previsto para esta área.',
   RESERVATION_CHANGED: 'A reserva foi alterada. Atualize os dados antes de continuar.',
   RESERVATION_CANCELLATION_CLOSED: 'O prazo para cancelar esta reserva terminou.',
+  RESERVATION_AUTHOR_REQUIRED: 'Somente quem fez a reserva pode cancelá-la pelo aplicativo.',
   RESERVATION_RULE_SNAPSHOT_INVALID: 'As regras aceitas desta reserva precisam ser conferidas pela gestão.',
   RESERVATION_WINDOW_INVALID: 'O período informado não atende às regras da área.',
   RESERVATION_RANGE_INVALID: 'Informe um período de consulta de até 31 dias.',
@@ -121,7 +121,7 @@ function amenity(value: unknown): Amenity {
   if (!record(value) || !isUUID(value.amenityId) || !isString(value.name) || !isInteger(value.capacity)
       || !isInteger(value.policyVersion) || !isInteger(value.feeCents) || !isInteger(value.bufferMinutes)
       || typeof value.approvalRequired !== 'boolean'
-      || !oneOf(value.bookingState, ['POLICY_NOT_CONFIGURED', 'APPROVAL_UNAVAILABLE', 'AVAILABLE_FOR_REQUEST']))
+      || !oneOf(value.bookingState, ['POLICY_NOT_CONFIGURED', 'AVAILABLE_FOR_APPROVAL_REQUEST', 'AVAILABLE_FOR_REQUEST']))
     throw invalidResponse();
   return { amenityId: value.amenityId, name: value.name, capacity: value.capacity, policyVersion: value.policyVersion,
     feeCents: value.feeCents, bufferMinutes: value.bufferMinutes, approvalRequired: value.approvalRequired,
@@ -132,11 +132,13 @@ function reservation(value: unknown, uncertain = false): Reservation {
   if (!record(value) || !isUUID(value.reservationId) || !isUUID(value.unitId) || !isUUID(value.amenityId)
       || !oneOf(value.status, ['HELD', 'PENDING_APPROVAL', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'])
       || !isDate(value.startsAt) || !isDate(value.endsAt) || !isDate(value.occupiedFrom) || !isDate(value.occupiedUntil)
-      || !isInteger(value.acceptedPolicyVersion) || !isInteger(value.feeCents) || !isInteger(value.version))
+      || !isInteger(value.acceptedPolicyVersion) || !isInteger(value.feeCents) || !isInteger(value.version)
+      || !(value.decisionReason === undefined || value.decisionReason === null || isString(value.decisionReason)))
     throw invalidResponse(uncertain);
   return { reservationId: value.reservationId, unitId: value.unitId, amenityId: value.amenityId, status: value.status,
     startsAt: value.startsAt, endsAt: value.endsAt, occupiedFrom: value.occupiedFrom, occupiedUntil: value.occupiedUntil,
-    acceptedPolicyVersion: value.acceptedPolicyVersion, feeCents: value.feeCents, version: value.version };
+    acceptedPolicyVersion: value.acceptedPolicyVersion, feeCents: value.feeCents, version: value.version,
+    decisionReason: typeof value.decisionReason === 'string' ? value.decisionReason : null };
 }
 
 function availability(value: unknown, expected: {

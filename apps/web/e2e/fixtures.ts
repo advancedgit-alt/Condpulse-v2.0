@@ -24,7 +24,7 @@ export function reservationFixture() {
     amenityId: AMENITY_A, status: 'CONFIRMED', startsAt: window.startsAt,
     endsAt: window.endsAt, occupiedFrom: window.startsAt,
     occupiedUntil: new Date(Date.parse(window.endsAt) + 15 * 60_000).toISOString(),
-    acceptedPolicyVersion: 1, feeCents: 2500, version: 0,
+    acceptedPolicyVersion: 1, feeCents: 2500, version: 0, decisionReason: null as string | null,
   };
 }
 
@@ -51,6 +51,8 @@ export interface ApiState {
 }
 
 interface FixtureOptions {
+  /** Área A exige aprovação: o servidor sintético devolve PENDING_APPROVAL na criação. */
+  approvalRequired?: boolean;
   delayAmenitiesA?: Promise<void>;
   onAmenitiesARequested?: () => void;
   onAmenitiesASettled?: () => void;
@@ -77,12 +79,12 @@ const identity = {
   ],
 };
 
-function amenity(tenant: string) {
+function amenity(tenant: string, approvalRequired = false) {
   return {
     amenityId: tenant === TENANT_A ? AMENITY_A : AMENITY_B,
     name: tenant === TENANT_A ? 'Área Sintética A' : 'Área Sintética B',
     capacity: 12, policyVersion: 1, feeCents: 2500, bufferMinutes: 15,
-    approvalRequired: false, bookingState: 'AVAILABLE_FOR_REQUEST',
+    approvalRequired, bookingState: approvalRequired ? 'AVAILABLE_FOR_APPROVAL_REQUEST' : 'AVAILABLE_FOR_REQUEST',
     policy: { schemaVersion: 1, weekDays: [1, 2, 3, 4, 5, 6, 7], opensAt: '08:00', closesAt: '22:00',
       minimumLeadMinutes: 0, maximumAdvanceDays: 366, maximumDurationMinutes: 600,
       maximumActivePerUnit: 3, cancellationLeadMinutes: 0 },
@@ -197,7 +199,7 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
         catch { /* Requisição já cancelada pelo cliente. */ }
         finally { options.onAmenitiesASettled?.(); }
       } else {
-        await json(route, 200, [amenity(tenant)]);
+        await json(route, 200, [amenity(tenant, tenant === TENANT_A && Boolean(options.approvalRequired))]);
       }
       return;
     }
@@ -257,6 +259,7 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       const replayed = state.createKeys.slice(0, -1).includes(key);
       if (!replayed) {
         state.reservations.push({ ...reservationFixture(), ...body, occupiedFrom: body.startsAt,
+          status: options.approvalRequired ? 'PENDING_APPROVAL' : 'CONFIRMED',
           occupiedUntil: new Date(Date.parse(body.endsAt) + 15 * 60_000).toISOString() });
       }
       if (options.loseFirstCreationResponse && !replayed) {
@@ -274,7 +277,7 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       }
       const current = state.reservations[0];
       if (!current) throw new Error('Fixture de cancelamento ausente.');
-      current.status = 'CANCELLED'; current.version += 1;
+      current.status = 'CANCELLED'; current.version += 1; current.decisionReason = 'Cancelamento solicitado pelo autor.';
       await json(route, 200, current, { 'Idempotency-Replayed': 'false' });
       return;
     }

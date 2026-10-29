@@ -125,7 +125,7 @@ function ReservationContext({ accountId, membership, unitId }: { accountId: stri
     <div className="residence-heading"><div><span className="eyebrow">SUA ROTINA, SEU ESPAÇO</span><h1>Reservas da unidade</h1><p>Escolha uma área, confira as regras e acompanhe a confirmação.</p></div><div className="context-badge"><Icon name="home" /><div><strong>{unit.blockName ? `${unit.blockName} · ` : ''}{unit.label}</strong><span>{roleNames[membership.role] ?? 'Vínculo ativo'}</span></div></div></div>
     <div className="reservation-layout"><div className="reservation-main"><section aria-labelledby="areas-title"><div className="section-heading"><div><span className="section-index">01 / ESCOLHA O ESPAÇO</span><h2 id="areas-title">Áreas do condomínio</h2></div><button className="button button-secondary button-compact" disabled={validating || operations.locked} onClick={() => void areas.refetch()}>{areas.isFetching ? 'Atualizando…' : 'Atualizar áreas'}</button></div>
       {areas.isPending ? <div className="panel"><Loading label="Consultando áreas e regras…" /></div> : areas.isError ? <ErrorState error={areas.error} retry={() => void areas.refetch()} /> : areas.data.length === 0 ? <div className="panel"><Empty title="Nenhuma área disponível">As áreas aparecerão aqui quando a gestão configurar o catálogo.</Empty></div> : <div className="amenity-grid">{areas.data.map(area => <AreaCard key={area.amenityId} area={area} disabled={operations.locked || validating} selected={selectedArea === area.amenityId} onChoose={() => setSelectedArea(area.amenityId)} />)}</div>}
-      {selected && selected.policy && selected.bookingState === 'AVAILABLE_FOR_REQUEST' && !selected.approvalRequired ? <BookingForm key={`${selected.amenityId}:${selected.policyVersion}:${JSON.stringify([selected.policy, selected.capacity, selected.bufferMinutes, selected.feeCents])}`} area={selected} scope={scope} timeZone={membership.timeZone} validating={validating} onClose={() => setSelectedArea(null)} /> : null}
+      {selected && isBookable(selected) ? <BookingForm key={`${selected.amenityId}:${selected.policyVersion}:${JSON.stringify([selected.policy, selected.capacity, selected.bufferMinutes, selected.feeCents])}`} area={selected} scope={scope} timeZone={membership.timeZone} validating={validating} onClose={() => setSelectedArea(null)} /> : null}
     </section>
     <section className="reservations-section" aria-labelledby="reservations-title"><div className="section-heading"><div><span className="section-index">02 / ACOMPANHE</span><h2 id="reservations-title">Agenda da unidade</h2></div><button className="button button-secondary button-compact" disabled={reservations.isFetching} onClick={() => void reservations.refetch()}>Atualizar</button></div><div className="reservation-filter"><label htmlFor="agenda-date">A partir de</label><input id="agenda-date" type="date" value={date} onChange={event => setDate(event.target.value)} /><span>Consulta de 30 dias · horários em {membership.timeZone}</span></div>
       {range.error ? <Notice tone="error">{range.error}</Notice> : reservations.isFetching || reservations.isPending ? <div className="panel"><Loading label="Consultando reservas da unidade…" /></div> : reservations.isError ? <ErrorState error={reservations.error} retry={() => void reservations.refetch()} /> : reservations.data ? <>
@@ -136,9 +136,21 @@ function ReservationContext({ accountId, membership, unitId }: { accountId: stri
   </>;
 }
 
+/** Combinação inconsistente entre aprovação e estado de reserva falha fechada: a área não aceita pedido. */
+function isBookable(area: Amenity): boolean {
+  if (area.policy === null) return false;
+  return area.approvalRequired ? area.bookingState === 'AVAILABLE_FOR_APPROVAL_REQUEST' : area.bookingState === 'AVAILABLE_FOR_REQUEST';
+}
+
 function AreaCard({ area, disabled, selected, onChoose }: { area: Amenity; disabled: boolean; selected: boolean; onChoose(): void }) {
-  const available = area.bookingState === 'AVAILABLE_FOR_REQUEST' && area.policy !== null && !area.approvalRequired;
-  return <article className={`amenity-card${selected ? ' selected' : ''}`}><div className="amenity-top"><span className="amenity-symbol"><Icon name="calendar" /></span><span className={`status-pill ${available ? 'status-ready' : 'status-neutral'}`}>{available ? 'Reservas disponíveis' : 'Indisponível neste fluxo'}</span></div><h3>{area.name}</h3><p className="amenity-capacity">Capacidade: {area.capacity} pessoas</p><div className="amenity-details"><span>{area.policy ? `${area.policy.opensAt} às ${area.policy.closesAt}` : 'Regras pendentes'}</span><span>{area.feeCents > 0 ? money(area.feeCents) : 'Sem taxa informada'}</span></div><p className="amenity-note">{area.approvalRequired ? 'Esta área exige aprovação e ainda não está disponível neste fluxo.' : area.policy === null ? 'A gestão precisa concluir a configuração das regras.' : `Limpeza após o uso: ${area.bufferMinutes} min · regulamento v${area.policyVersion}`}</p><button className="button button-secondary button-wide" disabled={disabled || !available} onClick={onChoose} aria-label={`Reservar ${area.name}`}>{selected ? 'Área selecionada' : 'Reservar esta área'}<Icon name="arrow" /></button></article>;
+  const available = isBookable(area);
+  const approval = available && area.approvalRequired;
+  const pill = !available ? 'Indisponível neste fluxo' : approval ? 'Sujeita a aprovação' : 'Reservas disponíveis';
+  const pillClass = !available ? 'status-neutral' : approval ? 'status-pending' : 'status-ready';
+  const note = area.policy === null ? 'A gestão precisa concluir a configuração das regras.'
+    : !available ? 'Esta área não está disponível para pedidos neste momento.'
+      : `${approval ? 'Pedido sujeito à aprovação da gestão · ' : ''}Limpeza após o uso: ${area.bufferMinutes} min · regulamento v${area.policyVersion}`;
+  return <article className={`amenity-card${selected ? ' selected' : ''}`}><div className="amenity-top"><span className="amenity-symbol"><Icon name="calendar" /></span><span className={`status-pill ${pillClass}`}>{pill}</span></div><h3>{area.name}</h3><p className="amenity-capacity">Capacidade: {area.capacity} pessoas</p><div className="amenity-details"><span>{area.policy ? `${area.policy.opensAt} às ${area.policy.closesAt}` : 'Regras pendentes'}</span><span>{area.feeCents > 0 ? money(area.feeCents) : 'Sem taxa informada'}</span></div><p className="amenity-note">{note}</p><button className="button button-secondary button-wide" disabled={disabled || !available} onClick={onChoose} aria-label={`${approval ? 'Solicitar' : 'Reservar'} ${area.name}`}>{selected ? 'Área selecionada' : approval ? 'Solicitar esta área' : 'Reservar esta área'}<Icon name="arrow" /></button></article>;
 }
 
 function BookingForm({ area, scope, timeZone, validating, onClose }: { area: Amenity; scope: Scope; timeZone: string; validating: boolean; onClose(): void }) {
@@ -151,6 +163,7 @@ function BookingForm({ area, scope, timeZone, validating, onClose }: { area: Ame
   const panel = useRef<HTMLElement>(null);
   useEffect(() => { panel.current?.focus(); }, []);
   const policy = area.policy!;
+  const approval = area.approvalRequired;
   const weekDays = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
   const availability = useAmenityAvailability(scope, area, timeZone, availabilityDate, validating);
   const proposal = useMemo(() => {
@@ -179,16 +192,17 @@ function BookingForm({ area, scope, timeZone, validating, onClose }: { area: Ame
     if (/^\d{4}-\d{2}-\d{2}T/.test(next)) setAvailabilityDate(next.slice(0, 10));
   }
   return <section ref={panel} tabIndex={-1} className="panel booking-panel" aria-labelledby="booking-title">
-    <div className="section-heading"><div><span className="section-index">NOVA RESERVA</span><h3 id="booking-title">{area.name}</h3></div>
+    <div className="section-heading"><div><span className="section-index">{approval ? 'NOVO PEDIDO' : 'NOVA RESERVA'}</span><h3 id="booking-title">{area.name}</h3></div>
       <button className="text-button" onClick={onClose} disabled={operations.locked}>Fechar</button></div>
     <div className="policy-summary"><strong>Condições da versão {area.policyVersion}</strong><dl>
       <div><dt>Horários</dt><dd>{policy.opensAt} às {policy.closesAt} · {policy.weekDays.map(day => weekDays[day - 1]).join(', ')}</dd></div>
       <div><dt>Antecedência</dt><dd>Mínimo {policy.minimumLeadMinutes} min · até {policy.maximumAdvanceDays} dias</dd></div>
       <div><dt>Duração e limpeza</dt><dd>Até {policy.maximumDurationMinutes} min de uso + {area.bufferMinutes} min de limpeza</dd></div>
       <div><dt>Limite para solicitar</dt><dd>Menos de {policy.maximumActivePerUnit} reservas ativas da unidade em todas as áreas</dd></div>
-      <div><dt>Cancelamento</dt><dd>Pelo autor, até {policy.cancellationLeadMinutes} min antes do início</dd></div>
+      <div><dt>Cancelamento</dt><dd>{approval ? `Pedido pendente: o autor pode retirá-lo até o início · Confirmada: até ${policy.cancellationLeadMinutes} min antes do início` : `Pelo autor, até ${policy.cancellationLeadMinutes} min antes do início`}</dd></div>
       <div><dt>Taxa informativa</dt><dd>{money(area.feeCents)} · pagamento não é realizado por esta tela</dd></div>
     </dl></div>
+    {approval ? <Notice>Esta área exige aprovação da gestão. O pedido ocupa o período até a decisão, que precisa acontecer em até 24 horas após o envio e nunca depois do início. Sem decisão no prazo, o pedido expira e o período é liberado.</Notice> : null}
     <AvailabilityPanel availability={availability} area={area} timeZone={timeZone} date={availabilityDate}
       onDateChange={setAvailabilityDate} disabled={operations.locked || validating} />
     <form onSubmit={event => void submit(event)}><fieldset disabled={operations.locked || validating} className="booking-fields">
@@ -202,11 +216,11 @@ function BookingForm({ area, scope, timeZone, validating, onClose }: { area: Ame
       {proposal.error ? <Notice tone="error">{proposal.error}</Notice> : null}
       {availability.current && selection === 'blocked' ? <Notice tone="warning">O período informado encontra um intervalo bloqueado, incluindo a limpeza. Escolha outro horário.</Notice> : null}
       {availability.current && selection === 'outside' ? <Notice tone="warning">O uso e a limpeza precisam estar dentro do dia consultado. Confira o dia, os horários e as regras.</Notice> : null}
-      {canConfirm ? <p className="availability-selection">O período informado não coincide com os intervalos desta consulta. A confirmação depende da verificação final do servidor.</p> : null}
+      {canConfirm ? <p className="availability-selection">O período informado não coincide com os intervalos desta consulta. {approval ? 'O envio depende da verificação final do servidor, e a reserva, da decisão da gestão.' : 'A confirmação depende da verificação final do servidor.'}</p> : null}
       <label className="checkbox-label"><input type="checkbox" required checked={accepted} onChange={event => setAccepted(event.target.checked)} />
         <span>Li e aceito as regras da versão {area.policyVersion}.</span></label>
       {validation ? <Notice tone="error">{validation}</Notice> : null}
-      <button className="button" type="submit" disabled={!accepted || operations.locked || validating || !canConfirm}>Confirmar reserva<Icon name="check" /></button>
+      <button className="button" type="submit" disabled={!accepted || operations.locked || validating || !canConfirm}>{approval ? 'Enviar pedido' : 'Confirmar reserva'}<Icon name="check" /></button>
     </fieldset></form>
   </section>;
 }
@@ -214,7 +228,11 @@ function BookingForm({ area, scope, timeZone, validating, onClose }: { area: Ame
 function ReservationCard({ reservation, area, scope, timeZone, confirming, validating, onAskCancel, onDismiss }: { reservation: Reservation; area: Amenity | undefined; scope: Scope; timeZone: string; confirming: boolean; validating: boolean; onAskCancel(): void; onDismiss(): void }) {
   const operations = useOperations();
   const states: Record<Reservation['status'], string> = { CONFIRMED: 'Confirmada', CANCELLED: 'Cancelada', EXPIRED: 'Expirada', HELD: 'Em retenção', PENDING_APPROVAL: 'Aguardando aprovação', REJECTED: 'Não aprovada' };
-  const canAsk = reservation.status === 'CONFIRMED' && new Date(reservation.startsAt).getTime() > Date.now();
-  async function confirm() { if (operations.locked || validating) return; await operations.cancel(scope, reservation.reservationId, { unitId: scope.unitId, expectedVersion: reservation.version }); onDismiss(); }
-  return <article className="reservation-card"><div className="reservation-row"><div className="reservation-date-icon"><Icon name="calendar" /></div><div className="reservation-info"><h3>{area?.name ?? 'Área da reserva'}</h3><p>{formatWhen(reservation.startsAt, timeZone)} — {new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(reservation.endsAt))}</p><small>Ocupação com limpeza até {new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(reservation.occupiedUntil))} · regulamento v{reservation.acceptedPolicyVersion}</small></div><span className={`status-pill ${reservation.status === 'CONFIRMED' ? 'status-ready' : 'status-neutral'}`}>{states[reservation.status]}</span></div>{canAsk ? <div className="reservation-actions">{confirming ? <div className="cancel-confirmation" role="group" aria-label="Confirmação de cancelamento"><p>Cancelar esta reserva? Apenas o autor pode cancelar, dentro do prazo das regras aceitas.</p><div className="button-row"><button className="button button-danger" disabled={operations.locked || validating} onClick={() => void confirm()}>Confirmar cancelamento</button><button className="button button-secondary" disabled={operations.locked || validating} onClick={onDismiss}>Manter reserva</button></div></div> : <><span>O cancelamento é permitido somente ao autor.</span><button className="text-button danger-text" disabled={operations.locked || validating} aria-label={`Cancelar reserva ${formatWhen(reservation.startsAt, timeZone)}`} onClick={onAskCancel}>Cancelar reserva</button></>}</div> : null}</article>;
+  const pending = reservation.status === 'PENDING_APPROVAL';
+  const canAsk = (reservation.status === 'CONFIRMED' || pending) && new Date(reservation.startsAt).getTime() > Date.now();
+  const reason = ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(reservation.status) ? reservation.decisionReason : null;
+  const pill = reservation.status === 'CONFIRMED' ? 'status-ready' : pending ? 'status-pending' : 'status-neutral';
+  const time = (value: string) => new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+  async function confirm() { if (operations.locked || validating) return; await operations.cancel(scope, reservation.reservationId, { unitId: scope.unitId, expectedVersion: reservation.version }, pending); onDismiss(); }
+  return <article className="reservation-card"><div className="reservation-row"><div className="reservation-date-icon"><Icon name="calendar" /></div><div className="reservation-info"><h3>{area?.name ?? 'Área da reserva'}</h3><p>{formatWhen(reservation.startsAt, timeZone)} — {time(reservation.endsAt)}</p><small>Ocupação com limpeza até {time(reservation.occupiedUntil)} · regulamento v{reservation.acceptedPolicyVersion}</small>{pending ? <p className="reservation-pending">Aguardando decisão da gestão. O período fica reservado para a unidade até a decisão; ainda não é uma reserva confirmada.</p> : null}{reason ? <p className="reservation-reason">Motivo: {reason}</p> : null}</div><span className={`status-pill ${pill}`}>{states[reservation.status]}</span></div>{canAsk ? <div className="reservation-actions">{confirming ? <div className="cancel-confirmation" role="group" aria-label={pending ? 'Confirmação de retirada' : 'Confirmação de cancelamento'}><p>{pending ? 'Retirar este pedido? O período será liberado para outras unidades.' : 'Cancelar esta reserva? Apenas o autor pode cancelar, dentro do prazo das regras aceitas.'}</p><div className="button-row"><button className="button button-danger" disabled={operations.locked || validating} onClick={() => void confirm()}>{pending ? 'Confirmar retirada' : 'Confirmar cancelamento'}</button><button className="button button-secondary" disabled={operations.locked || validating} onClick={onDismiss}>{pending ? 'Manter pedido' : 'Manter reserva'}</button></div></div> : <><span>{pending ? 'Somente o autor pode retirar o pedido.' : 'O cancelamento é permitido somente ao autor.'}</span><button className="text-button danger-text" disabled={operations.locked || validating} aria-label={`${pending ? 'Retirar pedido' : 'Cancelar reserva'} ${formatWhen(reservation.startsAt, timeZone)}`} onClick={onAskCancel}>{pending ? 'Retirar pedido' : 'Cancelar reserva'}</button></>}</div> : null}</article>;
 }

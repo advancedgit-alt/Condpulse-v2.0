@@ -47,7 +47,8 @@ export interface Amenity {
   feeCents: number;
   bufferMinutes: number;
   approvalRequired: boolean;
-  bookingState: 'POLICY_NOT_CONFIGURED' | 'APPROVAL_UNAVAILABLE' | 'AVAILABLE_FOR_REQUEST';
+  /** AVAILABLE_FOR_APPROVAL_REQUEST cria pedido PENDING_APPROVAL, nunca uma reserva confirmada. */
+  bookingState: 'POLICY_NOT_CONFIGURED' | 'AVAILABLE_FOR_APPROVAL_REQUEST' | 'AVAILABLE_FOR_REQUEST';
   policy: ReservationPolicy | null;
 }
 
@@ -76,6 +77,8 @@ export interface Reservation {
   acceptedPolicyVersion: number;
   feeCents: number;
   version: number;
+  /** Motivo da decisão, cancelamento ou expiração, visível à unidade. */
+  decisionReason: string | null;
 }
 
 export interface ReservationPage {

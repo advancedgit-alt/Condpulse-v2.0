@@ -923,7 +923,8 @@
           "503": {
             "description": "Dependência ou configuração indisponível"
           }
-        }
+        },
+        "description": "Área sem aprovação: CONFIRMED. Área com aprovação: PENDING_APPROVAL com prazo de decisão de até 24 h, nunca após o início. Pedidos vencidos no período ou da unidade são expirados sob trava antes da cota e do intervalo."
       }
     },
     "/v1/tenants/{tenantId}/reservations/{reservationId}/cancel": {
@@ -1031,7 +1032,8 @@
           "503": {
             "description": "Dependência ou configuração indisponível"
           }
-        }
+        },
+        "description": "Somente o autor cancela (403 RESERVATION_AUTHOR_REQUIRED para outra pessoa da unidade). Reserva confirmada respeita o prazo de cancelamento aceito. Pedido PENDING_APPROVAL pode ser retirado pelo autor até o início. Reserva já cancelada pela gestão responde 409 RESERVATION_CHANGED."
       }
     },
     "/v1/tenants/{tenantId}/management/blocks": {
@@ -2304,6 +2306,395 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/reservations": {
+      "get": {
+        "operationId": "managementListReservations",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "HELD",
+                "PENDING_APPROVAL",
+                "CONFIRMED",
+                "REJECTED",
+                "CANCELLED",
+                "EXPIRED"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "description": "Pedidos, reservas e bloqueios do condomínio (reservations.decide). Sem período: ainda não encerrados; com período: interseção com [from, until) de até 366 dias. Até 200 itens.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedReservationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, estado alterado, prazo vencido ou período ocupado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/reservations/{reservationId}/decision": {
+      "post": {
+        "operationId": "managementDecideReservation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reservationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Confirma ou rejeita (motivo obrigatório) pedido PENDING_APPROVAL pela versão lida. Decisão repetida devolve o estado atual sem novo evento; decisão oposta recebe 409. Prazo vencido grava EXPIRED e responde 409 RESERVATION_DECISION_EXPIRED, mesmo com versão antiga. Quem pediu não decide o próprio pedido (409 RESERVATION_SELF_DECISION_DENIED).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, estado alterado, prazo vencido ou período ocupado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/reservations/{reservationId}/cancel": {
+      "post": {
+        "operationId": "managementCancelReservation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reservationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Cancela reserva confirmada, pedido pendente ou bloqueio (amenities.manage) com motivo obrigatório. Repetição devolve o estado atual sem novo evento. Pedido vencido é gravado como EXPIRED e responde 409 RESERVATION_DECISION_EXPIRED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagementReservationCancellation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, estado alterado, prazo vencido ou período ocupado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/amenities/{amenityId}/maintenance-blocks": {
+      "post": {
+        "operationId": "managementCreateMaintenanceBlock",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "amenityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Bloqueio de manutenção (amenities.manage) no mesmo conjunto de exclusão das reservas. Pedidos e reservas válidos no período recebem 409 AMENITY_BLOCK_CONFLICT até serem decididos ou cancelados com motivo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMaintenanceBlock"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado durável; repetição com a mesma chave devolve o mesmo bloqueio",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, estado alterado, prazo vencido ou período ocupado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2530,9 +2921,10 @@
             "type": "string",
             "enum": [
               "POLICY_NOT_CONFIGURED",
-              "APPROVAL_UNAVAILABLE",
+              "AVAILABLE_FOR_APPROVAL_REQUEST",
               "AVAILABLE_FOR_REQUEST"
-            ]
+            ],
+            "description": "AVAILABLE_FOR_APPROVAL_REQUEST cria pedido PENDING_APPROVAL que depende de decisão da gestão; nunca é confirmação."
           },
           "policy": {
             "anyOf": [
@@ -2628,7 +3020,16 @@
             "format": "uuid"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "HELD",
+              "PENDING_APPROVAL",
+              "CONFIRMED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED"
+            ],
+            "description": "PENDING_APPROVAL ocupa o período mas não é confirmação; pedido com prazo de decisão vencido aparece como EXPIRED."
           },
           "startsAt": {
             "type": "string",
@@ -2659,6 +3060,14 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Motivo da decisão, cancelamento ou expiração, visível à unidade solicitante."
           }
         }
       },
@@ -3565,6 +3974,224 @@
           },
           "status": {
             "const": "PENDING"
+          }
+        }
+      },
+      "ManagedReservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reservationId",
+          "kind",
+          "unitId",
+          "unitLabel",
+          "amenityId",
+          "amenityName",
+          "status",
+          "startsAt",
+          "endsAt",
+          "occupiedFrom",
+          "occupiedUntil",
+          "expiresAt",
+          "acceptedPolicyVersion",
+          "feeCents",
+          "version",
+          "decisionReason",
+          "requesterName",
+          "createdAt"
+        ],
+        "description": "Visão da gestão local. BLOCK é bloqueio de manutenção (sem unidade). requesterName vem do vínculo no condomínio; sem e-mail ou conta Auth.",
+        "properties": {
+          "reservationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "BOOKING",
+              "BLOCK"
+            ]
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "HELD",
+              "PENDING_APPROVAL",
+              "CONFIRMED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED"
+            ]
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "acceptedPolicyVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feeCents": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "requesterName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ManagedReservationPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reservations",
+          "truncated"
+        ],
+        "properties": {
+          "reservations": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/ManagedReservation"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReservationDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "expectedVersion"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Obrigatório para REJECT."
+          }
+        }
+      },
+      "ManagementReservationCancellation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "CreateMaintenanceBlock": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "startsAt",
+          "endsAt",
+          "reason"
+        ],
+        "description": "Período [startsAt, endsAt) de até 366 dias, iniciando a partir de agora (tolerância de 5 minutos) e até 730 dias à frente.",
+        "properties": {
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
           }
         }
       }

@@ -55,7 +55,7 @@ class ReservationServiceTest {
   return new ReservationStore.AmenityData(area,"Área sintética",10,approval,5000,10,1,"{}",0,rules);
  }
  private ReservationModels.View view(String status,long version) {
-  return new ReservationModels.View(reservation,unit,area,status,start,end,start,end.plusSeconds(600),1,5000,version);
+  return new ReservationModels.View(reservation,unit,area,status,start,end,start,end.plusSeconds(600),1,5000,version,null);
  }
  @Test void createWritesReservationAuditEventAndReplyWithinTheSameContext() {
   var areaData=amenity(false,policy); var value=view("CONFIRMED",0);
@@ -68,6 +68,7 @@ class ReservationServiceTest {
   order.verify(store).lockUnit(tenant,unit);
   order.verify(store).amenity(tenant,area);
   order.verify(store).currentTime();
+  order.verify(store).expireStale(tenant,unit,area,start,end.plusSeconds(600));
   order.verify(store).activeCount(tenant,unit,now);
   order.verify(store).create(eq(tenant),eq(actor),eq(request()),eq(areaData),any(),eq("America/Sao_Paulo"));
   order.verify(store).record(eq(tenant),eq(actor),eq(value),eq("RESERVATION_CREATED"),any(UUID.class));
@@ -109,11 +110,53 @@ class ReservationServiceTest {
   verify(store,never()).create(any(),any(),any(),any(),any(),anyString());
   verify(store,never()).record(any(),any(),any(),anyString(),any());
  }
- @Test void approvalRequiredAreaDoesNotCreateAnUnmanagedPendingReservation() {
-  when(store.amenity(tenant,area)).thenReturn(amenity(true,policy));
-  assertEquals("AMENITY_APPROVAL_UNAVAILABLE",assertThrows(BusinessProblem.class,
-   ()->service.create(actor,tenant,key,request())).code());
-  verify(store,never()).create(any(),any(),any(),any(),any(),anyString());
+ @Test void approvalRequiredAreaCreatesPendingRequestWithRequestedEvent() {
+  var areaData=amenity(true,policy); var pending=view("PENDING_APPROVAL",0);
+  when(store.amenity(tenant,area)).thenReturn(areaData);
+  when(store.create(eq(tenant),eq(actor),eq(request()),eq(areaData),any(),eq("America/Sao_Paulo"))).thenReturn(pending);
+  var result=service.create(actor,tenant,key,request());
+  assertEquals("PENDING_APPROVAL",result.reservation().status(),"Pedido pendente nunca é apresentado como confirmado");
+  assertEquals(201,result.responseStatus());
+  verify(store).record(eq(tenant),eq(actor),eq(pending),eq("RESERVATION_REQUESTED"),any(UUID.class));
+  verify(store,never()).record(any(),any(),any(),eq("RESERVATION_CREATED"),any());
+  verify(store).finish(eq(tenant),eq(actor),anyString(),eq(key),eq(pending),eq(201));
+ }
+ @Test void staleRequestsAreExpiredUnderUnitLockBeforeQuotaAndInsert() {
+  var areaData=amenity(true,policy); var pending=view("PENDING_APPROVAL",0);
+  when(store.amenity(tenant,area)).thenReturn(areaData);
+  when(store.create(eq(tenant),eq(actor),eq(request()),eq(areaData),any(),eq("America/Sao_Paulo"))).thenReturn(pending);
+  service.create(actor,tenant,key,request());
+  var order=inOrder(store);
+  order.verify(store).lockUnit(tenant,unit);
+  order.verify(store).expireStale(tenant,unit,area,start,end.plusSeconds(600));
+  order.verify(store).activeCount(tenant,unit,now);
+  order.verify(store).create(eq(tenant),eq(actor),eq(request()),eq(areaData),any(),eq("America/Sao_Paulo"));
+ }
+ @Test void authorWithdrawsPendingRequestInsideCancellationLeadButNotAfterStart() {
+  var pending=view("PENDING_APPROVAL",0); var withdrawn=view("CANCELLED",1);
+  // Prazo de cancelamento de 2 dias já passou para a confirmada, mas pedido pendente pode ser retirado até o início.
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(pending,2880,actor));
+  when(store.cancel(tenant,actor,pending)).thenReturn(withdrawn);
+  assertEquals("CANCELLED",service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0)).reservation().status());
+  verify(store).record(eq(tenant),eq(actor),eq(withdrawn),eq("RESERVATION_CANCELLED"),any());
+  when(store.currentTime()).thenReturn(start);
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(pending,null,actor));
+  assertEquals("RESERVATION_CANCELLATION_CLOSED",assertThrows(BusinessProblem.class,
+   ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
+ }
+ @Test void confirmedReservationStillRespectsAcceptedCancellationLead() {
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",0),2880,actor));
+  assertEquals("RESERVATION_CANCELLATION_CLOSED",assertThrows(BusinessProblem.class,
+   ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
+  verify(store,never()).cancel(any(),any(),any());
+ }
+ @Test void expiredOrDecidedRequestCannotBeWithdrawn() {
+  for(String status:List.of("EXPIRED","REJECTED")) {
+   when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view(status,1),0,actor));
+   assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
+    ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,1))).code(),status);
+  }
+  verify(store,never()).cancel(any(),any(),any());
  }
  @Test void acceptedPolicyMustMatchTheCurrentVersion() {
   when(store.amenity(tenant,area)).thenReturn(amenity(false,policy));
@@ -138,16 +181,33 @@ class ReservationServiceTest {
   assertFalse(error.getMessage().contains("SQL")); verifyNoInteractions(store);
  }
  @Test void repeatedCancellationWithNewKeyDoesNotWriteEventOrAdvanceVersion() {
-  var cancelled=view("CANCELLED",1);
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0));
+  var cancelled=new ReservationModels.View(reservation,unit,area,"CANCELLED",start,end,start,end.plusSeconds(600),1,5000,1,
+   ReservationStore.AUTHOR_CANCELLED_REASON);
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0,actor));
   var result=service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0));
   assertEquals(200,result.responseStatus()); assertEquals(1,result.reservation().version());
   verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
   verify(store).finish(eq(tenant),eq(actor),anyString(),eq(key),eq(cancelled),eq(200));
  }
+ @Test void managementCancellationIsNotReportedAsTheAuthorsOwnCancellation() {
+  var cancelled=new ReservationModels.View(reservation,unit,area,"CANCELLED",start,end,start,end.plusSeconds(600),1,5000,1,
+   "Vazamento no salão");
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(cancelled,0,actor));
+  assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
+   ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
+  verify(store,never()).finish(any(),any(),anyString(),anyString(),any(),anyInt());
+ }
+ @Test void anotherPersonOfTheUnitReceivesExplicitAuthorRequirementAndNothingChanges() {
+  var other=UUID.fromString("77777777-7777-4777-8777-777777777777");
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",0),0,other));
+  var denied=assertThrows(BusinessProblem.class,()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0)));
+  assertEquals("RESERVATION_AUTHOR_REQUIRED",denied.code()); assertEquals(403,denied.status());
+  verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
+  verify(store,never()).finish(any(),any(),anyString(),anyString(),any(),anyInt());
+ }
  @Test void cancellationUsesAcceptedSnapshotRatherThanCurrentAmenityRules() {
   var current=view("CONFIRMED",0); var cancelled=view("CANCELLED",1);
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(current,0));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(current,0,actor));
   when(store.cancel(tenant,actor,current)).thenReturn(cancelled);
   var result=service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0));
   assertEquals(cancelled,result.reservation());
@@ -155,7 +215,7 @@ class ReservationServiceTest {
   verify(store).record(eq(tenant),eq(actor),eq(cancelled),eq("RESERVATION_CANCELLED"),any());
  }
  @Test void staleVersionCannotCancelConfirmedReservation() {
-  when(store.ownForUpdate(tenant,unit,actor,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",1),0));
+  when(store.unitReservationForUpdate(tenant,unit,reservation)).thenReturn(new ReservationStore.StoredReservation(view("CONFIRMED",1),0,actor));
   assertEquals("RESERVATION_CHANGED",assertThrows(BusinessProblem.class,
    ()->service.cancel(actor,tenant,reservation,key,new ReservationModels.Cancel(unit,0))).code());
   verify(store,never()).cancel(any(),any(),any()); verify(store,never()).record(any(),any(),any(),anyString(),any());
@@ -196,11 +256,14 @@ class ReservationServiceTest {
   when(store.amenity(tenant,area)).thenReturn(amenity(false,null));
   assertEquals("AMENITY_POLICY_NOT_CONFIGURED",assertThrows(BusinessProblem.class,
    ()->service.availability(actor,tenant,unit,area,start,end)).code());
-  when(store.amenity(tenant,area)).thenReturn(amenity(true,policy));
-  assertEquals("AMENITY_APPROVAL_UNAVAILABLE",assertThrows(BusinessProblem.class,
-   ()->service.availability(actor,tenant,unit,area,start,end)).code());
   verify(store,never()).blockedIntervals(any(),any(),any(),any());
   verify(store,never()).currentTime();
+ }
+ @Test void approvalAreaServesTheSameAnonymousOccupancy() {
+  when(store.amenity(tenant,area)).thenReturn(amenity(true,policy));
+  when(store.blockedIntervals(tenant,area,start,end)).thenReturn(List.of());
+  assertEquals(List.of(),service.availability(actor,tenant,unit,area,start,end).blockedIntervals());
+  verify(store).blockedIntervals(tenant,area,start,end);
  }
  @Test void availabilityRejectsUnboundedReversedExtremeAndSubMicrosecondRangesBeforeJdbc() {
   assertEquals("RESERVATION_RANGE_INVALID",assertThrows(BusinessProblem.class,

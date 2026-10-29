@@ -25,6 +25,11 @@ public final class ReservationRequestHash {
   if(reservationId==null || request==null || request.unitId()==null || request.expectedVersion()<0) throw invalid();
   return digest("CANCEL|"+reservationId+"|"+request.unitId()+"|"+request.expectedVersion());
  }
+ /** Bloqueio de manutenção: área, período e motivo definem a intenção da chave. */
+ public static String block(UUID amenityId,java.time.Instant startsAt,java.time.Instant endsAt,String reason) {
+  if(amenityId==null || startsAt==null || endsAt==null || reason==null) throw invalid();
+  return digest("BLOCK|"+amenityId+"|"+startsAt+"|"+endsAt+"|"+reason.length()+":"+reason);
+ }
  private static BusinessProblem invalid() {
   return new BusinessProblem("RESERVATION_REQUEST_INVALID",400,"Revise os dados da reserva.");
  }
