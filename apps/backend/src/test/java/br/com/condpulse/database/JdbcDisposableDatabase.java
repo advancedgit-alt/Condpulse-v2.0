@@ -151,8 +151,9 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
    for(String table:new String[]{"outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
-   update(connection,"delete from cp.membership_invitations where tenant_id in (?,?)",tenantA,tenantB);
-   update(connection,"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB);
+   // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.
+   update(connection,"with invitations as (delete from cp.membership_invitations where tenant_id in (?,?)) "
+    +"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB);
    update(connection,"delete from cp.units where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.blocks where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.tenants where id in (?,?)",tenantA,tenantB);
