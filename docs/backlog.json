@@ -382,6 +382,18 @@
             "python3 tests/database/run.py"
           ],
           "scope": "V007 (convites com hash de token e de e-mail; INSERT do vínculo pelo convidado exige convite válido no contexto local) e API de gestão de vínculos (aprovar, rejeitar e revogar com motivo, evento MEMBERSHIP_REVOKED, guardas de auto-revogação e último gestor) e de convites (emitir 1 a 14 dias, listar, revogar), mais aceite pelo convidado autenticado com o mesmo e-mail criando só vínculo PENDING, atrás de CP_MANAGEMENT_ENABLED=false. JDBC real e 20 verificações SQL novas. Sem SMTP, sem criação de usuário Auth pela API, sem telas web e sem V007 remota; não constitui aceite integral de CP-020."
+        },
+        {
+          "commit": "fefe09e764847938818ee1c83477331f6b870906",
+          "branch": "feat/memberships-invitations",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Auth sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40811423029",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,MembershipInvitationJdbcTest test",
+            "python3 tests/database/run.py"
+          ],
+          "scope": "Correções da revisão independente: revogação entre gestores serializada por condomínio (revogação cruzada não deixa o condomínio sem gestor, teste JDBC concorrente), unicidade de vínculo só entre não revogados (reconvite após rejeição ou revogação), convite de uso único também no banco, conclusão presa ao vínculo do próprio convidado, valid_from fora do grant, account_self só leitura, validade pelo relógio do banco, aceite recusa unidade inativa e gestor não decide o próprio vínculo. 7 verificações SQL novas. Pendentes registrados: endurecimento do aceite com SECURITY DEFINER, email_verified, HMAC do e-mail e MFA supervisionado de CONCIERGE."
         }
       ]
     },
@@ -565,6 +577,18 @@
             "python3 tests/database/run.py"
           ],
           "scope": "V007 (convites com hash de token e de e-mail; INSERT do vínculo pelo convidado exige convite válido no contexto local) e API de gestão de vínculos (aprovar, rejeitar e revogar com motivo, evento MEMBERSHIP_REVOKED, guardas de auto-revogação e último gestor) e de convites (emitir 1 a 14 dias, listar, revogar), mais aceite pelo convidado autenticado com o mesmo e-mail criando só vínculo PENDING, atrás de CP_MANAGEMENT_ENABLED=false. JDBC real e 20 verificações SQL novas. Sem SMTP, sem criação de usuário Auth pela API, sem telas web e sem V007 remota; não constitui aceite integral de CP-020."
+        },
+        {
+          "commit": "fefe09e764847938818ee1c83477331f6b870906",
+          "branch": "feat/memberships-invitations",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Auth sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40811423029",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,MembershipInvitationJdbcTest test",
+            "python3 tests/database/run.py"
+          ],
+          "scope": "Correções da revisão independente: revogação entre gestores serializada por condomínio (revogação cruzada não deixa o condomínio sem gestor, teste JDBC concorrente), unicidade de vínculo só entre não revogados (reconvite após rejeição ou revogação), convite de uso único também no banco, conclusão presa ao vínculo do próprio convidado, valid_from fora do grant, account_self só leitura, validade pelo relógio do banco, aceite recusa unidade inativa e gestor não decide o próprio vínculo. 7 verificações SQL novas. Pendentes registrados: endurecimento do aceite com SECURITY DEFINER, email_verified, HMAC do e-mail e MFA supervisionado de CONCIERGE."
         }
       ]
     },
