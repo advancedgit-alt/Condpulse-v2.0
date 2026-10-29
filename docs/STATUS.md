@@ -25,6 +25,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Convidados de reserva — CP-038
+
+- V021: convidado é convite da unidade com a janela do evento, até a capacidade da área; encerrar a reserva revoga todos na mesma transação por gatilho, com evento por convidado. Atrás de `CP_VISITS_ENABLED` (ligada); V021 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [VISITAS.md](VISITAS.md).
+- Pendentes: convidados pelo celular, aviso aos convidados e ensaio com Auth real.
+
 ## Link compartilhável do convite — CP-037
 
 - V020 (`cp.permit_links`): token só como SHA-256, um link em vigor por convite, revogação com horário do banco, leitura sem conta somente pelo hash da transação. Rotas atrás de `CP_VISITS_ENABLED` (já ligada na homologação); a abertura sem conta exige também o BFF (ligado). V020 ainda não aplicada na homologação: será aplicada pelo executor protegido depois do merge. Detalhes em [VISITAS.md](VISITAS.md).

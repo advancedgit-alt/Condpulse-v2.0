@@ -17,3 +17,8 @@
 .visit-link-details{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:14px 0}
 .visit-link-details dt{font-weight:700}
 .visit-link-details dd{margin:0}
+.reservation-guests{display:grid;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #edf1f5}
+.guest-list{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.guest-list li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
+.guest-form{display:grid;gap:6px;max-width:420px}
+.guest-form input{min-height:40px;padding:8px 10px;border:1px solid #cdd6e0;border-radius:8px;font:inherit}

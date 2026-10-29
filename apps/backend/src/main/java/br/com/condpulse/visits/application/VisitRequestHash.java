@@ -13,6 +13,9 @@ final class VisitRequestHash {
  static String permit(UUID unit,String visitor,String document,String purpose,Instant from,Instant until) {
   return digest("PERMIT|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+field(purpose)+"|"+from+"|"+until);
  }
+ static String guest(UUID reservation,String visitor,String document) {
+  return digest("RESERVATION_GUEST|"+reservation+"|"+field(visitor)+"|"+field(document));
+ }
  static String arrival(UUID unit,String visitor,String document,UUID permit) {
   return digest("ARRIVAL|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+permit);
  }

@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named = "CP_JDBC_TEST_OK", matches = "DISPOSABLE")
 class BootstrapBaselineJdbcTest {
     /** Migrations revisadas apos o baseline oficial 002; atualizar junto de cada nova migration. */
-    private static final List<Integer> POST_BASELINE_VERSIONS = List.of(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
+    private static final List<Integer> POST_BASELINE_VERSIONS = List.of(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21);
     private static final String URL = "jdbc:postgresql://localhost:5432/condpulse_bootstrap_ci";
     private static final String USER = "postgres";
     private static final String PASSWORD = "condpulse_ci_only";

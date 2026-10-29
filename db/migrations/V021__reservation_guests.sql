@@ -1,5 +1,5 @@
 -- CP-038: convidados de uma reserva. Cada convidado é um convite (visita prevista) da unidade da reserva, com a janela
--- derivada do evento: começa até 1 hora antes do início (ou agora, se o evento já começou) e termina no fim do uso.
+-- derivada do evento: começa até 1 hora antes do início (ou agora, durante o evento) e termina no fim do uso.
 -- Encerrar a reserva (cancelada, rejeitada ou vencida) revoga todos os convites ligados a ela na mesma transação, por
 -- qualquer caminho (morador, gestão, expiração), e uma repetição do cancelamento não reativa nada.
 
@@ -26,7 +26,8 @@ BEGIN
  IF target.status<>'CONFIRMED' OR target.ends_at<=clock_timestamp() THEN
   RAISE EXCEPTION 'reserva não confirmada ou já encerrada' USING ERRCODE='23514';
  END IF;
- IF NEW.valid_until<>target.ends_at OR NEW.valid_from<target.starts_at-interval '1 hour' OR NEW.valid_from>target.starts_at THEN
+ IF NEW.valid_until<>target.ends_at OR NEW.valid_from<target.starts_at-interval '1 hour'
+   OR NEW.valid_from>greatest(target.starts_at,clock_timestamp()) THEN
   RAISE EXCEPTION 'janela do convidado diferente da do evento' USING ERRCODE='23514';
  END IF;
  SELECT count(*) INTO active_guests FROM cp.visit_permits p
@@ -59,10 +60,17 @@ BEGIN
   RETURN NEW;
  END IF;
  PERFORM set_config('app.closing_reservation',NEW.id::text,true);
- UPDATE cp.visit_permits SET state='REVOKED',revoked_by=platform.current_actor_id(),
-   revoke_reason=CASE NEW.status WHEN 'CANCELLED' THEN 'Reserva cancelada' WHEN 'REJECTED' THEN 'Reserva rejeitada' ELSE 'Reserva vencida' END,
-   version=version+1
-  WHERE tenant_id=NEW.tenant_id AND reservation_id=NEW.id AND state='ACTIVE' AND valid_until>clock_timestamp();
+ -- Estado desejado final para integrações: um evento de revogação por convidado, na mesma transação.
+ WITH revoked AS (
+  UPDATE cp.visit_permits SET state='REVOKED',revoked_by=platform.current_actor_id(),
+    revoke_reason=CASE NEW.status WHEN 'CANCELLED' THEN 'Reserva cancelada' WHEN 'REJECTED' THEN 'Reserva rejeitada' ELSE 'Reserva vencida' END,
+    version=version+1
+   WHERE tenant_id=NEW.tenant_id AND reservation_id=NEW.id AND state='ACTIVE' AND valid_until>clock_timestamp()
+   RETURNING id,unit_id,version)
+ INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload)
+  SELECT NEW.tenant_id,'VISIT_PERMIT_REVOKED',r.id,r.version,
+   jsonb_build_object('id',r.id,'unitId',r.unit_id,'state','REVOKED','version',r.version,'reservationId',NEW.id)
+  FROM revoked r;
  SELECT count(*) INTO pending FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.reservation_id=NEW.id
   AND p.state='ACTIVE' AND p.valid_until>clock_timestamp();
  PERFORM set_config('app.closing_reservation','',true);

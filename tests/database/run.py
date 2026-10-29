@@ -1703,6 +1703,8 @@ def reservation_guest_checks():
     query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api")
     expect(value(f"select string_agg(state||':'||revoked_by||':'||revoke_reason,',' order by id) from cp.visit_permits where reservation_id='{RG1}'")
            == f"REVOKED:{MGRG}:Reserva cancelada,REVOKED:{MGRG}:Reserva cancelada", "cancelar a reserva revoga todos os convidados")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_PERMIT_REVOKED' and payload->>'reservationId'='{RG1}'") == "2",
+           "um evento de revogacao por convidado, na mesma transacao")
     expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
            "a liberacao para quem encerra nao sobra depois")
     expect(error(f"UPDATE cp.visit_permits SET state='ACTIVE',revoked_by=NULL,revoke_reason=NULL,version=version+1 WHERE id='{g1}'",

@@ -8579,6 +8579,172 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/reservations/{reservationId}/guests": {
+      "get": {
+        "operationId": "listReservationGuests",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reservationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Convidados da reserva (CP-038), para quem pode convidar pela unidade da reserva (dependente vê os que criou).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermitPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "RESERVATION_GUEST_UNAVAILABLE"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addReservationGuest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reservationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Convidado de reserva confirmada: convite da unidade com a janela do evento (de até 1 hora antes do início, ou de agora durante o evento, até o fim do uso), até a capacidade da área. Encerrar a reserva (cancelada, rejeitada ou vencida) revoga todos os convidados na mesma transação, com um evento VISIT_PERMIT_REVOKED por convidado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationGuestCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Convidado criado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitPermit"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VISIT_INPUT_INVALID, VISITOR_NAME_INVALID ou VISITOR_DOCUMENT_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "RESERVATION_GUEST_UNAVAILABLE"
+          },
+          "409": {
+            "description": "RESERVATION_NOT_CONFIRMED, RESERVATION_GUEST_LIMIT, RESERVATION_GUEST_TOO_EARLY ou IDEMPOTENCY_KEY_REUSED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11358,7 +11524,8 @@
           "revokeReason",
           "version",
           "createdAt",
-          "shareLinkActive"
+          "shareLinkActive",
+          "reservationId"
         ],
         "description": "Convite (visita prevista) da unidade: autorização temporal, não prova de identidade nem de entrada.",
         "properties": {
@@ -11445,6 +11612,14 @@
           "shareLinkActive": {
             "type": "boolean",
             "description": "Link compartilhável em vigor (CP-037); a portaria sempre recebe false."
+          },
+          "reservationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Reserva do convidado (CP-038); null em convite comum."
           }
         }
       },
@@ -13599,6 +13774,27 @@
         "properties": {
           "token": {
             "type": "string"
+          }
+        }
+      },
+      "ReservationGuestCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "visitorName"
+        ],
+        "properties": {
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Za-z]{2,4}$"
           }
         }
       }
