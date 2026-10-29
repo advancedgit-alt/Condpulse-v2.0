@@ -66,7 +66,7 @@ jobs:
           CP_ONBOARDING_JAVA_TEST_REQUIRED: "true"
         run: node --test tests/onboarding-operations-java.test.mjs
       - name: Manual database executor guards without managed credentials
-        run: node --test tests/database-operations.test.mjs
+        run: node --test tests/database-operations.test.mjs tests/production-database-operations.test.mjs
       - name: Runtime credential executor guards and disposable provisioning
         run: node --test tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs
       - name: Migrate with Flyway and validate replay
@@ -111,6 +111,27 @@ jobs:
           status=$(curl -sS -o /tmp/condpulse-auth.json -w '%{http_code}' http://127.0.0.1:8080/v1/me)
           test "$status" = "401"
           node -e "const p=JSON.parse(require('fs').readFileSync('/tmp/condpulse-auth.json','utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)"
+      - name: HTTP readiness with the homologation flag set
+        # Mesmo conjunto de flags da Vercel Production; chaves BFF sintéticas geradas pelo próprio script.
+        env:
+          SPRING_PROFILES_ACTIVE: api
+          PORT: "8081"
+          DATABASE_URL: jdbc:postgresql://localhost:5432/condpulse_ci
+          DATABASE_USER: cp_ci_login
+          DATABASE_PASSWORD: synthetic_ci_runtime_only
+          CP_JWT_ISSUER: https://auth.example.invalid/auth/v1
+          CP_JWT_JWK_SET_URI: https://auth.example.invalid/auth/v1/.well-known/jwks.json
+          CP_BFF_ORIGIN: https://condpulse.example.invalid
+          CP_SUPABASE_PUBLISHABLE_KEY: sb_publishable_SYNTHETIC_TEST_ONLY_1234567890
+          CP_BFF_ENABLED: "true"
+          CP_RESERVATIONS_ENABLED: "true"
+          CP_MANAGEMENT_ENABLED: "true"
+          CP_PLATFORM_ENABLED: "true"
+          CP_PLATFORM_BILLING_ENABLED: "true"
+          CP_PARCELS_ENABLED: "true"
+          CP_VISITS_ENABLED: "true"
+          CP_NOTIFICATIONS_ENABLED: "true"
+        run: bash tests/runtime/homologation-flags-smoke.sh
       - name: Durable BFF session database invariants
         run: psql -X -v ON_ERROR_STOP=1 -f tests/database/bff_sessions.sql
       - name: JDBC runtime and connection pool isolation
