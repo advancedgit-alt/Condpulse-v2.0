@@ -25,6 +25,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import java.util.function.Function;
+import br.com.condpulse.tenancy.application.TenantContext;
 import org.springframework.dao.DataAccessException;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -77,11 +79,28 @@ class LocalManagementJdbcTest {
   assertEquals(before,db.businessCount("audit_log")); db.assertEmptyContext();
  }
 
- @Test void databaseRejectsManagementWriteWithoutPublishedCapability() {
-  var store=new UnitManagementStore(db.jdbc);
-  var error=assertThrows(DataAccessException.class,()->transactions.execute(db.accountC,db.tenantA,AAL1,
-   context->store.insertUnit(db.tenantA,label(),null)));
-  assertEquals("42501",SqlStates.of(error)); db.assertEmptyContext();
+ @Test void databaseRejectsEveryManagementWriteWithoutPublishedCapability() throws Exception {
+  var unitStore=new UnitManagementStore(db.jdbc);
+  var amenityStore=new AmenityManagementStore(db.jdbc);
+  var managed=amenities.create(db.accountC,db.tenantA,AAL2,area("Barreira "+label(),1,null));
+  var value=AmenityManagementModels.validate(area("Barreira "+label(),1,null),true);
+  var unit=units.units(db.accountC,db.tenantA,AAL2).units().stream().filter(u->u.unitId().equals(db.unitA)).findFirst().orElseThrow();
+  long auditBefore=db.businessCount("audit_log");
+  // AAL1 não publica capacidade: INSERT e também UPDATE são recusados pelo banco com 42501, nunca "zero linhas".
+  List<Function<TenantContext,Object>> writes=List.of(
+   context->unitStore.insertUnit(db.tenantA,label(),null),
+   context->unitStore.insertBlock(db.tenantA,label()),
+   context->amenityStore.insert(db.tenantA,value),
+   context->unitStore.updateUnit(db.tenantA,db.unitA,unit.label()+" X",null,"INACTIVE",unit.version()),
+   context->amenityStore.update(db.tenantA,managed.amenityId(),managed.version(),value));
+  for(var write:writes) {
+   var error=assertThrows(DataAccessException.class,()->transactions.execute(db.accountC,db.tenantA,AAL1,write));
+   assertEquals("42501",SqlStates.of(error));
+  }
+  assertEquals(auditBefore,db.businessCount("audit_log"));
+  assertEquals(managed.version(),amenities.amenities(db.accountC,db.tenantA,AAL2).stream()
+   .filter(a->a.amenityId().equals(managed.amenityId())).findFirst().orElseThrow().version());
+  db.assertEmptyContext();
  }
 
  @Test void managerCreatesBlocksAndUnitsOnlyInsideOwnTenantWithAudit() throws Exception {
@@ -149,8 +168,8 @@ class LocalManagementJdbcTest {
   assertEquals("CONFIRMED",booked.reservation().status());
   var renamed=amenities.update(db.accountC,db.tenantA,AAL2,created.amenityId(),area(created.name()+" Norte",1,created.version()));
   assertEquals(1,renamed.policyVersion(),"Nome não muda a versão da regra");
-  var stricter=amenities.update(db.accountC,db.tenantA,AAL2,created.amenityId(),area(renamed.name(),2,renamed.version()));
-  assertEquals(2,stricter.policyVersion());
+  var quotaChanged=amenities.update(db.accountC,db.tenantA,AAL2,created.amenityId(),area(renamed.name(),2,renamed.version()));
+  assertEquals(2,quotaChanged.policyVersion());
   assertEquals("1",db.adminString("select rule_snapshot->>'policyVersion' from cp.reservations where id=?",booked.reservation().reservationId()));
   assertEquals("AMENITY_CHANGED",assertThrows(BusinessProblem.class,()->amenities.update(db.accountC,db.tenantA,AAL2,
    created.amenityId(),area(renamed.name(),3,renamed.version()))).code());
@@ -158,8 +177,37 @@ class LocalManagementJdbcTest {
    "jdbc-management:"+UUID.randomUUID(),new ReservationModels.Create(db.unitA,created.amenityId(),start.plusSeconds(7200),
    start.plusSeconds(10800),1))).code(),"Aceite antigo da regra não cria reserva");
   assertEquals("AMENITY_NAME_TAKEN",assertThrows(BusinessProblem.class,()->amenities.create(db.accountC,db.tenantA,AAL2,
-   area(" "+stricter.name().toUpperCase()+" ",1,null))).code());
+   area(" "+quotaChanged.name().toUpperCase()+" ",1,null))).code());
   assertEquals("1",db.adminString("select count(*) from cp.audit_log where resource_id=? and action='AMENITY_POLICY_VERSIONED'",created.amenityId()));
+  db.assertEmptyContext();
+ }
+
+ @Test void eachRuleFieldIncrementsPolicyVersionOnceButNameAndActivationDoNot() throws Exception {
+  var current=amenities.create(db.accountC,db.tenantA,AAL2,area("Versao "+label(),1,null));
+  record Change(String label,int capacity,boolean approval,long fee,int buffer,boolean active,int quota,int increment) {}
+  var changes=List.of(
+   new Change("capacidade",11,false,2500L,15,true,1,1),
+   new Change("aprovacao",11,true,2500L,15,true,1,1),
+   new Change("taxa",11,true,3000L,15,true,1,1),
+   new Change("limpeza",11,true,3000L,30,true,1,1),
+   new Change("regra",11,true,3000L,30,true,2,1),
+   new Change("somente inativar",11,true,3000L,30,false,2,0),
+   new Change("somente reativar",11,true,3000L,30,true,2,0),
+   new Change("varias juntas",12,false,0L,0,true,3,1));
+  for(var change:changes) {
+   var next=amenities.update(db.accountC,db.tenantA,AAL2,current.amenityId(),new AmenityManagementModels.AmenityInput(
+    current.name(),change.capacity(),change.approval(),change.fee(),change.buffer(),change.active(),policy(change.quota()),
+    current.version(),null));
+   assertEquals(current.policyVersion()+change.increment(),next.policyVersion(),change.label());
+   assertEquals(current.version()+1,next.version(),change.label());
+   current=next;
+  }
+  // Uma gravação com nova regra, inativação e novo nome registra as três ações.
+  var both=amenities.update(db.accountC,db.tenantA,AAL2,current.amenityId(),new AmenityManagementModels.AmenityInput(
+   current.name()+" Sul",current.capacity()+1,false,0L,0,false,policy(3),current.version(),"Reforma"));
+  assertEquals(current.policyVersion()+1,both.policyVersion());
+  assertEquals("AMENITY_DEACTIVATED,AMENITY_POLICY_VERSIONED,AMENITY_UPDATED",db.adminString(
+   "select string_agg(action,',' order by action) from cp.audit_log where resource_id=? and reason='Reforma'",current.amenityId()));
   db.assertEmptyContext();
  }
 
@@ -177,6 +225,23 @@ class LocalManagementJdbcTest {
 
  @Test void auditIsReadableOnlyWithCapabilityAndPaginatesWithinTenant() throws Exception {
   for(int i=0;i<3;i++) units.createUnit(db.accountC,db.tenantA,AAL2,new UnitManagementModels.CreateUnit(label(),null));
+  // Mesma transação => mesmo created_at: o desempate por id não pode pular nem repetir eventos.
+  db.adminUpdate("insert into cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+   +"select ?,?,'JDBC_TIE','FIXTURE',gen_random_uuid(),gen_random_uuid() from generate_series(1,5)",db.tenantA,db.accountC);
+  db.adminUpdate("insert into cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+   +"values(?,?,'JDBC_OTHER_TENANT','FIXTURE',gen_random_uuid(),gen_random_uuid())",db.tenantB,db.accountB);
+  var walked=new java.util.ArrayList<String>();
+  String cursor=null; int pages=0;
+  do {
+   var page=audit.page(db.accountC,db.tenantA,AAL2,cursor,2);
+   page.events().forEach(e->walked.add(e.eventId().toString()));
+   cursor=page.nextCursor(); pages++;
+   assertTrue(pages<10_000,"Paginação deve terminar");
+  } while(cursor!=null);
+  assertEquals(db.adminString("select string_agg(id::text,',' order by created_at desc,id desc) from cp.audit_log where tenant_id=?",
+   db.tenantA),String.join(",",walked),"Todas as páginas, uma única vez e na ordem do banco");
+  assertEquals("0",db.adminString("select count(*) from cp.audit_log where tenant_id=? and id::text=any(string_to_array(?,','))",
+   db.tenantB,String.join(",",walked)));
   assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->audit.page(db.accountA,db.tenantA,AAL2,null,10)).code());
   assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->audit.page(db.accountC,db.tenantA,AAL1,null,10)).code());
   var first=audit.page(db.accountC,db.tenantA,AAL2,null,2);

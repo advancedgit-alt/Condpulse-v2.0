@@ -49,9 +49,12 @@ public class AmenityManagementService {
    if(current.version()!=expected || !store.update(tenant,amenityId,expected,value))
     throw new BusinessProblem("AMENITY_CHANGED",409,"A área foi alterada. Atualize os dados antes de salvar.");
    var updated=required(store.find(tenant,amenityId));
-   String action=updated.policyVersion()!=current.policyVersion()?"AMENITY_POLICY_VERSIONED"
-    :current.active()!=updated.active()?(updated.active()?"AMENITY_REACTIVATED":"AMENITY_DEACTIVATED"):"AMENITY_UPDATED";
-   audit.record(tenant,actor,action,"AMENITY",amenityId,value.reason());
+   // Uma ação por mudança: nova regra, ativação e renomeação na mesma gravação ficam todas registradas.
+   var actions=new java.util.ArrayList<String>();
+   if(updated.policyVersion()!=current.policyVersion()) actions.add("AMENITY_POLICY_VERSIONED");
+   if(current.active()!=updated.active()) actions.add(updated.active()?"AMENITY_REACTIVATED":"AMENITY_DEACTIVATED");
+   if(!current.name().equals(updated.name()) || actions.isEmpty()) actions.add("AMENITY_UPDATED");
+   for(String action:actions) audit.record(tenant,actor,action,"AMENITY",amenityId,value.reason());
    return updated;
   });
  }

@@ -125,8 +125,24 @@ def manage_checks():
     expect(value(f"select count(*) from cp.units where tenant_id='{TA}' and label='FICTICIA GESTAO'") == "1",
            "gestor com capacidade cria unidade no proprio tenant")
     rename = f"WITH u AS (UPDATE cp.units SET label='FICTICIA RENOMEADA',version=version+1 WHERE id='{UA}' RETURNING id) SELECT count(*) FROM u"
-    expect(value(rename, tenant=TA, role="cp_api") == "0", "sem capacidade a atualizacao nao alcanca a unidade")
+    expect(error(rename, "42501", tenant=TA, role="cp_api"), "sem capacidade a atualizacao da unidade e recusada (42501)")
+    expect(error(capable("amenities.manage", rename), "42501", tenant=TA, role="cp_api"),
+           "capacidade de areas nao atualiza unidade")
     expect(value(capable("units.manage", rename), tenant=TA, role="cp_api") == "1", "com capacidade a unidade e atualizada")
+    block = f"INSERT INTO cp.blocks(tenant_id,name) VALUES('{TA}','BLOCO FICTICIO')"
+    expect(error(block, "42501", tenant=TA, role="cp_api"), "bloco nao e criado sem capacidade")
+    expect(error(capable("amenities.manage", block), "42501", tenant=TA, role="cp_api"), "capacidade de areas nao cria bloco")
+    query(capable("units.manage", block), tenant=TA, role="cp_api")
+    expect(error(capable("units.manage", "UPDATE cp.blocks SET name='BLOCO RENOMEADO'"), "42501", tenant=TA, role="cp_api"),
+           "bloco nao possui grant de alteracao")
+    new_area = f"INSERT INTO cp.amenities(tenant_id,name,capacity) VALUES('{TA}','AREA FICTICIA GESTAO',5)"
+    expect(error(new_area, "42501", tenant=TA, role="cp_api"), "area nao e criada sem capacidade")
+    expect(error(capable("units.manage", new_area), "42501", tenant=TA, role="cp_api"), "capacidade de unidades nao cria area")
+    resize = f"UPDATE cp.amenities SET capacity=capacity+1,version=version+1 WHERE id='{RA}'"
+    expect(error(resize, "42501", tenant=TA, role="cp_api"), "area nao e alterada sem capacidade")
+    expect(error(capable("units.manage", resize), "42501", tenant=TA, role="cp_api"), "capacidade de unidades nao altera area")
+    query(capable("amenities.manage", resize + "; UPDATE cp.amenities SET capacity=capacity-1,version=version+1 WHERE id='" + RA + "'"),
+          tenant=TA, role="cp_api")
     query(f"UPDATE cp.units SET label='FICTICIA 101' WHERE id='{UA}'")
     expect(error(f"DELETE FROM cp.units WHERE label='FICTICIA GESTAO'", "42501", tenant=TA, role="cp_api"),
            "aplicacao nao apaga unidades")
