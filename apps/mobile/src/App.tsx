@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { randomUUID } from 'expo-crypto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readConfig } from './config';
 import { createApi } from './api/client';
@@ -13,6 +14,9 @@ import { colors } from './ui/theme';
 export function newQueryClient(gcTime = 5 * 60_000): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: 1, gcTime, staleTime: 30_000 } } });
 }
+
+/** Chave de envio por operação (Idempotency-Key), aleatória do sistema operacional. */
+const newKey = () => `mobile:${randomUUID()}`;
 
 export default function App() {
   // O Expo só embute EXPO_PUBLIC_* lidos por nome (process.env.NOME), não o objeto inteiro.
@@ -33,7 +37,7 @@ export default function App() {
       <StatusBar style="dark" />
       {!config ? <Text style={styles.message}>Configuração do aplicativo incompleta. Procure o suporte do CondPulse.</Text>
         : failed ? <Text style={styles.message}>Não foi possível abrir o armazenamento seguro do aparelho.</Text>
-          : manager && api ? <Root manager={manager} api={api} /> : <Text style={styles.message}>Abrindo…</Text>}
+          : manager && api ? <Root manager={manager} api={api} newKey={newKey} /> : <Text style={styles.message}>Abrindo…</Text>}
     </SafeAreaView>
   </QueryClientProvider>;
 }

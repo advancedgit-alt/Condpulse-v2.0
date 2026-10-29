@@ -148,6 +148,32 @@ class ManagementSecurityIntegrationTest {
    .andReturn().getResponse().getStatus());
   verify(units).units(ACCOUNT,TENANT,AssuranceLevel.AAL2); verify(units).units(ACCOUNT,TENANT,AssuranceLevel.AAL1);
  }
+ @Test void nativeBearerWritesWithoutCsrfAndOnlyBearerSkipsIt() throws Exception {
+  when(decoder.decode("synthetic-bearer-aal2")).thenReturn(jwt("aal2"));
+  var request=new UnitManagementModels.CreateUnit("103",null);
+  when(units.createUnit(ACCOUNT,TENANT,AssuranceLevel.AAL2,request))
+   .thenReturn(new UnitManagementModels.Unit(UNIT,"103",null,null,"ACTIVE",0));
+  String route=BASE+"/units";
+  // Aplicativo: Bearer, sem cookie e sem Origin. O resource server do Spring não exige CSRF com token Bearer
+  // (o navegador não anexa esse cabeçalho sozinho); o cookie de sessão é ignorado quando há Bearer.
+  var nativeApp=mvc.perform(post(route).servletPath(route).secure(true).header("Authorization","Bearer synthetic-bearer-aal2")
+   .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"103\",\"blockId\":null}")).andReturn().getResponse();
+  assertEquals(201,nativeApp.getStatus());
+  // Sem Bearer, só o cookie: CSRF continua obrigatório.
+  var cookieOnly=mvc.perform(post(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,session("aal2")))
+   .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"103\"}")).andReturn().getResponse();
+  assertEquals(403,cookieOnly.getStatus());
+  // Sem identidade: barrado antes do serviço.
+  var anonymous=mvc.perform(post(route).servletPath(route).secure(true).contentType(MediaType.APPLICATION_JSON).content("{}"))
+   .andReturn().getResponse();
+  assertEquals(403,anonymous.getStatus());
+  // Bearer inválido: 401, nunca chega ao serviço.
+  when(decoder.decode("synthetic-invalid")).thenThrow(new org.springframework.security.oauth2.jwt.BadJwtException("invalido"));
+  var invalid=mvc.perform(post(route).servletPath(route).secure(true).header("Authorization","Bearer synthetic-invalid")
+   .contentType(MediaType.APPLICATION_JSON).content("{}")).andReturn().getResponse();
+  assertEquals(401,invalid.getStatus());
+  verify(units).createUnit(ACCOUNT,TENANT,AssuranceLevel.AAL2,request); verifyNoMoreInteractions(units);
+ }
  @Test void amenityUpdateAndAuditPassPathAndQueryParameters() throws Exception {
   String raw=session("aal2"); var csrf=csrf();
   var policy=new AmenityManagementModels.PolicyInput(1,List.of(1,2),"08:00","22:00",60,30,240,1,120);

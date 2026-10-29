@@ -8334,6 +8334,94 @@
         }
       }
     },
+    "/v1/tenants/{tenantId}/units/{unitId}/events": {
+      "get": {
+        "operationId": "streamUnitEvents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REALTIME_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Canal SSE de atualização da unidade (CP-036). Eventos: ready (assuntos acompanhados e intervalo de reconexão), changed ({topics:[...]}, só nomes de assuntos: reservations, parcels, arrivals, notifications, announcements, requests), ping e end ({reason: revoked|expired|timeout|unavailable|shutdown}). Nenhum dado pessoal ou identificador de registro; o cliente consulta o detalhe pelas rotas normais e consulta tudo de novo ao reconectar. Cada passada confere a sessão BFF (ou a validade do token Bearer), a conta, o vínculo residencial vigente e a unidade ativa; perder qualquer um encerra o canal. Vida máxima do canal limitada (CP_REALTIME_LIFETIME_SECONDS) e limites por instância e por conta.",
+        "responses": {
+          "200": {
+            "description": "Canal aberto",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED ou TENANT_ACCESS_DENIED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "REALTIME_LIMIT_REACHED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "REALTIME_DEPENDENCY_UNAVAILABLE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/permits/{permitId}/link": {
       "post": {
         "operationId": "shareVisitPermitLink",
