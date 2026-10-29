@@ -1,0 +1,542 @@
+[
+  {
+    "id": "AC-001",
+    "module": "Identidade",
+    "title": "Morador tenta unidade alheia",
+    "given": "conta A possui vínculo somente com unidade A",
+    "when": "consulta unidade B por identificador conhecido",
+    "then": "retorna 404/403 sem vazar existência ou conteúdo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-002",
+    "module": "Identidade",
+    "title": "Tenant alternado no pool",
+    "given": "duas contas válidas em tenants diferentes compartilham pool",
+    "when": "requisições intercaladas reutilizam conexões",
+    "then": "cada transação usa seu contexto e nenhuma herda o anterior",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-003",
+    "module": "Identidade",
+    "title": "Vínculo revogado com token válido",
+    "given": "JWT ainda está dentro de expiração",
+    "when": "gestor revoga vínculo e usuário tenta gravar",
+    "then": "vínculo de negócio é revalidado e operação é negada",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-004",
+    "module": "Identidade",
+    "title": "Operador sem MFA",
+    "given": "operador autentica com AAL1",
+    "when": "tenta aprovar cadastro facial",
+    "then": "recebe exigência de MFA e nenhuma alteração ocorre",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-005",
+    "module": "Identidade",
+    "title": "Sessão após logout",
+    "given": "cookie web já foi encerrado no servidor",
+    "when": "browser repete ação com cookie antigo",
+    "then": "não há nova ação nem renovação da sessão",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-006",
+    "module": "Identidade",
+    "title": "Ataque CSRF",
+    "given": "cookie válido e origem externa",
+    "when": "POST mutável chega sem token CSRF válido",
+    "then": "BFF rejeita antes de executar regra de negócio",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-007",
+    "module": "Identidade",
+    "title": "Recuperação de conta",
+    "given": "usuário perdeu acesso ao segundo fator",
+    "when": "aciona suporte",
+    "then": "identidade é verificada, acesso é auditado e MFA não é desabilitado informalmente",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-008",
+    "module": "Identidade",
+    "title": "Suporte expirado",
+    "given": "concessão temporária expirou",
+    "when": "suporte tenta ler dados do cliente",
+    "then": "consulta é negada e tentativa auditada",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-009",
+    "module": "Reservas",
+    "title": "Dupla reserva simultânea",
+    "given": "mesma área e intervalo livre",
+    "when": "duas transações confirmam ao mesmo tempo",
+    "then": "apenas uma ocupa o slot; outra recebe conflito",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-010",
+    "module": "Reservas",
+    "title": "Intervalo de limpeza",
+    "given": "reserva existente tem buffer de limpeza",
+    "when": "nova reserva sobrepõe só o buffer",
+    "then": "constraint impede o conflito operacional",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-011",
+    "module": "Reservas",
+    "title": "Repetição idempotente",
+    "given": "mesmo usuário e mesma chave com mesmo payload",
+    "when": "request é reenviado após perda da resposta",
+    "then": "retorna mesmo resultado sem nova reserva",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-012",
+    "module": "Reservas",
+    "title": "Chave reaproveitada indevidamente",
+    "given": "chave já foi utilizada",
+    "when": "cliente repete chave com outro período",
+    "then": "retorna conflito de idempotência",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-013",
+    "module": "Reservas",
+    "title": "Aprovação vencida",
+    "given": "pedido ultrapassou prazo máximo de análise",
+    "when": "gestor tenta aprovar",
+    "then": "pedido expira ou exige nova disponibilidade; não ignora conflito",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-014",
+    "module": "Reservas",
+    "title": "Mudança de regra",
+    "given": "regulamento foi alterado após pedido",
+    "when": "usuário consulta sua reserva",
+    "then": "versão aceita continua rastreável e mudanças exigidas são explícitas",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-015",
+    "module": "Reservas",
+    "title": "Cancelamento com convidados",
+    "given": "reserva possui convites ativos",
+    "when": "reserva é cancelada",
+    "then": "convites ficam revogados e integração recebe estado desejado final",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-016",
+    "module": "Reservas",
+    "title": "Fila de espera concorrente",
+    "given": "duas pessoas disputam vaga liberada",
+    "when": "worker oferece e cliente confirma",
+    "then": "oferta segue ordem e apenas uma ocupa a vaga",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-017",
+    "module": "Reservas",
+    "title": "Oferta expirada",
+    "given": "oferta de espera venceu",
+    "when": "destinatário tenta aceitar",
+    "then": "nova reserva não é criada e fila pode seguir ao próximo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-018",
+    "module": "Reservas",
+    "title": "Fuso de horário",
+    "given": "celular está em fuso diferente",
+    "when": "consulta horários de área em São Paulo",
+    "then": "apresenta fuso da área com período correto",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-019",
+    "module": "Visitas",
+    "title": "Convite expirado",
+    "given": "convite fora de validade",
+    "when": "portaria consulta token",
+    "then": "não libera visita e informa expiração",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-020",
+    "module": "Visitas",
+    "title": "Revogação imediata lógica",
+    "given": "convite é revogado",
+    "when": "portaria tenta decisão usando tela antiga",
+    "then": "backend rejeita com estado atualizado",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-021",
+    "module": "Visitas",
+    "title": "Sem resposta do morador",
+    "given": "visita aguarda autorização e push foi aceito",
+    "when": "prazo termina sem decisão",
+    "then": "não há autorização automática; segue procedimento de portaria",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-022",
+    "module": "Visitas",
+    "title": "Duas respostas contraditórias",
+    "given": "pedido aguarda decisão",
+    "when": "duas pessoas autorizadas aprovam/negam simultaneamente",
+    "then": "uma transição é aceita e outra recebe estado final",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-023",
+    "module": "Visitas",
+    "title": "Prestador fora de janela",
+    "given": "prestador autorizado às terças 08–12",
+    "when": "chega quarta-feira às 09",
+    "then": "autorização não vale para essa chegada",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-024",
+    "module": "Visitas",
+    "title": "Link vazado",
+    "given": "pessoa possui apenas link de convite",
+    "when": "tenta buscar dados de outros moradores",
+    "then": "token dá somente escopo mínimo e não cria sessão autenticada ampla",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-025",
+    "module": "Encomendas",
+    "title": "Entrega duplicada",
+    "given": "uma encomenda ainda está pendente",
+    "when": "duas portarias registram retirada",
+    "then": "apenas um handoff é gravado",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-026",
+    "module": "Encomendas",
+    "title": "Delegação trocada",
+    "given": "delegação corresponde à encomenda A",
+    "when": "é usada para retirar B",
+    "then": "operação rejeitada mesmo dentro do mesmo tenant",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-027",
+    "module": "Encomendas",
+    "title": "Código consumido",
+    "given": "código já foi usado",
+    "when": "segunda retirada usa o código",
+    "then": "não confirma nova entrega",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-028",
+    "module": "Encomendas",
+    "title": "Conferência humana",
+    "given": "foto de etiqueta foi enviada",
+    "when": "usuário abre detalhe",
+    "then": "imagem só aparece no escopo permitido e não comprova entrega sozinha",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-029",
+    "module": "Comunicação",
+    "title": "Aviso não publicado",
+    "given": "aviso é rascunho",
+    "when": "morador busca seu ID",
+    "then": "não acessa conteúdo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-030",
+    "module": "Comunicação",
+    "title": "Notificação sem entrega",
+    "given": "Expo aceita mas dispositivo está offline",
+    "when": "worker recebe receipt de provedor",
+    "then": "mantém sem confirmação de leitura e registra apenas aceitação",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-031",
+    "module": "Comunicação",
+    "title": "Troca de conta no aparelho",
+    "given": "aparelho tinha usuário A",
+    "when": "A sai e B entra",
+    "then": "tokens/caches antigos não entregam conteúdo de A para B",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-032",
+    "module": "Arquivos",
+    "title": "Objeto de outro condomínio",
+    "given": "usuário sabe caminho de arquivo alheio",
+    "when": "pede URL assinada",
+    "then": "API nega e bucket não possui leitura pública",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-033",
+    "module": "Arquivos",
+    "title": "Arquivo disfarçado",
+    "given": "conteúdo executável tem extensão PDF",
+    "when": "upload chega para conclusão",
+    "then": "permanece em quarentena/rejeitado conforme verificação",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-034",
+    "module": "Facial",
+    "title": "Recebimento não é aplicação",
+    "given": "parceiro confirma só recebimento",
+    "when": "app consulta estado",
+    "then": "mostra pendente de aplicação, não ativo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-035",
+    "module": "Facial",
+    "title": "Aplicação parcial",
+    "given": "credencial aceita em um de dois leitores",
+    "when": "usuário consulta acessos",
+    "then": "mostra cada destino e pendência do segundo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-036",
+    "module": "Facial",
+    "title": "Callback antigo após revogação",
+    "given": "versão 3 solicita revogar",
+    "when": "chega callback de criação versão 2",
+    "then": "não reativa e agenda reconciliação se necessário",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-037",
+    "module": "Facial",
+    "title": "Timeout desconhecido",
+    "given": "parceiro não garante idempotência",
+    "when": "chamada termina sem resposta",
+    "then": "estado UNKNOWN e consulta/reconciliação antes de nova mutação",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-038",
+    "module": "Facial",
+    "title": "Equipamento offline",
+    "given": "leitor está sem comunicação",
+    "when": "morador solicita novo cadastro",
+    "then": "não afirma disponibilidade; aplica procedimento de contingência",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-039",
+    "module": "Facial",
+    "title": "Revogação urgente offline",
+    "given": "credencial precisa ser bloqueada e leitor offline",
+    "when": "gestor revoga",
+    "then": "pendência crítica visível e acionamento do procedimento local",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-040",
+    "module": "Facial",
+    "title": "Abertura antiga",
+    "given": "comando de abertura venceu durante falha",
+    "when": "rede retorna",
+    "then": "comando não é executado nem repetido",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-041",
+    "module": "Facial",
+    "title": "Webhook repetido",
+    "given": "mesmo evento externo já foi processado",
+    "when": "provedor reenvia",
+    "then": "ack seguro sem duplicar histórico",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-042",
+    "module": "Facial",
+    "title": "Assinatura inválida",
+    "given": "callback não possui autenticidade válida",
+    "when": "endpoint recebe payload",
+    "then": "rejeita sem persistir evento de negócio",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-043",
+    "module": "Facial",
+    "title": "Conector cruza tenant",
+    "given": "credencial pertence ao conector A",
+    "when": "payload declara tenant B",
+    "then": "escopo deriva da credencial validada, nunca do campo arbitrário",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-044",
+    "module": "Facial",
+    "title": "Relé sem passagem",
+    "given": "controladora envia apenas acionamento",
+    "when": "histórico é exibido",
+    "then": "texto informa acionamento, não entrada de pessoa",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-045",
+    "module": "Facial",
+    "title": "Saída não identificada",
+    "given": "instalação usa botoeira sem identificação",
+    "when": "morador consulta visitante",
+    "then": "mostra sem registro de saída, não infere permanência",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-046",
+    "module": "Facial",
+    "title": "Retorno de energia",
+    "given": "controladora reinicia",
+    "when": "equipamento volta",
+    "then": "executa reconciliação e não envia abertura histórica",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-047",
+    "module": "Facial",
+    "title": "Remoção de foto",
+    "given": "cadastro foi finalizado e prazo de retenção venceu",
+    "when": "job executa purge",
+    "then": "foto transitória é removida e resultado auditado sem guardar a própria foto",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-048",
+    "module": "Facial",
+    "title": "Recusa de biometria",
+    "given": "titular não usará reconhecimento facial",
+    "when": "solicita acesso",
+    "then": "alternativa operacional documentada permanece disponível",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-049",
+    "module": "Infra",
+    "title": "Worker cai após efeito",
+    "given": "efeito idempotente já aconteceu",
+    "when": "worker reinicia antes do ack",
+    "then": "reprocessamento não duplica o efeito",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-050",
+    "module": "Infra",
+    "title": "Stream após revogação",
+    "given": "sessão SSE está aberta",
+    "when": "vínculo do usuário é revogado",
+    "then": "stream deixa de entregar conteúdo e exige reautorização",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-051",
+    "module": "Infra",
+    "title": "Restore sem efeitos colaterais",
+    "given": "backup anterior tem tarefas pendentes",
+    "when": "restore de teste inicia",
+    "then": "worker e integrações ficam desativados até reconciliação",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-052",
+    "module": "Infra",
+    "title": "Backup sem arquivos",
+    "given": "banco foi restaurado",
+    "when": "QA verifica anexos",
+    "then": "faltas são detectadas; backup só do banco não recebe aceite completo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-053",
+    "module": "Migração",
+    "title": "Lote repetido",
+    "given": "importação já foi aplicada",
+    "when": "mesmo lote é reenviado",
+    "then": "não duplica unidades nem reservas",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-054",
+    "module": "Migração",
+    "title": "Dados conflitantes",
+    "given": "duas reservas importadas se sobrepõem",
+    "when": "preview é gerado",
+    "then": "exibe conflito e impede aplicação cega",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-055",
+    "module": "Migração",
+    "title": "Duas agendas",
+    "given": "sistema antigo e CondPulse estão disponíveis",
+    "when": "cutover ocorre",
+    "then": "somente uma fonte aceita novas reservas por processo",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-056",
+    "module": "Operação",
+    "title": "Cobrança em atraso",
+    "given": "condomínio atrasa assinatura",
+    "when": "processo comercial marca atraso",
+    "then": "não bloqueia automaticamente passagem física de moradores",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-057",
+    "module": "UX",
+    "title": "Fonte ampliada",
+    "given": "morador utiliza escala de fonte grande",
+    "when": "conclui convite e reserva",
+    "then": "campos e botões permanecem legíveis e alcançáveis",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-058",
+    "module": "UX",
+    "title": "Rede interrompida na confirmação",
+    "given": "resposta se perde após gravação",
+    "when": "usuário retorna à tela",
+    "then": "consulta estado pelo identificador e evita falsa falha ou duplicação",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-059",
+    "module": "UX",
+    "title": "Navegação por teclado",
+    "given": "porteiro não usa mouse",
+    "when": "consulta e registra encomenda",
+    "then": "foco visível e sequência lógica permitem conclusão",
+    "status": "NÃO EXECUTADO"
+  },
+  {
+    "id": "AC-060",
+    "module": "Release",
+    "title": "Escopo não homologado",
+    "given": "facial não recebeu aceite físico",
+    "when": "release social é aprovado",
+    "then": "feature física fica desligada e contrato não a promete como entregue",
+    "status": "NÃO EXECUTADO"
+  }
+]

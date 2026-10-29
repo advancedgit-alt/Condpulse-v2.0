@@ -1,0 +1,22 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ a [label="Pessoa recebe explicação
+Alternativa não biométrica disponível",fillcolor="#E3F4F4"];
+ b [label="Vínculo e finalidade validados
+Foto aprovada / qualidade conferida"];
+ c [label="Cria estado desejado
+Outbox na mesma transação"];
+ d [label="Parceiro recebe o cadastro
+Aceite de API não significa leitor ativo"];
+ e [label="Sincronização por equipamento
+Versão desejada × aplicada"];
+ f [label="Confirmação verificável?",shape=diamond];
+ g [label="Ativo nos acessos confirmados
+Pode haver estado parcial",fillcolor="#E3F4F4"];
+ h [label="Pendente / falha / incerto
+Alerta e operação assistida",fillcolor="#FFFAEB"];
+ i [label="Revogação tem prioridade
+Pendente até confirmar remoção"];
+ a -> b -> c -> d -> e -> f;f -> g [label="sim"];f -> h [label="não"];h -> e [label="reconciliar"];
+ g -> i;i -> e [label="nova versão: revogar"];
+
+}

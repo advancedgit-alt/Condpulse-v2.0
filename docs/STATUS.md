@@ -1,4 +1,11 @@
-# Estado verificável - 28/10/2026
+# Estado verificável - 29/10/2026
+
+## Pacote de especificação versionado — CP-001/CP-002
+
+- O pacote v1.0 (27/10/2026) foi incorporado em `spec/` como referência imutável: 65 arquivos byte a byte conferidos contra o manifesto SHA256 do ZIP por `tests/spec-package.test.mjs`. PDF/DOCX do PRD (mesmo texto do Markdown), a pesquisa de concorrentes em PDF e a proposta de origem superada ficaram fora do repositório público.
+- O CI passa a executar `spec/qualidade/validar_estrutura.py` sobre cópia temporária. É validação documental; não comprova implementação. Backlog vivo continua em `docs/backlog.json`.
+
+## Registro de 28/10/2026
 
 ## Segundo projeto provisionado, aplicação ainda pendente — CP-004
 

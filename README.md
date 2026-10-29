@@ -18,6 +18,7 @@ validação de publicação e limitações em docs/WEB_IMPLANTACAO.md.
 - GitHub para código; Woodpecker como executor preferencial, após verificar capacidade/isolamento.
 
 ## Documentação de execução
+- [Pacote de especificação v1.0 (PRD, handoff, backlog e aceite de referência)](spec/LEIA-ME.md)
 - [Plano detalhado e implantação](docs/PLANO_IMPLANTACAO.md)
 - [Decisões e alternativas](docs/adr/0001-arquitetura.md)
 - [Banco único: PostgreSQL](docs/adr/0002-postgresql.md)

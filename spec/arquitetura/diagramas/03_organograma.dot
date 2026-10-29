@@ -1,0 +1,27 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ po [label="Responsável pelo produto / MESTRE
+Escopo · investimento · aceite",fillcolor="#102A43",fontcolor=white];
+ lead [label="Coordenação técnica
+Arquitetura · integração de PRs · evidências",fillcolor="#E3F4F4"];
+ be [label="Frente backend e dados
+Java · SQL · API · isolamento"];
+ fe [label="Frente experiência
+Web · mobile · design system"];
+ qa [label="Qualidade / revisão
+independente
+Testes · ameaças · acessibilidade"];
+ ops [label="Operação / implantação
+Deploy · backup · suporte"];
+ integrator [label="Integrador de segurança física
+Equipamentos · rede · contingência"];
+ legal [label="Privacidade / jurídico
+Base legal · contratos · retenção"];
+ pilot [label="Síndico + porteiros + moradores piloto
+Aceite das jornadas reais"];
+ po -> lead;po -> legal;lead -> be;lead -> fe;lead -> qa [constraint=false];lead -> ops [constraint=false];ops -> integrator;qa -> pilot;
+ foot [label="Agentes executam código.
+Pessoas designadas aprovam equipamento,
+contratos e operação.",shape=note];
+ {rank=same;be;fe} {rank=same;qa;ops} be -> qa [style=invis];fe -> ops [style=invis]; pilot -> foot [style=invis];
+
+}

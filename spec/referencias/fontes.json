@@ -1,0 +1,170 @@
+[
+  {
+    "id": "R01",
+    "title": "Spring Boot — System requirements",
+    "url": "https://docs.spring.io/spring-boot/system-requirements.html",
+    "usage": "Baseline e compatibilidade Java/Spring; fixar patches no D1.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R02",
+    "title": "Spring Security — JWT resource server",
+    "url": "https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html",
+    "usage": "Validação JWT; autorização de domínio permanece no produto.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R03",
+    "title": "Supabase — Securing your data",
+    "url": "https://supabase.com/docs/guides/database/secure-data",
+    "usage": "Exposição de dados e proteção de chaves/roles.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R04",
+    "title": "Supabase — Multi-factor authentication",
+    "url": "https://supabase.com/docs/guides/auth/auth-mfa",
+    "usage": "AAL e segundo fator.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R05",
+    "title": "Supabase — Row Level Security",
+    "url": "https://supabase.com/docs/guides/database/postgres/row-level-security",
+    "usage": "RLS, policies e papéis que podem contornar controles.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R06",
+    "title": "Supabase — Available regions",
+    "url": "https://supabase.com/docs/guides/platform/regions",
+    "usage": "Região específica São Paulo; confirmar disponibilidade no provisionamento.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R07",
+    "title": "Coolify — How databases work",
+    "url": "https://coolify.io/docs/databases/how-databases-work",
+    "usage": "Limites operacionais; não presumir HA automática.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R08",
+    "title": "PostgreSQL — Range types",
+    "url": "https://www.postgresql.org/docs/current/rangetypes.html",
+    "usage": "Intervalos e constraints de exclusão.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R09",
+    "title": "Control iD — Access API",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/",
+    "usage": "REST e modos de operação; capacidade depende de produto/modo.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R10",
+    "title": "Control iD — Introdução ao Monitor",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/monitor/introducao-ao-monitor/",
+    "usage": "Tipos de eventos, relé/sensor e passagem.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R11",
+    "title": "Control iD — Eventos de identificação online",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/modos-de-operacao/eventos-de-identificacao-online/",
+    "usage": "Contingência e configuração do modo.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R12",
+    "title": "Expo — Sending push notifications",
+    "url": "https://docs.expo.dev/push-notifications/sending-notifications/",
+    "usage": "Tickets e receipts não comprovam leitura do usuário.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R13",
+    "title": "Expo — Development builds",
+    "url": "https://docs.expo.dev/develop/development-builds/introduction/",
+    "usage": "Build próprio para desenvolvimento de app com recursos nativos.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R14",
+    "title": "W3C — WCAG 2.2",
+    "url": "https://www.w3.org/TR/WCAG22/",
+    "usage": "Referência de acessibilidade; critérios específicos exigem auditoria.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R15",
+    "title": "Brasil — Lei Geral de Proteção de Dados",
+    "url": "https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm",
+    "usage": "Dados sensíveis, biometria e obrigações; revisão jurídica necessária.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R16",
+    "title": "ANPD — Radar Tecnológico: biometria",
+    "url": "https://www.gov.br/anpd/pt-br/assuntos/noticias/biometria-e-tema-do-segundo-volume-da-serie-radar-tecnologico",
+    "usage": "Riscos do tratamento biométrico; não constitui homologação do CondPulse.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R17",
+    "title": "Coolify — Health checks",
+    "url": "https://coolify.io/docs/applications/configuration/health-checks",
+    "usage": "Verificações operacionais de containers.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R18",
+    "title": "TownSq — Novidades julho de 2026",
+    "url": "https://blog.townsq.com.br/townsq/townsq-julho-2026/",
+    "usage": "Oferta anunciada de portaria digital e integração física.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R19",
+    "title": "MyCond — Encomendas",
+    "url": "https://mycond.com.br/encomendas/",
+    "usage": "Referência de fluxo de recebimento assistido.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R20",
+    "title": "Nextin — Integração com controladora Bravas",
+    "url": "https://suporte.nextin.com.br/portal/pt-br/kb/articles/integra%C3%A7%C3%A3o-com-a-controladora-bravas",
+    "usage": "Exemplo de integração existente; não comprova parceria CondPulse.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R21",
+    "title": "Condfy — Recursos",
+    "url": "https://condfy.com.br/recursos/",
+    "usage": "Funções residenciais e controle de acesso anunciados.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R22",
+    "title": "Group Software — Group Portaria",
+    "url": "https://www.groupsoftware.com.br/blog/group-portaria/",
+    "usage": "Camada de portaria e equipamentos no ecossistema.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R23",
+    "title": "uCondo — Funcionalidade Acessos",
+    "url": "https://suporte.ucondo.com.br/o-que-%C3%A9-o-recurso/funcionalidade-acessos",
+    "usage": "Pré-autorização e limite de facial declarado no artigo consultado.",
+    "accessed": "2026-10-27"
+  },
+  {
+    "id": "R24",
+    "title": "Supabase — Database backups",
+    "url": "https://supabase.com/docs/guides/platform/backups",
+    "usage": "PITR/backup diário e exclusão de objetos do Storage do backup de banco.",
+    "accessed": "2026-10-27"
+  }
+]

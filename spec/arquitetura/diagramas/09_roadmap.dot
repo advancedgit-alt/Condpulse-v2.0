@@ -1,0 +1,26 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ a [label="D0 · Pré-condições
+Projeto exclusivo · responsáveis · piloto
+API do parceiro + acesso ao hardware",fillcolor="#102A43",fontcolor=white];
+ b [label="D1–D2 · Fundação
+CI · ambientes · banco · design"];
+ bi [label="D3–D5 · Identidade e cadastro
+Auth · MFA · tenancy · unidades"];
+ c [label="D6–D9 · Jornadas essenciais
+Reserva · visitante · encomenda"];
+ d [label="D10–D12 · Completo e integração
+Jornadas avançadas · facial em bancada"];
+ e [label="D13–D14 · Homologação
+Segurança · carga · restauração · migração"];
+ f [label="D15 · Gate de piloto
+Dois condomínios / escopo aprovado",fillcolor="#E3F4F4"];
+ g [label="D16–D19 · Estabilização
+Turnos reais · correções · custo · lojas"];
+ h [label="D20 · Gate comercial
+Somente escopo aceito e comprovado",fillcolor="#E3F4F4"];
+ i [label="Facial sem homologação?
+Não substituir acesso atual
+Não vender equivalência integral",fillcolor="#FFFAEB"];
+ a -> b -> bi -> c -> d -> e -> f -> g -> h;d -> i [style=dashed];i -> h [style=dashed,label="exclusão explícita"];
+
+}

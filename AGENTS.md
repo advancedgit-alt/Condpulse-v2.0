@@ -1,7 +1,7 @@
 # CondPulse — regras de execução
 - Português do Brasil; fuso America/Sao_Paulo; nome canônico CondPulse.
 - Leia CLAUDE.md, docs/PLANO_IMPLANTACAO.md e docs/STATUS.md.
-- Requisitos: PRD CondPulse v1.0, 27/10/2026. Desvios exigem ADR e evidência.
+- Requisitos: PRD CondPulse v1.0, 27/10/2026, texto em spec/documentacao. Desvios exigem ADR e evidência.
 - Trabalhe em branch própria, PR e revisão antes de merge; sem force push.
 - Gasto pago só com OK explícito, conforme CLAUDE.md.
 - Não alterar recursos, dados ou segredos da Advanced.

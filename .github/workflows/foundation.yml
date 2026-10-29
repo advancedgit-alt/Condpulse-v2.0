@@ -41,7 +41,13 @@ jobs:
         with:
           node-version: "24.18.0"
       - name: Foundation and contract checks
-        run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
+        run: node --test tests/foundation.test.mjs tests/spec-package.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
+      - name: Specification package structural validation on a temporary copy
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q python3-yaml; }
+          copy="$RUNNER_TEMP/condpulse-spec"
+          mkdir -p "$copy" && cp -R spec "$copy/"
+          python3 -I "$copy/spec/qualidade/validar_estrutura.py"
       - name: BFF staging guards and protocol without managed credentials
         run: node --test tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
       - name: Manual onboarding boundary without managed credentials

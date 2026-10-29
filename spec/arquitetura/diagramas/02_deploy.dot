@@ -1,0 +1,38 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ mobile [label="App React Native / Expo
+JWT + armazenamento seguro"];
+ browser [label="Web React + TypeScript
+Cookie seguro no BFF"];
+ proxy [label="HTTPS / proxy / rate limit
+Domínio ainda não contratado",fillcolor="#E3F4F4"];
+ subgraph cluster_app {label="Servidor dedicado CondPulse / Coolify";color="#8DABB9";style="rounded";
+ web [label="Web estática
+React + Vite"];
+ api [label="API / BFF · Java 25
+Spring Boot · sessão · permissões",fillcolor="#102A43",fontcolor=white];
+ worker [label="Worker Java
+Outbox · notificações · reconciliação"];
+ }
+ subgraph cluster_data {label="Supabase gerenciado / projeto exclusivo";color="#8DABB9";style="rounded";
+ db [label="PostgreSQL
+Schema cp privado · RLS · constraints",shape=cylinder];
+ idp [label="Auth
+JWT / JWKS / MFA"];
+ storage [label="Storage privado
+Arquivo ≠ backup do banco"];
+ }
+ partner [label="API do parceiro
+Homologação pendente"];
+ local [label="Condomínio
+Controladora + leitores
+Operação local validada"];
+ backup [label="Backup externo segregado
+Banco + arquivos + configurações"];
+ browser -> proxy;mobile -> proxy;proxy -> web;proxy -> api;web -> api [label="mesma origem"];
+ api -> idp;mobile -> idp [label="Auth público"];
+ api -> db;api -> storage;worker -> db;worker -> partner [label="tarefas duráveis"];
+ partner -> local;local -> partner [label="eventos"];
+ partner -> api [label="webhook autenticado"];
+ db -> backup [style=dashed];storage -> backup [style=dashed];
+
+}

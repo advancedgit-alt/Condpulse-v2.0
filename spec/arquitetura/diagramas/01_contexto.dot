@@ -1,0 +1,20 @@
+digraph G { graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.32", ranksep="0.48", fontname="Lato", fontsize=18, compound=true]; node [shape=box, style="rounded,filled", fillcolor="#F4F7FA", color="#CCD9E3", penwidth=1.2, fontname="Lato", fontsize=13, fontcolor="#102A43", margin="0.18,0.12"]; edge [color="#627D98", arrowsize=.7, fontname="Lato", fontsize=10, fontcolor="#52667A"];
+ m [label="Morador
+App e web responsiva", fillcolor="#E3F4F4"];
+ p [label="Portaria
+Computador / tablet"];
+ g [label="Gestão do condomínio
+Regras e exceções"];
+ cp [label="CondPulse
+Produto independente do app-advanced", fillcolor="#102A43", fontcolor="white", fontsize=18];
+ auth [label="Supabase dedicado
+Identidade · Postgres · arquivos"];
+ ac [label="Parceiro de acesso
+API e hardware homologados"];
+ n [label="Notificações
+Push + e-mail transacional"];
+ a [label="Advanced
+Integração opcional de atendimento", style="rounded,dashed"];
+ {rank=same;m;p;g} {rank=same;auth;ac} {rank=same;n;a} auth -> n [style=invis]; ac -> a [style=invis]; m -> cp;p -> cp;g -> cp;cp -> auth;cp -> ac;cp -> n [constraint=false];cp -> a [style=dashed,label="fase posterior"];
+
+}
