@@ -869,15 +869,45 @@
       "id": "CP-025",
       "delivery": "Autorização de visitante. Identidade mínima, responsável, validade e revogação.",
       "acceptance": "Token de convite não expõe CPF/unidade e não pode autorizar fora do prazo.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "0eaf5885feae35cc229814bab44dbc13448576bc",
+          "branch": "feat/visits",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40843363733",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,VisitJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Visitas e chegadas atrás de CP_VISITS_ENABLED=false (V013 não aplicada remotamente): convite da unidade com identidade mínima (nome e final do documento), período curto, estado pelo relógio do banco e revogação com motivo; convite de quem perdeu o vínculo ou de unidade inativa deixa de valer para a portaria; chegada sem convite com prazo de 5 minutos do banco, primeira decisão válida (teste concorrente), resposta do aplicativo só no prazo e, sem resposta, nada liberado — a portaria registra a confirmação assistida com origem e nota ou encerra; chegada vinculada só a convite válido da mesma unidade e pessoa (AC-019/AC-020). Sem token de convite compartilhável (CP-037), sem aviso efetivo (CP-034/CP-035), sem concessão de permissões ao dependente; Auth real e portaria nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-026",
       "delivery": "Chegada sem convite. Solicitação vinculada à pessoa/unidade; decisão única com prazo.",
       "acceptance": "Push sem resposta não libera visita; resposta antiga não decide nova chegada.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "0eaf5885feae35cc229814bab44dbc13448576bc",
+          "branch": "feat/visits",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40843363733",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,VisitJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Visitas e chegadas atrás de CP_VISITS_ENABLED=false (V013 não aplicada remotamente): convite da unidade com identidade mínima (nome e final do documento), período curto, estado pelo relógio do banco e revogação com motivo; convite de quem perdeu o vínculo ou de unidade inativa deixa de valer para a portaria; chegada sem convite com prazo de 5 minutos do banco, primeira decisão válida (teste concorrente), resposta do aplicativo só no prazo e, sem resposta, nada liberado — a portaria registra a confirmação assistida com origem e nota ou encerra; chegada vinculada só a convite válido da mesma unidade e pessoa (AC-019/AC-020). Sem token de convite compartilhável (CP-037), sem aviso efetivo (CP-034/CP-035), sem concessão de permissões ao dependente; Auth real e portaria nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-027",
