@@ -1,6 +1,7 @@
 # Pedidos da unidade e conversa vinculada (CP-033, sem anexos)
 
-Flag: `CP_REQUESTS_ENABLED` (padrão `false`). V017 ainda não foi aplicada a nenhum banco remoto.
+Flag: `CP_REQUESTS_ENABLED` (padrão `false`; ligada na homologação em 29/10/2026). V017 aplicada na homologação
+(`rpnrqfrfwywglvyykgrg`) em 29/10/2026; produção ainda sem migrations. Ver [STATUS.md](STATUS.md).
 Anexos (CP-017) e aviso efetivo à unidade (CP-034/CP-035) ficam para tickets próprios.
 
 ## Quem faz o quê
@@ -52,6 +53,6 @@ Dependente e proprietário ficam fora deste recorte (nenhum fluxo concede permis
 
 ## Pendências
 
-- Aplicação remota da V017 com aprovação; ensaio com Auth real, gestão e portaria nomeadas.
+- Ensaio com Auth real, gestão e portaria nomeadas; aplicação na produção pelo executor próprio.
 - Anexos (CP-017), aviso à unidade pela caixa interna e push (CP-034/CP-035), tempo real (CP-036).
 - Paginação além dos 100 pedidos e das 200 mensagens mais recentes, retenção e acesso do proprietário e do dependente.

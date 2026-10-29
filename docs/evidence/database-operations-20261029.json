@@ -24,7 +24,8 @@
       "createdAtUtc": "2026-10-29T10:58:38Z",
       "completedAtUtc": "2026-10-29T11:01:45Z",
       "conclusion": "success",
-      "historyEffect": "V006 a V015 gravadas no histórico entre 2026-10-29T11:00:04Z e 2026-10-29T11:01:16Z"
+      "historyEffect": "V006 a V015 gravadas no histórico entre 2026-10-29T11:00:04Z e 2026-10-29T11:01:16Z",
+      "sourceCommit": "8aa5ec691959427866adbee072236cd5d124ecc8"
     },
     {
       "mode": "migrate-replay",
@@ -33,62 +34,328 @@
       "createdAtUtc": "2026-10-29T11:02:13Z",
       "completedAtUtc": "2026-10-29T11:03:50Z",
       "conclusion": "success",
-      "historyEffect": "nenhuma linha nova; a última instalação continua em 2026-10-29T11:01:16Z"
+      "historyEffect": "nenhuma linha nova; a última instalação continua em 2026-10-29T11:01:16Z",
+      "sourceCommit": "8aa5ec691959427866adbee072236cd5d124ecc8"
+    },
+    {
+      "mode": "migrate",
+      "range": "016-016",
+      "sourceCommit": "86b00d24932692df63b7f7262172026ea7d73d2b",
+      "sourcePullRequest": 41,
+      "run": 40866823651,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40866823651",
+      "createdAtUtc": "2026-10-29T11:37:31Z",
+      "completedAtUtc": "2026-10-29T11:39:28Z",
+      "conclusion": "success",
+      "historyEffect": "V016 gravada no histórico em 2026-10-29T11:38:58Z"
+    },
+    {
+      "mode": "migrate-replay",
+      "range": "016-016",
+      "sourceCommit": "86b00d24932692df63b7f7262172026ea7d73d2b",
+      "run": 40867123268,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40867123268",
+      "createdAtUtc": "2026-10-29T11:39:55Z",
+      "completedAtUtc": "2026-10-29T11:41:40Z",
+      "conclusion": "success",
+      "historyEffect": "nenhuma linha nova; 15 linhas, a última em 2026-10-29T11:38:58Z"
+    },
+    {
+      "mode": "migrate",
+      "range": "017-017",
+      "sourceCommit": "b83f6d0793bb0e7a148f156b385c33b5db17be26",
+      "sourcePullRequest": 42,
+      "run": 40868152258,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40868152258",
+      "createdAtUtc": "2026-10-29T11:47:54Z",
+      "completedAtUtc": "2026-10-29T11:49:24Z",
+      "conclusion": "success",
+      "historyEffect": "V017 gravada no histórico em 2026-10-29T11:49:04Z"
+    },
+    {
+      "mode": "migrate-replay",
+      "range": "017-017",
+      "sourceCommit": "b83f6d0793bb0e7a148f156b385c33b5db17be26",
+      "run": 40868416867,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40868416867",
+      "createdAtUtc": "2026-10-29T11:49:58Z",
+      "completedAtUtc": "2026-10-29T11:51:21Z",
+      "conclusion": "success",
+      "historyEffect": "nenhuma linha nova; 16 linhas, a última em 2026-10-29T11:49:04Z"
     }
   ],
-  "publicSmoke": {
-    "run": 40862484199,
-    "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40862484199",
-    "sourceCommit": "8aa5ec691959427866adbee072236cd5d124ecc8",
-    "completedAtUtc": "2026-10-29T11:04:40Z",
-    "conclusion": "success",
-    "deployment": "dpl_6QXhghkhKy9zCRrrGDGoBdAnzaoH",
-    "note": "Deployment criado em 2026-10-29T10:58:23Z, antes das mudanças de flags; o workflow confere readiness UP e 401 sem token."
-  },
-  "readback": {
-    "method": "consulta somente leitura com o papel postgres (sem SUPERUSER, com BYPASSRLS) em 2026-10-29",
-    "flywayHistory": [
-      { "rank": 1, "version": "002", "type": "BASELINE", "script": "CondPulse ADR-0003 V001/V002", "checksum": null, "success": true, "installedUtc": "2026-10-28T16:54:03Z" },
-      { "rank": 2, "version": "003", "type": "SQL", "script": "V003__durable_bff_sessions.sql", "checksum": 109362481, "success": true, "installedUtc": "2026-10-28T16:56:24Z" },
-      { "rank": 3, "version": "004", "type": "SQL", "script": "V004__bff_rate_limits.sql", "checksum": -481413482, "success": true, "installedUtc": "2026-10-28T16:56:28Z" },
-      { "rank": 4, "version": "005", "type": "SQL", "script": "V005__operational_onboarding.sql", "checksum": 1796503302, "success": true, "installedUtc": "2026-10-28T16:56:31Z" },
-      { "rank": 5, "version": "006", "type": "SQL", "script": "V006__local_management_capabilities.sql", "checksum": 1294324162, "success": true, "installedUtc": "2026-10-29T11:00:04Z" },
-      { "rank": 6, "version": "007", "type": "SQL", "script": "V007__memberships_and_invitations.sql", "checksum": -1080962507, "success": true, "installedUtc": "2026-10-29T11:00:11Z" },
-      { "rank": 7, "version": "008", "type": "SQL", "script": "V008__reservation_decisions.sql", "checksum": 489512585, "success": true, "installedUtc": "2026-10-29T11:00:18Z" },
-      { "rank": 8, "version": "009", "type": "SQL", "script": "V009__access_recovery.sql", "checksum": 1741082284, "success": true, "installedUtc": "2026-10-29T11:00:22Z" },
-      { "rank": 9, "version": "010", "type": "SQL", "script": "V010__platform_administration.sql", "checksum": -1638969386, "success": true, "installedUtc": "2026-10-29T11:00:28Z" },
-      { "rank": 10, "version": "011", "type": "SQL", "script": "V011__platform_billing.sql", "checksum": -575261692, "success": true, "installedUtc": "2026-10-29T11:00:36Z" },
-      { "rank": 11, "version": "012", "type": "SQL", "script": "V012__parcels.sql", "checksum": -1723653814, "success": true, "installedUtc": "2026-10-29T11:00:49Z" },
-      { "rank": 12, "version": "013", "type": "SQL", "script": "V013__visits_and_arrivals.sql", "checksum": 1183666289, "success": true, "installedUtc": "2026-10-29T11:00:57Z" },
-      { "rank": 13, "version": "014", "type": "SQL", "script": "V014__manual_access_events.sql", "checksum": -256728017, "success": true, "installedUtc": "2026-10-29T11:01:09Z" },
-      { "rank": 14, "version": "015", "type": "SQL", "script": "V015__outbox_worker_and_inbox.sql", "checksum": 450612215, "success": true, "installedUtc": "2026-10-29T11:01:16Z" }
-    ],
-    "applicationTables": 29,
-    "tablesWithoutForceRls": 0,
-    "tablesNotOwnedByPostgres": 0,
-    "groupRoles": "cp_api, cp_worker e cp_onboarding NOLOGIN, sem SUPERUSER/BYPASSRLS",
-    "runtimeLogins": 1,
-    "workerOrOnboardingLogins": 0,
-    "rows": { "tenants": 0, "memberships": 0, "platformRoles": 0, "accounts": 1, "outbox": 0, "onboardingRuns": 0 }
-  },
   "vercelFlags": {
     "project": "prj_IeUa4Zjg1IwaPqJQwv525H14I837",
     "target": "production",
     "created": {
       "atUtc": "2026-10-29T11:06:28Z",
-      "keys": ["CP_MANAGEMENT_ENABLED", "CP_PLATFORM_ENABLED", "CP_PLATFORM_BILLING_ENABLED", "CP_PARCELS_ENABLED", "CP_VISITS_ENABLED", "CP_NOTIFICATIONS_ENABLED"],
+      "keys": [
+        "CP_MANAGEMENT_ENABLED",
+        "CP_PLATFORM_ENABLED",
+        "CP_PLATFORM_BILLING_ENABLED",
+        "CP_PARCELS_ENABLED",
+        "CP_VISITS_ENABLED",
+        "CP_NOTIFICATIONS_ENABLED"
+      ],
       "value": "true",
       "type": "plain"
     },
     "edited": {
       "atUtc": "2026-10-29T11:18:00Z",
-      "keys": ["CP_BFF_ENABLED", "CP_RESERVATIONS_ENABLED"],
+      "keys": [
+        "CP_BFF_ENABLED",
+        "CP_RESERVATIONS_ENABLED"
+      ],
       "from": "false",
       "to": "true",
       "note": "A primeira tentativa, às 11:06Z, foi recusada pelo controle de permissões do agente; aplicada depois da autorização explícita do responsável."
     },
-    "absent": ["CP_BFF_RECOVERY_ENABLED (sem SMTP)", "CP_WORKER_OUTBOX_ENABLED (worker contínuo não implantado)", "CP_ANNOUNCEMENTS_ENABLED e CP_REQUESTS_ENABLED (módulos ainda não mergeados)"],
+    "absent": [
+      "CP_BFF_RECOVERY_ENABLED (sem SMTP)",
+      "CP_WORKER_OUTBOX_ENABLED (worker contínuo não implantado)"
+    ],
     "secretValuesReadByAgent": false,
-    "effective": "Somente a partir do próximo deployment de produção. O redeploy manual pela API foi recusado pelo controle de permissões do agente; o deployment seguinte sai do próximo merge na base."
-  }
+    "effective": "Cada flag vale a partir do deployment seguinte à sua criação. O redeploy manual pela API foi recusado pelo controle de permissões do agente; os deployments saíram dos merges na base (PRs #40/#39, #41, #42 e o registro seguinte).",
+    "createdLater": [
+      {
+        "atUtc": "2026-10-29T11:40:14Z",
+        "key": "CP_ANNOUNCEMENTS_ENABLED",
+        "value": "true",
+        "type": "plain",
+        "after": "V016 aplicada e conferida"
+      },
+      {
+        "atUtc": "2026-10-29T11:49:59Z",
+        "key": "CP_REQUESTS_ENABLED",
+        "value": "true",
+        "type": "plain",
+        "after": "V017 aplicada e conferida"
+      }
+    ]
+  },
+  "publicSmoke": [
+    {
+      "run": 40862484199,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40862484199",
+      "sourceCommit": "8aa5ec691959427866adbee072236cd5d124ecc8",
+      "completedAtUtc": "2026-10-29T11:04:40Z",
+      "conclusion": "success",
+      "deployment": "dpl_6QXhghkhKy9zCRrrGDGoBdAnzaoH",
+      "note": "Deployment criado em 2026-10-29T10:58:23Z, antes das mudanças de flags; readiness UP e 401 sem token."
+    },
+    {
+      "run": 40865679949,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40865679949",
+      "sourceCommit": "d43cf69ff8cd602c76e950ce4b93d46b19ec9e4f",
+      "completedAtUtc": "2026-10-29T11:30:12Z",
+      "conclusion": "success",
+      "deployment": "dpl_CAEUz9pB1B48176HtfcKkhD2KbJf",
+      "note": "Primeiro deployment com as flags dos módulos, BFF e reservas (PRs #40 e #39)."
+    },
+    {
+      "run": 40866586014,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40866586014",
+      "sourceCommit": "86b00d24932692df63b7f7262172026ea7d73d2b",
+      "completedAtUtc": "2026-10-29T11:36:52Z",
+      "conclusion": "success",
+      "note": "Merge dos avisos (PR #41), banco ainda na V015."
+    },
+    {
+      "run": 40867960632,
+      "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40867960632",
+      "sourceCommit": "b83f6d0793bb0e7a148f156b385c33b5db17be26",
+      "completedAtUtc": "2026-10-29T11:47:32Z",
+      "conclusion": "success",
+      "note": "Merge dos pedidos (PR #42), com CP_ANNOUNCEMENTS_ENABLED já criada e V016 aplicada; banco ainda sem V017."
+    }
+  ],
+  "bffCheck": {
+    "atUtc": "2026-10-29",
+    "method": "GET público de /auth/csrf na origem https://project-rhvdq.vercel.app depois do deployment com as flags",
+    "result": "JSON com headerName X-CSRF-Token e token não vazio (valor não registrado); com o BFF desligado a rota não tem controlador"
+  },
+  "readbacks": [
+    {
+      "method": "consulta somente leitura com o papel postgres (sem SUPERUSER, com BYPASSRLS) em 2026-10-29",
+      "flywayHistory": [
+        {
+          "rank": 1,
+          "version": "002",
+          "type": "BASELINE",
+          "script": "CondPulse ADR-0003 V001/V002",
+          "checksum": null,
+          "success": true,
+          "installedUtc": "2026-10-28T16:54:03Z"
+        },
+        {
+          "rank": 2,
+          "version": "003",
+          "type": "SQL",
+          "script": "V003__durable_bff_sessions.sql",
+          "checksum": 109362481,
+          "success": true,
+          "installedUtc": "2026-10-28T16:56:24Z"
+        },
+        {
+          "rank": 3,
+          "version": "004",
+          "type": "SQL",
+          "script": "V004__bff_rate_limits.sql",
+          "checksum": -481413482,
+          "success": true,
+          "installedUtc": "2026-10-28T16:56:28Z"
+        },
+        {
+          "rank": 4,
+          "version": "005",
+          "type": "SQL",
+          "script": "V005__operational_onboarding.sql",
+          "checksum": 1796503302,
+          "success": true,
+          "installedUtc": "2026-10-28T16:56:31Z"
+        },
+        {
+          "rank": 5,
+          "version": "006",
+          "type": "SQL",
+          "script": "V006__local_management_capabilities.sql",
+          "checksum": 1294324162,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:04Z"
+        },
+        {
+          "rank": 6,
+          "version": "007",
+          "type": "SQL",
+          "script": "V007__memberships_and_invitations.sql",
+          "checksum": -1080962507,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:11Z"
+        },
+        {
+          "rank": 7,
+          "version": "008",
+          "type": "SQL",
+          "script": "V008__reservation_decisions.sql",
+          "checksum": 489512585,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:18Z"
+        },
+        {
+          "rank": 8,
+          "version": "009",
+          "type": "SQL",
+          "script": "V009__access_recovery.sql",
+          "checksum": 1741082284,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:22Z"
+        },
+        {
+          "rank": 9,
+          "version": "010",
+          "type": "SQL",
+          "script": "V010__platform_administration.sql",
+          "checksum": -1638969386,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:28Z"
+        },
+        {
+          "rank": 10,
+          "version": "011",
+          "type": "SQL",
+          "script": "V011__platform_billing.sql",
+          "checksum": -575261692,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:36Z"
+        },
+        {
+          "rank": 11,
+          "version": "012",
+          "type": "SQL",
+          "script": "V012__parcels.sql",
+          "checksum": -1723653814,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:49Z"
+        },
+        {
+          "rank": 12,
+          "version": "013",
+          "type": "SQL",
+          "script": "V013__visits_and_arrivals.sql",
+          "checksum": 1183666289,
+          "success": true,
+          "installedUtc": "2026-10-29T11:00:57Z"
+        },
+        {
+          "rank": 13,
+          "version": "014",
+          "type": "SQL",
+          "script": "V014__manual_access_events.sql",
+          "checksum": -256728017,
+          "success": true,
+          "installedUtc": "2026-10-29T11:01:09Z"
+        },
+        {
+          "rank": 14,
+          "version": "015",
+          "type": "SQL",
+          "script": "V015__outbox_worker_and_inbox.sql",
+          "checksum": 450612215,
+          "success": true,
+          "installedUtc": "2026-10-29T11:01:16Z"
+        }
+      ],
+      "applicationTables": 29,
+      "tablesWithoutForceRls": 0,
+      "tablesNotOwnedByPostgres": 0,
+      "groupRoles": "cp_api, cp_worker e cp_onboarding NOLOGIN, sem SUPERUSER/BYPASSRLS",
+      "runtimeLogins": 1,
+      "workerOrOnboardingLogins": 0,
+      "rows": {
+        "tenants": 0,
+        "memberships": 0,
+        "platformRoles": 0,
+        "accounts": 1,
+        "outbox": 0,
+        "onboardingRuns": 0
+      },
+      "state": "V015"
+    },
+    {
+      "state": "V017",
+      "method": "consulta somente leitura com o papel postgres (sem SUPERUSER, com BYPASSRLS) em 2026-10-29, depois do migrate 017",
+      "flywayHistoryAdded": [
+        {
+          "rank": 15,
+          "version": "016",
+          "type": "SQL",
+          "script": "V016__announcements.sql",
+          "checksum": -550274174,
+          "success": true,
+          "installedUtc": "2026-10-29T11:38:58Z"
+        },
+        {
+          "rank": 16,
+          "version": "017",
+          "type": "SQL",
+          "script": "V017__service_requests.sql",
+          "checksum": -581604477,
+          "success": true,
+          "installedUtc": "2026-10-29T11:49:04Z"
+        }
+      ],
+      "historyRows": 16,
+      "applicationTables": 33,
+      "tablesWithoutForceRls": 0,
+      "tablesNotOwnedByPostgres": 0,
+      "groupRoles": "cp_api, cp_worker e cp_onboarding NOLOGIN, sem SUPERUSER/BYPASSRLS",
+      "privilegeSpotChecks": {
+        "cpApiDeleteAnnouncements": false,
+        "cpApiUpdatePublishedAt": false,
+        "cpApiDeleteServiceRequests": false,
+        "cpApiUpdateRequestMessages": false,
+        "cpApiInsertRequesterName": false
+      }
+    }
+  ]
 }
