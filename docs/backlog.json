@@ -498,7 +498,23 @@
       "delivery": "Importação em staging. CSV, preview, validação, duplicatas, erros por linha e aprovação de lote.",
       "acceptance": "Repetir o mesmo lote não duplica unidades ou vínculos; origem e contagens são registradas.",
       "status": "EM_IMPLEMENTACAO",
-      "evidence": []
+      "evidence": [
+        {
+          "batch": "unit-import-20261029",
+          "commit": "953ae94b8c08b0ea621886c5ed51e6b636e84ed4",
+          "branch": "feat/cp-016-unit-import (PR #56)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40951606378",
+          "commands": [
+            "mvn verify + UnitImportJdbcTest",
+            "python3 tests/database/run.py (import_checks)",
+            "npm test; npx playwright test (e2e/imports.spec.ts)",
+            "database-operations migrate 018-018 (40951606378) e repeticao (40951942737)"
+          ],
+          "result": "CI_PASSED_V018_APPLIED_HML_LOGIN_REAL_PENDING",
+          "scope": "Recorte blocos e unidades: previa por linha, mesmo arquivo no mesmo lote, aprovacao que cria so o que falta sem duplicar (inclusive aprovacoes simultaneas e caixa diferente), parcial so explicito, descarte, isolamento e AAL2. Pessoas/vinculos nao importados; arquivo original depende do CP-017. Sem uso com login real."
+        }
+      ]
     },
     {
       "id": "CP-017",
