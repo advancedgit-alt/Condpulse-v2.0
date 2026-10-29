@@ -36,8 +36,11 @@ for spec in "GET /v1/tenants/$tenant/requests/$item/attachments" "POST /v1/tenan
   "POST /v1/tenants/$tenant/attachments/$item/complete" "POST /v1/tenants/$tenant/attachments/$item/download"; do
   set -- $spec
   status=$(curl -sS -X "$1" -H 'Content-Type: application/json' -d '{}' -o "$body" -w '%{http_code}' "$base$2")
-  if [ "$status" != 401 ]; then echo "Rota de anexo sem sessão respondeu $status: $2 $(head -c 300 "$body")" >> "$log"; exit 1; fi
-  node -e "const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)" "$body"
+  # GET sem sessão: 401. POST sem sessão nem CSRF: barrado pelo CSRF padrão do Spring Security antes da autenticação
+  # (403 ACTION_FORBIDDEN), comportamento observado no CI 40955946990.
+  if [ "$1" = GET ]; then expected=401; code=AUTHENTICATION_REQUIRED; else expected=403; code=ACTION_FORBIDDEN; fi
+  if [ "$status" != "$expected" ]; then echo "Rota de anexo sem sessão respondeu $status: $2 $(head -c 300 "$body")" >> "$log"; exit 1; fi
+  node -e "const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); if(p.code!==process.argv[2]) process.exit(1)" "$body" "$code"
 done
 if grep -qF "$CP_STORAGE_SERVICE_KEY" "$log"; then echo 'Chave de serviço apareceu no log.' >&2; exit 1; fi
 if grep -q -E 'APPLICATION FAILED TO START| ERROR [0-9]+ --- ' "$log"; then exit 1; fi
