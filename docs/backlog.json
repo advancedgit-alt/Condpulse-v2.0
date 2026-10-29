@@ -520,8 +520,25 @@
       "id": "CP-017",
       "delivery": "Upload privado e download autorizado. Intenção, tamanho/MIME, quarentena, conclusão e link curto após autorização.",
       "acceptance": "Objeto de outro tenant e arquivo com tipo inválido são negados; upload não vira público.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "batch": "attachments-20261029",
+          "commit": "aba54085d26a5953720c3089d8ed875697722292",
+          "branch": "feat/cp-017-attachments (PR #59)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40957142915",
+          "commands": [
+            "mvn verify + AttachmentJdbcTest, SupabaseAttachmentStorageTest, FilesConfigurationTest",
+            "python3 tests/database/run.py (attachment_checks)",
+            "bash tests/runtime/files-flag-smoke.sh",
+            "npm test; npx playwright test (e2e/attachments.spec.ts) inclusive contra a imagem nginx",
+            "database-operations migrate 019-019 (40958018877) e repeticao (40958254298)"
+          ],
+          "result": "CI_PASSED_V019_APPLIED_HML_FLAG_OFF",
+          "scope": "Anexo de pedido: intencao, URL assinada curta para bucket privado, conclusao que confere tamanho, assinatura do conteudo e SHA-256 (disfarcado e tamanho diferente recusados), vencido encerrado, limite de 10 por pedido, download revalidado de 60 s, outra unidade/condominio/gestao sem AAL2 negados. CP_FILES_ENABLED desligada: falta a chave de servico do Storage na Vercel. Sem antivirus. Sem uso com login real."
+        }
+      ]
     },
     {
       "id": "CP-018",
