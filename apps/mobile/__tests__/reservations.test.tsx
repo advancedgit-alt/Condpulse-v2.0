@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { newQueryClient } from '../src/App';
 import { ApiError, type CondPulseApi } from '../src/api/client';
 import type { Amenity, Reservation } from '../src/api/reservations';
-import { Reservations } from '../src/ui/Reservations';
+import { Reservations, type PendingStore } from '../src/ui/Reservations';
 
 const TENANT = '00000000-0000-4000-8000-000000000001';
 const UNIT = '20000000-0000-4000-8000-000000000001';
@@ -205,6 +205,41 @@ describe('reservas no celular', () => {
     </QueryClientProvider>);
     expect(await screen.findByText(/não foi possível avançar daqui/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Ver as reservas seguintes' })).toBeNull();
+  });
+
+  it('pedido incerto sobrevive à troca de vínculo e volta travado na mesma chave e no mesmo corpo', async () => {
+    const fake = fakeApi();
+    const pending: PendingStore = new Map();
+    const membership = { membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+      timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' as const };
+    const show = async (unitId: string) => {
+      const queries = newQueryClient(Infinity); clients.push(queries);
+      await render(<QueryClientProvider client={queries}>
+        <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => `test:key-${String(++counter).padStart(12, '0')}`}
+          membership={{ ...membership, unitId }} pending={pending} />
+      </QueryClientProvider>);
+    };
+    await show(UNIT);
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    expect(await screen.findByText(/o mesmo pedido não é gravado duas vezes/)).toBeTruthy();
+    // Troca para outra unidade: nada pendente lá.
+    await cleanup();
+    await show('20000000-0000-4000-8000-000000000002');
+    expect(await screen.findByRole('button', { name: 'Ver horários de Salão fictício' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tentar confirmar o mesmo pedido' })).toBeNull();
+    // Volta: a confirmação do mesmo pedido reaparece travada.
+    await cleanup();
+    await show(UNIT);
+    const retry = await screen.findByRole('button', { name: 'Tentar confirmar o mesmo pedido' });
+    expect(screen.getByRole('button', { name: 'Voltar às áreas' })).toBeDisabled();
+    await fireEvent.press(retry);
+    expect(await screen.findByText(/Pedido enviado/)).toBeTruthy();
+    expect(fake.state.creates).toHaveLength(2);
+    expect(fake.state.creates[1]).toEqual(fake.state.creates[0]);
+    expect(pending.size).toBe(0);
   });
 
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {

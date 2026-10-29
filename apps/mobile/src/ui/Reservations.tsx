@@ -14,6 +14,13 @@ import { colors, touch } from './theme';
  * A chave de envio é a mesma ao repetir depois de resultado incerto: nada é reservado duas vezes.
  */
 export type KeyFactory = () => string;
+/**
+ * Pedido de reserva com resultado ainda não confirmado, guardado fora da tela (só em memória, por conta, condomínio e
+ * unidade): trocar de vínculo e voltar restaura a confirmação do mesmo pedido, com a mesma chave e o mesmo corpo.
+ */
+export interface PendingCreate { areaId: string; date: string; length: number; slot: Slot; intent: string; key: string; body: ReservationBody }
+export type PendingStore = Map<string, PendingCreate>;
+const UNCERTAIN_MESSAGE = 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.';
 const DATES_PER_PAGE = 14;
 const PERIOD_DAYS = 30;
 const statusLabels: Record<ReservationStatus, string> = {
@@ -42,8 +49,8 @@ function Notice({ tone, children }: { tone: 'error' | 'info' | 'success' | 'warn
   return <Text accessibilityRole="alert" style={[styles.notice, styles[tone]]}>{children}</Text>;
 }
 
-export function Reservations({ api, accountId, membership, newKey, now = () => new Date() }: {
-  api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date;
+export function Reservations({ api, accountId, membership, newKey, now = () => new Date(), pending = new Map() }: {
+  api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date; pending?: PendingStore;
 }) {
   const { tenantId, unitId, timeZone } = membership;
   const scope = ['private', accountId, 'tenant', tenantId, 'unit', unitId] as const;
@@ -60,7 +67,8 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   const range = useMemo(() => ({ from: cursor ?? toInstant(`${periodStart}T00:00`, timeZone), until: toInstant(`${periodEnd}T00:00`, timeZone) }),
     [cursor, periodStart, periodEnd, timeZone]);
   const mine = useQuery({ queryKey: [...scope, 'reservations', range.from], queryFn: ({ signal }) => api.reservations(tenantId, unitId, range, signal) });
-  const [areaId, setAreaId] = useState<string | null>(null);
+  const pendingScope = `${accountId}|${tenantId}|${unitId}`;
+  const [areaId, setAreaId] = useState<string | null>(() => pending.get(pendingScope)?.areaId ?? null);
   const [outcome, setOutcome] = useState<{ tone: 'success' | 'info'; text: string } | null>(null);
   const area = amenities.data?.find((item) => item.amenityId === areaId) ?? null;
   const names = new Map((amenities.data ?? []).map((item) => [item.amenityId, item.name]));
@@ -68,7 +76,7 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={styles.heading}>Reservas</Text>
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
-    {area ? <Booking api={api} scope={scope} membership={membership} area={area} newKey={newKey} now={now}
+    {area ? <Booking api={api} scope={scope} membership={membership} area={area} newKey={newKey} now={now} pending={pending} pendingScope={pendingScope}
       close={(result) => {
         setAreaId(null);
         if (!result) return;
@@ -118,8 +126,9 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   </View>;
 }
 
-function Booking({ api, scope, membership, area, newKey, now, close }: {
+function Booking({ api, scope, membership, area, newKey, now, close, pending, pendingScope }: {
   api: CondPulseApi; scope: readonly unknown[]; membership: Membership & { unitId: string }; area: Amenity; newKey: KeyFactory;
+  pending: PendingStore; pendingScope: string;
   now: () => Date; close(result: { tone: 'success' | 'info'; text: string; startsAt: string } | null): void;
 }) {
   const queries = useQueryClient();
@@ -127,19 +136,21 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
   const policy = area.policy!;
   const dates = useMemo(() => bookableDates(policy, timeZone, now()), [policy, timeZone, now]);
   const lengths = useMemo(() => durations(policy, area.bufferMinutes), [policy, area.bufferMinutes]);
-  const [date, setDate] = useState(dates[0] ?? null);
+  const saved = pending.get(pendingScope)?.areaId === area.amenityId ? pending.get(pendingScope)! : null;
+  const [date, setDate] = useState(saved?.date ?? dates[0] ?? null);
   const [page, setPage] = useState(0);
   const visibleDates = dates.slice(page * DATES_PER_PAGE, (page + 1) * DATES_PER_PAGE);
-  const [length, setLength] = useState(lengths.includes(60) ? 60 : lengths[0] ?? null);
-  const [slot, setSlot] = useState<Slot | null>(null);
+  const [length, setLength] = useState(saved?.length ?? (lengths.includes(60) ? 60 : lengths[0] ?? null));
+  const [slot, setSlot] = useState<Slot | null>(saved?.slot ?? null);
   // Aceite preso à versão lida: se a gestão mudar regras ou taxa enquanto a tela está aberta, o aceite cai e precisa ser refeito.
   const [acceptedVersion, setAcceptedVersion] = useState<number | null>(null);
   const accepted = acceptedVersion === area.policyVersion;
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<unknown>(null);
+  const [failure, setFailure] = useState<unknown>(() => saved ? new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', UNCERTAIN_MESSAGE, true) : null);
   // Chave presa ao horário escolhido: repetir depois de resultado incerto confirma o mesmo pedido.
   // Depois de resultado incerto, a repetição reenvia exatamente o corpo original (inclusive a versão aceita).
-  const [pendingKey, setPendingKey] = useState<{ intent: string; key: string; body: ReservationBody } | null>(null);
+  const [pendingKey, setPendingKey] = useState<{ intent: string; key: string; body: ReservationBody } | null>(
+    saved ? { intent: saved.intent, key: saved.key, body: saved.body } : null);
   const range = date ? { from: toInstant(`${date}T00:00`, timeZone), until: toInstant(`${addDays(date, 1)}T00:00`, timeZone) } : null;
   const availability = useQuery({ enabled: range !== null, queryKey: [...scope, 'availability', area.amenityId, date],
     queryFn: ({ signal }) => api.availability(tenantId, unitId, area.amenityId, range!, signal) });
@@ -161,8 +172,11 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
       attempt = { intent, key: pendingKey?.intent === intent ? pendingKey.key : newKey(), body };
     }
     setPendingKey(attempt); setBusy(true); setFailure(null);
+    // Guardado antes do envio: se a pessoa trocar de vínculo no meio, a resposta incerta continua recuperável.
+    pending.set(pendingScope, { areaId: area.amenityId, date: date!, length: length!, slot, ...attempt });
     try {
       const result = await api.createReservation(tenantId, attempt.body, attempt.key);
+      pending.delete(pendingScope);
       setPendingKey(null);
       void queries.invalidateQueries({ queryKey: [...scope] });
       const when = `${formatWhen(result.reservation.startsAt, timeZone)} às ${formatTime(result.reservation.endsAt, timeZone)}`;
@@ -174,6 +188,7 @@ function Booking({ api, scope, membership, area, newKey, now, close }: {
           : { tone: 'info', text: `Pedido registrado com a situação "${statusLabels[result.reservation.status]}". Confira em Minhas reservas.`, startsAt });
     } catch (error) {
       setFailure(error);
+      if (!uncertain(error)) pending.delete(pendingScope);
       if (error instanceof ApiError && !error.uncertain) setPendingKey(null);
       if (error instanceof ApiError && ['RESERVATION_CONFLICT', 'RESERVATION_WINDOW_INVALID', 'AMENITY_POLICY_CHANGED'].includes(error.code)) {
         // Outro horário: a disponibilidade e as regras são consultadas de novo e a escolha é desfeita.

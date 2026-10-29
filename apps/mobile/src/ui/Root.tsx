@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { CondPulseApi, Membership } from '../api/client';
 import { SessionError, type SessionManager } from '../session/session';
 import { colors, touch } from './theme';
-import { Reservations, type KeyFactory } from './Reservations';
+import { Reservations, type KeyFactory, type PendingStore } from './Reservations';
 
 const roleLabels: Record<Membership['role'], string> = {
   RESIDENT: 'Morador', RESPONSIBLE: 'Responsável pela unidade', DEPENDENT: 'Dependente', OWNER: 'Proprietário',
@@ -82,6 +82,8 @@ function Home({ manager, api, accountId, newKey }: { manager: SessionManager; ap
   const identity = useQuery({ queryKey: ['private', accountId, 'identity'], queryFn: ({ signal }) => api.me(signal) });
   const [selected, setSelected] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  // Pedidos incertos sobrevivem à troca de vínculo; somem com a conta (Home é recriada por conta) e ao sair.
+  const [pending] = useState<PendingStore>(() => new Map());
   // A resposta precisa ser da mesma conta da sessão; outra conta encerra tudo.
   const mismatch = identity.data !== undefined && identity.data.accountId !== accountId;
   useEffect(() => { if (mismatch) void manager.expire(); }, [mismatch, manager]);
@@ -101,7 +103,7 @@ function Home({ manager, api, accountId, newKey }: { manager: SessionManager; ap
             </Pressable>)}</View>}
     {active ? <Notice tone="info">{`Contexto: ${active.tenantName} (${roleLabels[active.role]}).`}</Notice> : null}
     {active && active.unitId ? <Reservations key={active.membershipId} api={api} accountId={accountId}
-      membership={{ ...active, unitId: active.unitId }} newKey={newKey} />
+      membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={pending} />
       : active ? <Text style={styles.body}>Este vínculo não tem unidade: as reservas ficam com os moradores e com a gestão na web.</Text> : null}
     <Button label={leaving ? 'Saindo…' : 'Sair'} secondary disabled={leaving}
       onPress={() => { setLeaving(true); void manager.signOut().finally(() => setLeaving(false)); }} />
