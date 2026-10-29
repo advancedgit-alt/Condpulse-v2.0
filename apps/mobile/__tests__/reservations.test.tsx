@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { newQueryClient } from '../src/App';
 import { ApiError, type CondPulseApi } from '../src/api/client';
 import type { Amenity, Reservation } from '../src/api/reservations';
-import { Reservations } from '../src/ui/Reservations';
+import { Reservations, type PendingStore } from '../src/ui/Reservations';
 
 const TENANT = '00000000-0000-4000-8000-000000000001';
 const UNIT = '20000000-0000-4000-8000-000000000001';
@@ -207,6 +207,103 @@ describe('reservas no celular', () => {
     expect(screen.queryByRole('button', { name: 'Ver as reservas seguintes' })).toBeNull();
   });
 
+  it('pedido incerto sobrevive à troca de vínculo e volta travado na mesma chave e no mesmo corpo', async () => {
+    const fake = fakeApi();
+    const pending: PendingStore = new Map();
+    const membership = { membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+      timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' as const };
+    const show = async (unitId: string) => {
+      const queries = newQueryClient(Infinity); clients.push(queries);
+      await render(<QueryClientProvider client={queries}>
+        <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => `test:key-${String(++counter).padStart(12, '0')}`}
+          membership={{ ...membership, unitId }} pending={pending} />
+      </QueryClientProvider>);
+    };
+    await show(UNIT);
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    expect(await screen.findByText(/o mesmo pedido não é gravado duas vezes/)).toBeTruthy();
+    // Troca para outra unidade: nada pendente lá.
+    await cleanup();
+    await show('20000000-0000-4000-8000-000000000002');
+    expect(await screen.findByRole('button', { name: 'Ver horários de Salão fictício' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tentar confirmar o mesmo pedido' })).toBeNull();
+    // Volta: a confirmação do mesmo pedido reaparece travada.
+    await cleanup();
+    await show(UNIT);
+    const retry = await screen.findByRole('button', { name: 'Tentar confirmar o mesmo pedido' });
+    expect(screen.getByRole('button', { name: 'Voltar às áreas' })).toBeDisabled();
+    await fireEvent.press(retry);
+    expect(await screen.findByText(/Pedido enviado/)).toBeTruthy();
+    expect(fake.state.creates).toHaveLength(2);
+    expect(fake.state.creates[1]).toEqual(fake.state.creates[0]);
+    expect(pending.size).toBe(0);
+  });
+
+  it('área desativada depois de resultado incerto mantém a confirmação do mesmo pedido e bloqueia outro', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    expect(await screen.findByText(/o mesmo pedido não é gravado duas vezes/)).toBeTruthy();
+    // A gestão desativa o salão: a lista de áreas deixa de trazê-lo.
+    fake.mocks.amenities.mockImplementation(async () => [quadra]);
+    await act(async () => { await fake.queries.invalidateQueries(); });
+    expect(await screen.findByText(/a área não aparece mais na lista/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Ver horários/ })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/Pedido confirmado pelo servidor \(Aguardando aprovação\)/)).toBeTruthy();
+    expect(fake.state.creates).toHaveLength(2);
+    expect(fake.state.creates[1]).toEqual(fake.state.creates[0]);
+    expect(screen.queryByText(/a área não aparece mais na lista/)).toBeNull();
+  });
+
+  it('recusa ao confirmar sem área libera novos pedidos sem afirmar que nada foi gravado', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    await screen.findByText(/o mesmo pedido não é gravado duas vezes/);
+    fake.mocks.amenities.mockImplementation(async () => [quadra, { ...salao, amenityId: '30000000-0000-4000-8000-000000000003', name: 'Churrasqueira fictícia' }]);
+    await act(async () => { await fake.queries.invalidateQueries(); });
+    await screen.findByText(/a área não aparece mais na lista/);
+    fake.state.createError = new ApiError(404, 'RESERVATION_RESOURCE_UNAVAILABLE', 'A reserva ou a área não está disponível para esta operação.');
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/Não dá para saber se o pedido anterior foi gravado/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ver horários de Churrasqueira fictícia' })).toBeEnabled();
+  });
+
+  it('chave vencida ao repetir não diz que nada foi gravado e leva a conferir a lista', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    await screen.findByText(/o mesmo pedido não é gravado duas vezes/);
+    fake.state.createError = new ApiError(409, 'IDEMPOTENCY_KEY_EXPIRED', 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.');
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/não dá para saber se ele foi gravado\. Confira em Minhas reservas antes de fazer outro\./)).toBeTruthy();
+    expect(screen.queryByText(/não foi gravado/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ver horários de Salão fictício' })).toBeEnabled();
+  });
+
+  it('recusa de autorização ao repetir pedido incerto não afirma que o primeiro falhou', async () => {
+    const fake = await mount();
+    await pickSlot('10:00–11:00');
+    fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Solicitar reserva' }));
+    await screen.findByText(/o mesmo pedido não é gravado duas vezes/);
+    fake.state.createError = new ApiError(403, 'RESERVATION_ACCESS_DENIED', 'Seu vínculo não permite acessar as reservas.');
+    await fireEvent.press(screen.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' }));
+    expect(await screen.findByText(/Seu vínculo não permite.*Não dá para saber se o pedido anterior foi gravado\. Confira em Minhas reservas/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tentar confirmar o mesmo pedido' })).toBeNull();
+  });
+
   it('cancelamento pede confirmação, envia a versão lida e mostra a situação nova', async () => {
     const fake = await mount();
     fake.state.reservations = [{ reservationId: '41000000-0000-4000-8000-000000000009', unitId: UNIT, amenityId: SALAO, status: 'CONFIRMED',
@@ -297,9 +394,28 @@ describe('reservas no celular', () => {
     await fireEvent.press(within(list).getByRole('button', { name: /^Retirar pedido/ }));
     await fireEvent.press(within(list).getByRole('button', { name: 'Confirmar retirada' }));
     await waitFor(() => expect(within(screen.getByLabelText('Reservas da unidade')).getByText('Cancelada')).toBeTruthy());
-    // 90 dias de antecedência: três períodos à frente, não mais.
-    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    // A navegação vai até o limite do servidor (366 dias = 12 períodos à frente), mesmo que a regra atual seja menor.
+    for (let index = 1; index < 12; index += 1) await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
     expect(screen.getByRole('button', { name: 'Próximo período' })).toBeDisabled();
+  });
+
+  it('reserva antiga além da antecedência atual continua alcançável depois de a gestão reduzir a regra', async () => {
+    const fake = fakeApi();
+    fake.mocks.amenities.mockImplementation(async () => [{ ...salao, policy: { ...policy, maximumAdvanceDays: 10 } }, quadra]);
+    fake.state.reservations = [{ reservationId: '41000000-0000-4000-8000-000000000031', unitId: UNIT, amenityId: SALAO, status: 'CONFIRMED',
+      startsAt: '2030-03-08T13:00:00.000Z', endsAt: '2030-03-08T14:00:00.000Z', occupiedFrom: '2030-03-08T13:00:00.000Z',
+      occupiedUntil: '2030-03-08T14:00:00.000Z', acceptedPolicyVersion: 2, feeCents: 0, version: 0, decisionReason: null }];
+    const queries = newQueryClient(Infinity); clients.push(queries);
+    await render(<QueryClientProvider client={queries}>
+      <Reservations api={fake.api} accountId={ACCOUNT} now={now} newKey={() => 'test:key-period-000002'}
+        membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
+          timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
+    </QueryClientProvider>);
+    expect(await screen.findByText('Nenhuma reserva da unidade neste período.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Próximo período' }));
+    const list = await screen.findByLabelText('Reservas da unidade');
+    expect(within(list).getByText('Confirmada')).toBeTruthy();
+    expect(within(list).getByRole('button', { name: /^Cancelar reserva/ })).toBeTruthy();
   });
 });

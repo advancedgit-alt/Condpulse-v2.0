@@ -26,6 +26,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Atualização em tempo real da unidade — CP-036 (API e web)
+
+- Atrás de `CP_REALTIME_ENABLED` (padrão `false`, não ligada na Vercel). Sem migration. Canal SSE por unidade que só informa nomes de assunto; a tela consulta o detalhe pelas rotas normais e consulta tudo de novo ao reconectar. Cada passada confere a sessão BFF (ou a validade do token Bearer) e repete a validação do condomínio; perda de acesso fecha o canal. Detalhes em [TEMPO_REAL.md](TEMPO_REAL.md).
+- Pendentes: parte móvel, confirmação do streaming no Container Runtime da Vercel antes de ligar a flag, teste de carga e ensaio com Auth real.
+
 ## Pedidos da unidade e conversa vinculada — CP-033 (sem anexos)
 
 - Atrás de `CP_REQUESTS_ENABLED` (padrão `false`). Na homologação, V017 aplicada em 29/10/2026 (migrate 40868152258; repetição 40868416867 sem linha nova) e flag criada às 11:49Z, ativa no deployment do merge do PR #43 (`9fc9ff5`; smoke público 40875590209 aprovado); produção sem migrations. Morador ou responsável com vínculo vigente em unidade ativa abre pedido para a própria unidade (categoria, título e descrição, com chave de idempotência), acompanha o andamento e conversa nele; a gestão (capacidade `requests.manage` com AAL2) vê os pedidos do condomínio com filtro, define responsável da equipe vigente (gestão ou portaria) e prazo comunicado, muda o andamento pela versão lida e registra a resolução, que entra também na conversa. Comentário interno é sempre da equipe e nunca aparece para a unidade; mensagens não mudam nem são apagadas, cada uma presa ao pedido em que foi gravada, com nome e horário gravados pelo banco; fechado é final e não recebe mensagem (mensagem e fechamento em série pela trava do pedido). Pedido de outra unidade é negado mesmo pelo ID. Telas: seção Pedidos no início do morador e na gestão. Detalhes em [PEDIDOS.md](PEDIDOS.md).
