@@ -1,0 +1,134 @@
+name: CondPulse onboarding operations (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operacao explicita; inspect nao cadastra dados
+        type: choice
+        options: [inspect, apply]
+        default: inspect
+        required: true
+      expected_commit:
+        description: SHA completo revisado da branch principal (40 hex)
+        type: string
+        required: true
+      manifest_sha256:
+        description: SHA256 dos bytes exatos do manifesto privado aprovado
+        type: string
+        required: true
+      onboarding_ack:
+        description: Somente apply; PROJETO:SHA_COMMIT:SHA_MANIFESTO:FINGERPRINT da inspecao
+        type: string
+        required: false
+      maintenance_confirmed:
+        description: Somente apply; cadastro aprovado, backup e janela exclusiva conferidos
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: condpulse-database-operations-rpnrqfrfwywglvyykgrg
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Validate public request before releasing onboarding environment secrets
+        env:
+          CP_ONBOARDING_OPERATION: ${{ inputs.operation }}
+          CP_ONBOARDING_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_ONBOARDING_SOURCE_COMMIT: ${{ github.sha }}
+          CP_ONBOARDING_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          CP_ONBOARDING_ACK: ${{ inputs.onboarding_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: |
+          node --input-type=module <<'REQUEST_GATE'
+          import {validateRequest} from './infra/scripts/onboarding-operations/execute.mjs';
+          try { validateRequest(process.env); console.log('REQUEST_APPROVED_FOR_ONBOARDING_ENVIRONMENT'); }
+          catch { console.error('ONBOARDING_REQUEST_DENIED'); process.exitCode=1; }
+          REQUEST_GATE
+  onboarding-operation:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: condpulse-onboarding-operations
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Verify executor without managed credentials
+        run: node --test tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
+      - name: Build exact reviewed source without onboarding credentials
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          mvn -B -ntp -f apps/backend/pom.xml -DskipTests package
+          sha256sum apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar
+          umask 077
+          mkdir -p "$RUNNER_TEMP/condpulse-onboarding-operations/classes"
+          cd "$RUNNER_TEMP/condpulse-onboarding-operations/classes"
+          jar -xf "$GITHUB_WORKSPACE/apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar"
+      - name: Verify pinned public PostgreSQL CA over HTTPS
+        run: |
+          set -euo pipefail
+          umask 077
+          ca="$RUNNER_TEMP/condpulse-onboarding-operations/db-ca.crt"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            'https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt' -o "$ca"
+          printf '%s  %s\n' '807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa' "$ca" | sha256sum -c -
+          test "$(grep -c '^-----BEGIN CERTIFICATE-----$' "$ca")" -eq 1
+          openssl x509 -in "$ca" -noout -checkend 86400
+          openssl x509 -in "$ca" -noout -ext basicConstraints | grep -Eq '^[[:space:]]*CA:TRUE([,[:space:]]|$)'
+          openssl verify -check_ss_sig -CAfile "$ca" "$ca"
+          sudo install -d -m 0755 /run/secrets
+          sudo install -m 0444 "$ca" /run/secrets/db-ca.crt
+      - name: Execute only the selected onboarding operation
+        env:
+          CP_ONBOARDING_OPERATION: ${{ inputs.operation }}
+          CP_ONBOARDING_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_ONBOARDING_SOURCE_COMMIT: ${{ github.sha }}
+          CP_ONBOARDING_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          CP_ONBOARDING_ACK: ${{ inputs.onboarding_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+          CP_ONBOARDING_MANIFEST_BASE64: ${{ secrets.CP_ONBOARDING_MANIFEST_BASE64 }}
+          CP_ONBOARDING_DATABASE_USER: ${{ secrets.CP_ONBOARDING_DATABASE_USER }}
+          CP_ONBOARDING_DATABASE_PASSWORD: ${{ secrets.CP_ONBOARDING_DATABASE_PASSWORD }}
+          CP_ONBOARDING_AUTH_SECRET_KEY: ${{ secrets.CP_ONBOARDING_AUTH_SECRET_KEY }}
+        run: node infra/scripts/onboarding-operations/execute.mjs
+      - name: Remove ephemeral onboarding directory and public CA
+        if: always()
+        run: |
+          set -euo pipefail
+          sudo rm -f -- /run/secrets/db-ca.crt
+          node --input-type=module <<'CLEANUP'
+          import {rmSync,existsSync,realpathSync,lstatSync} from 'node:fs';
+          import {resolve,dirname,basename} from 'node:path';
+          const target=resolve(process.env.RUNNER_TEMP,'condpulse-onboarding-operations');
+          if(existsSync(target)) {
+            const actual=realpathSync(target), base=realpathSync(process.env.RUNNER_TEMP);
+            if(lstatSync(target).isSymbolicLink() || dirname(actual)!==base || basename(actual)!=='condpulse-onboarding-operations') throw Error('CLEANUP_TARGET_DENIED');
+            rmSync(actual,{recursive:true,force:true});
+          }
+          CLEANUP

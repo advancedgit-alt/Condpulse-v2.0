@@ -1,5 +1,13 @@
 # Estado verificável - 28/10/2026
 
+## Onboarding protegido e plano do MVP — CP-004/CP-010/CP-020/CP-066
+
+- Novo caminho manual `.github/workflows/onboarding-operations.yml` prepara a CLI existente para `inspect`/`apply` no alvo CondPulse fixo, após gate público do SHA revisado e SHA256 dos bytes do manifesto privado. O ACK externo vincula source/hash/fingerprint; a semântica transacional do CLI não foi alterada.
+- Cofre operacional separado `condpulse-onboarding-operations`, manifesto privado Base64 limitado a32KiB decodificados, principal `cp_onboarding_*` e Auth Admin somente no passo final. Saída reconstruída por allowlist; timeout/kill/saída inválida após iniciar apply é UNKNOWN, sem retry. Não usa credencial owner/API/worker/Vercel, não cria roles/usuários, não executa migrations nem altera flags.
+- Testes do wrapper/protocolo/gate e ensaio sem rede com CLI Java real integram o CI; resultados por source ficam na PR. O executor foi preparado, mas nenhum inspect/apply gerenciado, principal, Secret ou cadastro real foi executado por este pacote. Procedimento: [EXECUTOR_ONBOARDING.md](EXECUTOR_ONBOARDING.md).
+- [ADR-0007](adr/0007-tenancy-e-promocao-de-releases.md) e [MVP_ENTREGA.md](MVP_ENTREGA.md) registram a direção autorizada: aplicação central, tenants isolados, homologação separada, promoção de versão aprovada, master com capacidades/MFA/auditoria e financeiro básico SaaS. São seis fases remanescentes; marcos de teste técnico após3/6 não substituem 100%P0 exigidos pelo PRD para piloto operacional.
+- Segundo ambiente, cadastro/regras reais aprovados, principal/credenciais operacionais, Auth real, gestão local, master, financeiro e promoção protegida continuam pendentes. O rótulo Vercel Production não constitui aceite operacional. Nenhum recurso faturável novo ou alteração na Advanced.
+
 ## Chaves BFF preparadas, flags desligadas — CP-009/CP-066
 
 - [Apply40787895235](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40787895235) concluiu em 28/10 às20:31:29 (America/Sao_Paulo), no source `cbb0cc12d6f97c79555037bc19c7e2269acb4e64`, geração `1eec1437-1cdc-4976-b086-000ae350425b`: `STAGED`, `applied=true` e código vazio. Gate e helper passaram com manutenção confirmada e ACK da inspeção aprovada. Duas Secrets distintas de32bytes e uma Config publicável foram criadas somente em Production no projeto Vercel CondPulse; o readback conferiu metadados/revisões próprios, sem ler valores Secret de volta.

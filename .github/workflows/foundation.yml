@@ -44,8 +44,14 @@ jobs:
         run: node --test tests/foundation.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
       - name: BFF staging guards and protocol without managed credentials
         run: node --test tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
+      - name: Manual onboarding boundary without managed credentials
+        run: node --test tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
       - name: Compile and unit tests
         run: mvn -B -ntp -f apps/backend/pom.xml verify
+      - name: Real onboarding CLI protocol without managed credentials or network
+        env:
+          CP_ONBOARDING_JAVA_TEST_REQUIRED: "true"
+        run: node --test tests/onboarding-operations-java.test.mjs
       - name: Manual database executor guards without managed credentials
         run: node --test tests/database-operations.test.mjs
       - name: Runtime credential executor guards and disposable provisioning
