@@ -913,15 +913,45 @@
       "id": "CP-027",
       "delivery": "Fila operacional de portaria. Busca, chegadas, autorizações, ocorrências e ações contextuais.",
       "acceptance": "Não há botão que marque entrada de visitante ainda não autorizado.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "9af59db1cb2522326025d37f2b4faca6e2820f3e",
+          "branch": "feat/access-log",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40848614138",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,VisitJdbcTest,AccessJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Registro manual de entrada e saída atrás de CP_VISITS_ENABLED=false (V014 não aplicada remotamente): entrada pela portaria (capacidade com AAL2) só com autorização vigente — chegada autorizada nas últimas 24 horas de unidade ativa ou convite em vigor de quem ainda pode convidar —, uma entrada válida por chegada, saída de entrada não corrigida (uma válida por vez, teste concorrente) e correção por evento adicional com motivo; tipo MANUAL_IN/MANUAL_OUT com origem CONCIERGE, nunca passagem de equipamento; unidade, pessoa, horários e origem pelo banco; revogação e entrada pelo convite em série sem impasse (teste da intercalação). Fila e visitas previstas mostram 'Registrar entrada' só para quem tem autorização vigente (CP-027). Ocorrências da portaria, tempo real, aviso efetivo, equipamentos, retenção, Auth real e aplicação remota pendentes; não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-028",
       "delivery": "Registro de acesso manual. Direção, evidência manual, operador e motivo de correção por evento adicional.",
       "acceptance": "Entrada manual não é rotulada como passagem detectada por sensor.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "9af59db1cb2522326025d37f2b4faca6e2820f3e",
+          "branch": "feat/access-log",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40848614138",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,VisitJdbcTest,AccessJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Registro manual de entrada e saída atrás de CP_VISITS_ENABLED=false (V014 não aplicada remotamente): entrada pela portaria (capacidade com AAL2) só com autorização vigente — chegada autorizada nas últimas 24 horas de unidade ativa ou convite em vigor de quem ainda pode convidar —, uma entrada válida por chegada, saída de entrada não corrigida (uma válida por vez, teste concorrente) e correção por evento adicional com motivo; tipo MANUAL_IN/MANUAL_OUT com origem CONCIERGE, nunca passagem de equipamento; unidade, pessoa, horários e origem pelo banco; revogação e entrada pelo convite em série sem impasse (teste da intercalação). Fila e visitas previstas mostram 'Registrar entrada' só para quem tem autorização vigente (CP-027). Ocorrências da portaria, tempo real, aviso efetivo, equipamentos, retenção, Auth real e aplicação remota pendentes; não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-029",
