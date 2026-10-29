@@ -112,4 +112,40 @@ describe('sessão nativa', () => {
     expect(store.items.size).toBe(0);
     expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'signedOut' });
   });
+
+  it('saída bloqueia a sessão na hora, mesmo com a revogação remota lenta, e o novo login espera a limpeza', async () => {
+    const { store, vault, fake, manager } = setup();
+    await manager.start();
+    await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    await vault.setItem('cp-auth', 'sessao');
+    let release!: () => void;
+    fake.auth.signOut = () => new Promise((resolve) => { release = () => resolve({ error: null }); });
+    const leaving = manager.signOut();
+    expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'signedOut' });
+    expect(await manager.accessToken()).toBeNull();
+    expect(await manager.refresh()).toBeNull();
+    const next = manager.signIn('gestao@example.invalid', 'SYNTHETIC-PASSWORD-B');
+    await flush();
+    expect(manager.getState().status).toBe('signedOut');
+    release();
+    await leaving;
+    expect(store.items.size).toBe(0);
+    await next;
+    expect(manager.getState()).toMatchObject({ status: 'mfaRequired', accountId: B });
+  });
+
+  it('revogação remota que não responde não impede apagar o aparelho', async () => {
+    jest.useFakeTimers();
+    try {
+      const { store, vault, fake, manager } = setup();
+      await manager.start();
+      await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+      await vault.setItem('cp-auth', 'sessao');
+      fake.auth.signOut = () => new Promise(() => undefined);
+      const leaving = manager.signOut();
+      await jest.advanceTimersByTimeAsync(5_000);
+      await leaving;
+      expect(store.items.size).toBe(0);
+    } finally { jest.useRealTimers(); }
+  });
 });

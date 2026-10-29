@@ -45,13 +45,19 @@ function failure(error: { status?: number; code?: string } | null, fallback: 'IN
     : error?.status === undefined || error.status === 0 || error.status >= 500 ? 'AUTH_UNAVAILABLE' : fallback;
   return new SessionError(code, messages[code]);
 }
+export const SIGN_OUT_TIMEOUT = 5_000;
+function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([promise, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error('TIMEOUT')), milliseconds); })])
+    .finally(() => clearTimeout(timer));
+}
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
 export class SessionManager {
   private state: SessionState = { status: 'loading' };
   private readonly listeners = new Set<(state: SessionState) => void>();
   private lastAccount: string | null = null;
-  private ending = false;
+  private ending: Promise<void> | null = null;
   private subscription: { unsubscribe(): void } | null = null;
 
   constructor(private readonly auth: AuthPort, private readonly vault: Vault, private readonly clearData: () => void) {}
@@ -70,7 +76,7 @@ export class SessionManager {
     this.subscription ??= this.auth.onAuthStateChange((event) => {
       // A biblioteca avisa SIGNED_OUT quando a renovação é recusada: a sessão acabou de fato. Fora do callback para
       // não chamar o Auth de dentro do próprio aviso.
-      if (event === 'SIGNED_OUT' && !this.ending && (this.state.status === 'signedIn' || this.state.status === 'mfaRequired'))
+      if (event === 'SIGNED_OUT' && this.ending === null && (this.state.status === 'signedIn' || this.state.status === 'mfaRequired'))
         setTimeout(() => { void this.expire(); }, 0);
     }).data.subscription;
     let session: AuthSession | null = null;
@@ -99,6 +105,8 @@ export class SessionManager {
     const normalized = email.trim().toLowerCase();
     if (!EMAIL.test(normalized) || password.length < 1 || password.length > 128)
       throw new SessionError('INVALID_CREDENTIALS', 'Informe seu e-mail e sua senha.');
+    // Uma saída em andamento termina antes (senão a limpeza dela apagaria a sessão nova).
+    if (this.ending) await this.ending;
     // Qualquer resto de outra sessão sai antes do novo login.
     this.clearData();
     let result: Awaited<ReturnType<AuthPort['signInWithPassword']>>;
@@ -123,15 +131,18 @@ export class SessionManager {
 
   /** Token atual só para a sessão liberada; nunca durante a etapa de segundo fator. */
   async accessToken(): Promise<string | null> {
-    if (this.state.status !== 'signedIn') return null;
+    if (this.state.status !== 'signedIn' || this.ending) return null;
     const result = await this.auth.getSession();
+    // A saída pode ter começado durante a leitura.
+    if (this.state.status !== 'signedIn' || this.ending) return null;
     return result.error ? null : result.data.session?.access_token ?? null;
   }
   /** Renovação forçada depois de um 401; recusa encerra a sessão. */
   async refresh(): Promise<string | null> {
-    if (this.state.status !== 'signedIn') return null;
+    if (this.state.status !== 'signedIn' || this.ending) return null;
     try {
       const result = await this.auth.refreshSession();
+      if (this.state.status !== 'signedIn' || this.ending) return null;
       if (!result.error && result.data.session) return result.data.session.access_token;
     } catch { /* tratado abaixo */ }
     await this.expire();
@@ -141,16 +152,19 @@ export class SessionManager {
   async signOut(): Promise<void> { await this.end('signedOut'); }
   async expire(): Promise<void> { await this.end('expired'); }
 
-  private async end(reason: 'expired' | 'signedOut'): Promise<void> {
-    if (this.ending) return;
-    this.ending = true;
-    try {
-      // Sai do aparelho mesmo sem rede: a revogação remota é tentativa, o apagamento local é obrigatório.
-      try { await this.auth.signOut({ scope: 'local' }); } catch { /* sem rede */ }
-      await this.vault.wipe();
-      this.clearData();
-      this.lastAccount = null;
-      this.set({ status: 'signedOut', reason });
-    } finally { this.ending = false; }
+  private end(reason: 'expired' | 'signedOut'): Promise<void> {
+    if (this.ending) return this.ending;
+    // Bloqueio local imediato: a tela privada sai e nenhum token é entregue antes de qualquer chamada de rede.
+    this.lastAccount = null;
+    this.clearData();
+    this.set({ status: 'signedOut', reason });
+    this.ending = (async () => {
+      try {
+        // A revogação remota é tentativa, com prazo; o apagamento do aparelho acontece de qualquer forma.
+        try { await withTimeout(this.auth.signOut({ scope: 'local' }), SIGN_OUT_TIMEOUT); } catch { /* sem rede */ }
+        await this.vault.wipe();
+      } finally { this.ending = null; }
+    })();
+    return this.ending;
   }
 }

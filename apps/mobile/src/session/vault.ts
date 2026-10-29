@@ -47,11 +47,13 @@ export function createVault(store: SecureKeyValue): Vault {
     if (keys.length === 0) await store.deleteItemAsync(INDEX);
     else await store.setItemAsync(INDEX, JSON.stringify([...new Set(keys)].sort()));
   }
+  /**
+   * Apaga todas as partes possíveis, não só as contadas em `.n`: uma gravação interrompida antes do contador não deixa
+   * fragmento de token para trás. O índice já registra a chave antes da primeira parte gravada.
+   */
   async function removeParts(base: string): Promise<void> {
-    const count = Number(await store.getItemAsync(`${base}.n`));
-    const total = Number.isInteger(count) && count > 0 && count <= MAX_PARTS ? count : 0;
-    for (let index = 0; index < total; index += 1) await store.deleteItemAsync(`${base}.${index}`);
     await store.deleteItemAsync(`${base}.n`);
+    for (let index = 0; index < MAX_PARTS; index += 1) await store.deleteItemAsync(`${base}.${index}`);
   }
   return {
     getItem: (key) => serial(async () => {
@@ -71,9 +73,13 @@ export function createVault(store: SecureKeyValue): Vault {
       const base = safeKey(key);
       const parts = Math.max(1, Math.ceil(value.length / CHUNK));
       if (parts > MAX_PARTS) throw new Error('VAULT_VALUE_TOO_LARGE');
-      await removeParts(base);
+      // Índice antes da primeira parte: uma gravação interrompida ainda é apagada pela saída ou pela reinstalação.
       await writeIndex([...(await readIndex()), base]);
+      const previous = Number(await store.getItemAsync(`${base}.n`));
+      await store.deleteItemAsync(`${base}.n`);
       for (let index = 0; index < parts; index += 1) await store.setItemAsync(`${base}.${index}`, value.slice(index * CHUNK, (index + 1) * CHUNK));
+      const stale = Number.isInteger(previous) && previous > parts && previous <= MAX_PARTS ? previous : parts;
+      for (let index = parts; index < stale; index += 1) await store.deleteItemAsync(`${base}.${index}`);
       await store.setItemAsync(`${base}.n`, String(parts));
     }),
     removeItem: (key) => serial(async () => {

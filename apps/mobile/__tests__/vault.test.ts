@@ -44,4 +44,16 @@ describe('cofre da sessão', () => {
     expect(await ensureFreshInstall(marker, vault)).toBe('existing');
     expect(await vault.getItem('cp-auth')).toBe('sessao-atual');
   });
+  it('gravação interrompida antes do contador não deixa fragmento depois de apagar tudo', async () => {
+    const store = memoryStore();
+    const vault = createVault(store);
+    await vault.setItem('cp-auth', 'x'.repeat(CHUNK * 3));
+    const original = store.setItemAsync;
+    store.setItemAsync = async (key, value) => { if (key.endsWith('.n')) throw new Error('processo encerrado'); return original(key, value); };
+    await expect(vault.setItem('cp-auth', 'refresh-token-ficticio-' + 'y'.repeat(CHUNK * 4))).rejects.toThrow('processo encerrado');
+    store.setItemAsync = original;
+    expect([...store.items.values()].some((value) => value.includes('refresh-token-ficticio'))).toBe(true);
+    await vault.wipe();
+    expect(store.items.size).toBe(0);
+  });
 });
