@@ -66,4 +66,5 @@ próprio TOTP. Até existir prova adicional automatizada:
 
 Não foi ensaiado com Supabase Auth real nesta etapa: os testes usam provedor
 sintético. Recuperação por códigos de backup e step-up por operação não estão
-implementados. Telas web de MFA dependem da PR de gestão.
+implementados. A tela web de cadastro e verificação fica na porta da gestão (`/gestao/{condomínio}`), ensaiada com
+provedor sintético.

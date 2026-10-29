@@ -107,9 +107,31 @@ transação do cancelamento (o módulo de visitantes ainda não existe; o evento
 prazo de decisão configurável; worker de expiração (hoje a expiração acontece na
 criação seguinte e na decisão tardia); notificações.
 
+## Telas web (`/gestao/{condomínio}`)
+
+O acesso aparece na escolha de contexto apenas para vínculo `MANAGER` vigente. A
+porta da gestão consulta `GET /auth/mfa`: sem sessão AAL2 nenhuma rota de gestão é
+chamada; a pessoa cadastra o autenticador (chave e QR exibidos uma única vez, só no
+estado da tela) e verifica o código. A verificação troca a sessão e o CSRF. Uma
+resposta `MFA_REQUIRED` posterior volta à verificação; `STAFF_ACCESS_DENIED` ou
+`TENANT_ACCESS_DENIED` removem os dados da gestão da tela.
+
+Seções: Pendências (pedidos de reserva e vínculos aguardando decisão), Reservas
+(agenda de 30 dias, decisão, cancelamento com motivo e bloqueio de manutenção com
+chave idempotente reaproveitada enquanto o formulário não muda), Áreas (cadastro e
+edição de regras, com aviso de nova versão), Unidades (blocos e unidades, aviso ao
+inativar), Pessoas (vínculos por situação, convite com link exibido uma vez e
+revogação) e Auditoria (paginação por cursor). Ações nunca repetem sozinhas; falha
+incerta pede para atualizar a lista antes de repetir.
+
+O convite é aberto em `/convite#token=…`: o token fica no fragmento (não vai ao
+servidor nem aos registros de acesso), é guardado só na aba atual e removido da
+barra de endereço. Quem ainda não entrou é orientado a entrar com a conta do
+e-mail convidado; a tela de acessos mostra o convite em aberto.
+
 ## Pendências
 
-Telas web de gestão ficam nas próximas PRs. V006–V008 ainda não foram aplicadas
+V006–V008 ainda não foram aplicadas
 ao banco remoto: o executor de migrations está fixado em V003–V005 e exige
 revisão e autorização próprias. Envio automático do convite por e-mail depende de
 SMTP e de credencial administrativa fora da API.
