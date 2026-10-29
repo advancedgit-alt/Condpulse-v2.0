@@ -6187,6 +6187,149 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/notifications": {
+      "get": {
+        "operationId": "listUnitNotifications",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_NOTIFICATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Avisos da própria conta na unidade (os 50 mais recentes) e quantos ainda não foram abertos. Vínculo residencial vigente; dependente só vê o tipo para o qual tem permissão (visits.decide ou parcels.view). Gerados pelo worker do outbox (CP_WORKER_OUTBOX_ENABLED).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxNotificationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "NOTIFICATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/notifications/{notificationId}/open": {
+      "post": {
+        "operationId": "openNotification",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_NOTIFICATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Abertura autenticada pelo destinatário: única forma de marcar leitura (READ_IN_APP com horário do banco). Repetir devolve a leitura já gravada; aviso de outra pessoa responde 404.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxNotification"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado ou CSRF ausente na sessão web"
+          },
+          "404": {
+            "description": "NOTIFICATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "NOTIFICATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9640,6 +9783,88 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 300
+          }
+        }
+      },
+      "InboxNotification": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Aviso da caixa interna, sem nome de visitante nem dado do registro. AVAILABLE é disponível na caixa; READ_IN_APP só existe depois da abertura autenticada pelo destinatário. Entrega na caixa não é leitura.",
+        "required": [
+          "notificationId",
+          "unitId",
+          "kind",
+          "resourceId",
+          "resourceState",
+          "state",
+          "createdAt",
+          "readAt"
+        ],
+        "properties": {
+          "notificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ARRIVAL_WAITING",
+              "PARCEL_RECEIVED"
+            ]
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceState": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Situação atual do registro para quem lê (chegada: WAITING, APPROVED, DENIED, EXPIRED, CANCELLED; encomenda: RECEIVED, DELIVERED). null quando o registro não está mais visível (ex.: encomenda anulada)."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "READ_IN_APP"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "readAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "InboxNotificationPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "unread"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/InboxNotification"
+            }
+          },
+          "unread": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

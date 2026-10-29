@@ -1037,15 +1037,47 @@
       "id": "CP-034",
       "delivery": "Outbox e worker duráveis. Lease, backoff, dead-letter operacional, correlação e replay seletivo.",
       "acceptance": "Interrupção entre efeito e ack é testada; efeitos não idempotentes não recebem retry cego.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "fd656c0d7883d49540995d839105594f2f3e9984",
+          "branch": "feat/outbox-worker",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40855518106",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,OutboxWorkerJdbcTest,DatabaseRoleGuardJdbcTest test",
+            "python3 tests/database/run.py",
+            "bash tests/database/worker-smoke.sh",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Outbox com worker atrás de CP_WORKER_OUTBOX_ENABLED=false e caixa interna da unidade atrás de CP_NOTIFICATIONS_ENABLED=false (V015 não aplicada remotamente): arrendamento por condomínio com SKIP LOCKED e prazo, trava da tarefa arrendada antes do efeito, efeito e conclusão na mesma transação, reprocessamento sem duplicar (AC-049), backoff do PRD com erro saneado, FAILED visível, sem nova tentativa cega de efeito não idempotente, SKIPPED para evento sem consumidor; aviso interno de chegada aguardando e encomenda recebida para destinatário apto, leitura só pela abertura autenticada. Push, consentimento, instalações, recibos, desativação de token, reprocessamento seletivo, alerta de fila antiga, worker implantado e aplicação remota pendentes; não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-035",
       "delivery": "Push e caixa interna. Consentimento, instalações, preferências, receipts e falhas.",
       "acceptance": "Provider aceitou não vira morador visualizou; token inválido é desativado.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "fd656c0d7883d49540995d839105594f2f3e9984",
+          "branch": "feat/outbox-worker",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40855518106",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,OutboxWorkerJdbcTest,DatabaseRoleGuardJdbcTest test",
+            "python3 tests/database/run.py",
+            "bash tests/database/worker-smoke.sh",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Outbox com worker atrás de CP_WORKER_OUTBOX_ENABLED=false e caixa interna da unidade atrás de CP_NOTIFICATIONS_ENABLED=false (V015 não aplicada remotamente): arrendamento por condomínio com SKIP LOCKED e prazo, trava da tarefa arrendada antes do efeito, efeito e conclusão na mesma transação, reprocessamento sem duplicar (AC-049), backoff do PRD com erro saneado, FAILED visível, sem nova tentativa cega de efeito não idempotente, SKIPPED para evento sem consumidor; aviso interno de chegada aguardando e encomenda recebida para destinatário apto, leitura só pela abertura autenticada. Push, consentimento, instalações, recibos, desativação de token, reprocessamento seletivo, alerta de fila antiga, worker implantado e aplicação remota pendentes; não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-036",

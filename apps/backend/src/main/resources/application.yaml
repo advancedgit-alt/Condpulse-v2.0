@@ -48,6 +48,11 @@ condpulse:
     enabled: ${CP_PARCELS_ENABLED:false}
   visits:
     enabled: ${CP_VISITS_ENABLED:false}
+  notifications:
+    enabled: ${CP_NOTIFICATIONS_ENABLED:false}
+  worker:
+    outbox-enabled: ${CP_WORKER_OUTBOX_ENABLED:false}
+    poll-millis: ${CP_WORKER_POLL_MILLIS:2000}
   bff:
     enabled: ${CP_BFF_ENABLED:false}
     origin: ${CP_BFF_ORIGIN:}
@@ -67,6 +72,12 @@ spring:
   main:
     web-application-type: none
     keep-alive: true
+  task:
+    scheduling:
+      shutdown:
+        # Encerramento espera a passada em curso; arrendamento vencido cobre a queda abrupta.
+        await-termination: true
+        await-termination-period: 15s
 ---
 spring:
   config:

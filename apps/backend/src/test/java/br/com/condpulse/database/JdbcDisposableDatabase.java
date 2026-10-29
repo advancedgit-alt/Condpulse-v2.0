@@ -147,7 +147,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
    connection.setAutoCommit(false);
-   for(String table:new String[]{"parcel_handoffs","parcels","access_events","arrival_requests","visit_permits","visitors","outbox","audit_log","idempotency_keys","reservations","amenities"})
+   for(String table:new String[]{"notifications","parcel_handoffs","parcels","access_events","arrival_requests","visit_permits","visitors","outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    connection.commit();
   }
@@ -193,7 +193,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
     accountA,accountB,accountC,tenantA,tenantB);
    update(connection,"delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
-   for(String table:new String[]{"parcel_handoffs","parcels","access_events","arrival_requests","visit_permits","visitors","outbox","audit_log","idempotency_keys","reservations","amenities"})
+   for(String table:new String[]{"notifications","parcel_handoffs","parcels","access_events","arrival_requests","visit_permits","visitors","outbox","audit_log","idempotency_keys","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.
    update(connection,"with invitations as (delete from cp.membership_invitations where tenant_id in (?,?)) "
