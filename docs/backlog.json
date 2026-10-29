@@ -897,22 +897,67 @@
       "id": "CP-029",
       "delivery": "Recebimento de encomendas. Unidade, volumes, posição de guarda, foto opcional e outbox.",
       "acceptance": "Clique repetido com mesma chave gera apenas um registro e uma intenção de notificação.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "b9ef2371aeeba0eba859baf1150ec10401631dee",
+          "branch": "feat/parcels",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40834482307",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,ParcelJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Encomendas atrás de CP_PARCELS_ENABLED=false (V012 não aplicada remotamente): recebimento idempotente com auditoria e intenção de aviso na mesma transação e aviso de duplicidade suspeita; retirada única e identificada (pessoa escolhida entre os vínculos residenciais vigentes da unidade, documento conferido, constraint única e gatilho diferido); anulação de registro indevido com motivo; fila da portaria com filtro por situação, unidade e local; lista da unidade só para vínculo residencial (dependente com permissão explícita). Foto, código/delegação (CP-041), envio do aviso (CP-034/CP-035), Auth real e portaria nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-030",
       "delivery": "Retirada de encomendas. Transação de entrega, recebedor, operador e constraint única.",
       "acceptance": "Duas retiradas simultâneas produzem um sucesso e um conflito, sem sobrescrever histórico.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "b9ef2371aeeba0eba859baf1150ec10401631dee",
+          "branch": "feat/parcels",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40834482307",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,ParcelJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Encomendas atrás de CP_PARCELS_ENABLED=false (V012 não aplicada remotamente): recebimento idempotente com auditoria e intenção de aviso na mesma transação e aviso de duplicidade suspeita; retirada única e identificada (pessoa escolhida entre os vínculos residenciais vigentes da unidade, documento conferido, constraint única e gatilho diferido); anulação de registro indevido com motivo; fila da portaria com filtro por situação, unidade e local; lista da unidade só para vínculo residencial (dependente com permissão explícita). Foto, código/delegação (CP-041), envio do aviso (CP-034/CP-035), Auth real e portaria nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-031",
       "delivery": "Painel de encomendas. Listas, detalhes e confirmação explícita da pessoa recebedora.",
       "acceptance": "Lista do morador inclui somente entregas autorizadas; portaria filtra por posição e unidade.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "b9ef2371aeeba0eba859baf1150ec10401631dee",
+          "branch": "feat/parcels",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40834482307",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,ParcelJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Encomendas atrás de CP_PARCELS_ENABLED=false (V012 não aplicada remotamente): recebimento idempotente com auditoria e intenção de aviso na mesma transação e aviso de duplicidade suspeita; retirada única e identificada (pessoa escolhida entre os vínculos residenciais vigentes da unidade, documento conferido, constraint única e gatilho diferido); anulação de registro indevido com motivo; fila da portaria com filtro por situação, unidade e local; lista da unidade só para vínculo residencial (dependente com permissão explícita). Foto, código/delegação (CP-041), envio do aviso (CP-034/CP-035), Auth real e portaria nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-032",
