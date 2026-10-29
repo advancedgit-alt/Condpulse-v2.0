@@ -358,6 +358,18 @@
             "node --test tests/foundation.test.mjs tests/spec-package.test.mjs"
           ],
           "scope": "Capacidades de equipe por papel (MANAGER/CONCIERGE; SUPPORT sem capacidade) exigem AAL2 no backend: AAL1 recebe MFA_REQUIRED sem alteração e app.capabilities só é publicado no banco após vínculo vigente e AAL2 (JDBC real). BFF /auth/mfa, /auth/mfa/enroll e /auth/mfa/verify com CSRF/Origin, limite por sessão e rotação da sessão após verificação. Três jobs verdes; contagens por teste não lidas porque os logs do Actions são inacessíveis desta sessão. Sem Supabase Auth real, sem telas web de MFA e sem códigos de recuperação; não constitui aceite integral."
+        },
+        {
+          "commit": "58f559cda89df219e59fc1dd54225e775581b02b",
+          "branch": "feat/local-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Auth sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40805310227",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,LocalManagementJdbcTest test",
+            "python3 tests/database/run.py"
+          ],
+          "scope": "V006 (has_capability e políticas RLS restritivas) e API de gestão local de blocos, unidades, áreas/regras versionadas e auditoria paginada, atrás de CP_MANAGEMENT_ENABLED=false. JDBC real: AAL1/morador/outro tenant negados, 42501 sem capacidade publicada, versão de regra sem reescrever reserva, inativar unidade bloqueia moradores. 13 verificações SQL novas. Run anterior 40804489500 falhou uma vez na etapa SQL sem log acessível e não se repetiu sem mudança SQL; anotação do final do log adicionada ao CI. V006 não aplicada ao banco remoto; sem telas web; não constitui aceite integral."
         }
       ]
     },
@@ -449,6 +461,18 @@
           "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
           "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        },
+        {
+          "commit": "58f559cda89df219e59fc1dd54225e775581b02b",
+          "branch": "feat/local-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Auth sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40805310227",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,LocalManagementJdbcTest test",
+            "python3 tests/database/run.py"
+          ],
+          "scope": "V006 (has_capability e políticas RLS restritivas) e API de gestão local de blocos, unidades, áreas/regras versionadas e auditoria paginada, atrás de CP_MANAGEMENT_ENABLED=false. JDBC real: AAL1/morador/outro tenant negados, 42501 sem capacidade publicada, versão de regra sem reescrever reserva, inativar unidade bloqueia moradores. 13 verificações SQL novas. Run anterior 40804489500 falhou uma vez na etapa SQL sem log acessível e não se repetiu sem mudança SQL; anotação do final do log adicionada ao CI. V006 não aplicada ao banco remoto; sem telas web; não constitui aceite integral."
         }
       ]
     },
@@ -533,6 +557,18 @@
           "result": "CI_PASSED_REMOTE_ONBOARDING_PENDING",
           "scope": "CLI inspect/revisao/ACK/apply, manifesto estrito, prova Auth Admin antes do banco, V005/RLS/recibo append-only, transacao/idempotencia/UNKNOWN e launcher sanitizado passaram no CI. Nenhum cadastro, manifesto real ou migration remotos executados. Nao implementa autoconvite, tutorial, recuperacao, troca de dispositivo, MFA, edicao posterior ou importacao CSV; nenhum aceite integral de CP-020 ou demais tickets.",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40619649142"
+        },
+        {
+          "commit": "58f559cda89df219e59fc1dd54225e775581b02b",
+          "branch": "feat/local-management",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Auth sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40805310227",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,LocalManagementJdbcTest test",
+            "python3 tests/database/run.py"
+          ],
+          "scope": "V006 (has_capability e políticas RLS restritivas) e API de gestão local de blocos, unidades, áreas/regras versionadas e auditoria paginada, atrás de CP_MANAGEMENT_ENABLED=false. JDBC real: AAL1/morador/outro tenant negados, 42501 sem capacidade publicada, versão de regra sem reescrever reserva, inativar unidade bloqueia moradores. 13 verificações SQL novas. Run anterior 40804489500 falhou uma vez na etapa SQL sem log acessível e não se repetiu sem mudança SQL; anotação do final do log adicionada ao CI. V006 não aplicada ao banco remoto; sem telas web; não constitui aceite integral."
         }
       ]
     },
