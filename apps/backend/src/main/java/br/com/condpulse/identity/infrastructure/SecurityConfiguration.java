@@ -78,6 +78,13 @@ public class SecurityConfiguration {
     // Painel master: autenticação aqui; papel de plataforma vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/session","/v1/platform/tenants","/v1/platform/audit-events").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
+    .requestMatchers(HttpMethod.GET,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",
+      "/v1/platform/billing/charges").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",
+      "/v1/platform/billing/subscriptions/*/end","/v1/platform/billing/subscriptions/*/charges",
+      "/v1/platform/billing/charges/*/cancel","/v1/platform/billing/charges/*/payments",
+      "/v1/platform/billing/payments/*/void").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/platform/billing/plans/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify",
       "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete","/auth/invitation/accept").permitAll()

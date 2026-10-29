@@ -9,6 +9,8 @@ import br.com.condpulse.platform.infrastructure.PlatformStore;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.application.DisplayText;
 import br.com.condpulse.shared.infrastructure.SqlStates;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
@@ -21,14 +23,20 @@ import org.springframework.stereotype.Service;
 public class PlatformService {
  private final PlatformTransactionExecutor transactions;
  private final PlatformStore store;
- public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store) {
-  this.transactions=transactions; this.store=store;
+ private final boolean billingEnabled;
+ /** Financeiro desligado (padrão): billing.* não aparece na sessão, para a tela não oferecer a área sem API. */
+ @Autowired
+ public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store,
+   @Value("${condpulse.platform.billing-enabled:false}") boolean billingEnabled) {
+  this.transactions=transactions; this.store=store; this.billingEnabled=billingEnabled;
  }
+ public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store) { this(transactions,store,true); }
 
  /** Papel vigente da própria conta. Sem AAL2 devolve capacidades vazias e mfaRequired, para a tela pedir o fator. */
  public PlatformModels.PlatformSession session(UUID actor,AssuranceLevel assurance) {
   return execute(actor,assurance,context->new PlatformModels.PlatformSession(actor,context.role(),
-   context.effectiveCapabilities().stream().map(PlatformCapability::key).sorted().toList(),
+   context.effectiveCapabilities().stream().filter(capability->billingEnabled || !capability.key().startsWith("billing."))
+    .map(PlatformCapability::key).sorted().toList(),
    assurance!=AssuranceLevel.AAL2));
  }
  public PlatformModels.TenantPage tenants(UUID actor,AssuranceLevel assurance) { return tenants(actor,assurance,null); }

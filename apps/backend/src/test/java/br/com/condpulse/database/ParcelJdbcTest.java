@@ -190,8 +190,8 @@ class ParcelJdbcTest {
   String voidKey=key();
   var voided=parcels.voidParcel(concierge,db.tenantA,AAL2,confirmed.parcel().parcelId(),voidKey,
    new ParcelModels.VoidRequest("  Registro   duplicado ",0L)).parcel();
-  var again=parcels.voidParcel(concierge,db.tenantA,AAL2,confirmed.parcel().parcelId(),voidKey,new ParcelModels.VoidRequest("Registro duplicado",0L));
-  assertTrue(again.replayed()); assertEquals(voided,again.parcel(),"Repetir a anulação devolve o mesmo resultado");
+  var repeated=parcels.voidParcel(concierge,db.tenantA,AAL2,confirmed.parcel().parcelId(),voidKey,new ParcelModels.VoidRequest("Registro duplicado",0L));
+  assertTrue(repeated.replayed()); assertEquals(voided,repeated.parcel(),"Repetir a anulação devolve o mesmo resultado");
   assertEquals("VOIDED",voided.status()); assertEquals(1,voided.version()); assertEquals("Registro duplicado",voided.voidReason());
   assertNotNull(voided.voidedAt()); assertNull(voided.handoff());
   UUID id=voided.parcelId();

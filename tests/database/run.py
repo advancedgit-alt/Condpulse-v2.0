@@ -607,6 +607,132 @@ def parcel_checks():
           f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{OWN}','{SUS}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{CONC}','{DEP}','{OWN}','{SUS}','{RES2}')")
 
+def billing_checks():
+    """V011: financeiro da plataforma por capacidade; PAID somente com pagamento registrado do mesmo valor."""
+    PLAN, SUB, CH1, CH2, PAY, PAY2, SUB2, CH3, PAY3, CH4 = (
+        "90000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(1, 11))
+    full = "billing.read,billing.manage"
+    def caps(value, statement):
+        return f"SET LOCAL app.platform_capabilities='{value}'; {statement}"
+    def plan(actor=AA, extra_cols="", extra_vals="", price=1000, name="PLANO FICTICIO"):
+        return (f"INSERT INTO platform.billing_plans(name,price_cents,period,created_by{extra_cols}) "
+                f"VALUES('{name}',{price},'MONTHLY','{actor}'{extra_vals})")
+    expect(value("select count(*) from platform.billing_plans", role="cp_api") == "0", "sem capacidade nao ha planos visiveis")
+    expect(error(plan(), "42501", role="cp_api"), "plano exige capacidade de financeiro")
+    expect(error(caps(full, plan(actor=AB)), "42501", role="cp_api"), "plano registra o proprio ator")
+    expect(error(caps(full, plan(extra_cols=",version", extra_vals=",5")), "42501", role="cp_api"),
+           "aplicacao nao define versao do plano na criacao")
+    expect(error(caps(full, plan(price=0, name="PLANO GRATUITO")), "23514", role="cp_api"), "plano sem valor e recusado")
+    query(f"INSERT INTO platform.billing_plans(id,name,price_cents,period,created_by) VALUES('{PLAN}','PLANO FICTICIO',1000,'MONTHLY','{AA}')")
+    expect(value(caps("billing.manage", "select count(*) from platform.billing_plans"), role="cp_api") == "0",
+           "gestao financeira sem leitura nao enxerga planos")
+    expect(value(caps(full, "select count(*) from platform.billing_plans"), role="cp_api") == "1", "leitura financeira por capacidade")
+    def subscription(status="ACTIVE", price=1000, start="2030-01-01", identifier=None):
+        cols = "id," if identifier else ""
+        vals = f"'{identifier}'," if identifier else ""
+        return (f"INSERT INTO platform.billing_subscriptions({cols}tenant_id,plan_id,price_cents,period,starts_on,due_day,status,created_by) "
+                f"VALUES({vals}'{TA}','{PLAN}',{price},'MONTHLY','{start}',10,'{status}','{AA}')")
+    expect(error(caps(full, subscription("ENDED")), "42501", role="cp_api"), "assinatura nasce ativa")
+    expect(error(caps(full, subscription(price=999)), "23514", role="cp_api"), "assinatura copia o valor do plano")
+    expect(error(caps("billing.manage", subscription()), "42501", role="cp_api"), "assinatura sem leitura do plano falha fechada")
+    query(subscription(identifier=SUB))
+    expect(error(caps(full, subscription()), "23505", role="cp_api"), "uma assinatura ativa por condominio")
+    def charge(identifier, start, end, due, status="OPEN", amount=1000, sub=SUB, tenant=TA):
+        return (f"INSERT INTO platform.billing_charges(id,subscription_id,tenant_id,period_start,period_end,amount_cents,due_on,status,created_by) "
+                f"VALUES('{identifier}','{sub}','{tenant}','{start}','{end}',{amount},'{due}','{status}','{AA}')")
+    expect(error(caps(full, charge(CH2, "2030-02-01", "2030-03-01", "2030-02-10", "PAID")), "42501", role="cp_api"),
+           "cobranca nasce em aberto")
+    for label, statement in (
+            ("cobranca com valor diferente do contratado", charge(CH2, "2030-02-01", "2030-03-01", "2030-02-10", amount=900)),
+            ("cobranca fora do dia de inicio da assinatura", charge(CH2, "2030-02-15", "2030-03-15", "2030-03-10")),
+            ("cobranca com fim de periodo divergente", charge(CH2, "2030-02-01", "2030-04-01", "2030-02-10")),
+            ("cobranca com vencimento fora da regra", charge(CH2, "2030-02-01", "2030-03-01", "2030-02-20")),
+            ("cobranca antes do inicio da assinatura", charge(CH2, "2029-12-01", "2030-01-01", "2029-12-10")),
+            ("cobranca em outro condominio", charge(CH2, "2030-02-01", "2030-03-01", "2030-02-10", tenant=TB))):
+        expect(error(caps(full, statement), "23514", role="cp_api"), label + " e recusada")
+    expect(error(caps("billing.manage", charge(CH2, "2030-02-01", "2030-03-01", "2030-02-10")), "42501", role="cp_api"),
+           "cobranca sem leitura da assinatura falha fechada")
+    query(charge(CH1, "2030-01-01", "2030-02-01", "2030-01-10"))
+    paid = f"UPDATE platform.billing_charges SET status='PAID',version=version+1 WHERE id='{CH1}'"
+    expect(error(caps(full, paid), "23514", role="cp_api"), "cobranca paga exige pagamento registrado")
+    expect(error(caps(full, f"UPDATE platform.billing_charges SET status='PAID' WHERE id='{CH1}'"), "23514", role="cp_api"),
+           "transicao da cobranca avanca a versao")
+    def payment(identifier, amount, actor=AA, charge_id=CH1, reference="E2E-FICTICIO-001", paid_on="2025-01-08"):
+        return (f"INSERT INTO platform.billing_payments(id,charge_id,amount_cents,paid_on,method,reference,status,recorded_by) "
+                f"VALUES('{identifier}','{charge_id}',{amount},'{paid_on}','PIX','{reference}','RECORDED','{actor}')")
+    expect(error(caps(full, payment(PAY, 1000)), "23514", role="cp_api"), "pagamento sem baixa da cobranca e recusado")
+    expect(error(caps(full, payment(PAY, 900) + "; " + paid), "23514", role="cp_api"), "pagamento de valor diferente nao baixa a cobranca")
+    expect(error(caps(full, payment(PAY, 1000, actor=AB) + "; " + paid), "42501", role="cp_api"), "pagamento registra o proprio ator")
+    future = "((clock_timestamp() at time zone 'America/Sao_Paulo')::date + 2)"
+    expect(error(caps(full, payment(PAY, 1000, paid_on="2025-01-08").replace("'2025-01-08'", future) + "; " + paid), "23514",
+                 role="cp_api"), "pagamento com data futura e recusado")
+    query(caps(full, payment(PAY, 1000) + "; " + paid), role="cp_api")
+    expect(value(f"select status from platform.billing_charges where id='{CH1}'") == "PAID", "baixa com pagamento do mesmo valor")
+    expect(error(caps(full, payment(PAY2, 1000, reference="E2E-FICTICIO-OUTRO")), "23505", role="cp_api"),
+           "um pagamento registrado por cobranca")
+    expect(error(caps(full, f"UPDATE platform.billing_charges SET status='CANCELLED',cancel_reason='x',version=version+1 WHERE id='{CH1}'"),
+                 "23514", role="cp_api"), "cobranca paga nao e cancelada sem estorno")
+    def void(actor):
+        return (f"UPDATE platform.billing_payments SET status='VOIDED',voided_by='{actor}',voided_at=now(),void_reason='Registro errado' "
+                f"WHERE id='{PAY}'")
+    reopen = f"UPDATE platform.billing_charges SET status='OPEN',version=version+1 WHERE id='{CH1}'"
+    expect(error(caps(full, void(AB) + "; " + reopen), "42501", role="cp_api"), "estorno registra o proprio ator")
+    expect(error(caps(full, void(AA)), "23514", role="cp_api"), "estorno sem reabrir a cobranca e recusado")
+    query(caps(full, void(AA) + "; " + reopen), role="cp_api")
+    expect(error(caps(full, f"UPDATE platform.billing_payments SET status='RECORDED' WHERE id='{PAY}'"), "23514", role="cp_api"),
+           "pagamento estornado nao volta")
+    expect(error(caps(full, f"DELETE FROM platform.billing_payments WHERE id='{PAY}'"), "42501", role="cp_api"), "pagamento nao e apagado")
+    query(caps(full, f"UPDATE platform.billing_charges SET status='CANCELLED',cancel_reason='Periodo indevido',version=version+1 WHERE id='{CH1}'"),
+          role="cp_api")
+    expect(error(caps(full, f"UPDATE platform.billing_charges SET status='OPEN',cancel_reason=null,version=version+1 WHERE id='{CH1}'"),
+                 "23514", role="cp_api"), "cobranca cancelada nao volta")
+    expect(error(caps(full, f"UPDATE platform.billing_charges SET amount_cents=1 WHERE id='{CH1}'"), "42501", role="cp_api"),
+           "valor da cobranca e imutavel para a aplicacao")
+    # Periodo cancelado pode ser cobrado de novo; o comprovante estornado quita a cobranca correta.
+    query(caps(full, charge(CH2, "2030-01-01", "2030-02-01", "2030-01-10")), role="cp_api")
+    expect(error(caps(full, charge(CH3, "2030-01-01", "2030-02-01", "2030-01-10")), "23P01", role="cp_api"),
+           "periodo nao cancelado nao e cobrado duas vezes")
+    query(caps(full, payment(PAY2, 1000, charge_id=CH2) + f"; UPDATE platform.billing_charges SET status='PAID',version=version+1 WHERE id='{CH2}'"),
+          role="cp_api")
+    query(caps(full, charge(CH3, "2030-02-01", "2030-03-01", "2030-02-10")), role="cp_api")
+    expect(error(caps(full, payment(PAY3, 1000, charge_id=CH3, reference=" e2e-ficticio-001 ")
+                      + f"; UPDATE platform.billing_charges SET status='PAID',version=version+1 WHERE id='{CH3}'"), "23505", role="cp_api"),
+           "um comprovante registrado nao quita duas cobrancas")
+    # Encerramento: nao passa de cobranca existente, estado final e imutavel e a assinatura seguinte nao sobrepoe.
+    def end(day):
+        return f"UPDATE platform.billing_subscriptions SET status='ENDED',ends_on='{day}',ended_at=now(),version=version+1 WHERE id='{SUB}'"
+    expect(error(caps(full, end("2030-02-15")), "23514", role="cp_api"), "encerramento nao corta cobranca existente")
+    query(caps(full, end("2030-03-01")), role="cp_api")
+    expect(error(caps(full, f"UPDATE platform.billing_subscriptions SET status='ACTIVE',ends_on=null,ended_at=null,version=version+1 WHERE id='{SUB}'"),
+                 "23514", role="cp_api"), "assinatura encerrada nao volta")
+    expect(error(caps(full, charge(CH4, "2030-03-01", "2030-04-01", "2030-03-10")), "23514", role="cp_api"),
+           "assinatura encerrada nao cobra depois do encerramento")
+    expect(error(caps(full, subscription(start="2030-02-01")), "23P01", role="cp_api"), "nova assinatura nao comeca antes do encerramento")
+    query(caps(full, subscription(start="2030-03-01", identifier=SUB2)), role="cp_api")
+    # Mesmo com gatilhos desligados pelo dono, o banco nao aceita periodos sobrepostos do mesmo condominio.
+    query("SET session_replication_role=replica; " + charge(CH4, "2030-03-01", "2030-04-01", "2030-03-10"))
+    expect(error(caps(full, charge("90000000-0000-4000-8000-000000000011", "2030-03-01", "2030-04-01", "2030-03-10", sub=SUB2)), "23P01",
+                 role="cp_api"), "periodos de cobranca do condominio nao se sobrepoem")
+    expect(error(caps(full, f"UPDATE platform.billing_plans SET name='PLANO RENOMEADO' WHERE id='{PLAN}'"), "23514", role="cp_api"),
+           "alteracao de plano avanca a versao")
+    expect(value("SET LOCAL app.capabilities='units.manage,memberships.manage,amenities.manage,audit.read'; "
+                 "select count(*) from platform.billing_charges", role="cp_api", tenant=TA) == "0",
+           "gestao local nao ve o financeiro da plataforma")
+    expect(error("select count(*) from platform.billing_charges", "42501", role="cp_worker"), "worker nao le o financeiro")
+    mass = "WITH u AS (UPDATE platform.billing_plans SET active=false,version=version+1 RETURNING 1) SELECT count(*) FROM u"
+    expect(value(caps("billing.manage", mass), role="cp_api") == "0", "gestao financeira sem leitura nao varre planos")
+    expect(value(caps(full, mass), role="cp_api") == "1", "gestao financeira com leitura altera os planos visiveis")
+    def trail(action):
+        return (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) "
+                f"VALUES('{AA}','{action}','{TA}','ensaio')")
+    query(caps("billing.manage", trail("BILLING_PLAN_UPDATED")), role="cp_api")
+    expect(error(caps("billing.manage", trail("TENANT_SUSPENDED")), "42501", role="cp_api"), "financeiro nao grava evento de condominio")
+    expect(error(caps("billing.manage", trail("BILLINGX_FORJADO")), "42501", role="cp_api"), "prefixo do financeiro e literal")
+    expect(error(caps("tenants.manage", trail("BILLING_PAYMENT_RECORDED")), "42501", role="cp_api"), "catalogo nao grava evento financeiro")
+    expect(error(caps("billing.read", trail("BILLING_PLAN_UPDATED")), "42501", role="cp_api"), "leitura financeira nao grava trilha")
+    query("DELETE FROM platform.platform_audit_log; DELETE FROM platform.billing_payments; DELETE FROM platform.billing_charges; "
+          "DELETE FROM platform.billing_subscriptions; DELETE FROM platform.billing_plans")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -705,6 +831,7 @@ def main():
     decision_checks()
     recovery_checks()
     platform_checks()
+    billing_checks()
     parcel_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")

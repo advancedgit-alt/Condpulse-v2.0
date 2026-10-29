@@ -120,10 +120,22 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    account);
  }
  void clearPlatformFixtures() throws SQLException {
+  clearBillingFixtures();
   adminUpdate("delete from platform.platform_audit_log where actor_id in (?,?,?) or tenant_id in (?,?)",
    accountA,accountB,accountC,tenantA,tenantB);
   adminUpdate("delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
   adminUpdate("delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
+ }
+ /** Financeiro (V011) das contas e condomínios desta fixture; ordem respeita as chaves estrangeiras. */
+ void clearBillingFixtures() throws SQLException {
+  try(Connection connection=admin()) { deleteBilling(connection); }
+ }
+ private void deleteBilling(Connection connection) throws SQLException {
+  update(connection,"delete from platform.billing_payments where charge_id in (select id from platform.billing_charges where tenant_id in (?,?))",
+   tenantA,tenantB);
+  update(connection,"delete from platform.billing_charges where tenant_id in (?,?)",tenantA,tenantB);
+  update(connection,"delete from platform.billing_subscriptions where tenant_id in (?,?)",tenantA,tenantB);
+  update(connection,"delete from platform.billing_plans where created_by in (?,?,?)",accountA,accountB,accountC);
  }
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
@@ -169,6 +181,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    connection.setAutoCommit(false);
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.recovery_attempts where account_id in (?,?,?)",accountA,accountB,accountC);
+   deleteBilling(connection);
    update(connection,"delete from platform.platform_audit_log where actor_id in (?,?,?) or tenant_id in (?,?)",
     accountA,accountB,accountC,tenantA,tenantB);
    update(connection,"delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);

@@ -43,6 +43,7 @@ condpulse:
     enabled: ${CP_MANAGEMENT_ENABLED:false}
   platform:
     enabled: ${CP_PLATFORM_ENABLED:false}
+    billing-enabled: ${CP_PLATFORM_BILLING_ENABLED:false}
   parcels:
     enabled: ${CP_PARCELS_ENABLED:false}
   bff:
