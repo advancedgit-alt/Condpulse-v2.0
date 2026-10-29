@@ -116,8 +116,9 @@ export class SessionManager {
       throw new SessionError('INVALID_CREDENTIALS', 'Informe seu e-mail e sua senha.');
     // Uma limpeza local em andamento termina antes (senão ela apagaria a sessão nova); a revogação remota não é esperada.
     if (this.ending) await this.ending;
-    // Qualquer resto de outra sessão sai antes do novo login.
+    // Qualquer resto de outra sessão sai antes do novo login; só então o cofre volta a aceitar gravação.
     this.clearData();
+    this.vault.open();
     let result: Awaited<ReturnType<AuthPort['signInWithPassword']>>;
     try { result = await this.auth.signInWithPassword({ email: normalized, password }); }
     catch { throw new SessionError('AUTH_UNAVAILABLE', messages.AUTH_UNAVAILABLE); }
@@ -175,7 +176,7 @@ export class SessionManager {
         const token = this.lastToken;
         this.lastToken = null;
         // Primeiro o aparelho: o cliente do Auth lê a sessão do cofre, então apagar o cofre encerra a sessão local.
-        await this.vault.wipe();
+        await this.vault.seal();
         // Depois a revogação remota, em segundo plano e com prazo real (a requisição é cancelada, não só ignorada).
         // Ela só usa o token antigo; um novo login não espera por ela nem pode ser afetado por uma resposta tardia.
         if (token) this.revoking = this.revokeWithDeadline(token);

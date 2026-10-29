@@ -15,6 +15,13 @@ export interface Vault {
   removeItem(key: string): Promise<void>;
   /** Apaga todas as chaves que este cofre já gravou (e o próprio índice). */
   wipe(): Promise<void>;
+  /**
+   * Fecha o cofre na saída: apaga tudo e, até `open()`, descarta gravações e não devolve leituras. Uma renovação da
+   * sessão antiga que termine depois da saída não regrava o token.
+   */
+  seal(): Promise<void>;
+  /** Reabre para um novo login. */
+  open(): void;
 }
 
 /** Parte abaixo do limite de 2048 bytes do SecureStore, mesmo com caracteres de 3 bytes. */
@@ -30,6 +37,7 @@ export function safeKey(key: string): string {
 export function createVault(store: SecureKeyValue): Vault {
   // Operações em série: gravação e apagamento simultâneos não deixam parte órfã nem índice desatualizado.
   let tail: Promise<unknown> = Promise.resolve();
+  let sealed = false;
   const serial = <T>(operation: () => Promise<T>): Promise<T> => {
     const next = tail.then(operation, operation);
     tail = next.then(() => undefined, () => undefined);
@@ -55,8 +63,13 @@ export function createVault(store: SecureKeyValue): Vault {
     await store.deleteItemAsync(`${base}.n`);
     for (let index = 0; index < MAX_PARTS; index += 1) await store.deleteItemAsync(`${base}.${index}`);
   }
+  async function wipeAll(): Promise<void> {
+    for (const base of await readIndex()) await removeParts(base);
+    await store.deleteItemAsync(INDEX);
+  }
   return {
     getItem: (key) => serial(async () => {
+      if (sealed) return null;
       const base = safeKey(key);
       const count = Number(await store.getItemAsync(`${base}.n`));
       if (!Number.isInteger(count) || count < 1 || count > MAX_PARTS) return null;
@@ -69,27 +82,30 @@ export function createVault(store: SecureKeyValue): Vault {
       }
       return parts.join('');
     }),
-    setItem: (key, value) => serial(async () => {
-      const base = safeKey(key);
-      const parts = Math.max(1, Math.ceil(value.length / CHUNK));
-      if (parts > MAX_PARTS) throw new Error('VAULT_VALUE_TOO_LARGE');
-      // Índice antes da primeira parte: uma gravação interrompida ainda é apagada pela saída ou pela reinstalação.
-      await writeIndex([...(await readIndex()), base]);
-      const previous = Number(await store.getItemAsync(`${base}.n`));
-      await store.deleteItemAsync(`${base}.n`);
-      for (let index = 0; index < parts; index += 1) await store.setItemAsync(`${base}.${index}`, value.slice(index * CHUNK, (index + 1) * CHUNK));
-      const stale = Number.isInteger(previous) && previous > parts && previous <= MAX_PARTS ? previous : parts;
-      for (let index = parts; index < stale; index += 1) await store.deleteItemAsync(`${base}.${index}`);
-      await store.setItemAsync(`${base}.n`, String(parts));
-    }),
+    setItem: (key, value) => {
+      if (sealed) return Promise.resolve();
+      return serial(async () => {
+        if (sealed) return;
+        const base = safeKey(key);
+        const parts = Math.max(1, Math.ceil(value.length / CHUNK));
+        if (parts > MAX_PARTS) throw new Error('VAULT_VALUE_TOO_LARGE');
+        // Índice antes da primeira parte: uma gravação interrompida ainda é apagada pela saída ou pela reinstalação.
+        await writeIndex([...(await readIndex()), base]);
+        const previous = Number(await store.getItemAsync(`${base}.n`));
+        await store.deleteItemAsync(`${base}.n`);
+        for (let index = 0; index < parts; index += 1) await store.setItemAsync(`${base}.${index}`, value.slice(index * CHUNK, (index + 1) * CHUNK));
+        const stale = Number.isInteger(previous) && previous > parts && previous <= MAX_PARTS ? previous : parts;
+        for (let index = parts; index < stale; index += 1) await store.deleteItemAsync(`${base}.${index}`);
+        await store.setItemAsync(`${base}.n`, String(parts));
+      });
+    },
     removeItem: (key) => serial(async () => {
       const base = safeKey(key);
       await removeParts(base);
       await writeIndex((await readIndex()).filter((item) => item !== base));
     }),
-    wipe: () => serial(async () => {
-      for (const base of await readIndex()) await removeParts(base);
-      await store.deleteItemAsync(INDEX);
-    }),
+    wipe: () => serial(wipeAll),
+    seal: () => { sealed = true; return serial(wipeAll); },
+    open: () => { sealed = false; },
   };
 }

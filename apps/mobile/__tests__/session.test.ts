@@ -194,4 +194,20 @@ describe('sessão nativa', () => {
     await other.manager.revoking;
     expect(other.fake.state.revoked).toEqual([own]);
   });
+
+  it('renovação da sessão antiga que grava depois da saída não volta para o cofre', async () => {
+    const { store, vault, manager } = setup();
+    await manager.start();
+    await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    await vault.setItem('cp-auth', 'sessao');
+    await manager.signOut();
+    // A biblioteca termina uma renovação iniciada antes da saída e grava o token renovado.
+    await vault.setItem('cp-auth', 'refresh-token-renovado-da-sessao-encerrada');
+    expect(store.items.size).toBe(0);
+    expect(await vault.getItem('cp-auth')).toBeNull();
+    // Novo login reabre o cofre.
+    await manager.signIn('morador@example.invalid', 'SYNTHETIC-PASSWORD-A');
+    await vault.setItem('cp-auth', 'sessao-nova');
+    expect(await vault.getItem('cp-auth')).toBe('sessao-nova');
+  });
 });
