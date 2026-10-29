@@ -131,6 +131,8 @@ jobs:
           CP_PARCELS_ENABLED: "true"
           CP_VISITS_ENABLED: "true"
           CP_NOTIFICATIONS_ENABLED: "true"
+          CP_ANNOUNCEMENTS_ENABLED: "true"
+          CP_REQUESTS_ENABLED: "true"
         run: bash tests/runtime/homologation-flags-smoke.sh
       - name: Durable BFF session database invariants
         run: psql -X -v ON_ERROR_STOP=1 -f tests/database/bff_sessions.sql
