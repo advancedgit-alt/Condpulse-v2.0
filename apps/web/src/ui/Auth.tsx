@@ -87,12 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await queries.cancelQueries(); queries.clear(); api.clearSession();
       const result = await api.acceptInvitationWithLogin({ email, password, token }); accepted = true;
-      if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
+      // Aceite gravado: o resultado volta à tela mesmo se a identidade não puder ser lida agora (nova consulta depois).
+      if (epoch !== authEpoch.current) return result;
       if (!result.sessionStarted) { setMode('anonymous'); return result; }
-      const account = await api.currentIdentity();
-      if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
-      queries.setQueryData(['identity'], account);
-      setModeError(null); setMode('ready');
+      try {
+        const account = await api.currentIdentity();
+        if (epoch === authEpoch.current) queries.setQueryData(['identity'], account);
+      } catch { /* a consulta de identidade é refeita com o modo pronto */ }
+      if (epoch === authEpoch.current) { setModeError(null); setMode('ready'); }
       return result;
     } catch (failure) {
       if (epoch === authEpoch.current) {

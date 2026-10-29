@@ -41,4 +41,22 @@ describe('primeiro acesso por convite no cliente', () => {
     await expect(api.acceptInvitationWithLogin({ email: 'a@example.invalid', password: 'x', token }))
       .rejects.toMatchObject({ code: 'INVITATION_NOT_AVAILABLE', status: 404 });
   });
+  it('espera do 429 vale para o primeiro acesso e para o login comum, que compartilham o limite', async () => {
+    let now = 1_000_000;
+    const fetcher = vi.fn<typeof globalThis.fetch>();
+    fetcher.mockImplementation(async (input) => String(input) === '/auth/csrf' ? json({ headerName: 'X-CSRF-Token', token: 'synthetic-csrf' })
+      : new Response(JSON.stringify({ status: 429, code: 'AUTH_RATE_LIMITED' }),
+        { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '120' } }));
+    const api = new CondPulseApi({ fetch: fetcher, now: () => now });
+    await expect(api.acceptInvitationWithLogin({ email: 'a@example.invalid', password: 'x', token }))
+      .rejects.toMatchObject({ status: 429, code: 'AUTH_RATE_LIMITED', retryAfterSeconds: 120 });
+    const sent = () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST').length;
+    expect(sent()).toBe(1);
+    await expect(api.acceptInvitationWithLogin({ email: 'a@example.invalid', password: 'x', token })).rejects.toMatchObject({ status: 429 });
+    await expect(api.login({ email: 'a@example.invalid', password: 'x' })).rejects.toMatchObject({ status: 429 });
+    expect(sent()).toBe(1);
+    now += 121_000;
+    await expect(api.login({ email: 'a@example.invalid', password: 'x' })).rejects.toMatchObject({ status: 429 });
+    expect(sent()).toBe(2);
+  });
 });

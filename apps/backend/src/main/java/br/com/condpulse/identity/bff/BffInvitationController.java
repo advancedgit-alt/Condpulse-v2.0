@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController @Profile("api")
 @ConditionalOnProperty(name={"condpulse.bff.enabled","condpulse.management.enabled"},havingValue="true")
 public class BffInvitationController {
+ private static final System.Logger LOG=System.getLogger(BffInvitationController.class.getName());
  private final WebSessionService sessions;
  private final InvitationService invitations;
  private final CsrfTokenRepository csrf;
@@ -44,14 +45,21 @@ public class BffInvitationController {
   // Token malformado nunca chega ao provedor de senha.
   if(token==null || !token.matches("[A-Za-z0-9_-]{43}"))
    throw new BusinessProblem("INVITATION_NOT_AVAILABLE",404,"Convite inválido, expirado, já utilizado ou emitido para outro e-mail.");
+  // Cookie duplicado é recusado (401) antes do provedor de senha.
   String previous=BffCookies.read(request);
   var result=sessions.loginAcceptingInvitation(email,body.password(),
    (account,jwtEmail)->invitations.accept(account,jwtEmail,new MembershipModels.AcceptInvitation(token)));
   var session=result.session();
-  if(session!=null) {
-   if(previous!=null && !previous.equals(session.opaqueToken())) sessions.logout(previous);
-   BffCookies.set(response,session.opaqueToken(),Duration.between(clock.instant(),session.expiresAt()));
-   var rotated=csrf.generateToken(request); csrf.saveToken(rotated,request,response);
+  // Sessão nova substitui a anterior; sem sessão nova, a anterior (talvez de outra conta) também sai do navegador.
+  if(session!=null) BffCookies.set(response,session.opaqueToken(),Duration.between(clock.instant(),session.expiresAt()));
+  else if(previous!=null) BffCookies.clear(response);
+  if(session!=null || previous!=null) { var rotated=csrf.generateToken(request); csrf.saveToken(rotated,request,response); }
+  // O aceite já está gravado: falha ao encerrar a sessão anterior fica no log e não vira erro para quem entrou.
+  if(previous!=null && (session==null || !previous.equals(session.opaqueToken()))) {
+   try { sessions.logout(previous); }
+   catch(RuntimeException error) {
+    LOG.log(System.Logger.Level.WARNING,"Sessão anterior não encerrada no primeiro acesso: {0}",error.getClass().getSimpleName());
+   }
   }
   var accepted=result.accepted();
   return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(new FirstAccessBody(accepted.tenantId(),

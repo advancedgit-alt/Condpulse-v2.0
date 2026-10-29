@@ -6,6 +6,13 @@ import type {
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 import { instantMicros } from './instant';
 
+/**
+ * Rotas que guardam a espera do 429. O primeiro acesso por convite consome o mesmo balde de tentativas do login no
+ * servidor, então as duas rotas compartilham a espera.
+ */
+const COOLDOWN_KEYS: Readonly<Record<string, string>> = {
+  '/auth/login': '/auth/login', '/auth/invitation/accept': '/auth/login', '/auth/refresh': '/auth/refresh',
+};
 const messages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: 'Entre novamente para continuar.',
   SESSION_EXPIRED: 'Sua sessão terminou. Entre novamente para continuar.',
@@ -410,7 +417,8 @@ export class CondPulseApi {
 
   private async send(path: string, options: RequestOptions, generation: number, useCsrf = true): Promise<Reply> {
     this.ensureCurrent(generation, options.signal);
-    const deadline = this.authCooldowns.get(path);
+    const cooldownKey = COOLDOWN_KEYS[path] ?? path;
+    const deadline = this.authCooldowns.get(cooldownKey);
     const remaining = remainingCooldown(deadline, this.now());
     if (remaining > 0) throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, remaining, deadline);
     const mutation = options.method === 'POST' || options.method === 'PUT';
@@ -454,8 +462,8 @@ export class CondPulseApi {
     if (!response.ok) {
       if (response.status === 429) {
         const seconds = parseRetryAfterSeconds(response.headers.get('Retry-After'));
-        const until = Math.max(this.authCooldowns.get(path) ?? 0, this.now() + seconds * 1_000);
-        if (path === '/auth/login' || path === '/auth/refresh') this.authCooldowns.set(path, until);
+        const until = Math.max(this.authCooldowns.get(cooldownKey) ?? 0, this.now() + seconds * 1_000);
+        if (COOLDOWN_KEYS[path]) this.authCooldowns.set(cooldownKey, until);
         throw new ApiError(429, 'AUTH_RATE_LIMITED', messages.AUTH_RATE_LIMITED!, false, seconds, until);
       }
       const candidate = record(value) && isString(value.code) ? value.code : '';

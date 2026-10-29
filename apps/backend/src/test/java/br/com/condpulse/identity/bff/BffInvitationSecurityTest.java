@@ -113,6 +113,49 @@ class BffInvitationSecurityTest {
   assertEquals(201,response.getStatus()); assertTrue(response.getContentAsString().contains("\"sessionStarted\":false"));
   assertFalse(response.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_session=")));
  }
+ @Test void newSessionReplacesThePreviousOneEvenWhenEndingItFails() throws Exception {
+  start(true);
+  String raw=SessionSecrets.newToken(),previous=SessionSecrets.newToken();
+  acceptance(new WebSessionService.SessionTicket(raw,ACCOUNT,NOW.plusSeconds(28_800)));
+  doThrow(new BusinessProblem("SESSION_STORE_UNAVAILABLE",503,"Indisponível.")).when(sessions()).logout(previous);
+  var response=mvc.perform(mutation(csrf(),TOKEN).cookie(new Cookie(BffCookies.SESSION,previous))).andReturn().getResponse();
+  assertEquals(201,response.getStatus(),"O aceite gravado não vira erro por causa da sessão anterior");
+  assertTrue(response.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_session="+raw+";")));
+  verify(sessions()).logout(previous);
+ }
+ @Test void acceptanceWithoutNewSessionClearsThePreviousSession() throws Exception {
+  start(true);
+  String previous=SessionSecrets.newToken();
+  acceptance(null);
+  var response=mvc.perform(mutation(csrf(),TOKEN).cookie(new Cookie(BffCookies.SESSION,previous))).andReturn().getResponse();
+  assertEquals(201,response.getStatus());
+  String content=response.getContentAsString();
+  assertTrue(content.contains("\"sessionStarted\":false")); assertTrue(content.contains("\"accountId\":null"));
+  assertTrue(content.contains("\"expiresAt\":null"));
+  var cookies=response.getHeaders("Set-Cookie");
+  assertTrue(cookies.stream().anyMatch(h->h.startsWith("__Host-cp_session=;") && h.contains("Max-Age=0")),"Sessão anterior sai do navegador");
+  assertTrue(cookies.stream().anyMatch(h->h.startsWith("__Host-cp_csrf=") && !h.contains("Max-Age=0")),"CSRF renovado");
+  verify(sessions()).logout(previous);
+ }
+ @Test void duplicatedSessionCookieIsRefusedBeforeTheProvider() throws Exception {
+  start(true);
+  var response=mvc.perform(mutation(csrf(),TOKEN).cookie(new Cookie(BffCookies.SESSION,SessionSecrets.newToken()),
+   new Cookie(BffCookies.SESSION,SessionSecrets.newToken()))).andReturn().getResponse();
+  assertEquals(401,response.getStatus());
+  verify(sessions(),never()).loginAcceptingInvitation(any(),any(),any()); verifyNoInteractions(invitations());
+ }
+ @Test void inactiveAccountAndExistingMembershipPropagateWithoutSession() throws Exception {
+  start(true);
+  when(sessions().loginAcceptingInvitation(any(),any(),any()))
+   .thenThrow(new BusinessProblem("ACCOUNT_INACTIVE",403,"Seu acesso precisa ser validado pela gestão."))
+   .thenThrow(new BusinessProblem("MEMBERSHIP_ALREADY_EXISTS",409,"Você já possui este vínculo no condomínio."));
+  var inactive=mvc.perform(mutation(csrf(),TOKEN)).andReturn().getResponse();
+  assertEquals(403,inactive.getStatus()); assertTrue(inactive.getContentAsString().contains("ACCOUNT_INACTIVE"));
+  var existing=mvc.perform(mutation(csrf(),TOKEN)).andReturn().getResponse();
+  assertEquals(409,existing.getStatus()); assertTrue(existing.getContentAsString().contains("MEMBERSHIP_ALREADY_EXISTS"));
+  for(var response:java.util.List.of(inactive,existing))
+   assertFalse(response.getHeaders("Set-Cookie").stream().anyMatch(h->h.startsWith("__Host-cp_session=")));
+ }
  @Test void malformedTokenAndRateLimitNeverReachTheProvider() throws Exception {
   start(true);
   var malformed=mvc.perform(mutation(csrf(),"curto")).andReturn().getResponse();

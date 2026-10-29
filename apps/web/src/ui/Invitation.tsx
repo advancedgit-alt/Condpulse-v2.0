@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
@@ -18,6 +18,14 @@ export function InvitationPage() {
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [accepted, setAccepted] = useState<null | { sessionStarted: boolean }>(null);
+  /**
+   * O formulário de primeiro acesso já apareceu: o envio e a nova conferência de sessão que vem depois de uma recusa
+   * ("loading") não o desmontam, e o erro, a espera e o e-mail continuam na tela.
+   */
+  const [firstAccessOpen, setFirstAccessOpen] = useState(false);
+  const openFirstAccess = useCallback(() => setFirstAccessOpen(true), []);
+  /** Resultado incerto é estado final: o convite pode já ter sido usado, então o mesmo formulário não é oferecido de novo. */
+  const [unconfirmed, setUnconfirmed] = useState<unknown>(null);
   function settle(error: unknown) {
     setFailure(error);
     if (error instanceof ApiError && SPENT.includes(error.code)) { forget(); setToken(null); }
@@ -36,13 +44,20 @@ export function InvitationPage() {
     {accepted.sessionStarted ? <Link className="button" to="/contextos">Ir para meus acessos<Icon name="arrow" /></Link>
       : <><Notice tone="warning">O pedido foi registrado, mas a sessão não pôde ser iniciada agora. Entre com o seu e-mail e a sua senha para acompanhar.</Notice>
         <Link className="button" to="/entrar">Entrar<Icon name="arrow" /></Link></>}</SessionPage>;
+  if (unconfirmed) return <SessionPage><span className="eyebrow">CONVITE</span><h1>Não foi possível confirmar o primeiro acesso.</h1>
+    <Notice tone="warning">{errorMessage(unconfirmed)}</Notice>
+    <p>Não repita o envio por aqui: um convite aceito não vale de novo. Entre com o seu e-mail e a sua senha; se o pedido tiver sido registrado, a tela informará que o acesso aguarda a validação da gestão. Se a entrada não funcionar, abra novamente o link recebido.</p>
+    <Link className="button" to="/entrar">Entrar<Icon name="arrow" /></Link></SessionPage>;
   if (!token) return <SessionPage><span className="eyebrow">CONVITE</span><h1>Convite indisponível.</h1>
     {failure ? <Notice tone="error">{errorMessage(failure)}</Notice> : <p>Abra o link completo recebido da gestão. Ele vale uma única vez, para o e-mail convidado e dentro do prazo.</p>}
     <Link className="button button-secondary" to="/entrar">Ir para o acesso</Link></SessionPage>;
-  if (auth.status === 'loading' || auth.status === 'logoutPending') return <SessionPage><Loading label="Verificando sua sessão…" /></SessionPage>;
-  if (auth.status === 'anonymous' || auth.status === 'blocked') return <FirstAccess token={token}
+  const firstAccess = <FirstAccess token={token} onOpen={openFirstAccess}
     onAccepted={(result) => { forget(); setToken(null); setAccepted({ sessionStarted: result.sessionStarted }); }}
-    onSpent={(error) => settle(error)} discard={() => { forget(); setToken(null); }} />;
+    onSpent={(error) => settle(error)} onUnconfirmed={(error) => { forget(); setToken(null); setUnconfirmed(error); }}
+    discard={() => { forget(); setToken(null); }} />;
+  if (firstAccessOpen && auth.status === 'loading') return firstAccess;
+  if (auth.status === 'loading' || auth.status === 'logoutPending') return <SessionPage><Loading label="Verificando sua sessão…" /></SessionPage>;
+  if (auth.status === 'anonymous' || auth.status === 'blocked') return firstAccess;
   if (auth.status !== 'authenticated') return <SessionPage><span className="eyebrow">CONVITE</span><h1>Não foi possível verificar seu acesso.</h1>
     <p>Tente novamente em instantes. O convite continua guardado nesta janela.</p>
     <button className="button" type="button" onClick={auth.recheck}>Verificar acesso</button></SessionPage>;
@@ -58,8 +73,8 @@ export function InvitationPage() {
  * Primeiro acesso: o convidado ainda sem conta local entra com o e-mail convidado e a senha recebida no cadastro, e o
  * convite é aceito na mesma operação. Quem já tem acesso pode entrar pelo login comum e voltar ao aviso do convite.
  */
-function FirstAccess({ token, onAccepted, onSpent, discard }: { token: string; onAccepted(result: InvitationFirstAccess): void;
-  onSpent(error: unknown): void; discard(): void }) {
+function FirstAccess({ token, onOpen, onAccepted, onSpent, onUnconfirmed, discard }: { token: string; onOpen(): void;
+  onAccepted(result: InvitationFirstAccess): void; onSpent(error: unknown): void; onUnconfirmed(error: unknown): void; discard(): void }) {
   const auth = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,6 +82,7 @@ function FirstAccess({ token, onAccepted, onSpent, discard }: { token: string; o
   const [failure, setFailure] = useState<unknown>(null);
   const inFlight = useRef(false);
   const remaining = useCooldown(failure ?? undefined);
+  useEffect(() => { onOpen(); }, [onOpen]);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (inFlight.current || remaining > 0 || !email.trim() || !password) return;
@@ -78,6 +94,7 @@ function FirstAccess({ token, onAccepted, onSpent, discard }: { token: string; o
     } catch (error) {
       setPassword('');
       if (error instanceof ApiError && SPENT.includes(error.code)) { onSpent(error); return; }
+      if (!(error instanceof ApiError) || error.uncertain) { onUnconfirmed(error); return; }
       setFailure(error);
     } finally { inFlight.current = false; setPending(false); }
   }

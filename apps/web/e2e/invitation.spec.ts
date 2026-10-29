@@ -69,3 +69,72 @@ test('aceite sem sessão orienta o login e convite já usado é descartado sem d
   await expect(page.getByText('Convite inválido, expirado, já utilizado ou emitido para outro e-mail.')).toBeVisible();
   await expect(page.getByText('PRIVATE-SERVER-DETAIL')).toHaveCount(0);
 });
+
+test('senha recusada e espera do limite ficam visíveis no formulário, sem reenvio durante a espera', async ({ page }) => {
+  await installSyntheticApi(page);
+  const replies = [
+    { status: 401, code: 'AUTH_CREDENTIALS_REJECTED', headers: {} as Record<string, string> },
+    { status: 429, code: 'AUTH_RATE_LIMITED', headers: { 'Retry-After': '600' } as Record<string, string> },
+  ];
+  let calls = 0;
+  await page.route('**/auth/invitation/accept', async (route) => {
+    calls += 1;
+    const reply = replies.shift()!;
+    await route.fulfill({ status: reply.status, contentType: 'application/json', headers: reply.headers,
+      body: JSON.stringify({ status: reply.status, code: reply.code }) });
+  });
+  await page.goto(`/convite#token=${INVITATION_TOKEN}`);
+  await page.getByLabel('E-mail convidado').fill('convidada-sintetica@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-WRONG-PASSWORD');
+  await page.getByRole('button', { name: 'Aceitar convite e entrar' }).click();
+  await expect(page.getByText('Não foi possível validar seu e-mail e sua senha.')).toBeVisible();
+  await expect(page.getByLabel('E-mail convidado')).toHaveValue('convidada-sintetica@example.invalid');
+  await expect(page.getByLabel('Senha', { exact: true })).toHaveValue('');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByRole('button', { name: 'Aceitar convite e entrar' }).click();
+  await expect(page.getByText('Aguarde um pouco antes de tentar novamente.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Aceitar convite e entrar' })).toBeDisabled();
+  // A espera vale também para o login comum (mesmo limite no servidor), sem nova chamada.
+  await page.getByRole('link', { name: 'Já tenho acesso: entrar' }).click();
+  await page.getByLabel('E-mail').fill('convidada-sintetica@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByRole('button', { name: /Entrar/ }).first().click();
+  await expect(page.getByText('Aguarde um pouco antes de tentar novamente.')).toBeVisible();
+  expect(calls).toBe(2);
+});
+
+test('resultado incerto vira estado final com orientação de login, sem o mesmo formulário', async ({ page }) => {
+  await installSyntheticApi(page);
+  await page.route('**/auth/invitation/accept', async (route) => {
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ status: 503, code: 'AUTH_PROVIDER_UNAVAILABLE' }) });
+  });
+  await page.goto(`/convite#token=${INVITATION_TOKEN}`);
+  await page.getByLabel('E-mail convidado').fill('convidada-sintetica@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByRole('button', { name: 'Aceitar convite e entrar' }).click();
+  await expect(page.getByRole('heading', { name: 'Não foi possível confirmar o primeiro acesso.' })).toBeVisible();
+  await expect(page.getByText('Não foi possível confirmar o aceite do convite.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Aceitar convite e entrar' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Entrar' })).toBeVisible();
+  await expect(page.getByText('O convite continua guardado nesta janela.')).toHaveCount(0);
+});
+
+test('aceite com sessão segue confirmado mesmo se a identidade falhar logo depois', async ({ page }) => {
+  const state = await installSyntheticApi(page);
+  await firstAccessApi(page, state, 'session');
+  let failIdentity = true;
+  await page.route('**/v1/me', async (route) => {
+    if (state.authenticated && failIdentity) {
+      failIdentity = false;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ status: 503, code: 'DEPENDENCY_UNAVAILABLE' }) });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.goto(`/convite#token=${INVITATION_TOKEN}`);
+  await page.getByLabel('E-mail convidado').fill('convidada-sintetica@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByRole('button', { name: 'Aceitar convite e entrar' }).click();
+  await expect(page.getByRole('heading', { name: 'Pedido de vínculo enviado.' })).toBeVisible();
+  await expect(page.getByText('Há um convite aberto nesta janela.')).toHaveCount(0);
+});
