@@ -31,13 +31,15 @@ não comprova aceite de produção operacional. Nenhum recurso novo faturável f
 criado por este lote de planejamento.
 
 Ainda não existem painel master, financeiro de assinaturas, flags por tenant ou
-promoção de release demonstrada. O segundo ambiente isolado continua pendente.
+promoção de release demonstrada. O segundo projeto Supabase foi criado após
+autorização de custo, conforme [AMBIENTES.md](AMBIENTES.md); a integração e a
+separação completa dos ambientes continuam pendentes.
 
 ## Seis fases e seus critérios de conclusão
 
 | Fase | Entrega | Gate para concluir | Estado de partida |
 | --- | --- | --- | --- |
-| 1. Ambiente de teste e atualizações | Inventário homologação/produção, tenant de teste e processo central de versões | Separação efetiva de dados/Auth/Storage/segredos/origens, ingresso restrito, responsável e escopo/regras aprovados; custos novos aceitos antes de provisionar | Parcial: há um projeto remoto e aplicação publicada; segundo ambiente e cadastro aprovado pendentes |
+| 1. Ambiente de teste e atualizações | Inventário homologação/produção, tenant de teste e processo central de versões | Separação efetiva de dados/Auth/Storage/segredos/origens, ingresso restrito, responsável e escopo/regras aprovados; custos novos aceitos antes de provisionar | Parcial: dois projetos Supabase próprios existentes; produção reservada ainda sem aplicação/migrations/credenciais; integração, tenant de teste e cadastro aprovado pendentes |
 | 2. Acesso ao sistema | Cadastro operacional, primeiro acesso, recuperação de acesso e MFA/AAL2 administrativo | Principal mínimo conferido; `inspect`/revisão/ACK/`apply` e recibo; Auth real, cookies/CSRF, refresh/logout, recuperação e negações validados; MFA/AAL2 administrativo exigido no backend | CLI e base implementadas/ensaiadas no CI; wrapper protegido preparado, sem execução gerenciada; novos Secrets no cofre, principal, credencial operacional e manifesto reais pendentes; recuperação e MFA administrativos ainda não implementados |
 | 3. Painel do condomínio | Painel residencial e gestão local mínima de unidades, moradores/vínculos, áreas/regras e reservas | Contratos e telas administrativas implementados com autorização/MFA/auditoria; percurso real no navegador/API/banco, conflito/replay/revogação e isolamento entre contextos; aceite do teste restrito registrado | Interface residencial e subset de reservas implementados/ensaiados no CI; API/telas de gestão local e aceite gerenciado pendentes |
 | 4. Painel master | Operação global dos condomínios e escopo administrativo de plataforma | Autorização de plataforma, MFA/AAL2 e auditoria; listagem/cadastro/estado de condomínio aprovados; testes negando acesso cruzado e poder master a gestor local | Pendente de implementação e contratos detalhados |
