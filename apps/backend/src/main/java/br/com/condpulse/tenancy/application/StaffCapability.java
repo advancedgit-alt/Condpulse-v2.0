@@ -14,6 +14,7 @@ public enum StaffCapability {
  DECIDE_RESERVATIONS("reservations.decide"),
  READ_AUDIT("audit.read"),
  PUBLISH_ANNOUNCEMENTS("announcements.publish"),
+ MANAGE_REQUESTS("requests.manage"),
  OPERATE_CONCIERGE("concierge.operate");
 
  private final String key;
@@ -24,7 +25,8 @@ public enum StaffCapability {
  public static Set<StaffCapability> forRole(String role) {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
-   case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS);
+   case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
+    MANAGE_REQUESTS);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    default -> EnumSet.noneOf(StaffCapability.class);
   };
