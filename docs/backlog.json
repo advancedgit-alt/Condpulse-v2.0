@@ -1045,8 +1045,23 @@
       "id": "CP-033",
       "delivery": "Pedidos e conversa vinculada. Solicitação, mensagem, anexo, responsável e atualização de estado.",
       "acceptance": "Conversa permanece no pedido certo; acesso indevido por ID conhecido é negado.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "f3d5b8bae0b467a30dba9a0f47b2070df1165547",
+          "branch": "feat/service-requests",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartável/Chromium com API sintética",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40865407620",
+          "commands": [
+            "mvn -B -ntp -f apps/backend/pom.xml verify",
+            "mvn ... -Dtest=...,RequestJdbcTest test",
+            "python3 tests/database/run.py",
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "scope": "Pedidos atrás de CP_REQUESTS_ENABLED=false (V017 não aplicada remotamente): abertura pela unidade com vínculo vigente e chave de idempotência, conversa presa ao pedido com nome e horário do banco, comentário interno só da equipe e nunca visível à unidade, responsável da equipe vigente, prazo comunicado, andamento pela versão lida com transições do banco, resolução obrigatória e registrada na conversa, fechado final; pedido de outra unidade negado mesmo pelo ID. Este run falhou só no ensaio do baseline (contagem até a V016), corrigido no commit seguinte; o CI do PR confere o estado final. Anexos (CP-017), aviso à unidade (CP-034/CP-035), Auth real e equipe nomeada pendentes: não constitui aceite."
+        }
+      ]
     },
     {
       "id": "CP-034",
