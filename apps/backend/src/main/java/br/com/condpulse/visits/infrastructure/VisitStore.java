@@ -79,8 +79,14 @@ public class VisitStore {
     where p.tenant_id=? and p.id=?),false)
    """,Boolean.class,tenant,permit));
  }
+ /**
+  * Convite visível; com lock, para revogar: primeiro a trava consultiva do convite (a mesma da entrada pela portaria),
+  * depois a linha. A entrada toma a trava e só então confere a chave estrangeira na linha; travar a linha antes da trava
+  * produziria impasse. FOR NO KEY UPDATE: a revogação não muda chave e não bloqueia a conferência de chave estrangeira.
+  */
  public VisitModels.Permit permit(UUID tenant,UUID permit,boolean lock) {
-  var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.id=?"+(lock?" for update of p":""),PERMIT,tenant,permit);
+  if(lock) jdbc.queryForObject("select cp.lock_permit_access(?,?)",Boolean.class,tenant,permit);
+  var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.id=?"+(lock?" for no key update of p":""),PERMIT,tenant,permit);
   return rows.isEmpty()?null:rows.getFirst();
  }
  public void insertVisitor(UUID id,UUID tenant,String name,String document,UUID actor) {

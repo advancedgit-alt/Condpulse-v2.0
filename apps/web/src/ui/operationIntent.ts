@@ -41,3 +41,43 @@ export function useIntent() {
     reset: () => setIntent(null),
   };
 }
+
+/**
+ * Operação pendente por alvo (por exemplo, "entrada pelo convite X"): chave, dados e trava ficam fora do formulário.
+ * Fechar e reabrir o formulário — Voltar, troca de filtro ou de unidade, outra ação aberta na lista — não gera chave nova
+ * depois de um resultado incerto, e a repetição confirma o mesmo envio. Vale enquanto a página estiver aberta:
+ * recarregar a página descarta a pendência, e a lista atualizada continua sendo a referência antes de repetir.
+ */
+export interface PendingOperation { fingerprint: string; key: string; locked: boolean; body: unknown }
+const pendingOperations = new Map<string, PendingOperation>();
+export const pendingOperation = {
+  get: (slot: string): PendingOperation | null => pendingOperations.get(slot) ?? null,
+  /** Mesmos dados reaproveitam a chave; com o envio travado a chave antiga continua mesmo com outros dados. */
+  keyFor(slot: string, fingerprint: string, body: unknown): string {
+    const previous = pendingOperations.get(slot);
+    if (previous?.locked) return previous.key;
+    const key = previous?.fingerprint === fingerprint ? previous.key : newOperationKey();
+    pendingOperations.set(slot, { fingerprint, key, locked: false, body });
+    return key;
+  },
+  lock(slot: string, locked: boolean) {
+    const previous = pendingOperations.get(slot);
+    if (previous) pendingOperations.set(slot, { ...previous, locked });
+  },
+  clear(slot: string) { pendingOperations.delete(slot); },
+};
+export function usePendingOperation(slot: string) {
+  const [, setVersion] = useState(0);
+  const changed = () => setVersion((value) => value + 1);
+  const current = pendingOperation.get(slot);
+  return {
+    locked: current?.locked ?? false,
+    /** Dados do envio travado: o formulário reabre com o mesmo conteúdo. */
+    lockedBody: current?.locked ? current.body : null,
+    keyFor: (fingerprint: string, body: unknown) => pendingOperation.keyFor(slot, fingerprint, body),
+    reset() { pendingOperation.clear(slot); changed(); },
+    /** Envio confirmado ou recusado pelo estado: nada fica pendente (o formulário fecha em seguida). */
+    finish() { pendingOperation.clear(slot); },
+    setLocked(value: boolean) { pendingOperation.lock(slot, value); changed(); },
+  };
+}

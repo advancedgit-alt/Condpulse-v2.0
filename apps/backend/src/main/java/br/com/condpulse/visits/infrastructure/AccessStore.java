@@ -22,9 +22,13 @@ public class AccessStore {
  private final JdbcTemplate jdbc;
  public AccessStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
- /** Entrada com a correção dela, a saída mais recente e a correção da saída (registros visíveis a quem consulta). */
+ /**
+  * Entrada com a correção dela, a saída válida mais recente (ou, sem nenhuma válida, a última corrigida) e a correção
+  * da saída (registros visíveis a quem consulta). linked_permit_id: convite ao qual a chegada da entrada foi vinculada.
+  */
  private static final String RECORD_SELECT="""
   select e.id,e.unit_id,u.label as unit_label,b.name as block_name,v.full_name,v.document_last4,e.arrival_id,e.permit_id,
+    a.permit_id as linked_permit_id,
     e.event_type,e.source,e.evidence,e.note,e.occurred_at,e.recorded_by=platform.current_actor_id() as by_me,
     ec.id as ec_id,ec.occurred_at as ec_at,ec.note as ec_note,ec.recorded_by=platform.current_actor_id() as ec_by_me,
     x.id as x_id,x.occurred_at as x_at,x.note as x_note,x.recorded_by=platform.current_actor_id() as x_by_me,
@@ -33,10 +37,12 @@ public class AccessStore {
   join cp.visitors v on v.tenant_id=e.tenant_id and v.id=e.visitor_id
   join cp.units u on u.tenant_id=e.tenant_id and u.id=e.unit_id
   left join cp.blocks b on b.tenant_id=u.tenant_id and b.id=u.block_id
+  left join cp.arrival_requests a on a.tenant_id=e.tenant_id and a.id=e.arrival_id
   left join cp.access_events ec on ec.tenant_id=e.tenant_id and ec.corrects_event_id=e.id and ec.event_type='CORRECTION'
   left join lateral (select o.id,o.occurred_at,o.note,o.recorded_by from cp.access_events o
     where o.tenant_id=e.tenant_id and o.entry_event_id=e.id and o.event_type='MANUAL_OUT'
-    order by o.occurred_at desc,o.id desc limit 1) x on true
+    order by exists(select 1 from cp.access_events oc where oc.tenant_id=o.tenant_id and oc.corrects_event_id=o.id),
+     o.received_at desc,o.id desc limit 1) x on true
   left join cp.access_events xc on xc.tenant_id=e.tenant_id and xc.corrects_event_id=x.id and xc.event_type='CORRECTION'
   """;
  private static final RowMapper<AccessModels.AccessRecord> RECORD=(r,n)->{
@@ -50,25 +56,31 @@ public class AccessStore {
   }
   return new AccessModels.AccessRecord(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("unit_label"),
    r.getString("block_name"),r.getString("full_name"),r.getString("document_last4"),r.getObject("arrival_id",UUID.class),
-   r.getObject("permit_id",UUID.class),r.getString("event_type"),r.getString("source"),r.getString("evidence"),r.getString("note"),
-   instant(r,"occurred_at"),r.getBoolean("by_me"),correction,exit);
+   r.getObject("permit_id",UUID.class),r.getObject("linked_permit_id",UUID.class),r.getString("event_type"),r.getString("source"),
+   r.getString("evidence"),r.getString("note"),instant(r,"occurred_at"),r.getBoolean("by_me"),correction,exit);
  };
  private static Instant instant(ResultSet r,String column) throws SQLException {
   Timestamp value=r.getTimestamp(column);
   return value==null?null:value.toInstant();
  }
 
- /** Registros da portaria: entradas das últimas 24 horas, da mais recente. */
+ /**
+  * Registros da portaria: entradas recebidas nas últimas 24 horas, da mais recente. Janela e ordem pelo recebimento no
+  * servidor (índice access_events_recent); no registro manual o horário informado é o mesmo.
+  */
  public AccessModels.RecordPage recent(UUID tenant) {
-  var rows=jdbc.query(RECORD_SELECT+" where e.tenant_id=? and e.event_type='MANUAL_IN' and e.occurred_at>now()-interval '24 hours'"
-   +" order by e.occurred_at desc,e.id limit ?",RECORD,tenant,PAGE+1);
+  var rows=jdbc.query(RECORD_SELECT+" where e.tenant_id=? and e.event_type='MANUAL_IN' and e.received_at>now()-interval '24 hours'"
+   +" order by e.received_at desc,e.id limit ?",RECORD,tenant,PAGE+1);
   return new AccessModels.RecordPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
- /** Registros da unidade: entradas dos últimos 7 dias, da mais recente. */
+ /**
+  * Registros da unidade: entradas recebidas nos últimos 7 dias, da mais recente (índice access_events_by_unit). As
+  * observações da portaria são internas e não vão para a unidade; o motivo de correção vai.
+  */
  public AccessModels.RecordPage unitRecords(UUID tenant,UUID unit) {
   var rows=jdbc.query(RECORD_SELECT+" where e.tenant_id=? and e.unit_id=? and e.event_type='MANUAL_IN'"
-   +" and e.occurred_at>now()-interval '7 days' order by e.occurred_at desc,e.id limit ?",RECORD,tenant,unit,PAGE+1);
-  return new AccessModels.RecordPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+   +" and e.received_at>now()-interval '7 days' order by e.received_at desc,e.id limit ?",RECORD,tenant,unit,PAGE+1);
+  return new AccessModels.RecordPage(rows.stream().limit(PAGE).map(AccessModels.AccessRecord::withoutInternalNotes).toList(),rows.size()>PAGE);
  }
  public AccessModels.AccessRecord record(UUID tenant,UUID entry) {
   if(entry==null) return null;

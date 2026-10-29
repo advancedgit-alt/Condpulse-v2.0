@@ -23,13 +23,13 @@ interface SyntheticArrival {
 interface SyntheticCorrection { eventId: string; correctedAt: string; reason: string; recordedByMe: boolean }
 interface SyntheticRecord {
   entryId: string; unitId: string; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
-  arrivalId: string | null; permitId: string | null; eventType: 'MANUAL_IN'; source: 'CONCIERGE'; evidence: string; note: string | null;
-  enteredAt: string; recordedByMe: boolean; correction: SyntheticCorrection | null;
+  arrivalId: string | null; permitId: string | null; linkedPermitId: string | null; eventType: 'MANUAL_IN'; source: 'CONCIERGE'; evidence: string;
+  note: string | null; enteredAt: string; recordedByMe: boolean; correction: SyntheticCorrection | null;
   exit: null | { eventId: string; exitedAt: string; note: string | null; recordedByMe: boolean; correction: SyntheticCorrection | null };
 }
 interface VisitState {
   records: SyntheticRecord[]; entryPosts: { key: string; body: unknown }[]; exitPosts: { key: string; body: unknown }[];
-  correctionPosts: { key: string; body: unknown }[]; refuseEntry: string | null;
+  correctionPosts: { key: string; body: unknown }[]; refuseEntry: string | null; loseNextEntry: boolean; entryKeys: Map<string, SyntheticRecord>;
   permits: SyntheticPermit[]; arrivals: SyntheticArrival[];
   permitPosts: { key: string; body: unknown }[]; arrivalPosts: { key: string; body: unknown }[];
   decisions: unknown[]; assisted: unknown[]; cancels: unknown[]; revokes: unknown[]; expectedSearches: string[]; queueSearches: string[];
@@ -51,7 +51,8 @@ const arrivalFixture = (overrides: Partial<SyntheticArrival> = {}): SyntheticArr
 
 /** API sintética de visitas, registrada por último (precedência); identidade com portaria quando pedido. */
 async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): Promise<VisitState> {
-  const state: VisitState = { records: [], entryPosts: [], exitPosts: [], correctionPosts: [], refuseEntry: null, permits: [], arrivals: [],
+  const state: VisitState = { records: [], entryPosts: [], exitPosts: [], correctionPosts: [], refuseEntry: null, loseNextEntry: false,
+    entryKeys: new Map(), permits: [], arrivals: [],
     permitPosts: [], arrivalPosts: [], decisions: [], assisted: [], cancels: [], revokes: [], expectedSearches: [], queueSearches: [],
     loseNextRegister: false, decidedElsewhere: false, refuseLinked: null, loseNextPermit: false, permitFailure: null };
   if (concierge) {
@@ -157,12 +158,19 @@ async function installVisitsApi(page: Page, api: ApiState, concierge: boolean): 
       const body = request.postDataJSON() as { arrivalId: string | null; permitId: string | null; evidence: string; note: string | null };
       state.entryPosts.push({ key, body });
       if (state.refuseEntry) { await problem(route, 409, state.refuseEntry); return; }
-      const basis = body.arrivalId ? state.arrivals.find((item) => item.arrivalId === body.arrivalId)! : state.permits.find((item) => item.permitId === body.permitId)!;
+      // Mesma chave: o servidor devolve o registro já gravado, sem criar outro.
+      const previous = state.entryKeys.get(key);
+      if (previous) { await json(route, 201, previous, { 'Idempotency-Replayed': 'true' }); return; }
+      const arrival = body.arrivalId ? state.arrivals.find((item) => item.arrivalId === body.arrivalId)! : null;
+      const basis = arrival ?? state.permits.find((item) => item.permitId === body.permitId)!;
       const record: SyntheticRecord = { entryId: `90000000-0000-4000-8000-${String(state.entryPosts.length).padStart(12, '0')}`, unitId: basis.unitId,
         unitLabel: basis.unitLabel, blockName: basis.blockName, visitorName: basis.visitorName, documentLast4: basis.documentLast4, arrivalId: body.arrivalId,
-        permitId: body.permitId, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: body.evidence, note: body.note, enteredAt: new Date().toISOString(),
-        recordedByMe: true, correction: null, exit: null };
+        permitId: body.permitId, linkedPermitId: arrival?.permitId ?? null, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: body.evidence,
+        note: body.note, enteredAt: new Date().toISOString(), recordedByMe: true, correction: null, exit: null };
+      state.entryKeys.set(key, record);
       state.records.unshift(record);
+      // Gravado e resposta perdida: o resultado fica incerto para a portaria.
+      if (state.loseNextEntry) { state.loseNextEntry = false; await route.abort('connectionreset'); return; }
       await json(route, 201, record, { 'Idempotency-Replayed': 'false' });
       return;
     }
@@ -473,7 +481,7 @@ test('convite em vigor permite registrar entrada; agendado não; recusa do servi
   await current.getByRole('button', { name: 'Registrar entrada' }).click();
   form = page.getByRole('form', { name: 'Registrar entrada de Visita Prevista' });
   await form.getByRole('radio', { name: 'Reconhecida por quem autorizou, na portaria' }).check();
-  await form.getByLabel('Observação (opcional)').fill('  Chegou com a moradora ');
+  await form.getByLabel('Observação interna (opcional)').fill('  Chegou com a moradora ');
   await form.getByRole('button', { name: 'Registrar entrada' }).click();
   await expect(page.getByText('Entrada registrada: Visita Prevista', { exact: false })).toBeVisible();
   expect(state.entryPosts.at(-1)!.body).toEqual({ arrivalId: null, permitId: PERMIT, evidence: 'RECOGNIZED_BY_UNIT', note: 'Chegou com a moradora' });
@@ -481,10 +489,49 @@ test('convite em vigor permite registrar entrada; agendado não; recusa do servi
   await expect(current.getByText('Última entrada registrada em', { exact: false })).toBeVisible();
 });
 
+test('entrada pelo convite com resposta perdida continua travada ao fechar e reabrir, sem segunda entrada', async ({ page }) => {
+  const state = await openConcierge(page);
+  state.permits.push(permitFixture());
+  // Entrada anterior pela chegada pedida a partir do convite também conta como última entrada do convite.
+  state.records.push({ entryId: '90000000-0000-4000-8000-0000000000d1', unitId: UNIT_A, unitLabel: '101 — Sintética A', blockName: 'Bloco 1',
+    visitorName: 'Visita Prevista', documentLast4: '12AB', arrivalId: OTHER_ARRIVAL, permitId: null, linkedPermitId: PERMIT, eventType: 'MANUAL_IN',
+    source: 'CONCIERGE', evidence: 'DOCUMENT_CHECKED', note: null, enteredAt: minutes(-60), recordedByMe: false, correction: null,
+    exit: { eventId: '91000000-0000-4000-8000-0000000000d1', exitedAt: minutes(-40), note: null, recordedByMe: false, correction: null } });
+  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  const current = page.getByRole('list', { name: 'Visitas previstas' }).getByRole('listitem').filter({ hasText: 'Visita Prevista' });
+  await expect(current.getByText('Última entrada registrada em', { exact: false })).toContainText('saída em');
+  state.loseNextEntry = true;
+  await current.getByRole('button', { name: 'Registrar entrada' }).click();
+  let form = page.getByRole('form', { name: 'Registrar entrada de Visita Prevista' });
+  await expect(form.getByText('Fica com a portaria e não aparece para a unidade.', { exact: false })).toBeVisible();
+  await form.getByRole('radio', { name: 'Conferi o documento' }).check();
+  await form.getByLabel('Observação interna (opcional)').fill('Primeira tentativa');
+  await form.getByRole('button', { name: 'Registrar entrada' }).click();
+  await expect(form.getByText('O resultado não foi confirmado e o registro ficou travado', { exact: false })).toBeVisible();
+  // Fechar o formulário não descarta a pendência: ao reabrir, mesmos dados e mesma chave.
+  await form.getByRole('button', { name: 'Voltar' }).click();
+  await expect(form).toHaveCount(0);
+  await current.getByRole('button', { name: 'Registrar entrada' }).click();
+  form = page.getByRole('form', { name: 'Registrar entrada de Visita Prevista' });
+  await expect(form.getByText('O resultado não foi confirmado e o registro ficou travado', { exact: false })).toBeVisible();
+  await expect(form.getByRole('radio', { name: 'Conferi o documento' })).toBeChecked();
+  await expect(form.getByLabel('Observação interna (opcional)')).toHaveValue('Primeira tentativa');
+  await form.getByRole('button', { name: 'Tentar confirmar o mesmo registro' }).click();
+  await expect(page.getByText('Esta entrada já estava registrada: Visita Prevista', { exact: false })).toBeVisible();
+  expect(state.entryPosts).toHaveLength(2);
+  expect(state.entryPosts[1]!.key).toBe(state.entryPosts[0]!.key);
+  expect(state.records.filter((record) => record.permitId === PERMIT)).toHaveLength(1);
+  // Pendência resolvida: uma nova entrada pelo convite (saiu e voltou) começa limpa, com chave nova.
+  await current.getByRole('button', { name: 'Registrar entrada' }).click();
+  form = page.getByRole('form', { name: 'Registrar entrada de Visita Prevista' });
+  await expect(form.getByText('O resultado não foi confirmado', { exact: false })).toHaveCount(0);
+  await expect(form.getByRole('radio', { name: 'Conferi o documento' })).not.toBeChecked();
+});
+
 test('morador vê o histórico registrado pela portaria, com saída e correção', async ({ page }) => {
   const api = await installSyntheticApi(page);
   const state = await installVisitsApi(page, api, false);
-  const base = { unitId: UNIT_A, unitLabel: '101 — Sintética A', blockName: 'Bloco 1', documentLast4: null, permitId: null, eventType: 'MANUAL_IN' as const,
+  const base = { unitId: UNIT_A, unitLabel: '101 — Sintética A', blockName: 'Bloco 1', documentLast4: null, permitId: null, linkedPermitId: null, eventType: 'MANUAL_IN' as const,
     source: 'CONCIERGE' as const, evidence: 'DOCUMENT_CHECKED', note: null, recordedByMe: false };
   state.records.push(
     { ...base, entryId: '90000000-0000-4000-8000-0000000000c1', visitorName: 'Visita com Saída', arrivalId: ARRIVAL, enteredAt: minutes(-120), correction: null,

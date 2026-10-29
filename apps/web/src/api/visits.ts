@@ -29,10 +29,15 @@ export interface PermitMutation { permit: VisitPermit; replayed: boolean }
 export type AccessEvidence = 'DOCUMENT_CHECKED' | 'RECOGNIZED_BY_UNIT';
 export interface AccessCorrection { eventId: UUID; correctedAt: ISODateTime; reason: string; recordedByMe: boolean }
 export interface AccessExit { eventId: UUID; exitedAt: ISODateTime; note: string | null; recordedByMe: boolean; correction: AccessCorrection | null }
+/**
+ * linkedPermitId: convite ao qual a chegada da entrada foi vinculada (pedido de confirmação a partir do convite). note e
+ * exit.note são observações internas da portaria: na visão da unidade chegam null.
+ */
 export interface AccessRecord {
   entryId: UUID; unitId: UUID; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
-  arrivalId: UUID | null; permitId: UUID | null; eventType: 'MANUAL_IN'; source: 'CONCIERGE'; evidence: AccessEvidence; note: string | null;
-  enteredAt: ISODateTime; recordedByMe: boolean; correction: AccessCorrection | null; exit: AccessExit | null;
+  arrivalId: UUID | null; permitId: UUID | null; linkedPermitId: UUID | null; eventType: 'MANUAL_IN'; source: 'CONCIERGE';
+  evidence: AccessEvidence; note: string | null; enteredAt: ISODateTime; recordedByMe: boolean; correction: AccessCorrection | null;
+  exit: AccessExit | null;
 }
 export interface AccessRecordPage { records: AccessRecord[]; truncated: boolean }
 export interface AccessMutation { record: AccessRecord; replayed: boolean }
@@ -91,7 +96,8 @@ export function accessRecord(value: unknown, uncertain = false): AccessRecord {
   if (!record(value) || !isUUID(value.entryId) || !isUUID(value.unitId) || !isString(value.unitLabel)
       || !(value.blockName === null || isString(value.blockName)) || !text(value.visitorName, 2, 160) || !document(value.documentLast4)
       || !(value.arrivalId === null || isUUID(value.arrivalId)) || !(value.permitId === null || isUUID(value.permitId))
-      || (value.arrivalId === null) === (value.permitId === null) || value.eventType !== 'MANUAL_IN' || value.source !== 'CONCIERGE'
+      || (value.arrivalId === null) === (value.permitId === null) || !(value.linkedPermitId === null || isUUID(value.linkedPermitId))
+      || (value.linkedPermitId !== null && value.arrivalId === null) || value.eventType !== 'MANUAL_IN' || value.source !== 'CONCIERGE'
       || !oneOf(value.evidence, ['DOCUMENT_CHECKED', 'RECOGNIZED_BY_UNIT']) || !optional(value.note, 300) || !instant(value.enteredAt)
       || typeof value.recordedByMe !== 'boolean' || value.correction === undefined || value.exit === undefined) throw invalidResponse(uncertain);
   const correction = accessCorrection(value.correction, uncertain);
@@ -105,7 +111,8 @@ export function accessRecord(value: unknown, uncertain = false): AccessRecord {
   }
   return { entryId: value.entryId, unitId: value.unitId, unitLabel: value.unitLabel, blockName: value.blockName as string | null,
     visitorName: value.visitorName, documentLast4: value.documentLast4 as string | null, arrivalId: value.arrivalId as string | null,
-    permitId: value.permitId as string | null, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: value.evidence,
+    permitId: value.permitId as string | null, linkedPermitId: value.linkedPermitId as string | null, eventType: 'MANUAL_IN',
+    source: 'CONCIERGE', evidence: value.evidence,
     note: value.note as string | null, enteredAt: value.enteredAt, recordedByMe: value.recordedByMe, correction, exit };
 }
 function accessPage(value: unknown): AccessRecordPage {

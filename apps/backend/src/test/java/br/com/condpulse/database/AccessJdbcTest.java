@@ -20,6 +20,7 @@ import br.com.condpulse.visits.application.VisitModels;
 import br.com.condpulse.visits.application.VisitService;
 import br.com.condpulse.visits.infrastructure.AccessStore;
 import br.com.condpulse.visits.infrastructure.VisitStore;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,6 +102,7 @@ class AccessJdbcTest {
   var unit=access.unitRecords(db.accountA,db.tenantA,db.unitA).records();
   assertEquals(List.of(record.entryId()),unit.stream().map(AccessModels.AccessRecord::entryId).toList());
   assertFalse(unit.getFirst().recordedByMe());
+  assertNull(unit.getFirst().note(),"Observação da portaria é interna e não vai para a unidade");
   assertEquals("UNIT_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->access.unitRecords(db.accountC,db.tenantA,db.unitA)).code());
   assertTrue(access.unitRecords(db.accountC,db.tenantA,db.otherUnitA).records().isEmpty());
   assertEquals(List.of(record.entryId()),access.records(concierge,db.tenantA,AAL2).records().stream().map(AccessModels.AccessRecord::entryId).toList());
@@ -185,6 +187,70 @@ class AccessJdbcTest {
    assertEquals(List.of("ACCESS_EXIT_ALREADY_RECORDED"),results.stream().filter(r->!"OK".equals(r)).toList(),results.toString());
   } finally { pool.shutdownNow(); }
   assertEquals("1",db.adminString("select count(*) from cp.access_events where entry_event_id=? and event_type='MANUAL_OUT'",entry.entryId()));
+  db.assertEmptyContext();
+ }
+ /** Espera até a entrada da portaria estar parada na trava consultiva (prova a ordem das travas, sem relógio fixo). */
+ private static void waitForAdvisoryWaiter() {
+  long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(4);
+  try {
+   while(System.nanoTime()<deadline) {
+    if(!"0".equals(db.adminString("""
+      select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and wait_event='advisory'
+      """))) return;
+    Thread.sleep(20);
+   }
+  } catch(Exception error) { throw new IllegalStateException(error); }
+  throw new IllegalStateException("A entrada não chegou a esperar a trava consultiva do convite.");
+ }
+ @Test void revocationHoldingThePermitDoesNotDeadlockWithAnEntry() throws Exception {
+  var current=permit("Visita Revogada na Portaria",now(),now().plus(Duration.ofHours(2)));
+  var store=new VisitStore(db.jdbc);
+  var locked=new CountDownLatch(1);
+  var failure=new AtomicReference<Throwable>();
+  var pool=Executors.newFixedThreadPool(2);
+  try {
+   // Mesma ordem de VisitService.revokePermit: trava consultiva e linha do convite; revoga só com a portaria esperando.
+   var revocation=pool.submit(()->db.context(db.accountA,db.tenantA,null,()->{
+    var permit=store.permit(db.tenantA,current.permitId(),true);
+    locked.countDown();
+    try { waitForAdvisoryWaiter(); } catch(RuntimeException error) { failure.set(error); throw error; }
+    return store.revoke(db.tenantA,current.permitId(),permit.version(),db.accountA,"Visita cancelada");
+   }));
+   assertTrue(locked.await(5,TimeUnit.SECONDS));
+   var entry=pool.submit(()->{
+    try { enter(current); return "OK"; } catch(BusinessProblem problem) { return problem.code(); }
+   });
+   assertTrue(revocation.get(20,TimeUnit.SECONDS),"Revogação concluída sem impasse");
+   assertNull(failure.get());
+   assertEquals("ACCESS_STATE_CHANGED",entry.get(20,TimeUnit.SECONDS),"A entrada esperou a revogação e encontrou o convite revogado");
+  } finally { pool.shutdownNow(); }
+  assertEquals("0",db.adminString("select count(*) from cp.access_events where permit_id=?",current.permitId()));
+  assertEquals("REVOKED",db.adminString("select state from cp.visit_permits where id=?",current.permitId()));
+  db.assertEmptyContext();
+ }
+ @Test void inactiveUnitBlocksArrivalEntryAndUnitViewKeepsInternalNotesOut() throws Exception {
+  var approved=approvedArrival("Pessoa de Unidade Desativada");
+  db.adminUpdate("update cp.units set status='INACTIVE' where id=?",db.unitA);
+  assertEquals("ACCESS_UNIT_INACTIVE",assertThrows(BusinessProblem.class,()->access.entry(concierge,db.tenantA,AAL2,key(),
+   new AccessModels.RecordEntry(approved.arrivalId(),null,"DOCUMENT_CHECKED",null))).code());
+  assertEquals("0",db.adminString("select count(*) from cp.access_events where arrival_id=?",approved.arrivalId()));
+  db.restoreActiveFixtures();
+  // Chegada pedida a partir do convite: a entrada pela chegada aponta o convite vinculado.
+  var invited=permit("Visita Vinculada",now(),now().plus(Duration.ofHours(2)));
+  var arrival=visits.register(concierge,db.tenantA,AAL2,key(),new VisitModels.RegisterArrival(db.unitA,"Visita Vinculada",null,invited.permitId())).arrival();
+  visits.decide(db.accountA,db.tenantA,arrival.arrivalId(),new VisitModels.Decision("APPROVE"));
+  var entry=access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(arrival.arrivalId(),null,"DOCUMENT_CHECKED","Observação interna")).record();
+  assertEquals(invited.permitId(),entry.linkedPermitId()); assertNull(entry.permitId());
+  assertEquals("Observação interna",entry.note());
+  var exited=access.exit(concierge,db.tenantA,AAL2,entry.entryId(),key(),new AccessModels.RecordExit("Saiu de carro")).record();
+  assertEquals("Saiu de carro",exited.exit().note());
+  var corrected=access.correct(concierge,db.tenantA,AAL2,exited.exit().eventId(),key(),new AccessModels.Correct("Saída registrada antes da hora")).record();
+  var unitView=access.unitRecords(db.accountA,db.tenantA,db.unitA).records().stream()
+   .filter(record->record.entryId().equals(entry.entryId())).findFirst().orElseThrow();
+  assertNull(unitView.note(),"Observação da portaria é interna"); assertNull(unitView.exit().note());
+  assertEquals("Saída registrada antes da hora",unitView.exit().correction().reason(),"O motivo da correção vai para a unidade");
+  assertEquals(invited.permitId(),unitView.linkedPermitId());
+  assertEquals(corrected.exit().eventId(),unitView.exit().eventId());
   db.assertEmptyContext();
  }
 }

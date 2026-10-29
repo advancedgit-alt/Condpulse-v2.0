@@ -20,7 +20,7 @@ const waiting = {
 const decided = { decidedAt: '2030-01-01T12:02:00Z', version: 1 };
 const entry = {
   entryId: '90000000-0000-4000-8000-000000000001', unitId: unit, unitLabel: '101', blockName: null, visitorName: 'Pessoa Fictícia',
-  documentLast4: null, arrivalId: waiting.arrivalId, permitId: null, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: 'DOCUMENT_CHECKED',
+  documentLast4: null, arrivalId: waiting.arrivalId, permitId: null, linkedPermitId: null, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: 'DOCUMENT_CHECKED',
   note: null, enteredAt: '2030-01-01T12:03:00Z', recordedByMe: true, correction: null, exit: null,
 };
 const correction = { eventId: '90000000-0000-4000-8000-000000000003', correctedAt: '2030-01-01T12:10:00Z', reason: 'Pessoa não entrou', recordedByMe: true };
@@ -66,6 +66,11 @@ describe('contratos das visitas', () => {
     expect(() => accessRecord({ ...entry, evidence: 'SENSOR' })).toThrow();
     expect(() => accessRecord({ ...entry, exit: { ...exit, correction: { ...correction, reason: '' } } })).toThrow();
     expect(() => accessRecord({ ...entry, exit: undefined })).toThrow();
+    // Convite vinculado só existe na entrada pela chegada; a unidade recebe as observações como null.
+    expect(accessRecord({ ...entry, linkedPermitId: permit.permitId }).linkedPermitId).toBe(permit.permitId);
+    expect(() => accessRecord({ ...entry, arrivalId: null, permitId: permit.permitId, linkedPermitId: permit.permitId })).toThrow();
+    expect(() => accessRecord({ ...entry, linkedPermitId: 'convite' })).toThrow();
+    expect(() => accessRecord({ ...entry, linkedPermitId: undefined })).toThrow();
   });
   it('convite e chegada levam a chave e o CSRF; decisões sem chave; resposta incoerente vira resultado incerto', async () => {
     let reply = () => json(permit, 201, { 'Idempotency-Replayed': 'true' });

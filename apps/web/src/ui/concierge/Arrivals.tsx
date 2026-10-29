@@ -2,12 +2,12 @@ import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parcels } from '../../api/parcels';
 import { collapseText, displayText } from '../../api/text';
-import { visits, type AccessEvidence, type AccessMutation, type AccessRecord, type Arrival, type ArrivalMutation, type ArrivalState,
-  type RegisterArrivalBody, type VisitPermit } from '../../api/visits';
+import { visits, type AccessEntryBody, type AccessEvidence, type AccessMutation, type AccessRecord, type Arrival, type ArrivalMutation,
+  type ArrivalState, type RegisterArrivalBody, type VisitPermit } from '../../api/visits';
 import { Empty, ErrorState, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import { ActionFeedback, isAccessError, useAccessGuard, useAction, useManagement, type ActionResult } from '../management/shared';
-import { codeOf, conciergeKey, repeatFailure, settleFailure, uncertain, unitName, useIntent } from './shared';
+import { codeOf, conciergeKey, repeatFailure, settleFailure, uncertain, unitName, useIntent, usePendingOperation } from './shared';
 
 /**
  * Visitas na portaria (CP-025 a CP-028): registrar quem chegou sem convite válido, acompanhar a fila das últimas 24
@@ -346,7 +346,8 @@ function ExpectedVisits() {
           : <ol className="management-list" aria-label="Visitas previstas">{list.data.permits.map((permit) => <li key={permit.permitId} className="management-row">
             <ExpectedSummary permit={permit} timeZone={scope.timeZone} />
             {(() => {
-              const last = validEntries(records.data?.records, (record) => record.permitId === permit.permitId)[0];
+              // Entrada pelo convite ou pela chegada pedida a partir dele (linkedPermitId).
+              const last = validEntries(records.data?.records, (record) => record.permitId === permit.permitId || record.linkedPermitId === permit.permitId)[0];
               return last ? <span className="field-help">Última entrada registrada em {formatWhen(last.enteredAt, scope.timeZone)}{exitState(last)
                 ? ` · saída em ${formatWhen(last.exit!.exitedAt, scope.timeZone)}` : ' · sem registro de saída'}.</span> : null;
             })()}
@@ -375,13 +376,14 @@ function AskUnit({ permit, close }: { permit: VisitPermit; close(result: ActionR
   const scope = useManagement();
   const queries = useQueryClient();
   const action = useAction();
-  const intent = useIntent();
-  const [locked, setLocked] = useState(false);
+  // Pendência por convite: fechar e reabrir depois de resultado incerto repete o mesmo envio, sem segunda chegada.
+  const intent = usePendingOperation(`${scope.tenantId}:ask:${permit.permitId}`);
+  const locked = intent.locked;
   const refresh = () => queries.invalidateQueries({ queryKey: arrivalsKey(scope) });
   async function submit(event: FormEvent) {
     event.preventDefault();
     const body: RegisterArrivalBody = { unitId: permit.unitId, visitorName: permit.visitorName, documentLast4: permit.documentLast4, permitId: permit.permitId };
-    const key = intent.keyFor(JSON.stringify(body));
+    const key = intent.keyFor(JSON.stringify(body), body);
     let result: ActionResult | null = null;
     let failure: unknown = null;
     const ok = await action.run(async () => {
@@ -395,15 +397,16 @@ function AskUnit({ permit, close }: { permit: VisitPermit; close(result: ActionR
           : { tone: 'success', text: `Chegada registrada: ${done.arrival.visitorName} aguarda a resposta de ${unitName(done.arrival)}, pelo aplicativo até ${formatWhen(done.arrival.expiresAt, scope.timeZone)}. Acompanhe na fila.` };
       return result;
     }, async () => { await refresh(); });
-    if (ok) { close(result); return; }
+    if (ok) { intent.finish(); close(result); return; }
     const code = codeOf(failure);
     if (['ARRIVAL_PERMIT_INVALID', 'ARRIVAL_UNIT_UNAVAILABLE', 'VISIT_PERMIT_REVOKED', 'VISIT_PERMIT_EXPIRED', 'VISIT_PERMIT_INACTIVE',
       'VISIT_PERMIT_NOT_FOUND'].includes(code)) {
+      intent.finish();
       close({ tone: 'warning', text: `${errorMessage(failure)} Nada foi registrado.` });
       void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'permits') });
       return;
     }
-    settleFailure(failure, locked, intent, setLocked);
+    settleFailure(failure, locked, intent, intent.setLocked);
     void refresh();
   }
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Pedir confirmação para ${permit.visitorName}`}>
@@ -421,52 +424,59 @@ const evidenceText: Record<AccessEvidence, string> = {
   DOCUMENT_CHECKED: 'documento conferido', RECOGNIZED_BY_UNIT: 'reconhecida por quem autorizou',
 };
 /** Recusas de estado: a lista atualizada mostra a situação real e o formulário fecha sem sucesso falso. */
-const entryClosedCodes = ['ACCESS_ARRIVAL_NOT_AUTHORIZED', 'ACCESS_AUTHORIZATION_EXPIRED', 'ACCESS_PERMIT_NOT_CURRENT', 'ACCESS_ENTRY_ALREADY_RECORDED',
+const entryClosedCodes = ['ACCESS_ARRIVAL_NOT_AUTHORIZED', 'ACCESS_AUTHORIZATION_EXPIRED', 'ACCESS_UNIT_INACTIVE', 'ACCESS_PERMIT_NOT_CURRENT', 'ACCESS_ENTRY_ALREADY_RECORDED',
   'ACCESS_STATE_CHANGED', 'ARRIVAL_NOT_FOUND', 'VISIT_PERMIT_NOT_FOUND'];
 const exitClosedCodes = ['ACCESS_EXIT_ALREADY_RECORDED', 'ACCESS_ENTRY_CORRECTED', 'ACCESS_EVENT_NOT_FOUND', 'ACCESS_STATE_CHANGED'];
 const correctionClosedCodes = ['ACCESS_ALREADY_CORRECTED', 'ACCESS_CORRECTION_INVALID', 'ACCESS_EVENT_NOT_FOUND', 'ACCESS_STATE_CHANGED'];
 
 /**
  * Ação com chave de operação sobre os registros de acesso: mesma intenção reaproveita a chave, resultado incerto trava
- * o formulário até conferir a lista e recusa de estado fecha com aviso.
+ * o envio até conferir a lista e recusa de estado fecha com aviso. A pendência fica por alvo (slot), fora do
+ * formulário: fechar e reabrir mantém a trava, a chave e os dados — sem isso, uma entrada pelo convite (que admite mais
+ * de uma no período) poderia ser gravada duas vezes depois de uma resposta perdida.
  */
-function useAccessAction(closedCodes: string[], close: (result: ActionResult | null) => void) {
+function useAccessAction(slot: string, closedCodes: string[], close: (result: ActionResult | null) => void) {
   const scope = useManagement();
   const queries = useQueryClient();
   const action = useAction();
-  const intent = useIntent();
-  const [locked, setLocked] = useState(false);
+  const intent = usePendingOperation(`${scope.tenantId}:${slot}`);
   const refresh = () => Promise.all([queries.invalidateQueries({ queryKey: accessKey(scope) }), queries.invalidateQueries({ queryKey: arrivalsKey(scope) })]);
-  async function run(fingerprint: string, call: (key: string) => Promise<AccessMutation>, describe: (done: AccessMutation) => ActionResult) {
-    const key = intent.keyFor(fingerprint);
+  async function run(body: unknown, call: (key: string) => Promise<AccessMutation>, describe: (done: AccessMutation) => ActionResult) {
+    const key = intent.keyFor(JSON.stringify(body), body);
     let result: ActionResult | null = null;
     let failure: unknown = null;
     const ok = await action.run(async () => {
       try { return await call(key); }
       catch (error) { failure = error; throw repeatFailure(error); }
     }, (done: AccessMutation): ActionResult => { result = describe(done); return result; }, async () => { await refresh(); });
-    if (ok) { close(result); return; }
-    if (closedCodes.includes(codeOf(failure))) { close({ tone: 'warning', text: `${errorMessage(failure)} Nada novo foi registrado.` }); void refresh(); return; }
-    settleFailure(failure, locked, intent, setLocked);
+    if (ok) { intent.finish(); close(result); return; }
+    if (closedCodes.includes(codeOf(failure))) {
+      intent.finish();
+      close({ tone: 'warning', text: `${errorMessage(failure)} Nada novo foi registrado.` }); void refresh(); return;
+    }
+    settleFailure(failure, intent.locked, intent, intent.setLocked);
     void refresh();
   }
-  return { scope, action, locked, run };
+  return { scope, action, locked: intent.locked, lockedBody: intent.lockedBody, run };
 }
 
 /** Entrada de quem tem autorização vigente: conferência indicada pela portaria; nunca rotulada como passagem de equipamento. */
 function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: string | null; permitId: string | null }; visitorName: string; unit: string;
   close(result: ActionResult | null): void }) {
-  const { scope, action, locked, run } = useAccessAction(entryClosedCodes, close);
-  const [evidence, setEvidence] = useState<AccessEvidence | ''>('');
-  const [note, setNote] = useState('');
+  const slot = basis.arrivalId ? `entry:arrival:${basis.arrivalId}` : `entry:permit:${basis.permitId}`;
+  const { scope, action, locked, lockedBody, run } = useAccessAction(slot, entryClosedCodes, close);
+  // Envio travado reabre com os mesmos dados (mesma chave e mesmo conteúdo).
+  const pending = lockedBody as AccessEntryBody | null;
+  const [evidence, setEvidence] = useState<AccessEvidence | ''>(pending?.evidence ?? '');
+  const [note, setNote] = useState(pending?.note ?? '');
   const normalizedNote = collapseText(note) ? displayText(note, 300) : '';
   const valid = evidence !== '' && normalizedNote !== null;
   const id = `entry-${basis.arrivalId ?? basis.permitId}`;
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid) return;
-    const body = { ...basis, evidence, note: normalizedNote || null };
-    await run(JSON.stringify(body), (key) => visits.recordEntry(scope.tenantId, key, body), (done) =>
+    const body: AccessEntryBody = { ...basis, evidence, note: normalizedNote || null };
+    await run(body, (key) => visits.recordEntry(scope.tenantId, key, body), (done) =>
       done.record.arrivalId === basis.arrivalId && done.record.permitId === basis.permitId && done.record.correction === null
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta entrada já estava registrada' : 'Entrada registrada'}: ${done.record.visitorName} em ${unitName(done.record)}, às ${formatWhen(done.record.enteredAt, scope.timeZone)}, pela portaria (${evidenceText[done.record.evidence]}).` }
         : { tone: 'warning', text: 'A resposta não confirmou esta entrada. Atualize os registros antes de repetir.' });
@@ -480,10 +490,12 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
       <label className="weekday-option"><input type="radio" name={`${id}-evidence`} value="RECOGNIZED_BY_UNIT" checked={evidence === 'RECOGNIZED_BY_UNIT'}
         onChange={() => setEvidence('RECOGNIZED_BY_UNIT')} disabled={busy} />Reconhecida por quem autorizou, na portaria</label>
     </fieldset>
-    <label htmlFor={`${id}-note`}>Observação (opcional)</label>
-    <input id={`${id}-note`} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} disabled={busy} autoComplete="off" />
+    <label htmlFor={`${id}-note`}>Observação interna (opcional)</label>
+    <input id={`${id}-note`} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} disabled={busy} autoComplete="off"
+      aria-describedby={`${id}-note-help`} />
+    <span className="field-help" id={`${id}-note-help`}>Fica com a portaria e não aparece para a unidade. Não registre documento completo nem dados sensíveis.</span>
     <ActionFeedback state={action.state} success={false} />
-    {locked ? <Notice tone="warning">O resultado não foi confirmado e o registro ficou travado. Atualize os registros: se a entrada já aparece, não repita.</Notice> : null}
+    {locked ? <Notice tone="warning">O resultado não foi confirmado e o registro ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo registro”: se a entrada já foi gravada, nada novo é criado.</Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Registrando…' : locked ? 'Tentar confirmar o mesmo registro' : 'Registrar entrada'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
@@ -492,22 +504,25 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
 }
 
 function ExitForm({ record, close }: { record: AccessRecord; close(result: ActionResult | null): void }) {
-  const { scope, action, locked, run } = useAccessAction(exitClosedCodes, close);
-  const [note, setNote] = useState('');
+  const { scope, action, locked, lockedBody, run } = useAccessAction(`exit:${record.entryId}`, exitClosedCodes, close);
+  const pending = lockedBody as { exit: string; note: string | null } | null;
+  const [note, setNote] = useState(pending?.note ?? '');
   const normalizedNote = collapseText(note) ? displayText(note, 300) : '';
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (normalizedNote === null) return;
     const value = normalizedNote || null;
-    await run(JSON.stringify({ exit: record.entryId, note: value }), (key) => visits.recordExit(scope.tenantId, record.entryId, key, value), (done) =>
+    await run({ exit: record.entryId, note: value }, (key) => visits.recordExit(scope.tenantId, record.entryId, key, value), (done) =>
       done.record.entryId === record.entryId && done.record.exit !== null && done.record.exit.correction === null
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta saída já estava registrada' : 'Saída registrada'}: ${done.record.visitorName}, às ${formatWhen(done.record.exit.exitedAt, scope.timeZone)}, pela portaria.` }
         : { tone: 'warning', text: 'A resposta não confirmou esta saída. Atualize os registros antes de repetir.' });
   }
   const id = `exit-${record.entryId}`;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Registrar saída de ${record.visitorName}`}>
-    <label htmlFor={`${id}-note`}>Observação (opcional)</label>
-    <input id={`${id}-note`} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} disabled={action.state.pending || locked} autoComplete="off" />
+    <label htmlFor={`${id}-note`}>Observação interna (opcional)</label>
+    <input id={`${id}-note`} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} disabled={action.state.pending || locked} autoComplete="off"
+      aria-describedby={`${id}-note-help`} />
+    <span className="field-help" id={`${id}-note-help`}>Fica com a portaria e não aparece para a unidade. Não registre dados sensíveis.</span>
     <ActionFeedback state={action.state} success={false} />
     {locked ? <Notice tone="warning">O resultado não foi confirmado. Atualize os registros: se a saída já aparece, não repita.</Notice> : null}
     <div className="button-row">
@@ -519,14 +534,16 @@ function ExitForm({ record, close }: { record: AccessRecord; close(result: Actio
 
 /** Correção humana: evento adicional com motivo; o registro corrigido continua guardado e visível. */
 function CorrectionForm({ record, target, close }: { record: AccessRecord; target: 'entry' | 'exit'; close(result: ActionResult | null): void }) {
-  const { scope, action, locked, run } = useAccessAction(correctionClosedCodes, close);
-  const [reason, setReason] = useState('');
+  // Alvo fixado ao abrir: a lista atualizada a cada 10 s não troca a saída que está sendo corrigida.
+  const [eventId] = useState(() => target === 'entry' ? record.entryId : record.exit!.eventId);
+  const { scope, action, locked, lockedBody, run } = useAccessAction(`correct:${eventId}`, correctionClosedCodes, close);
+  const pending = lockedBody as { correct: string; reason: string } | null;
+  const [reason, setReason] = useState(pending?.reason ?? '');
   const normalized = displayText(reason, 300);
-  const eventId = target === 'entry' ? record.entryId : record.exit!.eventId;
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (normalized === null) return;
-    await run(JSON.stringify({ correct: eventId, reason: normalized }), (key) => visits.correct(scope.tenantId, eventId, key, normalized), (done) => {
+    await run({ correct: eventId, reason: normalized }, (key) => visits.correct(scope.tenantId, eventId, key, normalized), (done) => {
       const corrected = target === 'entry' ? done.record.correction : done.record.exit?.eventId === eventId ? done.record.exit.correction : null;
       return done.record.entryId === record.entryId && corrected !== null
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta correção já estava registrada' : 'Correção registrada'}: ${target === 'entry' ? 'entrada' : 'saída'} de ${done.record.visitorName}. O registro original continua guardado.` }
@@ -535,7 +552,7 @@ function CorrectionForm({ record, target, close }: { record: AccessRecord; targe
   }
   const id = `correct-${eventId}`;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Corrigir ${target === 'entry' ? 'entrada' : 'saída'} de ${record.visitorName}`}>
-    <Notice tone="warning">Use quando o registro foi feito por engano (pessoa errada, entrada ou saída que não aconteceu). A correção fica ao lado do registro original, que não é apagado.</Notice>
+    <Notice tone="warning">Use quando o registro foi feito por engano (pessoa errada, entrada ou saída que não aconteceu). A correção fica ao lado do registro original, que não é apagado. O motivo aparece para a unidade: não registre dados pessoais.</Notice>
     <label htmlFor={`${id}-reason`}>Motivo da correção</label>
     <textarea id={`${id}-reason`} required maxLength={300} rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={action.state.pending || locked} />
     <ActionFeedback state={action.state} success={false} />

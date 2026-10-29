@@ -17,11 +17,20 @@ public final class AccessModels {
  public record Exit(UUID eventId,Instant exitedAt,String note,boolean recordedByMe,Correction correction) {}
  /**
   * Entrada registrada pela portaria e o que veio depois. eventType é sempre MANUAL_IN e source CONCIERGE; evidence:
-  * DOCUMENT_CHECKED ou RECOGNIZED_BY_UNIT. Base: arrivalId (chegada autorizada) ou permitId (convite em vigor).
+  * DOCUMENT_CHECKED ou RECOGNIZED_BY_UNIT. Base: arrivalId (chegada autorizada) ou permitId (convite em vigor);
+  * linkedPermitId é o convite ao qual a chegada foi vinculada (pedido de confirmação a partir do convite), quando houver.
+  * note e exit.note são observações internas da portaria: a unidade recebe null.
   */
  public record AccessRecord(UUID entryId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,
-   UUID arrivalId,UUID permitId,String eventType,String source,String evidence,String note,Instant enteredAt,boolean recordedByMe,
-   Correction correction,Exit exit) {}
+   UUID arrivalId,UUID permitId,UUID linkedPermitId,String eventType,String source,String evidence,String note,Instant enteredAt,
+   boolean recordedByMe,Correction correction,Exit exit) {
+  /** Visão da unidade: sem as observações internas da portaria (o motivo de correção continua). */
+  public AccessRecord withoutInternalNotes() {
+   var visibleExit=exit==null?null:new Exit(exit.eventId(),exit.exitedAt(),null,exit.recordedByMe(),exit.correction());
+   return new AccessRecord(entryId,unitId,unitLabel,blockName,visitorName,documentLast4,arrivalId,permitId,linkedPermitId,eventType,
+    source,evidence,null,enteredAt,recordedByMe,correction,visibleExit);
+  }
+ }
  public record RecordPage(List<AccessRecord> records,boolean truncated) {
   public RecordPage { records=List.copyOf(records); }
  }
