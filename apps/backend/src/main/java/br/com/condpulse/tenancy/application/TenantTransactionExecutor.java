@@ -61,7 +61,8 @@ public class TenantTransactionExecutor {
    var memberships=jdbc.query("""
     select m.id,m.unit_id,m.role,
       coalesce(m.permissions#>'{reservations,create}'='true'::jsonb,false) as can_create,
-      coalesce(m.permissions#>'{reservations,cancel}'='true'::jsonb,false) as can_cancel
+      coalesce(m.permissions#>'{reservations,cancel}'='true'::jsonb,false) as can_cancel,
+      coalesce(m.permissions#>'{parcels,view}'='true'::jsonb,false) as can_view_parcels
     from cp.memberships m
     left join cp.units u on u.tenant_id=m.tenant_id and u.id=m.unit_id
     where m.tenant_id=? and m.account_id=? and m.status='ACTIVE'
@@ -69,7 +70,8 @@ public class TenantTransactionExecutor {
       and(m.unit_id is null or u.status='ACTIVE')
     order by m.id
     """,(r,n)->new TenantContext.Membership(r.getObject("id",UUID.class),
-      r.getObject("unit_id",UUID.class),r.getString("role"),r.getBoolean("can_create"),r.getBoolean("can_cancel")),
+      r.getObject("unit_id",UUID.class),r.getString("role"),r.getBoolean("can_create"),r.getBoolean("can_cancel"),
+      r.getBoolean("can_view_parcels")),
       tenantId,accountId);
    if(memberships.isEmpty()) throw denied();
    var context=new TenantContext(accountId,tenantId,timeZone,memberships,assurance);

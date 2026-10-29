@@ -54,13 +54,21 @@ public record TenantContext(UUID accountId,UUID tenantId,ZoneId timeZone,List<Me
  }
 
  public record Membership(UUID membershipId,UUID unitId,String role,
-     boolean reservationCreateAllowed,boolean reservationCancelAllowed) {
+     boolean reservationCreateAllowed,boolean reservationCancelAllowed,boolean parcelViewAllowed) {
   public Membership { Objects.requireNonNull(membershipId); Objects.requireNonNull(role); }
+  /** Vínculo sem permissão de encomendas concedida ao dependente. */
+  public Membership(UUID membershipId,UUID unitId,String role,boolean reservationCreateAllowed,boolean reservationCancelAllowed) {
+   this(membershipId,unitId,role,reservationCreateAllowed,reservationCancelAllowed,false);
+  }
   public boolean canCreateReservation() {
    return unitId!=null && (isResident() || ("DEPENDENT".equals(role) && reservationCreateAllowed));
   }
   public boolean canCancelReservation() {
    return unitId!=null && (isResident() || ("DEPENDENT".equals(role) && reservationCancelAllowed));
+  }
+  /** Encomendas da unidade: morador e responsável; dependente só com permissions.parcels.view (o banco repete a regra). */
+  public boolean canViewParcels() {
+   return unitId!=null && (isResident() || ("DEPENDENT".equals(role) && parcelViewAllowed));
   }
   private boolean isResident() { return "RESIDENT".equals(role) || "RESPONSIBLE".equals(role); }
  }
