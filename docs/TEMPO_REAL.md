@@ -19,7 +19,8 @@ existem, como `cp_api`, pelas mesmas políticas de leitura.
 - **Sem dado pessoal**: o evento não leva identificador, nome, texto nem situação de registro. A tela consulta o detalhe
   pelas rotas normais, com as permissões de quem abre.
 - **Estado resumido**: para cada assunto, quantidade, soma das versões e última alteração das linhas que o leitor pode
-  ver (uma instrução, um instantâneo). Mudança que o leitor não pode ver (outra unidade, outro condomínio) não altera
+  ver (uma instrução, um instantâneo). Em pedidos, também as mensagens visíveis à unidade (resposta nova não muda a
+  versão do pedido; comentário interno não conta). Mudança que o leitor não pode ver (outra unidade, outro condomínio) não altera
   nada (`RealtimeJdbcTest`).
 - **Revogação fecha o canal**: a cada passada (padrão 5 s), por canal, primeiro a credencial e depois o estado:
   - web: a sessão BFF é conferida no banco; sair ou ter a sessão removida encerra com `end: revoked`;
@@ -48,7 +49,7 @@ atualizar).
 - `RealtimeSecurityIntegrationTest`: cadeia HTTP real com cookie e Bearer; sem sessão 401; unidade negada 404 em JSON;
   limite 429; sessão removida fecha o canal na passada seguinte; rota ausente com a flag desligada.
 - `RealtimeJdbcTest` (PostgreSQL descartável, login da API): todos os assuntos lidos; encomenda de outra unidade não muda
-  nada; outra unidade, outro condomínio, equipe sem unidade, vínculo revogado e conta suspensa recusados.
+  nada; resposta visível da gestão muda `requests` e comentário interno não; outra unidade, outro condomínio, equipe sem unidade, vínculo revogado e conta suspensa recusados.
 - `tests/runtime/realtime-flag-smoke.sh`: jar real com a flag ligada; canal sem sessão ou com Bearer inválido responde
   401 sem abrir stream.
 - Web: `src/api/events.test.ts` (Vitest) e `e2e/realtime.spec.ts` (Playwright): aviso novo aparece sozinho, reconexão

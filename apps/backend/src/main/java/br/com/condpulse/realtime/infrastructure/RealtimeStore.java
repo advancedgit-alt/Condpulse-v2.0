@@ -44,11 +44,15 @@ public class RealtimeStore {
       where a.tenant_id=? and a.state='PUBLISHED'
        and(a.audience='TENANT' or(a.audience='UNITS' and u.id=any(a.audience_ids)) or(a.audience='BLOCKS' and u.block_id=any(a.audience_ids)))) as announcements,
     (select count(*)||':'||coalesce(sum(version),0)||':'||coalesce(max(updated_at)::text,'')
-      from cp.service_requests where tenant_id=? and unit_id=?) as requests
+      from cp.service_requests where tenant_id=? and unit_id=?)
+     -- Mensagem nova não muda a versão do pedido: conta à parte, só as que o leitor pode ver (a política esconde as internas).
+     ||'|'||(select count(*)||':'||coalesce(max(m.created_at)::text,'')
+      from cp.request_messages m join cp.service_requests q on q.tenant_id=m.tenant_id and q.id=m.request_id
+      where m.tenant_id=? and q.unit_id=? and m.visibility='RESIDENT') as requests
    """,(r,n)->{
     var result=new LinkedHashMap<String,String>();
     for(String topic:TOPICS) result.put(topic,r.getString(topic));
     return result;
-   },tenant,unit,tenant,unit,tenant,unit,tenant,unit,unit,tenant,tenant,unit);
+   },tenant,unit,tenant,unit,tenant,unit,tenant,unit,unit,tenant,tenant,unit,tenant,unit);
  }
 }

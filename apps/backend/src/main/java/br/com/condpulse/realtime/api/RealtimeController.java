@@ -12,6 +12,7 @@ import br.com.condpulse.realtime.application.RealtimeService;
 import br.com.condpulse.realtime.infrastructure.RealtimeStore;
 import br.com.condpulse.shared.application.BusinessProblem;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.CacheControl;
@@ -37,6 +38,7 @@ public class RealtimeController {
  private final RealtimeHub hub;
  private final ObjectProvider<WebSessionService> sessions;
  private final Clock clock;
+ @Autowired
  public RealtimeController(RealtimeService service,RealtimeHub hub,ObjectProvider<WebSessionService> sessions) {
   this(service,hub,sessions,Clock.systemUTC());
  }
