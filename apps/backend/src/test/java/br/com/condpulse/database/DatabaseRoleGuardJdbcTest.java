@@ -34,7 +34,7 @@ class DatabaseRoleGuardJdbcTest {
   db.adminUpdate(grant);
   try {
    var guard=new DatabaseRoleGuard(worker?workerDb.jdbc:db.jdbc);
-   var refused=assertThrows(IllegalStateException.class,()->guard.run(null),grant);
+   var refused=assertThrows(IllegalStateException.class,()->guard.verify(),grant);
    assertEquals("Role de execução com privilégios incompatíveis.",refused.getMessage());
   } finally { db.adminUpdate(revoke); }
  }
@@ -54,7 +54,7 @@ class DatabaseRoleGuardJdbcTest {
   for(String[] login:new String[][]{{env("CP_TEST_DB_USER"),env("CP_TEST_DB_PASSWORD")},
    {env("CP_TEST_WORKER_DB_USER"),env("CP_TEST_WORKER_DB_PASSWORD")}}) {
    var jdbc=new JdbcTemplate(new DriverManagerDataSource(url,login[0],login[1]));
-   assertDoesNotThrow(()->new DatabaseRoleGuard(jdbc).run(null),label+": "+login[0]);
+   assertDoesNotThrow(()->new DatabaseRoleGuard(jdbc).verify(),label+": "+login[0]);
   }
  }
 
@@ -82,8 +82,8 @@ class DatabaseRoleGuardJdbcTest {
  }
 
  @Test void runtimeRolesStartAndColumnGrantDriftIsRefused() throws Exception {
-  assertDoesNotThrow(()->new DatabaseRoleGuard(db.jdbc).run(null),"Login da API sem privilégio a mais");
-  assertDoesNotThrow(()->new DatabaseRoleGuard(workerDb.jdbc).run(null),"Login do worker sem privilégio a mais");
+  assertDoesNotThrow(()->new DatabaseRoleGuard(db.jdbc).verify(),"Login da API sem privilégio a mais");
+  assertDoesNotThrow(()->new DatabaseRoleGuard(workerDb.jdbc).verify(),"Login do worker sem privilégio a mais");
   assertRefusedWith("GRANT UPDATE(note) ON cp.access_events TO cp_api","REVOKE UPDATE(note) ON cp.access_events FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(unit_id) ON cp.access_events TO cp_api","REVOKE INSERT(unit_id) ON cp.access_events FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(state) ON cp.outbox TO cp_api","REVOKE INSERT(state) ON cp.outbox FROM cp_api",false);
@@ -93,7 +93,7 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT DELETE ON cp.outbox TO cp_worker","REVOKE DELETE ON cp.outbox FROM cp_worker",true);
   assertRefusedWith("GRANT UPDATE(account_id) ON cp.notifications TO cp_worker","REVOKE UPDATE(account_id) ON cp.notifications FROM cp_worker",true);
   // Depois de desfeitos os grants, as duas roles voltam a iniciar.
-  assertDoesNotThrow(()->new DatabaseRoleGuard(db.jdbc).run(null));
-  assertDoesNotThrow(()->new DatabaseRoleGuard(workerDb.jdbc).run(null));
+  assertDoesNotThrow(()->new DatabaseRoleGuard(db.jdbc).verify());
+  assertDoesNotThrow(()->new DatabaseRoleGuard(workerDb.jdbc).verify());
  }
 }

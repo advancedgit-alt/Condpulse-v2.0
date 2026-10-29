@@ -65,7 +65,9 @@ class DatabaseRoleGuardStartupTest {
  @Test void otherProfilesDoNotCheck() {
   var jdbc=jdbc(true,1);
   runner("migrate",jdbc,new PortOpener()).run(context->assertNull(context.getStartupFailure()));
-  verifyNoInteractions(jdbc);
+  // O contêiner chama afterPropertiesSet() do JdbcTemplate; o que importa é nenhuma consulta.
+  verify(jdbc,never()).queryForObject(anyString(),eq(Boolean.class));
+  verify(jdbc,never()).queryForObject(anyString(),eq(Integer.class));
  }
 
  private static Throwable rootCause(Throwable error) {
