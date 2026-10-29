@@ -5325,7 +5325,7 @@
             }
           }
         ],
-        "description": "Visitas previstas para a portaria (AAL2): convites ativos que valem agora ou começam nas próximas 24 horas, busca por nome sem curingas.",
+        "description": "Visitas previstas para a portaria (AAL2): convites ativos que valem agora ou começam nas próximas 24 horas, de quem ainda tem vínculo para convidar pela unidade ativa; busca por nome sem curingas.",
         "responses": {
           "200": {
             "description": "Resultado autorizado",
@@ -5537,7 +5537,7 @@
             "description": "ARRIVAL_UNIT_UNAVAILABLE"
           },
           "409": {
-            "description": "ARRIVAL_PERMIT_INVALID, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+            "description": "ARRIVAL_PERMIT_INVALID (convite de outra unidade ou pessoa), VISIT_PERMIT_REVOKED, VISIT_PERMIT_EXPIRED, VISIT_PERMIT_INACTIVE (quem convidou perdeu o vínculo), IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
           },
           "503": {
             "description": "VISIT_DEPENDENCY_UNAVAILABLE"
@@ -9293,7 +9293,8 @@
               "string",
               "null"
             ],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Convite agendado ou em vigor da mesma unidade e da mesma pessoa (nome e final do documento), de quem ainda pode convidar. O vínculo não autoriza: a chegada espera a resposta da unidade."
           }
         }
       },

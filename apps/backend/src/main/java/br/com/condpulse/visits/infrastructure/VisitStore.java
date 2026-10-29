@@ -56,16 +56,28 @@ public class VisitStore {
   var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.unit_id=? order by p.valid_until desc,p.id limit ?",PERMIT,tenant,unit,PAGE+1);
   return new VisitModels.PermitPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
- /** Visitas previstas para a portaria: convites ativos que valem agora ou começam nas próximas 24 horas. */
+ /**
+  * Visitas previstas para a portaria: convites ativos que valem agora ou começam nas próximas 24 horas, de quem ainda
+  * tem vínculo para convidar pela unidade ativa.
+  */
  public VisitModels.PermitPage expected(UUID tenant,UUID unit,String visitor) {
   var where=new ArrayList<String>(); var args=new ArrayList<Object>();
   where.add("p.tenant_id=?"); args.add(tenant);
-  where.add("p.state='ACTIVE' and p.valid_until>clock_timestamp() and p.valid_from<clock_timestamp()+interval '24 hours'");
+  // Faixa por now() (permite o índice); convite de quem não pode mais convidar ou de unidade inativa não vale para a portaria.
+  where.add("p.state='ACTIVE' and p.valid_until>now() and p.valid_from<now()+interval '24 hours'"
+   +" and cp.permit_issuer_active(p.tenant_id,p.unit_id,p.created_by)");
   if(unit!=null) { where.add("p.unit_id=?"); args.add(unit); }
   if(visitor!=null) { where.add("v.full_name ilike ? escape '\\'"); args.add("%"+literal(visitor)+"%"); }
   args.add(PAGE+1);
   var rows=jdbc.query(PERMIT_SELECT+" where "+String.join(" and ",where)+" order by p.valid_from,p.id limit ?",PERMIT,args.toArray());
   return new VisitModels.PermitPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+ }
+ /** Quem convidou ainda pode convidar pela unidade ativa (conferido com a visibilidade de quem consulta). */
+ public boolean issuerActive(UUID tenant,UUID permit) {
+  return Boolean.TRUE.equals(jdbc.queryForObject("""
+   select coalesce((select cp.permit_issuer_active(p.tenant_id,p.unit_id,p.created_by) from cp.visit_permits p
+    where p.tenant_id=? and p.id=?),false)
+   """,Boolean.class,tenant,permit));
  }
  public VisitModels.Permit permit(UUID tenant,UUID permit,boolean lock) {
   var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.id=?"+(lock?" for update of p":""),PERMIT,tenant,permit);
@@ -104,7 +116,7 @@ public class VisitStore {
   instant(r,"created_at"));
  /** Chegadas da unidade nos últimos 7 dias, da mais recente. */
  public VisitModels.ArrivalPage unitArrivals(UUID tenant,UUID unit) {
-  var rows=jdbc.query(ARRIVAL_SELECT+" where r.tenant_id=? and r.unit_id=? and r.created_at>clock_timestamp()-interval '7 days'"
+  var rows=jdbc.query(ARRIVAL_SELECT+" where r.tenant_id=? and r.unit_id=? and r.created_at>now()-interval '7 days'"
    +" order by r.created_at desc,r.id limit ?",ARRIVAL,tenant,unit,PAGE+1);
   return new VisitModels.ArrivalPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
@@ -112,7 +124,7 @@ public class VisitStore {
  public VisitModels.ArrivalPage queue(UUID tenant,String state) {
   var where=new ArrayList<String>(); var args=new ArrayList<Object>();
   where.add("r.tenant_id=?"); args.add(tenant);
-  where.add("r.created_at>clock_timestamp()-interval '24 hours'");
+  where.add("r.created_at>now()-interval '24 hours'");
   if("WAITING".equals(state)) where.add("r.state='WAITING' and r.expires_at>clock_timestamp()");
   else if("EXPIRED".equals(state)) where.add("r.state='WAITING' and r.expires_at<=clock_timestamp()");
   else if(state!=null) { where.add("r.state=?"); args.add(state); }
@@ -146,7 +158,7 @@ public class VisitStore {
    """,actor,reason,tenant,arrival)==1;
  }
 
- /** Intenção de aviso na mesma transação, com dados mínimos (sem nome do visitante): o worker consulta o resto. */
+ /** Intenção de aviso na mesma transação, com dados mínimos (sem nome do visitante). */
  public void event(UUID tenant,String eventType,UUID aggregate,long version,UUID unit,String state) {
   jdbc.update("""
    insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload)

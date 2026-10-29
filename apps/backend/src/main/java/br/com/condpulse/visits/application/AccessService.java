@@ -78,8 +78,8 @@ public class AccessService {
    } else {
     var permit=visits.permit(tenant,request.permitId(),false);
     if(permit==null) throw new BusinessProblem("VISIT_PERMIT_NOT_FOUND",404,"Convite não encontrado.");
-    if(!"ACTIVE".equals(permit.state()))
-     throw new BusinessProblem("ACCESS_PERMIT_NOT_CURRENT",409,"O convite não vale agora (antes do início, vencido ou revogado).");
+    if(!"ACTIVE".equals(permit.state()) || !visits.issuerActive(tenant,permit.permitId()))
+     throw new BusinessProblem("ACCESS_PERMIT_NOT_CURRENT",409,"O convite não vale agora (antes do início, vencido, revogado ou de quem perdeu o vínculo).");
    }
    UUID id=UUID.randomUUID();
    store.insert(id,tenant,request.arrivalId(),request.permitId(),"MANUAL_IN",null,null,request.evidence(),note,actor);

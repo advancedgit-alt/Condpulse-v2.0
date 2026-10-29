@@ -60,14 +60,14 @@ public class AccessStore {
 
  /** Registros da portaria: entradas das últimas 24 horas, da mais recente. */
  public AccessModels.RecordPage recent(UUID tenant) {
-  var rows=jdbc.query(RECORD_SELECT+" where e.tenant_id=? and e.event_type='MANUAL_IN' and e.occurred_at>clock_timestamp()-interval '24 hours'"
+  var rows=jdbc.query(RECORD_SELECT+" where e.tenant_id=? and e.event_type='MANUAL_IN' and e.occurred_at>now()-interval '24 hours'"
    +" order by e.occurred_at desc,e.id limit ?",RECORD,tenant,PAGE+1);
   return new AccessModels.RecordPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
  /** Registros da unidade: entradas dos últimos 7 dias, da mais recente. */
  public AccessModels.RecordPage unitRecords(UUID tenant,UUID unit) {
   var rows=jdbc.query(RECORD_SELECT+" where e.tenant_id=? and e.unit_id=? and e.event_type='MANUAL_IN'"
-   +" and e.occurred_at>clock_timestamp()-interval '7 days' order by e.occurred_at desc,e.id limit ?",RECORD,tenant,unit,PAGE+1);
+   +" and e.occurred_at>now()-interval '7 days' order by e.occurred_at desc,e.id limit ?",RECORD,tenant,unit,PAGE+1);
   return new AccessModels.RecordPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
  public AccessModels.AccessRecord record(UUID tenant,UUID entry) {

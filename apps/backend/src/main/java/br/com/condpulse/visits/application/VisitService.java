@@ -2,6 +2,7 @@ package br.com.condpulse.visits.application;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -57,12 +58,15 @@ public class VisitService {
   String document=document(request.documentLast4());
   String purpose=request.purpose()==null || DisplayText.collapse(request.purpose()).isEmpty()?null
    :text(request.purpose(),200,"VISIT_PURPOSE_INVALID","Use até 200 caracteres na finalidade.");
-  Instant from=request.validFrom(), until=request.validUntil();
+  // Segundos inteiros: o banco guarda microssegundos e um período menor que isso viraria violação de CHECK.
+  Instant from=request.validFrom()==null?null:request.validFrom().truncatedTo(ChronoUnit.SECONDS);
+  Instant until=request.validUntil()==null?null:request.validUntil().truncatedTo(ChronoUnit.SECONDS);
   if(from==null || until==null || !until.isAfter(from) || Duration.between(from,until).compareTo(MAX_PERMIT)>0)
    throw invalid("VISIT_PERIOD_INVALID","Informe o período da visita, com fim depois do início e até 7 dias.");
   String hash=VisitRequestHash.permit(unit,visitor,document,purpose,from,until);
   String route="/v1/tenants/"+tenant+"/units/"+unit+"/permits";
-  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of(),context->{
+  // O gatilho confere o início pelo relógio do banco, um instante depois do Java: a recusa dele é período inválido.
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of("23514",VisitService::periodInvalid),context->{
    if(!store.member(tenant,unit,"create")) throw unitDenied();
    var previous=store.begin(tenant,actor,route,key,hash);
    if(!previous.fresh()) {
@@ -71,8 +75,7 @@ public class VisitService {
     return new VisitModels.PermitMutation(replay,true,previous.responseStatus());
    }
    Instant now=store.now();
-   if(from.isBefore(now.minus(START_TOLERANCE)) || from.isAfter(now.plus(MAX_LEAD)) || !until.isAfter(now))
-    throw invalid("VISIT_PERIOD_INVALID","O convite começa a partir de agora (até 90 dias à frente) e termina no futuro.");
+   if(from.isBefore(now.minus(START_TOLERANCE)) || from.isAfter(now.plus(MAX_LEAD)) || !until.isAfter(now)) throw periodInvalid();
    UUID visitorId=UUID.randomUUID(), id=UUID.randomUUID();
    store.insertVisitor(visitorId,tenant,visitor,document,actor);
    store.insertPermit(id,tenant,visitorId,unit,purpose,actor,from,until);
@@ -159,8 +162,17 @@ public class VisitService {
    }
    if(!store.activeUnit(tenant,request.unitId())) throw unitUnavailable();
    if(request.permitId()!=null) {
+    // Convite vinculado: o da mesma unidade e da mesma pessoa, ainda válido; revogado, vencido ou de vínculo encerrado
+    // é recusado com o estado atual (AC-019/AC-020) e a portaria segue a chegada sem convite.
     var permit=store.permit(tenant,request.permitId(),false);
-    if(permit==null || !permit.unitId().equals(request.unitId())) throw permitInvalid();
+    if(permit==null || !permit.unitId().equals(request.unitId()) || !permit.visitorName().equals(visitor)
+      || !java.util.Objects.equals(permit.documentLast4(),document)) throw permitInvalid();
+    if("REVOKED".equals(permit.state()))
+     throw new BusinessProblem("VISIT_PERMIT_REVOKED",409,"Este convite foi revogado. Siga o procedimento de chegada sem convite.");
+    if("EXPIRED".equals(permit.state()))
+     throw new BusinessProblem("VISIT_PERMIT_EXPIRED",409,"A vigência deste convite terminou. Siga o procedimento de chegada sem convite.");
+    if(!store.issuerActive(tenant,permit.permitId()))
+     throw new BusinessProblem("VISIT_PERMIT_INACTIVE",409,"Quem convidou não tem mais vínculo para convidar pela unidade: o convite não vale.");
    }
    UUID visitorId=UUID.randomUUID(), id=UUID.randomUUID();
    store.insertVisitor(visitorId,tenant,visitor,document,actor);
@@ -287,7 +299,10 @@ public class VisitService {
   return new BusinessProblem("VISIT_PERMIT_CHANGED",409,"O convite foi alterado. Atualize os convites antes de continuar.");
  }
  private static BusinessProblem permitInvalid() {
-  return new BusinessProblem("ARRIVAL_PERMIT_INVALID",409,"O convite informado não é desta unidade. Confira a visita prevista.");
+  return new BusinessProblem("ARRIVAL_PERMIT_INVALID",409,"O convite informado não confere com a unidade ou a pessoa. Confira a visita prevista.");
+ }
+ private static BusinessProblem periodInvalid() {
+  return invalid("VISIT_PERIOD_INVALID","O convite começa a partir de agora (até 90 dias à frente), termina no futuro e dura até 7 dias.");
  }
  private static BusinessProblem arrivalNotFound() { return new BusinessProblem("ARRIVAL_NOT_FOUND",404,"Chegada não encontrada."); }
  private static BusinessProblem arrivalClosed() {

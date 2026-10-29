@@ -21,7 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
  * CP_VISITS_ENABLED. Capacidade da portaria com AAL2 conferida no serviço.
  */
 @RestController @Profile("api")
-@ConditionalOnExpression("${condpulse.parcels.enabled:false} or ${condpulse.visits.enabled:false}")
+// Comparação textual (como @ConditionalOnProperty com havingValue="true"): valor vazio ou não booleano não derruba a
+// inicialização e mantém a rota fora.
+@ConditionalOnExpression("'${condpulse.parcels.enabled:false}'.equalsIgnoreCase('true') or '${condpulse.visits.enabled:false}'.equalsIgnoreCase('true')")
 public class ConciergeUnitsController {
  private final ParcelService service;
  public ConciergeUnitsController(ParcelService service) { this.service=service; }

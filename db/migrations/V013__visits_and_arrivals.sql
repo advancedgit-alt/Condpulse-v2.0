@@ -41,6 +41,9 @@ CREATE TABLE cp.visit_permits (
 );
 CREATE INDEX visit_permits_by_unit ON cp.visit_permits(tenant_id,unit_id,valid_until DESC,id);
 CREATE INDEX visit_permits_current ON cp.visit_permits(tenant_id,valid_from,valid_until) WHERE state='ACTIVE';
+-- Cada pessoa registrada pertence a um único convite (sem cadastro reaproveitável); o índice também atende a política
+-- de leitura de visitantes, que procura o convite pela pessoa.
+CREATE UNIQUE INDEX visit_permits_one_per_visitor ON cp.visit_permits(tenant_id,visitor_id);
 
 -- Chegada sem convite: a tabela da fundação ganha a pessoa, o convite opcional, quem registrou e a origem da
 -- decisão. O prazo vem do relógio do banco (5 minutos); CANCELLED encerra uma chegada registrada por engano ou
@@ -65,6 +68,9 @@ ALTER TABLE cp.arrival_requests ADD CONSTRAINT arrival_requests_state_check
  ADD CONSTRAINT arrival_requests_assisted_note CHECK(decision_source IS NULL OR decision_source IN ('APP','CONCIERGE') OR decision_note IS NOT NULL);
 CREATE INDEX arrival_requests_queue ON cp.arrival_requests(tenant_id,created_at DESC,id);
 CREATE INDEX arrival_requests_waiting ON cp.arrival_requests(tenant_id,unit_id,expires_at) WHERE state='WAITING';
+CREATE INDEX arrival_requests_by_unit ON cp.arrival_requests(tenant_id,unit_id,created_at DESC,id);
+-- Cada pessoa registrada pertence a uma única chegada (também atende a política de leitura de visitantes).
+CREATE UNIQUE INDEX arrival_requests_one_per_visitor ON cp.arrival_requests(tenant_id,visitor_id);
 
 -- Grants mínimos: a aplicação não escolhe estado inicial, prazo, datas nem responsável de outra conta.
 REVOKE ALL ON cp.visitors,cp.visit_permits FROM PUBLIC;
@@ -98,6 +104,22 @@ AS $$ SELECT EXISTS(SELECT 1 FROM cp.memberships m
 REVOKE ALL ON FUNCTION cp.visit_member(uuid,uuid,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.visit_member(uuid,uuid,text) TO cp_api;
 
+-- Quem convidou ainda pode convidar pela unidade ativa (conta ativa, vínculo vigente, adulto ou dependente com
+-- visits.create). Convite de vínculo encerrado, conta suspensa ou unidade inativa não vale para a portaria: some das
+-- visitas previstas e não vincula chegada. Executa como quem consulta: a portaria enxerga os vínculos residenciais
+-- vigentes do condomínio (V012); para quem não enxerga o vínculo, o resultado é falso (falha fechada).
+CREATE FUNCTION cp.permit_issuer_active(target_tenant uuid,target_unit uuid,issuer uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT EXISTS(SELECT 1 FROM cp.memberships m
+  JOIN cp.units u ON u.tenant_id=m.tenant_id AND u.id=m.unit_id AND u.status='ACTIVE'
+  JOIN platform.accounts a ON a.id=m.account_id AND a.status='ACTIVE'
+  WHERE m.tenant_id=target_tenant AND m.unit_id=target_unit AND m.account_id=issuer AND m.status='ACTIVE'
+   AND m.valid_from<=now() AND (m.valid_until IS NULL OR m.valid_until>now())
+   AND (m.role IN ('RESIDENT','RESPONSIBLE') OR (m.role='DEPENDENT'
+    AND coalesce(m.permissions#>ARRAY['visits','create']='true'::jsonb,false)))) $$;
+REVOKE ALL ON FUNCTION cp.permit_issuer_active(uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.permit_issuer_active(uuid,uuid,uuid) TO cp_api;
+
 -- Visitante: visível para a portaria e para quem acompanha um convite ou chegada da unidade que o cita; criado em
 -- nome da própria conta pela portaria (chegada) ou por quem pode convidar.
 CREATE POLICY visitors_read_scope ON cp.visitors AS RESTRICTIVE FOR SELECT TO cp_api
@@ -111,9 +133,12 @@ CREATE POLICY visitors_insert_scope ON cp.visitors AS RESTRICTIVE FOR INSERT TO 
 CREATE POLICY permits_read_scope ON cp.visit_permits AS RESTRICTIVE FOR SELECT TO cp_api
  USING(platform.has_capability('concierge.operate') OR cp.visit_member(tenant_id,unit_id,NULL)
   OR (created_by=platform.current_actor_id() AND cp.visit_member(tenant_id,unit_id,'create')));
+-- A pessoa do convite foi registrada pela própria conta (a FK não passa pela política de leitura).
 CREATE POLICY permits_create ON cp.visit_permits AS RESTRICTIVE FOR INSERT TO cp_api
  WITH CHECK(created_by=platform.current_actor_id() AND state='ACTIVE' AND valid_until>clock_timestamp()
-  AND cp.visit_member(tenant_id,unit_id,'create'));
+  AND cp.visit_member(tenant_id,unit_id,'create')
+  AND EXISTS(SELECT 1 FROM cp.visitors v WHERE v.tenant_id=cp.visit_permits.tenant_id AND v.id=cp.visit_permits.visitor_id
+   AND v.created_by=platform.current_actor_id()));
 CREATE POLICY permits_revoke ON cp.visit_permits AS RESTRICTIVE FOR UPDATE TO cp_api
  USING(cp.visit_member(tenant_id,unit_id,NULL) OR (created_by=platform.current_actor_id() AND cp.visit_member(tenant_id,unit_id,'create')))
  WITH CHECK(state='REVOKED' AND revoked_by=platform.current_actor_id());
@@ -123,7 +148,9 @@ CREATE POLICY arrivals_read_scope ON cp.arrival_requests AS RESTRICTIVE FOR SELE
  USING(platform.has_capability('concierge.operate') OR cp.visit_member(tenant_id,unit_id,'decide'));
 CREATE POLICY arrivals_register ON cp.arrival_requests AS RESTRICTIVE FOR INSERT TO cp_api
  WITH CHECK(platform.has_capability('concierge.operate') AND created_by=platform.current_actor_id() AND state='WAITING'
-  AND EXISTS(SELECT 1 FROM cp.units u WHERE u.tenant_id=cp.arrival_requests.tenant_id AND u.id=cp.arrival_requests.unit_id AND u.status='ACTIVE'));
+  AND EXISTS(SELECT 1 FROM cp.units u WHERE u.tenant_id=cp.arrival_requests.tenant_id AND u.id=cp.arrival_requests.unit_id AND u.status='ACTIVE')
+  AND EXISTS(SELECT 1 FROM cp.visitors v WHERE v.tenant_id=cp.arrival_requests.tenant_id AND v.id=cp.arrival_requests.visitor_id
+   AND v.created_by=platform.current_actor_id()));
 -- Decisão pelo aplicativo é da unidade; a portaria registra só a confirmação assistida (interfone/presencial) ou o
 -- cancelamento, sempre em nome da própria conta.
 CREATE POLICY arrivals_decide ON cp.arrival_requests AS RESTRICTIVE FOR UPDATE TO cp_api
@@ -133,11 +160,20 @@ CREATE POLICY arrivals_decide ON cp.arrival_requests AS RESTRICTIVE FOR UPDATE T
   OR (decision_source IN ('INTERCOM','IN_PERSON','CONCIERGE') AND platform.has_capability('concierge.operate'))));
 
 -- Inclusões conferidas antes da gravação (executa como quem grava; registro de referência invisível falha fechado):
--- convite com início recente e no máximo 90 dias à frente; chegada com convite da mesma unidade e prazo do banco.
+-- convite com início recente e no máximo 90 dias à frente; chegada com prazo do banco e, quando vinculada a convite,
+-- convite da mesma unidade, não revogado, ainda em vigor ou agendado, de quem ainda pode convidar, e a mesma pessoa
+-- (nome e final do documento) do convite.
 CREATE FUNCTION cp.visit_insert_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE
  permit_unit uuid;
+ permit_state text;
+ permit_until timestamptz;
+ permit_issuer uuid;
+ permit_name text;
+ permit_document text;
+ arrival_name text;
+ arrival_document text;
 BEGIN
  IF TG_TABLE_NAME='visit_permits' THEN
   IF NEW.valid_from<clock_timestamp()-interval '10 minutes' OR NEW.valid_from>clock_timestamp()+interval '90 days' THEN
@@ -146,9 +182,20 @@ BEGIN
  ELSE
   NEW.expires_at := clock_timestamp()+interval '5 minutes';
   IF NEW.permit_id IS NOT NULL THEN
-   SELECT p.unit_id INTO permit_unit FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.permit_id;
+   SELECT p.unit_id,p.state,p.valid_until,p.created_by,v.full_name,v.document_last4
+    INTO permit_unit,permit_state,permit_until,permit_issuer,permit_name,permit_document
+    FROM cp.visit_permits p JOIN cp.visitors v ON v.tenant_id=p.tenant_id AND v.id=p.visitor_id
+    WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.permit_id;
    IF permit_unit IS NULL THEN RAISE EXCEPTION 'Convite não visível.' USING ERRCODE='42501'; END IF;
    IF permit_unit<>NEW.unit_id THEN RAISE EXCEPTION 'Convite de outra unidade.' USING ERRCODE='23514'; END IF;
+   IF permit_state<>'ACTIVE' OR permit_until<=clock_timestamp() OR NOT cp.permit_issuer_active(NEW.tenant_id,permit_unit,permit_issuer) THEN
+    RAISE EXCEPTION 'Convite revogado, vencido ou de vínculo encerrado.' USING ERRCODE='23514';
+   END IF;
+   SELECT v.full_name,v.document_last4 INTO arrival_name,arrival_document
+    FROM cp.visitors v WHERE v.tenant_id=NEW.tenant_id AND v.id=NEW.visitor_id;
+   IF arrival_name IS DISTINCT FROM permit_name OR arrival_document IS DISTINCT FROM permit_document THEN
+    RAISE EXCEPTION 'Pessoa diferente da do convite.' USING ERRCODE='23514';
+   END IF;
   END IF;
  END IF;
  RETURN NEW;

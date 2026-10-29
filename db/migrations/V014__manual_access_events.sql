@@ -1,7 +1,7 @@
 -- Registro manual de entrada e saída de visitantes (CP-028) e ações contextuais da fila da portaria (CP-027). A
 -- portaria (capacidade concierge.operate, AAL2) registra a entrada somente de quem tem autorização vigente — chegada
 -- autorizada nas últimas 24 horas (pela unidade no aplicativo ou por confirmação assistida) ou convite em vigor pelo
--- relógio do banco — e a saída de uma entrada registrada. Evento manual nunca é rotulado como passagem detectada por
+-- relógio do banco, de quem ainda pode convidar — e a saída de uma entrada registrada. Evento manual nunca é rotulado como passagem detectada por
 -- equipamento: o tipo é MANUAL_IN/MANUAL_OUT e a origem é a portaria. Correção humana é um evento adicional que
 -- referencia o anterior, com motivo; nada é alterado nem apagado. Equipamentos, eventos de sensor e saída automática
 -- ficam para os tickets do parceiro (CP-043 a CP-048).
@@ -78,6 +78,7 @@ DECLARE
  base_state text;
  base_from timestamptz;
  base_until timestamptz;
+ base_issuer uuid;
  target_type text;
  target uuid;
 BEGIN
@@ -101,10 +102,13 @@ BEGIN
   ELSIF NEW.permit_id IS NOT NULL THEN
    -- Mesma trava da revogação: entrada e revogação do mesmo convite ficam em série.
    PERFORM pg_advisory_xact_lock(hashtextextended('cp.visit_permits:'||NEW.tenant_id::text||':'||NEW.permit_id::text,0));
-   SELECT p.unit_id,p.visitor_id,p.state,p.valid_from,p.valid_until INTO base_unit,base_visitor,base_state,base_from,base_until
+   SELECT p.unit_id,p.visitor_id,p.state,p.valid_from,p.valid_until,p.created_by
+    INTO base_unit,base_visitor,base_state,base_from,base_until,base_issuer
     FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.permit_id;
    IF base_unit IS NULL THEN RAISE EXCEPTION 'Convite não visível.' USING ERRCODE='42501'; END IF;
-   IF base_state<>'ACTIVE' OR base_from>clock_timestamp() OR base_until<=clock_timestamp() THEN
+   -- Em vigor agora e de quem ainda pode convidar pela unidade ativa (V013).
+   IF base_state<>'ACTIVE' OR base_from>clock_timestamp() OR base_until<=clock_timestamp()
+      OR NOT cp.permit_issuer_active(NEW.tenant_id,base_unit,base_issuer) THEN
     RAISE EXCEPTION 'Convite fora do período ou revogado.' USING ERRCODE='23514';
    END IF;
   END IF;

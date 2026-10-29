@@ -772,6 +772,9 @@ def visit_checks():
            "dependente com permissao ve somente os convites que criou")
     expect(value(f"select count(*) from cp.visit_permits where id in ('{P1}','{P2}')", tenant=TA, role="cp_api") == "2",
            "morador ve todos os convites da unidade")
+    expect(error(permit(P3, V1, unit=UA2, actor=RES2), "42501", tenant=TA, actor=RES2, role="cp_api"),
+           "convite nao usa pessoa registrada por outra conta")
+    expect(error(permit(P3, V1), "23505", tenant=TA, role="cp_api"), "cada pessoa registrada pertence a um unico convite")
     expect(value(f"select count(*) from cp.visit_permits where id in ('{P1}','{P2}')", tenant=TA, actor=RES2, role="cp_api") == "0",
            "outra unidade nao ve convites")
     expect(value(f"select count(*) from cp.visitors where id in ('{V1}','{V2}')", tenant=TA, actor=RES2, role="cp_api") == "0",
@@ -814,6 +817,32 @@ def visit_checks():
     expect(value(f"select count(*) from cp.arrival_requests where id in ('{A1}','{A2}')", tenant=TA, actor=DEP, role="cp_api") == "0",
            "dependente sem permissao de decidir nao ve chegadas")
     expect(value(f"select count(*) from cp.visitors where id='{V3}'", tenant=TA, role="cp_api") == "1", "unidade ve quem chegou")
+    expect(error(concierge + arrival("72000000-0000-4000-8000-000000000020", V1), "42501", tenant=TA, actor=CONC, role="cp_api"),
+           "chegada nao usa pessoa registrada por outra conta")
+    expect(error(concierge + arrival("72000000-0000-4000-8000-000000000015", V3), "23505", tenant=TA, actor=CONC, role="cp_api"),
+           "cada pessoa registrada pertence a uma unica chegada")
+    # Chegada vinculada a convite: o mesmo convite valido, da mesma pessoa e de quem ainda pode convidar.
+    V5, V6, V7, V8 = ("70000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(23, 27))
+    A5, A6, A7, A8 = ("72000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(16, 20))
+    expect(error(concierge + visitor(V5, actor=CONC) + "; " + arrival(A5, V5, permit_id=P2), "23514", tenant=TA, actor=CONC, role="cp_api"),
+           "convite revogado nao vincula chegada")
+    expect(error(concierge + visitor(V5, name="OUTRA PESSOA", actor=CONC) + "; " + arrival(A5, V5, permit_id=P1), "23514", tenant=TA,
+                 actor=CONC, role="cp_api"), "chegada vinculada exige a mesma pessoa do convite")
+    query(concierge + visitor(V5, actor=CONC) + "; " + arrival(A5, V5, permit_id=P1), tenant=TA, actor=CONC, role="cp_api")
+    expect(value(f"select permit_id from cp.arrival_requests where id='{A5}'") == P1, "chegada vinculada ao convite valido da mesma pessoa")
+    query(visitor(V6, actor=RES2) + "; " + permit("71000000-0000-4000-8000-000000000015", V6, unit=UA2, actor=RES2), tenant=TA, actor=RES2,
+          role="cp_api")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{RES2}'")
+    expect(value(concierge + "select cp.permit_issuer_active(tenant_id,unit_id,created_by)::text from cp.visit_permits "
+                 "where id='71000000-0000-4000-8000-000000000015'", tenant=TA, actor=CONC, role="cp_api") == "false",
+           "convite de vinculo encerrado deixa de valer para a portaria")
+    expect(error(concierge + visitor(V7, actor=CONC) + "; " + arrival(A7, V7, unit=UA2, permit_id="71000000-0000-4000-8000-000000000015"),
+                 "23514", tenant=TA, actor=CONC, role="cp_api"), "convite de vinculo encerrado nao vincula chegada")
+    query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE account_id='{RES2}'")
+    query(f"SET session_replication_role=replica; UPDATE cp.visit_permits SET valid_from=now()-interval '3 hours',"
+          f"valid_until=now()-interval '1 hour' WHERE id='71000000-0000-4000-8000-000000000015'")
+    expect(error(concierge + visitor(V8, actor=CONC) + "; " + arrival(A8, V8, unit=UA2, permit_id="71000000-0000-4000-8000-000000000015"),
+                 "23514", tenant=TA, actor=CONC, role="cp_api"), "convite vencido nao vincula chegada")
     def decide(identifier, state, actor=AA, source="APP", note="NULL", where=" AND state='WAITING'"):
         return (f"UPDATE cp.arrival_requests SET state='{state}',decided_by='{actor}',decision_source='{source}',decision_note={note},"
                 f"version=version+1 WHERE id='{identifier}'{where}")
@@ -859,7 +888,8 @@ def visit_checks():
              f"VALUES('{TA}','{CONC}','ARRIVAL_DECIDED','ARRIVAL','{A1}','{ROLL}')")
     expect(error(trail, "42501", tenant=TA, role="cp_api"), "trilha de visitas so em nome da propria conta")
     expect(error("select count(*) from cp.visit_permits", "42501", tenant=TA, role="cp_worker"), "worker nao le convites")
-    query(f"DELETE FROM cp.arrival_requests WHERE id in ('{A1}','{A2}','{A3}','{A4}'); DELETE FROM cp.visit_permits WHERE id in ('{P1}','{P2}'); "
+    query(f"DELETE FROM cp.arrival_requests WHERE id in ('{A1}','{A2}','{A3}','{A4}','{A5}'); "
+          f"DELETE FROM cp.visit_permits WHERE id in ('{P1}','{P2}','71000000-0000-4000-8000-000000000015'); "
           f"DELETE FROM cp.visitors WHERE tenant_id='{TA}' AND id<>'{VA}'; "
           f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{RES2}'); DELETE FROM cp.units WHERE id='{UA2}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{CONC}','{DEP}','{RES2}')")
@@ -868,7 +898,7 @@ def access_checks():
     """V014: entrada e saida manuais pela portaria so com autorizacao vigente; correcao por evento adicional."""
     CONC, DEP, RES2, UA2 = ("10000000-0000-4000-8000-0000000000f1", "10000000-0000-4000-8000-0000000000f2",
                             "10000000-0000-4000-8000-0000000000f3", "20000000-0000-4000-8000-0000000000f4")
-    V = ["73000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(10, 17)]
+    V = ["73000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(10, 18)]
     P_NOW, P_LATER, P_REVOKED, P_OTHER = ("74000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(10, 14))
     A_OK, A_WAIT, A_DENIED, A_OLD = ("75000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(10, 14))
     E = ["76000000-0000-4000-8000-0000000000" + str(i).zfill(2) for i in range(10, 22)]
@@ -889,7 +919,7 @@ def access_checks():
         UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Visita desmarcada',version=1 WHERE id='{P_REVOKED}';
         INSERT INTO cp.arrival_requests(id,tenant_id,unit_id,visitor_id,created_by)
           VALUES('{A_OK}','{TA}','{UA}','{V[3]}','{CONC}'),('{A_WAIT}','{TA}','{UA}','{V[4]}','{CONC}'),
-                ('{A_DENIED}','{TA}','{UA}','{V[5]}','{CONC}'),('{A_OLD}','{TA}','{UA}','{V[5]}','{CONC}');
+                ('{A_DENIED}','{TA}','{UA}','{V[5]}','{CONC}'),('{A_OLD}','{TA}','{UA}','{V[7]}','{CONC}');
         UPDATE cp.arrival_requests SET state='APPROVED',decided_by='{AA}',decision_source='APP',version=1 WHERE id='{A_OK}';
         UPDATE cp.arrival_requests SET state='DENIED',decided_by='{AA}',decision_source='APP',version=1 WHERE id='{A_DENIED}';
         UPDATE cp.arrival_requests SET state='APPROVED',decided_by='{AA}',decision_source='APP',version=1 WHERE id='{A_OLD}';
@@ -930,6 +960,9 @@ def access_checks():
     expect(value(f"select count(*) from cp.access_events where permit_id='{P_NOW}'") == "2", "convite em vigor admite nova entrada no periodo")
     as_concierge(event(E[3], permit=P_OTHER))
     expect(value(f"select unit_id from cp.access_events where id='{E[3]}'") == UA2, "portaria registra entrada para qualquer unidade do condominio")
+    query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{RES2}'")
+    expect(as_concierge(event(E[11], permit=P_OTHER), "23514"), "convite de quem perdeu o vinculo nao autoriza entrada")
+    query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE account_id='{RES2}'")
     # Saida e correcao.
     expect(as_concierge(event(E[4], kind="MANUAL_OUT", entry=E[0], evidence="DOCUMENT_CHECKED"), "23514"), "saida exige evidencia de saida")
     as_concierge(event(E[4], kind="MANUAL_OUT", entry=E[0], evidence="EXIT_OBSERVED"))

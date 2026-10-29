@@ -7,7 +7,7 @@ import { visits, type AccessEvidence, type AccessMutation, type AccessRecord, ty
 import { Empty, ErrorState, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import { ActionFeedback, isAccessError, useAccessGuard, useAction, useManagement, type ActionResult } from '../management/shared';
-import { codeOf, conciergeKey, freshKeyCodes, repeatFailure, uncertain, unitName, useIntent } from './shared';
+import { codeOf, conciergeKey, repeatFailure, settleFailure, uncertain, unitName, useIntent } from './shared';
 
 /**
  * Visitas na portaria (CP-025 a CP-028): registrar quem chegou sem convite válido, acompanhar a fila das últimas 24
@@ -77,9 +77,8 @@ function RegisterArrival() {
       intent.reset(); setLocked(false); setUnitId(''); setName(''); setDocument('');
       return;
     }
-    const code = codeOf(failure);
-    if (freshKeyCodes.includes(code)) { intent.reset(); void refreshQueue(); return; }
-    if (uncertain(failure)) { setLocked(true); void refreshQueue(); }
+    settleFailure(failure, locked, intent, setLocked);
+    void refreshQueue();
   }
   function restart() { intent.reset(); setLocked(false); action.clear(); }
   const busy = action.state.pending || locked;
@@ -298,7 +297,7 @@ function CancelForm({ arrival, close }: { arrival: Arrival; close(result: Action
   }
   const id = `cancel-${arrival.arrivalId}`;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Encerrar chegada de ${arrival.visitorName}`}>
-    <Notice tone="warning">Use quando a pessoa foi embora ou a chegada foi registrada por engano. Encerrar não autoriza nem recusa a entrada, e a unidade deixa de poder responder.</Notice>
+    <Notice tone="warning">Use quando a pessoa foi embora ou a chegada foi registrada por engano. Encerrar não autoriza nem recusa a entrada, e a unidade deixa de poder responder. O motivo aparece para a unidade: não registre dados pessoais.</Notice>
     <label htmlFor={`${id}-reason`}>Motivo</label>
     <textarea id={`${id}-reason`} required maxLength={300} rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={action.state.pending || locked} />
     <ActionFeedback state={action.state} success={false} />
@@ -389,20 +388,23 @@ function AskUnit({ permit, close }: { permit: VisitPermit; close(result: ActionR
       try { return await visits.register(scope.tenantId, key, body); }
       catch (error) { failure = error; throw repeatFailure(error); }
     }, (done: ArrivalMutation): ActionResult => {
-      result = done.arrival.permitId === permit.permitId && done.arrival.unitId === permit.unitId
-        ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta chegada já estava registrada' : 'Chegada registrada'}: ${done.arrival.visitorName} aguarda a resposta de ${unitName(done.arrival)}, pelo aplicativo até ${formatWhen(done.arrival.expiresAt, scope.timeZone)}. Acompanhe na fila.` }
-        : { tone: 'warning', text: 'A resposta não confirmou esta chegada. Confira a fila antes de registrar de novo.' };
+      // Repetição devolve o estado atual da chegada, que pode já ter sido respondida ou vencida.
+      result = done.arrival.permitId !== permit.permitId || done.arrival.unitId !== permit.unitId
+        ? { tone: 'warning', text: 'A resposta não confirmou esta chegada. Confira a fila antes de registrar de novo.' }
+        : done.replayed ? { tone: 'info', text: `Esta chegada já estava registrada para ${unitName(done.arrival)}. Situação atual: ${arrivalPills[done.arrival.state][0].toLowerCase()}. Nada novo foi criado.` }
+          : { tone: 'success', text: `Chegada registrada: ${done.arrival.visitorName} aguarda a resposta de ${unitName(done.arrival)}, pelo aplicativo até ${formatWhen(done.arrival.expiresAt, scope.timeZone)}. Acompanhe na fila.` };
       return result;
     }, async () => { await refresh(); });
     if (ok) { close(result); return; }
     const code = codeOf(failure);
-    if (code === 'ARRIVAL_PERMIT_INVALID' || code === 'ARRIVAL_UNIT_UNAVAILABLE') {
+    if (['ARRIVAL_PERMIT_INVALID', 'ARRIVAL_UNIT_UNAVAILABLE', 'VISIT_PERMIT_REVOKED', 'VISIT_PERMIT_EXPIRED', 'VISIT_PERMIT_INACTIVE',
+      'VISIT_PERMIT_NOT_FOUND'].includes(code)) {
       close({ tone: 'warning', text: `${errorMessage(failure)} Nada foi registrado.` });
       void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'permits') });
       return;
     }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void refresh(); return; }
-    if (uncertain(failure)) { setLocked(true); void refresh(); }
+    settleFailure(failure, locked, intent, setLocked);
+    void refresh();
   }
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Pedir confirmação para ${permit.visitorName}`}>
     <Notice>Registra a chegada de <bdi>{permit.visitorName}</bdi> para <bdi>{unitName(permit)}</bdi>, vinculada ao convite, e espera a resposta da unidade. Até a resposta, nada está autorizado.</Notice>
@@ -444,10 +446,9 @@ function useAccessAction(closedCodes: string[], close: (result: ActionResult | n
       catch (error) { failure = error; throw repeatFailure(error); }
     }, (done: AccessMutation): ActionResult => { result = describe(done); return result; }, async () => { await refresh(); });
     if (ok) { close(result); return; }
-    const code = codeOf(failure);
-    if (closedCodes.includes(code)) { close({ tone: 'warning', text: `${errorMessage(failure)} Nada novo foi registrado.` }); void refresh(); return; }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void refresh(); return; }
-    if (uncertain(failure)) { setLocked(true); void refresh(); }
+    if (closedCodes.includes(codeOf(failure))) { close({ tone: 'warning', text: `${errorMessage(failure)} Nada novo foi registrado.` }); void refresh(); return; }
+    settleFailure(failure, locked, intent, setLocked);
+    void refresh();
   }
   return { scope, action, locked, run };
 }

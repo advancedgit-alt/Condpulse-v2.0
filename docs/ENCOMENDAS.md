@@ -12,8 +12,8 @@ V012 não foi aplicada a nenhum banco remoto.
 | Dependente da unidade | O mesmo que o morador **somente com permissão explícita** (`permissions.parcels.view`); retirar só com `permissions.parcels.pickup` | Tudo acima sem a permissão |
 | Proprietário sem vínculo residencial, gestão sem portaria, conta suspensa, unidade inativa | — | Ver encomendas da unidade |
 
-As permissões do dependente seguem o modelo das reservas (`permissions.reservations.*`): hoje só são gravadas pelo
-cadastro operacional; ainda não há tela para concedê-las.
+As permissões do dependente seguem o modelo das reservas (`permissions.reservations.*`), mas ainda não há como
+concedê-las: nem a gestão nem o cadastro operacional gravam `permissions` (o cadastro exige vínculo sem permissões).
 
 ## Rotas
 
@@ -72,5 +72,5 @@ cadastro operacional; ainda não há tela para concedê-las.
 ## Pendências
 
 - Aplicação remota da V012 com aprovação; ensaio com Auth real e portaria nomeada.
-- Tela para conceder `parcels.view`/`parcels.pickup` ao dependente.
+- Concessão de `parcels.view`/`parcels.pickup` ao dependente (tela e regra; hoje nenhum fluxo grava permissões).
 - Foto, código e delegação, aviso efetivo ao morador e retenção (tickets próprios).

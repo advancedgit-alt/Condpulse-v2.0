@@ -9,7 +9,7 @@ import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
 import { dateInZone, formatWhen } from '../dateTime';
 import { ActionFeedback, ManagementProvider, useAccessGuard, useAction, useManagement, type ActionResult, type ManagementScope } from '../management/shared';
-import { codeOf, conciergeKey, freshKeyCodes, repeatFailure, uncertain, unitName, useIntent } from './shared';
+import { codeOf, conciergeKey, repeatFailure, settleFailure, unitName, useIntent } from './shared';
 import { ArrivalDesk } from './Arrivals';
 import '../management/Management.css';
 
@@ -111,8 +111,8 @@ function ReceiveParcel() {
     }
     const code = codeOf(failure);
     if (code === 'PARCEL_DUPLICATE_SUSPECTED') { setDuplicate(true); return; }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void refreshQueue(); return; }
-    if (uncertain(failure)) { setLocked(true); void refreshQueue(); }
+    settleFailure(failure, locked, intent, setLocked);
+    void refreshQueue();
   }
   function restart() { intent.reset(); setLocked(false); setDuplicate(false); action.clear(); }
   const busy = action.state.pending || locked;
@@ -255,8 +255,8 @@ function DeliverParcel({ parcel, close }: { parcel: Parcel; close(result: Action
       return;
     }
     if (code === 'PARCEL_RECIPIENT_NOT_ALLOWED') { setRecipient(''); setChecked(false); intent.reset(); void recipients.refetch(); return; }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); return; }
-    if (uncertain(failure)) { setLocked(true); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); }
+    settleFailure(failure, locked, intent, setLocked);
+    void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
   }
   const id = `deliver-${parcel.parcelId}`;
   const busy = action.state.pending || locked;
@@ -314,8 +314,8 @@ function VoidParcel({ parcel, close }: { parcel: Parcel; close(result: ActionRes
       void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
       return;
     }
-    if (freshKeyCodes.includes(code)) { intent.reset(); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); return; }
-    if (uncertain(failure)) { setLocked(true); void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); }
+    settleFailure(failure, locked, intent, setLocked);
+    void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
   }
   const id = `void-${parcel.parcelId}`;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Anular registro de ${unitName(parcel)}`}>
