@@ -43,6 +43,10 @@ Dependente e proprietário ficam fora deste recorte (nenhum fluxo concede permis
   vigente, em `cp.request_unit_member`), grants por coluna, gatilhos de abertura, transição e conversa, eventos
   `REQUEST_*` no outbox (sem consumidor neste recorte) e trilha `REQUEST_*` em nome da própria conta. A guarda de
   inicialização recusa runtime com `DELETE`, alteração de mensagem ou grant nas colunas preenchidas pelo banco.
+- **Identidade dos eventos**: o outbox exige `(condomínio, tipo, pedido, número)` único. Abertura e andamento usam a
+  versão do pedido; `REQUEST_MESSAGE_ADDED` usa o número da mensagem visível no pedido, porque mensagem não muda a
+  versão. O payload continua com a versão do pedido e o ID da mensagem; comentário interno não gera evento. Até
+  29/10/2026 a mensagem usava a versão, e a segunda mensagem visível seguida no mesmo pedido falhava com 503.
 
 ## Telas web
 
