@@ -66,6 +66,7 @@ describe('lógica do canal (igual à web)', () => {
     for (let i = 0; i < 6; i += 1) { h.last().fail(true); waits.push(h.timers.pending().at(-1)!.ms); h.timers.fire(); }
     expect(waits).toEqual([RETRY_BASE_MS, RETRY_BASE_MS * 2, RETRY_BASE_MS * 4, RETRY_BASE_MS * 8, RETRY_MAX_MS, RETRY_MAX_MS]);
     h.last().emit('ready', '{}');
+    expect(h.calls).toEqual(['resync']); // mudanças durante as recusas são consultadas na primeira abertura
     h.last().fail(true);
     expect(h.timers.pending().at(-1)!.ms).toBe(RETRY_BASE_MS);
     h.dispose();
