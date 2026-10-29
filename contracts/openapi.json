@@ -326,6 +326,19 @@
           },
           "503": {
             "description": "AUTH_PROVIDER_UNAVAILABLE"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: limite por conta para consultas de estado.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
           }
         }
       }
@@ -373,7 +386,7 @@
             "description": "Origem/CSRF inválidos ou MFA_OPERATION_REJECTED"
           },
           "429": {
-            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "description": "AUTH_RATE_LIMITED: limite por conta (5 a cada 15 min), cobrado após validar a sessão; sem retry automático.",
             "headers": {
               "Retry-After": {
                 "required": true,
@@ -396,7 +409,7 @@
         "operationId": "mfaVerifyTotp",
         "security": [],
         "x-feature-flag": "CP_BFF_ENABLED",
-        "description": "Desafia e verifica o fator. Sucesso substitui o cookie opaco por nova sessão AAL2 com o mesmo limite absoluto; código rejeitado preserva a sessão.",
+        "description": "Reserva a sessão, desafia e verifica o fator. Sucesso troca atomicamente o cookie opaco por nova sessão AAL2 com o mesmo limite absoluto; recusa definitiva preserva a sessão; resultado incerto encerra a sessão local e no provedor.",
         "parameters": [
           {
             "name": "Origin",
@@ -464,7 +477,7 @@
             "description": "MFA_CODE_REJECTED"
           },
           "429": {
-            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "description": "AUTH_RATE_LIMITED: limite por conta (5 a cada 15 min), cobrado após validar a sessão; sem retry automático.",
             "headers": {
               "Retry-After": {
                 "required": true,
@@ -478,6 +491,9 @@
           },
           "503": {
             "description": "AUTH_PROVIDER_UNAVAILABLE"
+          },
+          "409": {
+            "description": "SESSION_REFRESH_IN_PROGRESS: renovação concorrente da mesma sessão"
           }
         }
       }

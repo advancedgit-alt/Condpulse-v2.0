@@ -65,12 +65,14 @@ public class BffController {
  }
  @GetMapping("/auth/mfa") public MfaBody mfa(HttpServletRequest request,HttpServletResponse response) {
   response.setHeader("Cache-Control","no-store");
-  var status=sessions.mfaStatus(BffCookies.read(request));
+  String raw=BffCookies.read(request);
+  requireAdmission(limits.mfaStatus(sessions.accountOf(raw)),response);
+  var status=sessions.mfaStatus(raw);
   return new MfaBody(status.assuranceLevel().name(),status.factors());
  }
  @PostMapping("/auth/mfa/enroll") public EnrollmentBody enroll(HttpServletRequest request,HttpServletResponse response) {
   String raw=BffCookies.read(request);
-  requireAdmission(limits.mfa(raw),response);
+  requireAdmission(limits.mfaEnroll(sessions.accountOf(raw)),response);
   response.setHeader("Cache-Control","no-store");
   var enrollment=sessions.enrollTotp(raw);
   return new EnrollmentBody(enrollment.factorId(),enrollment.otpauthUri(),enrollment.secret(),enrollment.qrCodeDataUri());
@@ -78,7 +80,7 @@ public class BffController {
  @PostMapping("/auth/mfa/verify") public SessionBody verify(@RequestBody MfaVerifyBody body,
     HttpServletRequest request,HttpServletResponse response) {
   String raw=BffCookies.read(request);
-  requireAdmission(limits.mfa(raw),response);
+  requireAdmission(limits.mfaVerify(sessions.accountOf(raw)),response);
   var result=sessions.verifyTotp(raw,body.factorId(),body.code());
   // Elevação AAL2 troca o cookie opaco e o CSRF; a sessão anterior deixa de existir.
   BffCookies.set(response,result.opaqueToken(),Duration.between(clock.instant(),result.expiresAt()));
