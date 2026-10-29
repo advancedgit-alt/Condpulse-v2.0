@@ -1,0 +1,198 @@
+import { api, identifier, invalidResponse, isDate, isInteger, isString, isUUID, list, oneOf, record, type CondPulseApi } from './client';
+import type { ISODateTime, ReservationPolicy, UUID } from './types';
+
+/** Contratos da gestão local (CP-014/CP-018/CP-020/CP-021/CP-023). Toda resposta é validada antes da interface. */
+export type MembershipRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MANAGER' | 'SUPPORT';
+export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
+export type InvitationRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE';
+export type ReservationStatus = 'HELD' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
+
+export interface ManagedBlock { blockId: UUID; name: string }
+export interface ManagedUnit { unitId: UUID; label: string; blockId: UUID | null; blockName: string | null; status: 'ACTIVE' | 'INACTIVE'; version: number }
+export interface ManagedUnitPage { units: ManagedUnit[]; truncated: boolean }
+export interface AmenityPolicyInput {
+  schemaVersion: 1; weekDays: number[]; opensAt: string; closesAt: string; minimumLeadMinutes: number;
+  maximumAdvanceDays: number; maximumDurationMinutes: number; maximumActivePerUnit: number; cancellationLeadMinutes: number;
+}
+export interface AmenityInput {
+  name: string; capacity: number; approvalRequired: boolean; feeCents: number; bufferMinutes: number;
+  active: boolean | null; policy: AmenityPolicyInput; expectedVersion: number | null; reason: string | null;
+}
+export interface ManagedAmenity {
+  amenityId: UUID; name: string; capacity: number; approvalRequired: boolean; feeCents: number; bufferMinutes: number;
+  active: boolean; policyVersion: number; version: number; policyState: 'CONFIGURED' | 'POLICY_NOT_CONFIGURED';
+  policy: ReservationPolicy | null;
+}
+export interface ManagedMembership {
+  membershipId: UUID; unitId: UUID | null; unitLabel: string | null; displayName: string; role: MembershipRole;
+  status: MembershipStatus; validFrom: ISODateTime; validUntil: ISODateTime | null; version: number;
+}
+export interface ManagedMembershipPage { memberships: ManagedMembership[]; truncated: boolean }
+export interface ManagedInvitation {
+  invitationId: UUID; unitId: UUID | null; unitLabel: string | null; role: string; displayName: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED'; expiresAt: ISODateTime; createdAt: ISODateTime; acceptedAt: ISODateTime | null;
+}
+/** O token aparece uma única vez; a interface nunca o guarda em cache de consultas. */
+export interface InvitationCreated { invitationId: UUID; token: string; expiresAt: ISODateTime }
+export interface CreateInvitation { unitId: UUID | null; role: InvitationRole; displayName: string; email: string; validDays: number }
+export interface ManagedReservation {
+  reservationId: UUID; kind: 'BOOKING' | 'BLOCK'; unitId: UUID | null; unitLabel: string | null; amenityId: UUID;
+  amenityName: string; status: ReservationStatus; startsAt: ISODateTime; endsAt: ISODateTime; occupiedFrom: ISODateTime;
+  occupiedUntil: ISODateTime; expiresAt: ISODateTime | null; acceptedPolicyVersion: number; feeCents: number; version: number;
+  decisionReason: string | null; requesterName: string | null; createdAt: ISODateTime;
+}
+export interface ManagedReservationPage { reservations: ManagedReservation[]; truncated: boolean }
+export interface BlockResult { reservation: ManagedReservation; replayed: boolean }
+export interface AuditEvent {
+  eventId: UUID; actorId: UUID; action: string; resourceType: string; resourceId: UUID; reason: string | null; createdAt: ISODateTime;
+}
+export interface AuditEventPage { events: AuditEvent[]; nextCursor: string | null }
+
+const RESERVATION_STATUSES: readonly ReservationStatus[] = ['HELD', 'PENDING_APPROVAL', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'];
+const nullableString = (value: unknown): value is string | null => value === null || isString(value);
+const nullableUuid = (value: unknown): value is string | null => value === null || isUUID(value);
+const nullableDate = (value: unknown): value is string | null => value === null || isDate(value);
+const optional = <T>(value: unknown, check: (item: unknown) => item is T): T | null => (value === undefined || value === null ? null : check(value) ? value : (() => { throw invalidResponse(); })());
+
+function block(value: unknown): ManagedBlock {
+  if (!record(value) || !isUUID(value.blockId) || !isString(value.name)) throw invalidResponse();
+  return { blockId: value.blockId, name: value.name };
+}
+function unit(value: unknown): ManagedUnit {
+  if (!record(value) || !isUUID(value.unitId) || !isString(value.label) || !nullableUuid(value.blockId ?? null)
+      || !nullableString(value.blockName ?? null) || !oneOf(value.status, ['ACTIVE', 'INACTIVE']) || !isInteger(value.version))
+    throw invalidResponse();
+  return { unitId: value.unitId, label: value.label, blockId: (value.blockId ?? null) as string | null,
+    blockName: (value.blockName ?? null) as string | null, status: value.status, version: value.version };
+}
+function policy(value: unknown): ReservationPolicy | null {
+  if (value === null || value === undefined) return null;
+  if (!record(value) || value.schemaVersion !== 1 || !Array.isArray(value.weekDays)
+      || !value.weekDays.every((day) => isInteger(day) && day >= 1 && day <= 7) || !isString(value.opensAt) || !isString(value.closesAt)
+      || !isInteger(value.minimumLeadMinutes) || !isInteger(value.maximumAdvanceDays) || !isInteger(value.maximumDurationMinutes)
+      || !isInteger(value.maximumActivePerUnit) || !isInteger(value.cancellationLeadMinutes)) throw invalidResponse();
+  return { schemaVersion: 1, weekDays: [...value.weekDays] as number[], opensAt: value.opensAt, closesAt: value.closesAt,
+    minimumLeadMinutes: value.minimumLeadMinutes, maximumAdvanceDays: value.maximumAdvanceDays,
+    maximumDurationMinutes: value.maximumDurationMinutes, maximumActivePerUnit: value.maximumActivePerUnit,
+    cancellationLeadMinutes: value.cancellationLeadMinutes };
+}
+function amenity(value: unknown): ManagedAmenity {
+  if (!record(value) || !isUUID(value.amenityId) || !isString(value.name) || !isInteger(value.capacity)
+      || typeof value.approvalRequired !== 'boolean' || !isInteger(value.feeCents) || !isInteger(value.bufferMinutes)
+      || typeof value.active !== 'boolean' || !isInteger(value.policyVersion) || !isInteger(value.version)
+      || !oneOf(value.policyState, ['CONFIGURED', 'POLICY_NOT_CONFIGURED'])) throw invalidResponse();
+  return { amenityId: value.amenityId, name: value.name, capacity: value.capacity, approvalRequired: value.approvalRequired,
+    feeCents: value.feeCents, bufferMinutes: value.bufferMinutes, active: value.active, policyVersion: value.policyVersion,
+    version: value.version, policyState: value.policyState, policy: policy(value.policy) };
+}
+function membership(value: unknown): ManagedMembership {
+  if (!record(value) || !isUUID(value.membershipId) || !nullableUuid(value.unitId ?? null) || !nullableString(value.unitLabel ?? null)
+      || !isString(value.displayName) || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MANAGER', 'SUPPORT'])
+      || !oneOf(value.status, ['PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED']) || !isDate(value.validFrom)
+      || !nullableDate(value.validUntil ?? null) || !isInteger(value.version)) throw invalidResponse();
+  return { membershipId: value.membershipId, unitId: (value.unitId ?? null) as string | null, unitLabel: (value.unitLabel ?? null) as string | null,
+    displayName: value.displayName, role: value.role, status: value.status, validFrom: value.validFrom,
+    validUntil: (value.validUntil ?? null) as string | null, version: value.version };
+}
+function invitation(value: unknown): ManagedInvitation {
+  if (!record(value) || !isUUID(value.invitationId) || !nullableUuid(value.unitId ?? null) || !nullableString(value.unitLabel ?? null)
+      || !isString(value.role) || !isString(value.displayName) || !oneOf(value.status, ['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'])
+      || !isDate(value.expiresAt) || !isDate(value.createdAt) || !nullableDate(value.acceptedAt ?? null)) throw invalidResponse();
+  return { invitationId: value.invitationId, unitId: (value.unitId ?? null) as string | null, unitLabel: (value.unitLabel ?? null) as string | null,
+    role: value.role, displayName: value.displayName, status: value.status, expiresAt: value.expiresAt, createdAt: value.createdAt,
+    acceptedAt: (value.acceptedAt ?? null) as string | null };
+}
+function invitationCreated(value: unknown): InvitationCreated {
+  if (!record(value) || !isUUID(value.invitationId) || !isString(value.token) || !/^[A-Za-z0-9_-]{43}$/.test(value.token)
+      || !isDate(value.expiresAt)) throw invalidResponse(true);
+  return { invitationId: value.invitationId, token: value.token, expiresAt: value.expiresAt };
+}
+export function managedReservation(value: unknown, uncertain = false): ManagedReservation {
+  if (!record(value) || !isUUID(value.reservationId) || !oneOf(value.kind, ['BOOKING', 'BLOCK'])
+      || !nullableUuid(value.unitId) || !nullableString(value.unitLabel) || !isUUID(value.amenityId) || !isString(value.amenityName)
+      || !oneOf(value.status, RESERVATION_STATUSES) || !isDate(value.startsAt) || !isDate(value.endsAt)
+      || !isDate(value.occupiedFrom) || !isDate(value.occupiedUntil) || !nullableDate(value.expiresAt)
+      || !isInteger(value.acceptedPolicyVersion) || !isInteger(value.feeCents) || !isInteger(value.version)
+      || !nullableString(value.decisionReason) || !nullableString(value.requesterName) || !isDate(value.createdAt)
+      || (value.kind === 'BOOKING') !== (value.unitId !== null)) throw invalidResponse(uncertain);
+  return { reservationId: value.reservationId, kind: value.kind, unitId: value.unitId, unitLabel: value.unitLabel,
+    amenityId: value.amenityId, amenityName: value.amenityName, status: value.status, startsAt: value.startsAt, endsAt: value.endsAt,
+    occupiedFrom: value.occupiedFrom, occupiedUntil: value.occupiedUntil, expiresAt: value.expiresAt,
+    acceptedPolicyVersion: value.acceptedPolicyVersion, feeCents: value.feeCents, version: value.version,
+    decisionReason: value.decisionReason, requesterName: value.requesterName, createdAt: value.createdAt };
+}
+function auditEvent(value: unknown): AuditEvent {
+  if (!record(value) || !isUUID(value.eventId) || !isUUID(value.actorId) || !isString(value.action) || !isString(value.resourceType)
+      || !isUUID(value.resourceId) || !nullableString(value.reason ?? null) || !isDate(value.createdAt)) throw invalidResponse();
+  return { eventId: value.eventId, actorId: value.actorId, action: value.action, resourceType: value.resourceType,
+    resourceId: value.resourceId, reason: (value.reason ?? null) as string | null, createdAt: value.createdAt };
+}
+const page = <T, K extends string>(key: K, decode: (item: unknown) => T) => (value: unknown): { [P in K]: T[] } & { truncated: boolean } => {
+  if (!record(value) || typeof value.truncated !== 'boolean') throw invalidResponse();
+  return { [key]: list(value[key], decode), truncated: value.truncated } as { [P in K]: T[] } & { truncated: boolean };
+};
+const mutationOf = <T>(decode: (value: unknown, uncertain?: boolean) => T) => (value: unknown) => decode(value, true);
+
+export function createManagementApi(client: CondPulseApi = api) {
+  const base = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}/management`;
+  return {
+    blocks: (tenantId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/blocks`, (value) => list(value, block), signal ? { signal } : {}),
+    createBlock: (tenantId: string, name: string) =>
+      client.call(`${base(tenantId)}/blocks`, mutationOf(block), { method: 'POST', body: { name } }),
+    units: (tenantId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/units`, page('units', unit), signal ? { signal } : {}) as Promise<ManagedUnitPage>,
+    createUnit: (tenantId: string, body: { label: string; blockId: string | null }) =>
+      client.call(`${base(tenantId)}/units`, mutationOf(unit), { method: 'POST', body }),
+    updateUnit: (tenantId: string, unitId: string, body: { label: string; blockId: string | null; status: 'ACTIVE' | 'INACTIVE'; expectedVersion: number; reason: string | null }) =>
+      client.call(`${base(tenantId)}/units/${identifier(unitId)}`, mutationOf(unit), { method: 'PUT', body }),
+    amenities: (tenantId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/amenities`, (value) => list(value, amenity), signal ? { signal } : {}),
+    createAmenity: (tenantId: string, body: AmenityInput) =>
+      client.call(`${base(tenantId)}/amenities`, mutationOf(amenity), { method: 'POST', body }),
+    updateAmenity: (tenantId: string, amenityId: string, body: AmenityInput) =>
+      client.call(`${base(tenantId)}/amenities/${identifier(amenityId)}`, mutationOf(amenity), { method: 'PUT', body }),
+    memberships: (tenantId: string, status: MembershipStatus | null, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/memberships${status ? `?status=${status}` : ''}`, page('memberships', membership),
+        signal ? { signal } : {}) as Promise<ManagedMembershipPage>,
+    decideMembership: (tenantId: string, membershipId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
+      client.call(`${base(tenantId)}/memberships/${identifier(membershipId)}/decision`, mutationOf(membership), { method: 'POST', body }),
+    revokeMembership: (tenantId: string, membershipId: string, body: { expectedVersion: number; reason: string }) =>
+      client.call(`${base(tenantId)}/memberships/${identifier(membershipId)}/revoke`, mutationOf(membership), { method: 'POST', body }),
+    invitations: (tenantId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/invitations`, (value) => list(value, invitation), signal ? { signal } : {}),
+    createInvitation: (tenantId: string, body: CreateInvitation) =>
+      client.call(`${base(tenantId)}/invitations`, invitationCreated, { method: 'POST', body }),
+    revokeInvitation: (tenantId: string, invitationId: string) =>
+      client.call(`${base(tenantId)}/invitations/${identifier(invitationId)}/revoke`, () => undefined, { method: 'POST', body: {} }),
+    reservations: (tenantId: string, filter: { status: ReservationStatus | null; from: string | null; until: string | null }, signal?: AbortSignal) => {
+      const query = new URLSearchParams();
+      if (filter.status) query.set('status', filter.status);
+      if (filter.from && filter.until) { query.set('from', filter.from); query.set('until', filter.until); }
+      const suffix = query.size ? `?${query}` : '';
+      return client.call(`${base(tenantId)}/reservations${suffix}`, page('reservations', (item) => managedReservation(item)),
+        signal ? { signal } : {}) as Promise<ManagedReservationPage>;
+    },
+    decideReservation: (tenantId: string, reservationId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
+      client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/decision`, mutationOf(managedReservation), { method: 'POST', body }),
+    cancelReservation: (tenantId: string, reservationId: string, body: { expectedVersion: number; reason: string }) =>
+      client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/cancel`, mutationOf(managedReservation), { method: 'POST', body }),
+    createMaintenanceBlock: (tenantId: string, amenityId: string, key: string, body: { startsAt: string; endsAt: string; reason: string }) =>
+      client.call(`${base(tenantId)}/amenities/${identifier(amenityId)}/maintenance-blocks`, (value, response): BlockResult => ({
+        reservation: managedReservation(value, true), replayed: response.headers.get('Idempotency-Replayed') === 'true' }),
+      { method: 'POST', body, key }),
+    audit: (tenantId: string, cursor: string | null, signal?: AbortSignal) => {
+      const query = new URLSearchParams({ limit: '30' });
+      if (cursor) query.set('cursor', cursor);
+      return client.call(`${base(tenantId)}/audit-events?${query}`, (value): AuditEventPage => {
+        if (!record(value)) throw invalidResponse();
+        const next = optional(value.nextCursor, isString);
+        if (next !== null && !/^[A-Za-z0-9_-]{1,120}$/.test(next)) throw invalidResponse();
+        return { events: list(value.events, auditEvent), nextCursor: next };
+      }, signal ? { signal } : {});
+    },
+  };
+}
+
+export const management = createManagementApi();
+export type ManagementApi = ReturnType<typeof createManagementApi>;
