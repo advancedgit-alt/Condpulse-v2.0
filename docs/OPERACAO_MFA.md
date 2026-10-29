@@ -19,10 +19,17 @@ Referências: PRD cap. 9 e 18, CP-013, AC-004/AC-007.
 1. `GET /auth/mfa` informa o nível da sessão e os fatores TOTP da conta.
 2. `POST /auth/mfa/enroll` devolve URI `otpauth`, segredo e QR SVG uma única
    vez, com `no-store`. O fator só vale depois de verificado.
-3. `POST /auth/mfa/verify` desafia e verifica o código de 6 dígitos. Sucesso
-   cria nova sessão opaca AAL2, com o mesmo limite absoluto, e remove a anterior.
-   Código rejeitado mantém a sessão atual. Limite: 10 tentativas por sessão em
-   5 minutos e 300 por minuto no total.
+3. `POST /auth/mfa/verify` desafia e verifica o código de 6 dígitos. A sessão
+   fica reservada contra renovação concorrente. Sucesso troca, na mesma transação,
+   a sessão antiga por uma nova sessão opaca AAL2 com o mesmo limite absoluto.
+   Recusa definitiva do provedor (código errado, fator inexistente, limite)
+   mantém a sessão. Qualquer resultado incerto depois do envio (indisponibilidade,
+   token inesperado, falha ao gravar) encerra a sessão local e no provedor, sem
+   repetição: a pessoa entra novamente.
+
+Limites por conta (HMAC do identificador, cobrados só depois de validar a
+sessão): 5 verificações e 5 cadastros a cada 15 minutos; 30 consultas de estado
+por minuto. Novas sessões da mesma conta não renovam as tentativas.
 
 Todos exigem `CP_BFF_ENABLED=true`, Origin exato e CSRF nas mutações.
 
@@ -42,6 +49,18 @@ Procedimento manual, por pessoa autorizada da operação CondPulse:
    o vínculo de equipe volta a operar.
 5. Registrar a conclusão no chamado. O segundo fator nunca é desativado
    informalmente nem por mensagem.
+
+## Risco do primeiro cadastro
+
+O Supabase permite cadastrar o primeiro fator com sessão de senha (AAL1). Quem
+obtiver a senha de uma pessoa de equipe ainda sem fator poderia cadastrar o
+próprio TOTP. Até existir prova adicional automatizada:
+
+- o vínculo `MANAGER`/`CONCIERGE` só é ativado depois que a pessoa cadastra o
+  fator em atendimento supervisionado pela operação;
+- habilitar no painel do Supabase as notificações de segurança por e-mail para
+  cadastro e remoção de fator (configuração pendente, depende de SMTP próprio);
+- qualquer cadastro não reconhecido segue o procedimento de recuperação acima.
 
 ## Limitações
 

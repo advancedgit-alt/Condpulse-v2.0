@@ -107,29 +107,66 @@ public final class WebSessionService {
  }
  /**
   * Verifica TOTP e substitui a sessão opaca por uma nova sessão AAL2 com o mesmo limite absoluto.
-  * Código rejeitado preserva a sessão atual; elevação de privilégio nunca reaproveita o cookie anterior.
+  * A sessão fica reservada contra renovação concorrente. Recusa definitiva do provedor preserva a sessão;
+  * qualquer resultado incerto depois do envio encerra a sessão local e no provedor, sem repetição.
   */
  public SessionTicket verifyTotp(String raw,String factorId,String code) {
   UUID factor=parseFactor(factorId);
   if(code==null || !code.matches("[0-9]{6}"))
    throw new BusinessProblem("MFA_CODE_REJECTED",422,"Informe o código de 6 dígitos do aplicativo autenticador.");
-  var current=current(raw);
-  var tokens=auth.verifyTotp(current.accessToken(),factor,code);
-  Jwt jwt=decodeNew(tokens.access_token());
-  UUID account=current.session().accountId();
-  if(!account.toString().equalsIgnoreCase(jwt.getSubject()) || assurance(jwt)!=AssuranceLevel.AAL2)
-   throw new BusinessProblem("AUTH_PROVIDER_UNAVAILABLE",503,"Não foi possível confirmar o segundo fator.");
-  String nextRaw=SessionSecrets.newToken(),nextHash=SessionSecrets.hash(nextRaw);
-  var draft=new StoredWebSession(UUID.randomUUID(),nextHash,account,"","",jwt.getExpiresAt(),
-    current.session().expiresAt(),0);
-  var stored=new StoredWebSession(draft.id(),nextHash,account,
-    cipher.seal(tokens.access_token(),draft.cipherContext("access")),
-    cipher.seal(tokens.refresh_token(),draft.cipherContext("refresh")),
-    jwt.getExpiresAt(),draft.expiresAt(),0);
-  store.create(stored);
-  store.remove(current.session().tokenHash());
-  return new SessionTicket(nextRaw,account,stored.expiresAt());
+  String hash=hash(raw);
+  UUID lease=UUID.randomUUID();
+  var session=store.claimRefresh(hash,lease);
+  String access;
+  try {
+   access=cipher.open(session.encryptedAccessToken(),session.cipherContext("access"));
+  } catch(IllegalStateException ex) {
+   discard(hash,null);
+   throw new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente para continuar.");
+  }
+  try {
+   Jwt current=decoder.decode(access);
+   if(!session.accountId().toString().equalsIgnoreCase(current.getSubject())) {
+    discard(hash,null);
+    throw new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente para continuar.");
+   }
+  } catch(JwtException ex) {
+   store.releaseRefresh(hash,lease);
+   throw new BusinessProblem("SESSION_REFRESH_REQUIRED",401,"Renove a sessão para continuar.");
+  }
+  SupabaseAuthClient.TokenResponse tokens;
+  try { tokens=auth.verifyTotp(access,factor,code); }
+  catch(BusinessProblem ex) {
+   if(DEFINITIVE_MFA_REJECTIONS.contains(ex.code())) { store.releaseRefresh(hash,lease); throw ex; }
+   discard(hash,access); throw ex;
+  } catch(RuntimeException ex) { discard(hash,access); throw ex; }
+  UUID account=session.accountId();
+  try {
+   Jwt jwt=decodeNew(tokens.access_token());
+   if(!account.toString().equalsIgnoreCase(jwt.getSubject()) || assurance(jwt)!=AssuranceLevel.AAL2)
+    throw new BusinessProblem("AUTH_PROVIDER_UNAVAILABLE",503,"Não foi possível confirmar o segundo fator.");
+   String nextRaw=SessionSecrets.newToken(),nextHash=SessionSecrets.hash(nextRaw);
+   var draft=new StoredWebSession(UUID.randomUUID(),nextHash,account,"","",jwt.getExpiresAt(),session.expiresAt(),0);
+   var stored=new StoredWebSession(draft.id(),nextHash,account,
+     cipher.seal(tokens.access_token(),draft.cipherContext("access")),
+     cipher.seal(tokens.refresh_token(),draft.cipherContext("refresh")),
+     jwt.getExpiresAt(),draft.expiresAt(),0);
+   store.replace(hash,lease,stored);
+   return new SessionTicket(nextRaw,account,stored.expiresAt());
+  } catch(RuntimeException ex) {
+   discard(hash,tokens.access_token());
+   throw ex;
+  }
  }
+ /** Conta da sessão opaca válida, usada para limites por conta antes de chamar o provedor. */
+ public UUID accountOf(String raw) { return store.load(hash(raw)).accountId(); }
+ private void discard(String hash,String accessToSignOut) {
+  try { store.remove(hash); }
+  catch(RuntimeException ignored) { /* Reserva vencida também impede reutilizar a sessão. */ }
+  if(accessToSignOut!=null) auth.signOutBestEffort(accessToSignOut);
+ }
+ private static final java.util.Set<String> DEFINITIVE_MFA_REJECTIONS=java.util.Set.of(
+  "MFA_CODE_REJECTED","MFA_FACTOR_NOT_FOUND","MFA_OPERATION_REJECTED","AUTH_RATE_LIMITED","SESSION_REFRESH_REQUIRED");
  private CurrentAccess current(String raw) {
   var session=store.load(hash(raw));
   String access;
