@@ -31,6 +31,16 @@ continua fixado em V003–V005 e qualquer aplicação exige revisão e autoriza�
   (`404 TENANT_ACCESS_DENIED`) na próxima requisição de moradores e gestão local. Não apaga dados, sessões ou
   reservas e não é automática por atraso de pagamento (fase 5).
 
+## Tela web (`/master`)
+
+Sem link na escolha de contexto: a administração acessa `/master` diretamente. A tela consulta
+`/v1/platform/session`; conta sem papel vê "Área restrita" sem nenhum dado da plataforma; flag desligada mostra
+"Painel indisponível"; sem AAL2 a tela cadastra/verifica o autenticador antes de qualquer outra rota. Seções:
+Condomínios (lista com estado, fuso, versão e recibo do onboarding; alterar nome ou estado com motivo, pela
+versão lida ao abrir, com aviso e recarga quando outra pessoa mudou o condomínio) e Auditoria (por cursor,
+horários em America/Sao_Paulo). Repetição natural aparece como informação, nunca como sucesso; `403
+PLATFORM_ACCESS_DENIED` em qualquer consulta remove os dados da tela.
+
 ## O que o painel não faz
 
 - Não cria condomínio. O cadastro segue pelo onboarding operacional (`OPERACAO_ONBOARDING.md`), que confere as

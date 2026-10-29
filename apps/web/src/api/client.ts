@@ -124,6 +124,15 @@ const messages: Record<string, string> = {
   AUDIT_CURSOR_INVALID: 'A página da auditoria expirou. Recarregue a lista.',
   AUDIT_LIMIT_INVALID: 'Use um limite entre 1 e 100.',
   AUDIT_DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar a auditoria. Tente novamente.',
+  PLATFORM_ACCESS_DENIED: 'Esta área é exclusiva da administração da plataforma.',
+  PLATFORM_INPUT_INVALID: 'Os dados informados não atendem às regras do cadastro.',
+  PLATFORM_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Tente novamente.',
+  TENANT_CHANGED: 'O condomínio foi alterado por outra pessoa. Recarregue os dados antes de salvar.',
+  TENANT_NOT_FOUND: 'Condomínio não encontrado.',
+  TENANT_NAME_INVALID: 'Informe o nome do condomínio com até 160 caracteres.',
+  TENANT_STATE_INVALID: 'Informe se o condomínio fica ativo ou suspenso.',
+  TENANT_VERSION_REQUIRED: 'Recarregue os dados do condomínio antes de salvar.',
+  AUDIT_REASON_REQUIRED: 'Informe o motivo da alteração, com até 500 caracteres.',
 };
 
 export class ApiError extends Error {
