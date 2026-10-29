@@ -3,6 +3,7 @@ import java.net.URI;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import jakarta.servlet.DispatcherType;
 import br.com.condpulse.identity.bff.BffSecurityConfigurer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpMethod;
@@ -54,6 +55,8 @@ public class SecurityConfiguration {
   return http.sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .requestCache(c->c.disable())
    .authorizeHttpRequests(a->a
+    // Despacho assíncrono só existe depois de uma requisição já autorizada (canal SSE): não autenticar de novo nele.
+    .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
     .requestMatchers("/actuator/health","/actuator/health/liveness","/actuator/health/readiness").permitAll()
     .requestMatchers("/v1/me").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units","/v1/tenants/*/amenities",
@@ -105,6 +108,8 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/requests/*/messages","/v1/tenants/*/management/requests/*/state").authenticated()
     // Caixa interna da unidade: autenticação aqui; somente os próprios avisos, com vínculo vigente, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/notifications").authenticated()
+    // Canal em tempo real da unidade (CP-036): autenticação aqui; vínculo residencial vigente no serviço e no banco, a cada passada.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/events").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/notifications/*/open").authenticated()
     // Painel master: autenticação aqui; papel de plataforma vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/session","/v1/platform/tenants","/v1/platform/audit-events").authenticated()

@@ -1184,7 +1184,7 @@
       "id": "CP-036",
       "delivery": "Atualizações em tempo real. SSE autenticado e consulta de estado na reconexão.",
       "acceptance": "Revogação fecha stream; eventos não são transmitidos a usuários sem autorização.",
-      "status": "PLANEJADO",
+      "status": "EM_IMPLEMENTACAO",
       "evidence": []
     },
     {
