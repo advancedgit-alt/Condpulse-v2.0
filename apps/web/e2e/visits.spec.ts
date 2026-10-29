@@ -198,28 +198,32 @@ test('morador responde a chegada uma vez, convida com chave de operação e revo
   await expect(page.getByRole('list', { name: 'Convites encerrados' }).getByText('Revogado: Visita adiada')).toBeVisible();
 });
 
-test('as quatro abas da unidade cabem sem rolagem nem rótulo cortado, também com fonte larga', async ({ page }) => {
-  const api = await installSyntheticApi(page);
-  await installVisitsApi(page, api, false);
-  await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
-  await expect(page.getByRole('heading', { name: 'Acessos da unidade' })).toBeVisible();
-  // Fonte de fallback larga (como no runner do CI): o pior caso para "Encomendas".
-  await page.addStyleTag({ content: '*{font-family:"DejaVu Sans",sans-serif!important}' });
-  const tabs = page.getByRole('navigation', { name: 'Navegação da unidade' });
-  for (const width of [360, 390, 430, 480, 481, 560, 640, 720, 721, 800, 900]) {
-    await page.setViewportSize({ width, height: 780 });
-    await expect(tabs.getByRole('link')).toHaveCount(4);
-    await expect(tabs.getByRole('link', { name: 'Acessos' })).toHaveAttribute('aria-current', 'page');
-    expect(await noHorizontalOverflow(page), `sem rolagem horizontal em ${width}px`).toBe(true);
-    expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth)), `rótulos inteiros em ${width}px`).toBe(true);
-  }
-  await page.getByRole('navigation', { name: 'Navegação da unidade' }).getByRole('link', { name: 'Encomendas' }).click();
-  await expect(tabs.getByRole('link', { name: 'Encomendas' })).toHaveAttribute('aria-current', 'page');
-  for (const width of [360, 481, 721]) {
-    await page.setViewportSize({ width, height: 780 });
-    expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth)), `aba atual inteira em ${width}px`).toBe(true);
-  }
+// A imagem de produção aplica CSP (style-src 'self'): só este ensaio de layout injeta a fonte larga sem CSP.
+test.describe('fonte larga', () => {
+  test.use({ bypassCSP: true });
+  test('as quatro abas da unidade cabem sem rolagem nem rótulo cortado, também com fonte larga', async ({ page }) => {
+    const api = await installSyntheticApi(page);
+    await installVisitsApi(page, api, false);
+    await signIn(page);
+    await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+    await expect(page.getByRole('heading', { name: 'Acessos da unidade' })).toBeVisible();
+    // Fonte de fallback larga (como no runner do CI): o pior caso para "Encomendas".
+    await page.addStyleTag({ content: '*{font-family:"DejaVu Sans",sans-serif!important}' });
+    const tabs = page.getByRole('navigation', { name: 'Navegação da unidade' });
+    for (const width of [360, 390, 430, 480, 481, 560, 640, 720, 721, 800, 900]) {
+      await page.setViewportSize({ width, height: 780 });
+      await expect(tabs.getByRole('link')).toHaveCount(4);
+      await expect(tabs.getByRole('link', { name: 'Acessos' })).toHaveAttribute('aria-current', 'page');
+      expect(await noHorizontalOverflow(page), `sem rolagem horizontal em ${width}px`).toBe(true);
+      expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth)), `rótulos inteiros em ${width}px`).toBe(true);
+    }
+    await page.getByRole('navigation', { name: 'Navegação da unidade' }).getByRole('link', { name: 'Encomendas' }).click();
+    await expect(tabs.getByRole('link', { name: 'Encomendas' })).toHaveAttribute('aria-current', 'page');
+    for (const width of [360, 481, 721]) {
+      await page.setViewportSize({ width, height: 780 });
+      expect(await tabs.evaluate((nav) => [...nav.querySelectorAll('a')].every((link) => link.scrollWidth <= link.clientWidth)), `aba atual inteira em ${width}px`).toBe(true);
+    }
+  });
 });
 
 test('acessos indisponíveis no ambiente não mostram dados nem erro técnico', async ({ page }) => {
