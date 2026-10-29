@@ -389,6 +389,7 @@ function AskUnit({ permit, close }: { permit: VisitPermit; close(result: ActionR
     const ok = await action.run(async () => {
       try { return await visits.register(scope.tenantId, key, body); }
       catch (error) { failure = error; throw repeatFailure(error); }
+      finally { intent.settle(); }
     }, (done: ArrivalMutation): ActionResult => {
       // Repetição devolve o estado atual da chegada, que pode já ter sido respondida ou vencida.
       result = done.arrival.permitId !== permit.permitId || done.arrival.unitId !== permit.unitId
@@ -414,7 +415,7 @@ function AskUnit({ permit, close }: { permit: VisitPermit; close(result: ActionR
     <ActionFeedback state={action.state} success={false} />
     {locked ? <Notice tone="warning">O resultado não foi confirmado. Confira a fila: se a chegada já aparece, não registre de novo.</Notice> : null}
     <div className="button-row">
-      <button className="button" type="submit" disabled={action.state.pending}>{action.state.pending ? 'Registrando…' : locked ? 'Tentar confirmar o mesmo envio' : 'Registrar chegada e pedir confirmação'}</button>
+      <button className="button" type="submit" disabled={action.state.pending || intent.inFlight}>{action.state.pending || intent.inFlight ? 'Registrando…' : locked ? 'Tentar confirmar o mesmo envio' : 'Registrar chegada e pedir confirmação'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
     </div>
   </form>;
@@ -448,6 +449,7 @@ function useAccessAction(slot: string, closedCodes: string[], close: (result: Ac
     const ok = await action.run(async () => {
       try { return await call(key); }
       catch (error) { failure = error; throw repeatFailure(error); }
+      finally { intent.settle(); }
     }, (done: AccessMutation): ActionResult => { result = describe(done); return result; }, async () => { await refresh(); });
     if (ok) { intent.finish(); close(result); return; }
     if (closedCodes.includes(codeOf(failure))) {
@@ -457,14 +459,14 @@ function useAccessAction(slot: string, closedCodes: string[], close: (result: Ac
     settleFailure(failure, intent.locked, intent, intent.setLocked);
     void refresh();
   }
-  return { scope, action, locked: intent.locked, lockedBody: intent.lockedBody, run };
+  return { scope, action, locked: intent.locked, inFlight: intent.inFlight, lockedBody: intent.lockedBody, run };
 }
 
 /** Entrada de quem tem autorização vigente: conferência indicada pela portaria; nunca rotulada como passagem de equipamento. */
 function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: string | null; permitId: string | null }; visitorName: string; unit: string;
   close(result: ActionResult | null): void }) {
   const slot = basis.arrivalId ? `entry:arrival:${basis.arrivalId}` : `entry:permit:${basis.permitId}`;
-  const { scope, action, locked, lockedBody, run } = useAccessAction(slot, entryClosedCodes, close);
+  const { scope, action, locked, inFlight, lockedBody, run } = useAccessAction(slot, entryClosedCodes, close);
   // Envio travado reabre com os mesmos dados (mesma chave e mesmo conteúdo).
   const pending = lockedBody as AccessEntryBody | null;
   const [evidence, setEvidence] = useState<AccessEvidence | ''>(pending?.evidence ?? '');
@@ -481,7 +483,7 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta entrada já estava registrada' : 'Entrada registrada'}: ${done.record.visitorName} em ${unitName(done.record)}, às ${formatWhen(done.record.enteredAt, scope.timeZone)}, pela portaria (${evidenceText[done.record.evidence]}).` }
         : { tone: 'warning', text: 'A resposta não confirmou esta entrada. Atualize os registros antes de repetir.' });
   }
-  const busy = action.state.pending || locked;
+  const busy = action.state.pending || locked || inFlight;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Registrar entrada de ${visitorName}`}>
     <Notice>Registro manual da portaria para <bdi>{visitorName}</bdi> ({unit}), com autorização vigente. Não representa passagem detectada por equipamento.</Notice>
     <fieldset className="weekday-fieldset"><legend>Como a pessoa foi conferida</legend>
@@ -497,14 +499,14 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
     <ActionFeedback state={action.state} success={false} />
     {locked ? <Notice tone="warning">O resultado não foi confirmado e o registro ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo registro”: se a entrada já foi gravada, nada novo é criado.</Notice> : null}
     <div className="button-row">
-      <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Registrando…' : locked ? 'Tentar confirmar o mesmo registro' : 'Registrar entrada'}</button>
+      <button className="button" type="submit" disabled={!valid || action.state.pending || inFlight}>{action.state.pending || inFlight ? 'Registrando…' : locked ? 'Tentar confirmar o mesmo registro' : 'Registrar entrada'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
     </div>
   </form>;
 }
 
 function ExitForm({ record, close }: { record: AccessRecord; close(result: ActionResult | null): void }) {
-  const { scope, action, locked, lockedBody, run } = useAccessAction(`exit:${record.entryId}`, exitClosedCodes, close);
+  const { scope, action, locked, inFlight, lockedBody, run } = useAccessAction(`exit:${record.entryId}`, exitClosedCodes, close);
   const pending = lockedBody as { exit: string; note: string | null } | null;
   const [note, setNote] = useState(pending?.note ?? '');
   const normalizedNote = collapseText(note) ? displayText(note, 300) : '';
@@ -526,7 +528,7 @@ function ExitForm({ record, close }: { record: AccessRecord; close(result: Actio
     <ActionFeedback state={action.state} success={false} />
     {locked ? <Notice tone="warning">O resultado não foi confirmado. Atualize os registros: se a saída já aparece, não repita.</Notice> : null}
     <div className="button-row">
-      <button className="button" type="submit" disabled={normalizedNote === null || action.state.pending}>{action.state.pending ? 'Registrando…' : locked ? 'Tentar confirmar a mesma saída' : 'Registrar saída'}</button>
+      <button className="button" type="submit" disabled={normalizedNote === null || action.state.pending || inFlight}>{action.state.pending || inFlight ? 'Registrando…' : locked ? 'Tentar confirmar a mesma saída' : 'Registrar saída'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
     </div>
   </form>;
@@ -536,7 +538,7 @@ function ExitForm({ record, close }: { record: AccessRecord; close(result: Actio
 function CorrectionForm({ record, target, close }: { record: AccessRecord; target: 'entry' | 'exit'; close(result: ActionResult | null): void }) {
   // Alvo fixado ao abrir: a lista atualizada a cada 10 s não troca a saída que está sendo corrigida.
   const [eventId] = useState(() => target === 'entry' ? record.entryId : record.exit!.eventId);
-  const { scope, action, locked, lockedBody, run } = useAccessAction(`correct:${eventId}`, correctionClosedCodes, close);
+  const { scope, action, locked, inFlight, lockedBody, run } = useAccessAction(`correct:${eventId}`, correctionClosedCodes, close);
   const pending = lockedBody as { correct: string; reason: string } | null;
   const [reason, setReason] = useState(pending?.reason ?? '');
   const normalized = displayText(reason, 300);
@@ -554,11 +556,11 @@ function CorrectionForm({ record, target, close }: { record: AccessRecord; targe
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Corrigir ${target === 'entry' ? 'entrada' : 'saída'} de ${record.visitorName}`}>
     <Notice tone="warning">Use quando o registro foi feito por engano (pessoa errada, entrada ou saída que não aconteceu). A correção fica ao lado do registro original, que não é apagado. O motivo aparece para a unidade: não registre dados pessoais.</Notice>
     <label htmlFor={`${id}-reason`}>Motivo da correção</label>
-    <textarea id={`${id}-reason`} required maxLength={300} rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={action.state.pending || locked} />
+    <textarea id={`${id}-reason`} required maxLength={300} rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={action.state.pending || locked || inFlight} />
     <ActionFeedback state={action.state} success={false} />
     {locked ? <Notice tone="warning">O resultado não foi confirmado. Atualize os registros antes de repetir.</Notice> : null}
     <div className="button-row">
-      <button className="button button-danger" type="submit" disabled={normalized === null || action.state.pending}>{action.state.pending ? 'Corrigindo…' : locked ? 'Tentar confirmar a mesma correção' : 'Registrar correção'}</button>
+      <button className="button button-danger" type="submit" disabled={normalized === null || action.state.pending || inFlight}>{action.state.pending || inFlight ? 'Corrigindo…' : locked ? 'Tentar confirmar a mesma correção' : 'Registrar correção'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
     </div>
   </form>;

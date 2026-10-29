@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { TENANT_A, UNIT_A, installSyntheticApi, signIn } from './fixtures';
+import { TENANT_A, UNIT_A, chooseContext, installSyntheticApi, signIn } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
 test.use({ timezoneId: 'UTC' });
@@ -139,6 +139,37 @@ test('unidade abre pedido com chave pendente, conversa no próprio pedido e não
   await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Pode vir à tarde.')).toBeVisible();
   await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Você')).toBeVisible();
   expect(state.messages.map((item) => item.body)).toEqual([{ body: 'Pode vir à tarde.' }]);
+});
+
+test('pedido com resultado incerto não fica pendente para a próxima conta depois de sair', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installRequestsApi(page);
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.getByRole('button', { name: 'Abrir pedido' }).click();
+  const form = page.getByRole('form', { name: 'Abrir pedido' });
+  await form.getByLabel('Título').fill('Portão travado');
+  await form.getByLabel('Descrição').fill('Não abre pelo controle.');
+  state.loseNextOpen = true;
+  await form.getByRole('button', { name: 'Enviar pedido' }).click();
+  await expect(form.getByText('O resultado não foi confirmado e o pedido ficou travado', { exact: false })).toBeVisible();
+  // Nova entrada na mesma aba, sem recarregar a página (a memória da aba continua).
+  await page.getByRole('button', { name: 'Sair', exact: true }).click();
+  await page.getByLabel('E-mail', { exact: true }).fill('morador-sintetico@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByLabel('Senha', { exact: true }).press('Enter');
+  await expect(page).toHaveURL(/\/contextos/);
+  await chooseContext(page, 'A', 'inicio');
+  await page.getByRole('button', { name: 'Abrir pedido' }).click();
+  const reopened = page.getByRole('form', { name: 'Abrir pedido' });
+  await expect(reopened.getByLabel('Título')).toHaveValue('');
+  await expect(reopened.getByText('O resultado não foi confirmado', { exact: false })).toHaveCount(0);
+  await expect(reopened.getByRole('button', { name: 'Enviar pedido' })).toBeVisible();
+  await reopened.getByLabel('Título').fill('Outro pedido');
+  await reopened.getByLabel('Descrição').fill('Texto do outro pedido.');
+  await reopened.getByRole('button', { name: 'Enviar pedido' }).click();
+  await expect.poll(() => state.opens.length).toBe(2);
+  expect(state.opens[1]!.key).not.toBe(state.opens[0]!.key);
 });
 
 test('gestão registra comentário interno, define responsável e prazo e conclui com resolução visível', async ({ page }) => {

@@ -7,7 +7,9 @@ describe('operação pendente por alvo', () => {
   it('reabrir com os mesmos dados reaproveita a chave; dados novos sem trava geram outra', () => {
     const slot = 'tenant:entry:permit:teste-1';
     const first = pendingOperation.keyFor(slot, '{"note":null}', { note: null });
+    pendingOperation.settle(slot); // resposta recebida (recusa de regra, por exemplo), sem trava
     expect(pendingOperation.keyFor(slot, '{"note":null}', { note: null })).toBe(first);
+    pendingOperation.settle(slot);
     const other = pendingOperation.keyFor(slot, '{"note":"x"}', { note: 'x' });
     expect(other).not.toBe(first);
     pendingOperation.clear(slot);
@@ -31,5 +33,47 @@ describe('operação pendente por alvo', () => {
     settleFailure(new ApiError(409, 'ACCESS_STATE_CHANGED', 'Mudou'), true, intent, (value) => pendingOperation.lock(slot, value));
     expect(pendingOperation.get(slot)?.locked).toBe(false);
     pendingOperation.clear(slot);
+  });
+  it('desde o início do envio a chave e os dados ficam presos ao alvo até a resposta', () => {
+    const slot = 'tenant:entry:permit:teste-3';
+    const key = pendingOperation.keyFor(slot, '{"evidence":"DOCUMENT_CHECKED"}', { evidence: 'DOCUMENT_CHECKED' });
+    expect(pendingOperation.get(slot)).toMatchObject({ key, inFlight: true, locked: false });
+    // Outro formulário do mesmo alvo, com outros dados, não troca a chave enquanto o primeiro envio não respondeu.
+    expect(pendingOperation.keyFor(slot, '{"evidence":"RECOGNIZED_BY_UNIT"}', { evidence: 'RECOGNIZED_BY_UNIT' })).toBe(key);
+    expect(pendingOperation.get(slot)?.body).toEqual({ evidence: 'DOCUMENT_CHECKED' });
+    // Resposta recebida sem trava: dados novos voltam a gerar outra chave.
+    pendingOperation.settle(slot);
+    expect(pendingOperation.get(slot)?.inFlight).toBe(false);
+    expect(pendingOperation.keyFor(slot, '{"evidence":"RECOGNIZED_BY_UNIT"}', { evidence: 'RECOGNIZED_BY_UNIT' })).not.toBe(key);
+    // Resultado incerto trava e encerra o "em andamento" na mesma operação.
+    pendingOperation.lock(slot, true);
+    expect(pendingOperation.get(slot)).toMatchObject({ locked: true, inFlight: false });
+    pendingOperation.clear(slot);
+  });
+  it('a pendência pertence à conta: outra conta, saída ou sessão perdida encontram a lista vazia', () => {
+    const slot = 'tenant:ask:permit-4';
+    pendingOperation.bindAccount('conta-a');
+    pendingOperation.keyFor(slot, '{}', {});
+    pendingOperation.lock(slot, true);
+    pendingOperation.bindAccount('conta-a');
+    expect(pendingOperation.get(slot)?.locked).toBe(true);
+    pendingOperation.bindAccount('conta-b');
+    expect(pendingOperation.get(slot)).toBeNull();
+    pendingOperation.keyFor(slot, '{}', {});
+    pendingOperation.clearAll();
+    expect(pendingOperation.get(slot)).toBeNull();
+  });
+  it('avisa quem acompanha o alvo a cada mudança', () => {
+    let calls = 0;
+    const stop = pendingOperation.subscribe(() => { calls += 1; });
+    const before = pendingOperation.revision();
+    pendingOperation.keyFor('tenant:x', '{}', {});
+    pendingOperation.settle('tenant:x');
+    pendingOperation.clear('tenant:x');
+    stop();
+    pendingOperation.keyFor('tenant:x', '{}', {});
+    expect(calls).toBe(3);
+    expect(pendingOperation.revision()).toBeGreaterThan(before);
+    pendingOperation.clear('tenant:x');
   });
 });

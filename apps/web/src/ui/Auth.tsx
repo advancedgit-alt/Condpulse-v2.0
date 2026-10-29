@@ -6,6 +6,7 @@ import type { CurrentIdentity, InvitationFirstAccess } from '../api/types';
 import { Brand, ErrorState, Icon, Loading, Notice, RateLimitNotice, errorMessage } from './primitives';
 import { useCooldown } from './cooldown';
 import { forgetInvitation, storedInvitation } from './invitationStorage';
+import { pendingOperation } from './operationIntent';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated' | 'blocked' | 'unavailable' | 'logoutPending' | 'logoutUnconfirmed';
 interface AuthValue {
@@ -32,6 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMode(failure instanceof ApiError && failure.status === 401 ? 'anonymous'
       : failure instanceof ApiError && failure.code === 'ACCOUNT_INACTIVE' ? 'blocked' : 'unavailable');
     void queries.cancelQueries(); queries.clear();
+    // Envio pendente pertence à sessão encerrada: a próxima entrada nesta aba não o herda.
+    pendingOperation.clearAll();
   }), [queries]);
   const needsLogin = mode === 'anonymous' || mode === 'ready' && !identity.isFetching
     && identity.error instanceof ApiError && identity.error.status === 401;
@@ -49,6 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     : identity.isPending ? 'loading' : identity.isError
       ? identity.error instanceof ApiError && identity.error.status === 403 ? 'blocked' : 'unavailable'
       : 'authenticated';
+  // Pendências de envio pertencem à conta autenticada: outra conta nesta aba encontra a lista vazia.
+  const authenticatedAccount = status === 'authenticated' ? identity.data?.accountId ?? null : null;
+  useEffect(() => { if (authenticatedAccount) pendingOperation.bindAccount(authenticatedAccount); }, [authenticatedAccount]);
   useEffect(() => {
     if (status === 'blocked' || status === 'unavailable') {
       void queries.cancelQueries({ queryKey: ['private'] });
@@ -60,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (status !== 'anonymous') throw new ApiError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'O serviço de acesso está temporariamente indisponível.');
     const epoch = ++authEpoch.current;
     setMode('loginPending'); setModeError(null);
+    pendingOperation.clearAll();
     let accepted = false;
     try {
       await queries.cancelQueries(); queries.clear(); api.clearSession();
@@ -83,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (status !== 'anonymous' && status !== 'blocked') throw new ApiError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'O serviço de acesso está temporariamente indisponível.');
     const epoch = ++authEpoch.current;
     setMode('loginPending'); setModeError(null);
+    pendingOperation.clearAll();
     let accepted = false;
     try {
       await queries.cancelQueries(); queries.clear(); api.clearSession();
@@ -110,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMode('logoutPending'); setModeError(null);
     // Convite pendente pertence a quem abriu o link: a próxima conta desta aba não o herda.
     forgetInvitation();
+    pendingOperation.clearAll();
     await queries.cancelQueries(); queries.clear(); api.clearSession();
     try { await api.logout(); if (epoch === authEpoch.current) setMode('ready'); }
     catch (failure) { if (epoch === authEpoch.current) { setModeError(failure); setMode('logoutUnconfirmed'); } }

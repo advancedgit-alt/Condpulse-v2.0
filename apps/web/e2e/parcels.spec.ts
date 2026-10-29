@@ -191,6 +191,28 @@ test('duplicidade suspeita pede confirmação explícita e resultado incerto tra
   expect(state.parcels.filter((item) => item.storageLocation === 'Armário 8')).toHaveLength(1);
 });
 
+test('repetir um recebimento incerto confirmado como outra encomenda mantém a confirmação e a chave', async ({ page }) => {
+  const state = await openConcierge(page);
+  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  const form = page.getByRole('form', { name: 'Receber encomenda' });
+  await form.getByLabel('Unidade', { exact: true }).selectOption(UNIT_A);
+  await form.getByLabel('Local de guarda').fill('Armário 9');
+  state.suspectDuplicate = true;
+  await form.getByRole('button', { name: 'Registrar recebimento' }).click();
+  await expect(form.getByRole('button', { name: 'É outra encomenda: registrar' })).toBeVisible();
+  // A confirmação de duplicidade é gravada, mas a resposta se perde.
+  state.loseNextReceive = true;
+  await form.getByRole('button', { name: 'É outra encomenda: registrar' }).click();
+  await expect(form.getByText('O resultado do último envio não foi confirmado', { exact: false })).toBeVisible();
+  await form.getByRole('button', { name: 'Tentar confirmar o mesmo envio' }).click();
+  await expect(page.getByText('Este recebimento já estava registrado com os mesmos dados. Nada novo foi criado.')).toBeVisible();
+  const confirmations = state.receives.filter((item) => item.body.storageLocation === 'Armário 9' && item.body.confirmDuplicate === true);
+  expect(confirmations).toHaveLength(2);
+  expect(confirmations[1]!.key).toBe(confirmations[0]!.key);
+  expect(state.receives.filter((item) => item.body.storageLocation === 'Armário 9' && !item.body.confirmDuplicate)).toHaveLength(1);
+  expect(state.parcels.filter((item) => item.storageLocation === 'Armário 9')).toHaveLength(1);
+});
+
 test('registro indevido é anulado com motivo e a fila filtra por unidade', async ({ page }) => {
   const state = await openConcierge(page);
   state.parcels.push(waiting());

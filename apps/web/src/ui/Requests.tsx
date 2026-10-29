@@ -72,7 +72,7 @@ function OpenForm({ scope, close }: { scope: Scope; close(created: { requestId: 
   const locked = intent.locked;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!valid || busy) return;
+    if (!valid || busy || intent.inFlight) return;
     const body: OpenRequestBody = { category, title: normalizedTitle!, description: normalizedDescription! };
     const operationKey = intent.keyFor(JSON.stringify(body), body);
     setBusy(true); setFailure(null);
@@ -87,7 +87,7 @@ function OpenForm({ scope, close }: { scope: Scope; close(created: { requestId: 
       setFailure(repeatFailure(error));
       settleFailure(error, intent.locked, intent, intent.setLocked);
       void queries.invalidateQueries({ queryKey: [...scopeKey(scope), 'requests'] });
-    } finally { setBusy(false); }
+    } finally { intent.settle(); setBusy(false); }
   }
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label="Abrir pedido">
     <label htmlFor="request-category">Categoria</label>
@@ -103,7 +103,7 @@ function OpenForm({ scope, close }: { scope: Scope; close(created: { requestId: 
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}</Notice> : null}
     {locked ? <Notice tone="warning">O resultado não foi confirmado e o pedido ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo pedido”: se ele já foi enviado, nada novo é gravado.</Notice> : null}
     <div className="button-row">
-      <button className="button" type="submit" disabled={!valid || busy}>{busy ? 'Enviando…' : locked ? 'Tentar confirmar o mesmo pedido' : 'Enviar pedido'}</button>
+      <button className="button" type="submit" disabled={!valid || busy || intent.inFlight}>{busy || intent.inFlight ? 'Enviando…' : locked ? 'Tentar confirmar o mesmo pedido' : 'Enviar pedido'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={busy}>Voltar</button>
     </div>
   </form>;
@@ -147,7 +147,7 @@ function ReplyForm({ scope, request }: { scope: Scope; request: UnitRequest }) {
   const id = `request-reply-${request.requestId}`;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (normalized === null || busy) return;
+    if (normalized === null || busy || intent.inFlight) return;
     const operationKey = intent.keyFor(normalized, { body: normalized });
     setBusy(true); setFailure(null);
     try {
@@ -157,7 +157,7 @@ function ReplyForm({ scope, request }: { scope: Scope; request: UnitRequest }) {
       setFailure(repeatFailure(error));
       settleFailure(error, intent.locked, intent, intent.setLocked);
     } finally {
-      setBusy(false);
+      intent.settle(); setBusy(false);
       void queries.invalidateQueries({ queryKey: [...scopeKey(scope), 'request', request.requestId] });
       void queries.invalidateQueries({ queryKey: [...scopeKey(scope), 'requests'] });
     }
