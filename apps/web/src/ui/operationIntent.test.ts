@@ -76,4 +76,21 @@ describe('operação pendente por alvo', () => {
     expect(pendingOperation.revision()).toBeGreaterThan(before);
     pendingOperation.clear('tenant:x');
   });
+  it('envio concluído mantém a identidade só para o formulário reaberto com os dados dele', () => {
+    const slot = 'tenant:request-message:r-5';
+    const key = pendingOperation.keyFor(slot, 'Mensagem', { body: 'Mensagem' });
+    // Formulário reaberto durante o envio recebe a chave do envio em andamento como origem dos dados.
+    const restored = pendingOperation.get(slot)!.key;
+    pendingOperation.complete(slot);
+    expect(pendingOperation.get(slot)).toMatchObject({ completed: true, inFlight: false, key });
+    // O reaberto, com os mesmos dados, repete a mesma chave (o servidor devolve o que já foi gravado).
+    expect(pendingOperation.keyFor(slot, 'Mensagem', { body: 'Mensagem' }, restored)).toBe(key);
+    pendingOperation.complete(slot);
+    // Quem não veio daquele envio (ou mudou o texto) começa uma operação nova.
+    expect(pendingOperation.keyFor(slot, 'Mensagem', { body: 'Mensagem' })).not.toBe(key);
+    pendingOperation.complete(slot);
+    expect(pendingOperation.keyFor(slot, 'Outra', { body: 'Outra' }, restored)).not.toBe(key);
+    pendingOperation.clear(slot);
+  });
 });
+

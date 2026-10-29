@@ -143,6 +143,7 @@ function DraftForm({ targets, current, close }: { targets: { blocks: Target[]; u
           onChange={(event) => setSelected((previous) => event.target.checked ? [...previous, item.id] : previous.filter((value) => value !== item.id))} /><bdi>{item.label}</bdi></label>)}
       </fieldset> : null}
     <ActionFeedback state={action.state} success={false} />
+    {!current && intent.completedElsewhere ? <Notice>Este rascunho já foi criado pelo formulário aberto antes. Criar de novo só confirma o mesmo rascunho; confira a lista.</Notice> : null}
     {locked ? <Notice tone="warning">O resultado não foi confirmado e o rascunho ficou travado, mesmo se você fechar o formulário. Use “Tentar confirmar o mesmo rascunho”: se ele já foi criado, nada novo é gravado.</Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Salvando…' : locked ? 'Tentar confirmar o mesmo rascunho' : current ? 'Salvar rascunho' : 'Criar rascunho'}</button>
