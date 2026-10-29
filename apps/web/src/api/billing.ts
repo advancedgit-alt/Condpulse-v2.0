@@ -24,8 +24,16 @@ export interface BillingChargePage { charges: BillingCharge[]; truncated: boolea
 
 const PERIODS: readonly BillingPeriod[] = ['MONTHLY', 'YEARLY'];
 const METHODS: readonly PaymentMethod[] = ['PIX', 'TRANSFERENCIA', 'BOLETO', 'OUTRO'];
-const civil = (value: unknown): value is CivilDate => isString(value) && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`));
-const cents = (value: unknown): value is number => isInteger(value) && value <= 100_000_000;
+/** Data civil existente (2030-02-30 é recusada): o calendário confere ano, mês e dia de volta. */
+export function isCivilDate(value: unknown): value is CivilDate {
+  if (!isString(value) || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return year >= 1000 && date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+const civil = isCivilDate;
+/** Valores financeiros sempre positivos: não há plano, cobrança ou pagamento de R$ 0. */
+const cents = (value: unknown): value is number => isInteger(value) && value >= 1 && value <= 100_000_000;
 
 export function billingPlan(value: unknown, uncertain = false): BillingPlan {
   if (!record(value) || !isUUID(value.planId) || !isString(value.name) || !cents(value.priceCents) || !oneOf(value.period, PERIODS)

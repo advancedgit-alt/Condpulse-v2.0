@@ -5,7 +5,8 @@
 CREATE TABLE platform.billing_plans (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 120),
- price_cents bigint NOT NULL CHECK (price_cents BETWEEN 0 AND 100000000),
+ -- Valor maior que zero: isenção não existe neste recorte (cobrança de R$ 0 não teria como ser paga).
+ price_cents bigint NOT NULL CHECK (price_cents BETWEEN 1 AND 100000000),
  period text NOT NULL CHECK (period IN ('MONTHLY','YEARLY')),
  active boolean NOT NULL DEFAULT true,
  version bigint NOT NULL DEFAULT 0 CHECK (version >= 0),
@@ -20,16 +21,17 @@ CREATE TABLE platform.billing_subscriptions (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  tenant_id uuid NOT NULL REFERENCES platform.tenants(id),
  plan_id uuid NOT NULL REFERENCES platform.billing_plans(id),
- price_cents bigint NOT NULL CHECK (price_cents BETWEEN 0 AND 100000000),
+ price_cents bigint NOT NULL CHECK (price_cents BETWEEN 1 AND 100000000),
  period text NOT NULL CHECK (period IN ('MONTHLY','YEARLY')),
- starts_on date NOT NULL,
- ends_on date,
+ starts_on date NOT NULL CHECK (starts_on BETWEEN DATE '2000-01-01' AND DATE '2100-12-28'),
+ ends_on date CHECK (ends_on IS NULL OR ends_on <= DATE '2101-12-31'),
  due_day smallint NOT NULL CHECK (due_day BETWEEN 1 AND 28),
  status text NOT NULL CHECK (status IN ('ACTIVE','ENDED')),
  version bigint NOT NULL DEFAULT 0 CHECK (version >= 0),
  created_by uuid NOT NULL REFERENCES platform.accounts(id),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  ended_at timestamptz,
+ UNIQUE (id, tenant_id),
  CHECK (ends_on IS NULL OR ends_on > starts_on),
  -- Início até o dia 28: os períodos mensais seguintes caem sempre no mesmo dia.
  CHECK (extract(day FROM starts_on) <= 28),
@@ -37,34 +39,39 @@ CREATE TABLE platform.billing_subscriptions (
 );
 CREATE UNIQUE INDEX billing_subscription_active ON platform.billing_subscriptions(tenant_id) WHERE status = 'ACTIVE';
 
--- Cobrança de um período [period_start, period_end) da assinatura. PAID só existe com pagamento registrado do mesmo
--- valor (gatilho diferido abaixo); cancelada não recebe pagamento.
+-- Cobrança de um período [period_start, period_end) da assinatura, do mesmo condomínio (chave composta). PAID só existe
+-- com pagamento registrado do mesmo valor (gatilho diferido abaixo); cancelada não recebe pagamento. Períodos não
+-- cancelados do mesmo condomínio não se sobrepõem (o mesmo período duas vezes inclusive), nem entre assinaturas
+-- diferentes; período cancelado pode ser cobrado de novo.
 CREATE TABLE platform.billing_charges (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- subscription_id uuid NOT NULL REFERENCES platform.billing_subscriptions(id),
+ subscription_id uuid NOT NULL,
  tenant_id uuid NOT NULL REFERENCES platform.tenants(id),
- period_start date NOT NULL,
+ period_start date NOT NULL CHECK (period_start BETWEEN DATE '2000-01-01' AND DATE '2100-12-31'),
  period_end date NOT NULL,
- amount_cents bigint NOT NULL CHECK (amount_cents BETWEEN 0 AND 100000000),
+ amount_cents bigint NOT NULL CHECK (amount_cents BETWEEN 1 AND 100000000),
  due_on date NOT NULL,
  status text NOT NULL CHECK (status IN ('OPEN','PAID','CANCELLED')),
  cancel_reason text CHECK (cancel_reason IS NULL OR length(btrim(cancel_reason)) BETWEEN 1 AND 500),
  version bigint NOT NULL DEFAULT 0 CHECK (version >= 0),
  created_by uuid NOT NULL REFERENCES platform.accounts(id),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- UNIQUE (subscription_id, period_start),
- CHECK (period_end > period_start AND due_on >= period_start),
- CHECK ((status = 'CANCELLED') = (cancel_reason IS NOT NULL))
+ FOREIGN KEY (subscription_id, tenant_id) REFERENCES platform.billing_subscriptions(id, tenant_id),
+ CHECK (period_end > period_start AND due_on >= period_start AND due_on < period_end),
+ CHECK ((status = 'CANCELLED') = (cancel_reason IS NOT NULL)),
+ CONSTRAINT billing_charges_no_overlap EXCLUDE USING gist (tenant_id WITH =, daterange(period_start, period_end) WITH &&)
+  WHERE (status <> 'CANCELLED')
 );
 CREATE INDEX billing_charges_due ON platform.billing_charges(status, due_on);
 
 -- Pagamento registrado manualmente: referência do comprovante (identificador da transação ou recibo), responsável e
--- data. Estorno de registro errado mantém a linha (VOIDED) com motivo e responsável; nada é apagado.
+-- data. Estorno de registro errado mantém a linha (VOIDED) com motivo e responsável; nada é apagado. Um comprovante
+-- registrado quita uma única cobrança.
 CREATE TABLE platform.billing_payments (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  charge_id uuid NOT NULL REFERENCES platform.billing_charges(id),
- amount_cents bigint NOT NULL CHECK (amount_cents BETWEEN 0 AND 100000000),
- paid_on date NOT NULL,
+ amount_cents bigint NOT NULL CHECK (amount_cents BETWEEN 1 AND 100000000),
+ paid_on date NOT NULL CHECK (paid_on >= DATE '2000-01-01'),
  method text NOT NULL CHECK (method IN ('PIX','TRANSFERENCIA','BOLETO','OUTRO')),
  reference text NOT NULL CHECK (length(btrim(reference)) BETWEEN 3 AND 200),
  status text NOT NULL CHECK (status IN ('RECORDED','VOIDED')),
@@ -76,6 +83,7 @@ CREATE TABLE platform.billing_payments (
  CHECK ((status = 'VOIDED') = (voided_by IS NOT NULL AND voided_at IS NOT NULL AND void_reason IS NOT NULL))
 );
 CREATE UNIQUE INDEX billing_payment_recorded ON platform.billing_payments(charge_id) WHERE status = 'RECORDED';
+CREATE UNIQUE INDEX billing_payment_reference ON platform.billing_payments(method, lower(btrim(reference))) WHERE status = 'RECORDED';
 
 -- Consistência financeira conferida no commit, para qualquer papel: cobrança PAID tem exatamente um pagamento
 -- registrado do mesmo valor; cobrança OPEN ou CANCELLED não tem pagamento registrado.
@@ -107,26 +115,111 @@ CREATE CONSTRAINT TRIGGER billing_charge_consistency AFTER INSERT OR UPDATE ON p
 CREATE CONSTRAINT TRIGGER billing_payment_consistency AFTER INSERT OR UPDATE ON platform.billing_payments
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION platform.billing_charge_consistency();
 
--- Estados encerrados não voltam: assinatura ENDED, cobrança CANCELLED e pagamento VOIDED são finais; cobrança PAID
--- só volta a OPEN quando o pagamento é estornado (conferido pelo gatilho diferido).
-CREATE FUNCTION platform.billing_transition_guard() RETURNS trigger
+-- Regras que não dependem só do Java, conferidas antes da gravação (executa como quem grava; registro de referência
+-- invisível falha fechado): assinatura copia o plano ativo e não começa antes do fim de outra do mesmo condomínio;
+-- cobrança alinhada ao início da assinatura, com o valor contratado, o vencimento da regra e dentro do encerramento;
+-- pagamento com data até hoje no fuso de operação.
+CREATE FUNCTION platform.billing_insert_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE
+ plan_row record;
+ sub record;
+ latest date;
+ aligned boolean;
+ expected_end date;
+ expected_due date;
+ next_month date;
 BEGIN
- IF NEW.status IS DISTINCT FROM OLD.status AND (
-     (TG_TABLE_NAME = 'billing_subscriptions' AND OLD.status = 'ENDED')
-  OR (TG_TABLE_NAME = 'billing_charges' AND (OLD.status = 'CANCELLED' OR (OLD.status = 'PAID' AND NEW.status = 'CANCELLED')))
-  OR (TG_TABLE_NAME = 'billing_payments' AND OLD.status = 'VOIDED')) THEN
-  RAISE EXCEPTION 'Transição financeira não permitida.' USING ERRCODE = '23514';
+ IF TG_TABLE_NAME = 'billing_subscriptions' THEN
+  SELECT p.price_cents, p.period, p.active INTO plan_row FROM platform.billing_plans p WHERE p.id = NEW.plan_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Plano não visível.' USING ERRCODE = '42501'; END IF;
+  IF NOT plan_row.active OR plan_row.price_cents <> NEW.price_cents OR plan_row.period <> NEW.period
+     OR NEW.ends_on IS NOT NULL OR NEW.ended_at IS NOT NULL THEN
+   RAISE EXCEPTION 'Assinatura diverge do plano vigente.' USING ERRCODE = '23514';
+  END IF;
+  SELECT max(s.ends_on) INTO latest FROM platform.billing_subscriptions s WHERE s.tenant_id = NEW.tenant_id;
+  IF latest IS NOT NULL AND NEW.starts_on < latest THEN
+   RAISE EXCEPTION 'Assinatura sobrepõe contrato anterior do condomínio.' USING ERRCODE = '23P01';
+  END IF;
+ ELSIF TG_TABLE_NAME = 'billing_charges' THEN
+  SELECT s.tenant_id, s.price_cents, s.period, s.starts_on, s.ends_on, s.due_day INTO sub
+   FROM platform.billing_subscriptions s WHERE s.id = NEW.subscription_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Assinatura não visível.' USING ERRCODE = '42501'; END IF;
+  IF sub.period = 'MONTHLY' THEN
+   expected_end := (NEW.period_start + interval '1 month')::date;
+   aligned := extract(day FROM NEW.period_start) = extract(day FROM sub.starts_on);
+  ELSE
+   expected_end := (NEW.period_start + interval '1 year')::date;
+   aligned := extract(month FROM NEW.period_start) = extract(month FROM sub.starts_on)
+    AND extract(day FROM NEW.period_start) = extract(day FROM sub.starts_on);
+  END IF;
+  -- Mesma regra do Java: dia de vencimento no próprio mês se ainda não passou do início; senão, no mês seguinte.
+  next_month := (NEW.period_start + interval '1 month')::date;
+  expected_due := CASE WHEN sub.due_day >= extract(day FROM NEW.period_start)
+   THEN make_date(extract(year FROM NEW.period_start)::int, extract(month FROM NEW.period_start)::int, sub.due_day)
+   ELSE make_date(extract(year FROM next_month)::int, extract(month FROM next_month)::int, sub.due_day) END;
+  IF NOT aligned OR NEW.period_start < sub.starts_on OR NEW.period_end <> expected_end OR NEW.amount_cents <> sub.price_cents
+     OR NEW.due_on <> expected_due OR (sub.ends_on IS NOT NULL AND NEW.period_end > sub.ends_on) OR NEW.tenant_id <> sub.tenant_id THEN
+   RAISE EXCEPTION 'Cobrança diverge da assinatura.' USING ERRCODE = '23514';
+  END IF;
+ ELSE
+  IF NEW.paid_on > (clock_timestamp() AT TIME ZONE 'America/Sao_Paulo')::date
+     OR NEW.voided_by IS NOT NULL OR NEW.voided_at IS NOT NULL OR NEW.void_reason IS NOT NULL THEN
+   RAISE EXCEPTION 'Pagamento com data futura ou estorno na inclusão.' USING ERRCODE = '23514';
+  END IF;
  END IF;
  RETURN NEW;
 END $$;
-REVOKE ALL ON FUNCTION platform.billing_transition_guard() FROM PUBLIC;
-CREATE TRIGGER billing_subscription_transition BEFORE UPDATE OF status ON platform.billing_subscriptions
- FOR EACH ROW EXECUTE FUNCTION platform.billing_transition_guard();
-CREATE TRIGGER billing_charge_transition BEFORE UPDATE OF status ON platform.billing_charges
- FOR EACH ROW EXECUTE FUNCTION platform.billing_transition_guard();
-CREATE TRIGGER billing_payment_transition BEFORE UPDATE OF status ON platform.billing_payments
- FOR EACH ROW EXECUTE FUNCTION platform.billing_transition_guard();
+REVOKE ALL ON FUNCTION platform.billing_insert_guard() FROM PUBLIC;
+CREATE TRIGGER billing_subscription_insert BEFORE INSERT ON platform.billing_subscriptions
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_insert_guard();
+CREATE TRIGGER billing_charge_insert BEFORE INSERT ON platform.billing_charges
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_insert_guard();
+CREATE TRIGGER billing_payment_insert BEFORE INSERT ON platform.billing_payments
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_insert_guard();
+
+-- Toda alteração é uma transição permitida com a versão avançando uma unidade e horário do banco: plano por versão;
+-- assinatura ACTIVE -> ENDED; cobrança OPEN -> PAID/CANCELLED e PAID -> OPEN (estorno, conferido pelo gatilho
+-- diferido); pagamento RECORDED -> VOIDED. Estados finais (ENDED, CANCELLED, VOIDED) não mudam mais.
+CREATE FUNCTION platform.billing_update_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF TG_TABLE_NAME = 'billing_plans' THEN
+  IF NEW.version <> OLD.version + 1 THEN
+   RAISE EXCEPTION 'Versão do plano deve avançar uma unidade.' USING ERRCODE = '23514';
+  END IF;
+  NEW.updated_at := clock_timestamp();
+ ELSIF TG_TABLE_NAME = 'billing_subscriptions' THEN
+  IF OLD.status <> 'ACTIVE' OR NEW.status <> 'ENDED' OR NEW.version <> OLD.version + 1 THEN
+   RAISE EXCEPTION 'Transição de assinatura não permitida.' USING ERRCODE = '23514';
+  END IF;
+  IF EXISTS (SELECT 1 FROM platform.billing_charges c WHERE c.subscription_id = NEW.id AND c.status <> 'CANCELLED'
+     AND c.period_end > NEW.ends_on) THEN
+   RAISE EXCEPTION 'Há cobrança depois do encerramento.' USING ERRCODE = '23514';
+  END IF;
+  NEW.ended_at := clock_timestamp();
+ ELSIF TG_TABLE_NAME = 'billing_charges' THEN
+  IF NEW.version <> OLD.version + 1 OR NOT ((OLD.status = 'OPEN' AND NEW.status IN ('PAID','CANCELLED'))
+     OR (OLD.status = 'PAID' AND NEW.status = 'OPEN')) THEN
+   RAISE EXCEPTION 'Transição de cobrança não permitida.' USING ERRCODE = '23514';
+  END IF;
+ ELSE
+  IF OLD.status <> 'RECORDED' OR NEW.status <> 'VOIDED' THEN
+   RAISE EXCEPTION 'Transição de pagamento não permitida.' USING ERRCODE = '23514';
+  END IF;
+  NEW.voided_at := clock_timestamp();
+ END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION platform.billing_update_guard() FROM PUBLIC;
+CREATE TRIGGER billing_plan_update BEFORE UPDATE ON platform.billing_plans
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_update_guard();
+CREATE TRIGGER billing_subscription_update BEFORE UPDATE ON platform.billing_subscriptions
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_update_guard();
+CREATE TRIGGER billing_charge_update BEFORE UPDATE ON platform.billing_charges
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_update_guard();
+CREATE TRIGGER billing_payment_update BEFORE UPDATE ON platform.billing_payments
+ FOR EACH ROW EXECUTE FUNCTION platform.billing_update_guard();
 
 ALTER TABLE platform.billing_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform.billing_plans FORCE ROW LEVEL SECURITY;

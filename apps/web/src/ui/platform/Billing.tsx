@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  billing, type BillingCharge, type BillingPeriod, type BillingPlan, type BillingSubscription, type ChargeFilter, type PaymentMethod,
+  billing, isCivilDate, type BillingCharge, type BillingPeriod, type BillingPlan, type BillingSubscription, type ChargeFilter, type PaymentMethod,
 } from '../../api/billing';
 import { platform } from '../../api/platform';
 import { displayText } from '../../api/text';
@@ -124,7 +124,7 @@ function ChargeEditor({ charge, action, close }: { charge: BillingCharge; action
   const normalizedReference = displayText(reference, 200);
   const normalizedReason = displayText(reason, 500);
   const valid = action === 'pay'
-    ? cents !== null && cents > 0 && /^\d{4}-\d{2}-\d{2}$/.test(paidOn) && paidOn <= today() && normalizedReference !== null && [...normalizedReference].length >= 3
+    ? cents !== null && cents > 0 && isCivilDate(paidOn) && paidOn <= today() && normalizedReference !== null && [...normalizedReference].length >= 3
     : normalizedReason !== null;
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -163,7 +163,7 @@ function ChargeEditor({ charge, action, close }: { charge: BillingCharge; action
       <label htmlFor={`${id}-reference`}>Referência do comprovante</label>
       <input id={`${id}-reference`} required maxLength={200} value={reference} onChange={(event) => setReference(event.target.value)} disabled={pending}
         aria-describedby={`${id}-reference-help`} />
-      <span className="field-help" id={`${id}-reference-help`}>Identificador do Pix, da transferência ou do boleto, de 3 a 200 caracteres.</span>
+      <span className="field-help" id={`${id}-reference-help`}>Identificador do Pix, da transferência ou do boleto, de 3 a 200 caracteres. Um comprovante registrado quita uma única cobrança.</span>
     </> : <>
       {action === 'void' ? <Notice tone="warning">O estorno marca o pagamento como registro errado, com o seu motivo, e a cobrança volta a ficar em aberto. Nada é devolvido automaticamente.</Notice>
         : <Notice tone="warning">A cobrança cancelada não volta a ficar em aberto. Use para período cobrado por engano.</Notice>}
@@ -197,21 +197,29 @@ function Subscriptions() {
       : subscriptions.isError && !subscriptions.data ? <ErrorState error={subscriptions.error} retry={() => void subscriptions.refetch()} />
         : !subscriptions.data || subscriptions.data.length === 0 ? <div className="panel"><Empty title="Nenhuma assinatura">As assinaturas dos condomínios aparecerão aqui.</Empty></div>
           : <ol className="management-list" aria-label="Assinaturas">{subscriptions.data.map((subscription) => <li key={subscription.subscriptionId} className="management-row">
-            <div><strong><bdi>{subscription.tenantName}</bdi></strong> <span className={`status-pill ${subscription.status === 'ACTIVE' ? 'status-ready' : 'status-neutral'}`}>{subscription.status === 'ACTIVE' ? 'Ativa' : 'Encerrada'}</span>
-              <span>Plano <bdi>{subscription.planName}</bdi> · {formatCents(subscription.priceCents)} por {perPeriod(subscription.period)} · início em {formatCivil(subscription.startsOn)} · vencimento no dia {subscription.dueDay}{subscription.endsOn ? ` · encerrada em ${formatCivil(subscription.endsOn)}` : ''}</span></div>
-            {manage && subscription.status === 'ACTIVE' && editing?.subscriptionId !== subscription.subscriptionId ? <div className="button-row">
+            <div><strong><bdi>{subscription.tenantName}</bdi></strong> <SubscriptionStatus subscription={subscription} />
+              <span>Plano <bdi>{subscription.planName}</bdi> · {formatCents(subscription.priceCents)} por {perPeriod(subscription.period)} · início em {formatCivil(subscription.startsOn)} · vencimento no dia {subscription.dueDay}{subscription.endsOn ? ` · ${subscription.endsOn > today() ? 'encerra' : 'encerrada'} em ${formatCivil(subscription.endsOn)}` : ''}</span></div>
+            {manage && editing?.subscriptionId !== subscription.subscriptionId ? <div className="button-row">
               <button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setCreating(false); setEditing({ subscriptionId: subscription.subscriptionId, action: 'charge' }); }}>Gerar cobrança</button>
-              <button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setCreating(false); setEditing({ subscriptionId: subscription.subscriptionId, action: 'end' }); }}>Encerrar assinatura</button></div> : null}
+              {subscription.status === 'ACTIVE' ? <button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setCreating(false); setEditing({ subscriptionId: subscription.subscriptionId, action: 'end' }); }}>Encerrar assinatura</button> : null}</div> : null}
             {manage && editing?.subscriptionId === subscription.subscriptionId ? editing.action === 'charge'
               ? <ChargeForm subscription={subscription} close={finish} /> : <EndSubscriptionForm subscription={subscription} close={finish} /> : null}
           </li>)}</ol>}
+    {subscriptions.data && subscriptions.data.length >= 500 ? <Notice tone="warning">A lista mostra 500 assinaturas: as ativas primeiro, em ordem alfabética do condomínio.</Notice> : null}
   </div>;
+}
+
+/** Encerramento com data futura é agendado: a assinatura já não aceita outro encerramento, mas segue em vigor até a data. */
+function SubscriptionStatus({ subscription }: { subscription: BillingSubscription }) {
+  const [label, tone] = subscription.status === 'ACTIVE' ? ['Ativa', 'status-ready']
+    : subscription.endsOn && subscription.endsOn > today() ? ['Encerramento agendado', 'status-pending'] : ['Encerrada', 'status-neutral'];
+  return <span className={`status-pill ${tone}`}>{label}</span>;
 }
 
 function ChargeForm({ subscription, close }: { subscription: BillingSubscription; close(result: Outcome | null): void }) {
   const { pending, notice, run } = useBillingAction();
   const [periodStart, setPeriodStart] = useState(subscription.startsOn);
-  const valid = /^\d{4}-\d{2}-\d{2}$/.test(periodStart);
+  const valid = isCivilDate(periodStart) && periodStart >= subscription.startsOn && (subscription.endsOn === null || periodStart < subscription.endsOn);
   const day = Number(subscription.startsOn.slice(8, 10));
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -223,9 +231,11 @@ function ChargeForm({ subscription, close }: { subscription: BillingSubscription
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Gerar cobrança de ${subscription.tenantName}`}>
     <p className="field-help">{subscription.period === 'MONTHLY'
       ? `O período mensal começa no dia ${day} de um mês, a partir de ${formatCivil(subscription.startsOn)}.`
-      : `O período anual começa em ${formatCivil(subscription.startsOn)} ou na mesma data dos anos seguintes.`} Valor contratado: {formatCents(subscription.priceCents)}. Uma cobrança por período.</p>
+      : `O período anual começa em ${formatCivil(subscription.startsOn)} ou na mesma data dos anos seguintes.`} Valor contratado: {formatCents(subscription.priceCents)}. Uma cobrança por período; período cancelado pode ser cobrado de novo.
+      {subscription.endsOn ? ` Com encerramento em ${formatCivil(subscription.endsOn)}, o período precisa terminar até essa data.` : ''}</p>
     <label htmlFor={`${id}-start`}>Início do período</label>
-    <input id={`${id}-start`} type="date" required min={subscription.startsOn} value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} disabled={pending} />
+    <input id={`${id}-start`} type="date" required min={subscription.startsOn} max={subscription.endsOn ?? undefined} value={periodStart}
+      onChange={(event) => setPeriodStart(event.target.value)} disabled={pending} />
     {notice}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || pending}>{pending ? 'Gerando…' : 'Gerar cobrança'}</button>
@@ -240,20 +250,21 @@ function EndSubscriptionForm({ subscription, close }: { subscription: BillingSub
   const [endsOn, setEndsOn] = useState('');
   const [reason, setReason] = useState('');
   const normalizedReason = displayText(reason, 500);
-  const valid = /^\d{4}-\d{2}-\d{2}$/.test(endsOn) && endsOn > subscription.startsOn && normalizedReason !== null;
+  const valid = isCivilDate(endsOn) && endsOn > subscription.startsOn && normalizedReason !== null;
   const stale = read !== subscription.version;
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid || stale) return;
     const result = await run(() => billing.endSubscription(subscription.subscriptionId, { endsOn, expectedVersion: read, reason: normalizedReason! }));
     if (result) close(result.status === 'ENDED' && result.endsOn
-      ? { tone: 'success', text: `Assinatura de ${result.tenantName} encerrada em ${formatCivil(result.endsOn)}. Cobranças já geradas permanecem como estão.` }
+      ? { tone: 'success', text: `${result.endsOn > today() ? 'Encerramento agendado' : 'Assinatura encerrada'}: ${result.tenantName}, em ${formatCivil(result.endsOn)}. Cobranças já geradas permanecem como estão.` }
       : { tone: 'warning', text: 'A resposta não confirmou o encerramento. Atualize a lista e confira.' });
   }
   const id = `end-${subscription.subscriptionId}`;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Encerrar assinatura de ${subscription.tenantName}`}>
     <Stale read={read} current={subscription.version} reload={() => setRead(subscription.version)} />
-    <Notice tone="warning">Encerrar a assinatura não suspende o condomínio. Cobrança de período depois da data precisa ser cancelada antes.</Notice>
+    <Notice tone="warning">Encerrar a assinatura não suspende o condomínio. Cobrança de período depois da data precisa ser cancelada antes.
+      A data pode ser futura (encerramento agendado); uma nova assinatura do condomínio só começa a partir dela.</Notice>
     <label htmlFor={`${id}-date`}>Data de encerramento</label>
     <input id={`${id}-date`} type="date" required value={endsOn} onChange={(event) => setEndsOn(event.target.value)} disabled={pending} />
     <label htmlFor={`${id}-reason`}>Motivo (fica na auditoria da plataforma)</label>
@@ -269,7 +280,9 @@ function EndSubscriptionForm({ subscription, close }: { subscription: BillingSub
 function SubscriptionForm({ close }: { close(result: Outcome | null): void }) {
   const scope = usePlatform();
   const { pending, notice, run } = useBillingAction();
-  const catalog = useQuery({ queryKey: tenantListKey(scope.accountId, null), queryFn: ({ signal }) => platform.tenants(null, signal),
+  const [search, setSearch] = useState('');
+  const [applied, setApplied] = useState<string | null>(null);
+  const catalog = useQuery({ queryKey: tenantListKey(scope.accountId, applied), queryFn: ({ signal }) => platform.tenants(applied, signal),
     enabled: scope.session.capabilities.includes('tenants.read') });
   const plans = useQuery({ queryKey: billingKey(scope.accountId, 'plans'), queryFn: ({ signal }) => billing.plans(signal) });
   const [tenantId, setTenantId] = useState('');
@@ -281,7 +294,7 @@ function SubscriptionForm({ close }: { close(result: Outcome | null): void }) {
   const day = Number(dueDay);
   const normalizedReason = displayText(reason, 500);
   const valid = /^[0-9a-f-]{36}$/.test(tenantId) && available.some((plan) => plan.planId === planId)
-    && /^\d{4}-\d{2}-\d{2}$/.test(startsOn) && Number(startsOn.slice(8, 10)) <= 28
+    && isCivilDate(startsOn) && Number(startsOn.slice(8, 10)) <= 28
     && Number.isInteger(day) && day >= 1 && day <= 28 && normalizedReason !== null;
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -289,12 +302,22 @@ function SubscriptionForm({ close }: { close(result: Outcome | null): void }) {
     const result = await run(() => billing.createSubscription({ tenantId, planId, startsOn, dueDay: day, reason: normalizedReason! }));
     if (result) close({ tone: 'success', text: `Assinatura criada para ${result.tenantName}: plano ${result.planName}, ${formatCents(result.priceCents)} por ${perPeriod(result.period)}, vencimento no dia ${result.dueDay}.` });
   }
+  function find() {
+    const term = displayText(search, 120);
+    setApplied(term); setTenantId('');
+  }
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label="Nova assinatura">
+    <label htmlFor="subscription-search">Buscar condomínio por nome ou código</label>
+    <div className="button-row">
+      <input id="subscription-search" maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} disabled={pending}
+        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); find(); } }} />
+      <button className="button button-secondary button-compact" type="button" onClick={find} disabled={pending || catalog.isFetching}>Buscar</button></div>
     <label htmlFor="subscription-tenant">Condomínio</label>
     <select id="subscription-tenant" required value={tenantId} onChange={(event) => setTenantId(event.target.value)} disabled={pending}>
       <option value="">Escolha o condomínio</option>
       {catalog.data?.tenants.map((tenant) => <option key={tenant.tenantId} value={tenant.tenantId}>{tenant.name}{tenant.active ? '' : ' (suspenso)'}</option>)}</select>
-    {catalog.data?.truncated ? <span className="field-help">A lista mostra os primeiros 200 condomínios em ordem alfabética.</span> : null}
+    {catalog.data?.truncated ? <span className="field-help">A lista mostra os primeiros 200 condomínios em ordem alfabética. Use a busca para encontrar outro.</span> : null}
+    {applied && catalog.data?.tenants.length === 0 ? <span className="field-help">Nenhum condomínio encontrado para esta busca.</span> : null}
     {catalog.isError ? <Notice tone="error">Não foi possível carregar os condomínios. {errorMessage(catalog.error)}</Notice> : null}
     <label htmlFor="subscription-plan">Plano</label>
     <select id="subscription-plan" required value={planId} onChange={(event) => setPlanId(event.target.value)} disabled={pending}>
@@ -356,7 +379,7 @@ function PlanForm({ plan, close }: { plan?: BillingPlan; close(result: Outcome |
   const normalizedName = displayText(name, 120);
   const cents = parseCents(price);
   const normalizedReason = displayText(reason, 500);
-  const valid = normalizedName !== null && cents !== null && normalizedReason !== null;
+  const valid = normalizedName !== null && cents !== null && cents >= 1 && normalizedReason !== null;
   const stale = plan !== undefined && read !== null && read.version !== plan.version;
   function reload() {
     if (!plan) return;
@@ -384,8 +407,8 @@ function PlanForm({ plan, close }: { plan?: BillingPlan; close(result: Outcome |
     <input id={`${id}-name`} required value={name} onChange={(event) => setName(event.target.value)} disabled={pending} />
     <label htmlFor={`${id}-price`}>Valor (R$)</label>
     <input id={`${id}-price`} inputMode="decimal" required value={price} onChange={(event) => setPrice(event.target.value)} disabled={pending}
-      aria-describedby={`${id}-price-help`} aria-invalid={price !== '' && cents === null} />
-    <span className="field-help" id={`${id}-price-help`}>Formato brasileiro, por exemplo 1.234,56; até R$ 1.000.000,00.</span>
+      aria-describedby={`${id}-price-help`} aria-invalid={price !== '' && (cents === null || cents < 1)} />
+    <span className="field-help" id={`${id}-price-help`}>Formato brasileiro, por exemplo 1.234,56; de R$ 0,01 até R$ 1.000.000,00.</span>
     {plan ? <fieldset className="weekday-fieldset"><legend>Disponibilidade</legend>
       <label className="weekday-option"><input type="radio" name={`${id}-active`} checked={active} onChange={() => setActive(true)} disabled={pending} />Disponível</label>
       <label className="weekday-option"><input type="radio" name={`${id}-active`} checked={!active} onChange={() => setActive(false)} disabled={pending} />Indisponível</label>
@@ -422,7 +445,7 @@ export function billingAuditDetails(details: Record<string, string>): ReactNode 
   if (start && end) parts.push(`período de ${start} a ${end}`);
   const paid = civil(details.paidOn);
   if (paid) parts.push(`pago em ${paid}`);
-  if (details.method && details.method in METHOD_LABELS) parts.push(METHOD_LABELS[details.method as PaymentMethod]);
+  if (details.method && Object.hasOwn(METHOD_LABELS, details.method)) parts.push(METHOD_LABELS[details.method as PaymentMethod]);
   const ends = civil(details.endsOn);
   if (ends) parts.push(`encerramento em ${ends}`);
   return parts.length ? <span>{parts.join(' · ')}</span> : null;

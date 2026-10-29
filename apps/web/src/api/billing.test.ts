@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { billingCharge, billingPlan, billingSubscription, createBillingApi } from './billing';
+import { billingCharge, billingPlan, billingSubscription, createBillingApi, isCivilDate } from './billing';
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
@@ -31,6 +31,13 @@ describe('contratos do financeiro da plataforma', () => {
     expect(() => billingCharge({ ...open, amountCents: 1.5 })).toThrow();
     expect(() => billingCharge({ ...open, dueOn: '10/01/2030' })).toThrow();
     expect(() => billingCharge({ ...open, payment: undefined })).toThrow();
+    expect(() => billingCharge({ ...open, dueOn: '2030-02-30' })).toThrow();
+    expect(() => billingCharge({ ...open, amountCents: 0 })).toThrow();
+  });
+  it('data civil precisa existir no calendário', () => {
+    for (const valid of ['2030-01-31', '2028-02-29', '2000-12-01']) expect(isCivilDate(valid), valid).toBe(true);
+    for (const invalid of ['2030-02-29', '2030-02-30', '2030-13-01', '2030-00-10', '2030-04-31', '0099-01-01', '2030-1-01', '2030-01-01T00:00', 20300101])
+      expect(isCivilDate(invalid), String(invalid)).toBe(false);
   });
   it('assinatura encerrada tem data de encerramento e vencimento entre 1 e 28', () => {
     const subscription = { subscriptionId: ids.subscription, tenantId: ids.tenant, tenantName: 'Condomínio Fictício', planId: ids.plan,
@@ -41,8 +48,9 @@ describe('contratos do financeiro da plataforma', () => {
     expect(() => billingSubscription({ ...subscription, status: 'ENDED' })).toThrow();
     expect(() => billingSubscription({ ...subscription, endsOn: '2030-06-05' })).toThrow();
     expect(() => billingSubscription({ ...subscription, dueDay: 29 })).toThrow();
-    expect(() => billingPlan({ planId: ids.plan, name: 'X', priceCents: -1, period: 'MONTHLY', active: true, version: 0,
-      createdAt: '2030-01-05T12:00:00Z', updatedAt: '2030-01-05T12:00:00Z' })).toThrow();
+    for (const priceCents of [-1, 0])
+      expect(() => billingPlan({ planId: ids.plan, name: 'X', priceCents, period: 'MONTHLY', active: true, version: 0,
+        createdAt: '2030-01-05T12:00:00Z', updatedAt: '2030-01-05T12:00:00Z' })).toThrow();
   });
   it('filtro vai na consulta; pagamento usa POST com CSRF e versão lida; resposta incoerente é resultado incerto', async () => {
     let reply: () => Response = () => json({ ...open, status: 'PAID', version: 1, payment });

@@ -5,7 +5,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import br.com.condpulse.platform.application.BillingModels;
 import org.springframework.context.annotation.Profile;
@@ -82,6 +84,15 @@ public class BillingStore {
    where id=? and version=? and status='ACTIVE'
    """,Date.valueOf(endsOn),id,expectedVersion)==1;
  }
+ /** Assinaturas do condomínio bloqueadas na ordem do id: há ativa? qual o último encerramento? */
+ public record TenantSubscriptions(boolean active,LocalDate latestEnd) {}
+ private record SubscriptionState(String status,LocalDate endsOn) {}
+ public TenantSubscriptions lockTenantSubscriptions(UUID tenant) {
+  var rows=jdbc.query("select status,ends_on from platform.billing_subscriptions where tenant_id=? order by id for update",
+   (r,n)->new SubscriptionState(r.getString("status"),r.getObject("ends_on",LocalDate.class)),tenant);
+  return new TenantSubscriptions(rows.stream().anyMatch(row->"ACTIVE".equals(row.status())),
+   rows.stream().map(SubscriptionState::endsOn).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null));
+ }
  /** Cobrança não cancelada que passa do fim pedido impede encerrar a assinatura nessa data. */
  public boolean chargesBeyond(UUID subscription,LocalDate endsOn) {
   return Boolean.TRUE.equals(jdbc.queryForObject("""
@@ -139,6 +150,13 @@ public class BillingStore {
    insert into platform.billing_payments(id,charge_id,amount_cents,paid_on,method,reference,status,recorded_by)
    values(?,?,?,?,?,?,'RECORDED',?)
    """,id,charge,amountCents,Date.valueOf(paidOn),method,reference,actor);
+ }
+ /** Mesmo comprovante (forma e referência, sem diferença de caixa ou espaços nas pontas) já quita outra cobrança. */
+ public boolean referenceRecorded(String method,String reference) {
+  return Boolean.TRUE.equals(jdbc.queryForObject("""
+   select exists(select 1 from platform.billing_payments
+    where method=? and lower(btrim(reference))=lower(btrim(?)) and status='RECORDED')
+   """,Boolean.class,method,reference));
  }
  public boolean markPaid(UUID charge,long expectedVersion) {
   return jdbc.update("update platform.billing_charges set status='PAID',version=version+1 where id=? and version=? and status='OPEN'",

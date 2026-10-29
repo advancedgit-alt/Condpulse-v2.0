@@ -30,6 +30,10 @@ public class BillingService {
  static final Set<String> CHARGE_FILTERS=Set.of("OPEN","OVERDUE","PAID","CANCELLED");
  static final long MAX_CENTS=100_000_000L;
  private static final LocalDate EARLIEST=LocalDate.of(2000,1,1);
+ /** Limites das datas aceitas (iguais aos CHECKs do V011): início até o dia 28 e períodos dentro do século. */
+ private static final LocalDate LATEST_START=LocalDate.of(2100,12,28);
+ private static final LocalDate LATEST_PERIOD=LocalDate.of(2100,12,31);
+ private static final LocalDate LATEST_END=LocalDate.of(2101,12,31);
  private final PlatformTransactionExecutor transactions;
  private final BillingStore store;
  private final PlatformStore platform;
@@ -47,7 +51,7 @@ public class BillingService {
   String period=oneOf(request.period(),PERIODS,"BILLING_PERIOD_INVALID","Use período mensal ou anual.");
   String reason=reason(request.reason());
   UUID id=UUID.randomUUID();
-  return manage(actor,assurance,"BILLING_PLAN_NAME_TAKEN",context->{
+  return manage(actor,assurance,Map.of("23505","BILLING_PLAN_NAME_TAKEN"),context->{
    store.insertPlan(id,name,price,period,actor);
    platform.audit(actor,"BILLING_PLAN_CREATED",null,reason,details("planId",id,"name",name,"priceCents",price,"period",period));
    return store.plan(id,false);
@@ -63,7 +67,7 @@ public class BillingService {
   if(request.active()==null) throw invalid("BILLING_INPUT_INVALID","Informe se o plano fica disponível.");
   boolean active=request.active();
   String reason=reason(request.reason());
-  return manage(actor,assurance,"BILLING_PLAN_NAME_TAKEN",context->{
+  return manage(actor,assurance,Map.of("23505","BILLING_PLAN_NAME_TAKEN"),context->{
    var current=store.plan(planId,true);
    if(current==null) throw notFound("BILLING_PLAN_NOT_FOUND","Plano não encontrado.");
    if(current.name().equals(name) && current.priceCents()==price && current.active()==active)
@@ -84,29 +88,38 @@ public class BillingService {
   if(request==null || request.tenantId()==null || request.planId()==null)
    throw invalid("BILLING_INPUT_INVALID","Informe o condomínio e o plano.");
   LocalDate startsOn=request.startsOn();
-  if(startsOn==null || startsOn.getDayOfMonth()>28 || startsOn.isBefore(EARLIEST))
-   throw invalid("BILLING_START_INVALID","Informe o início da assinatura entre os dias 1 e 28 do mês.");
+  if(startsOn==null || startsOn.getDayOfMonth()>28 || startsOn.isBefore(EARLIEST) || startsOn.isAfter(LATEST_START))
+   throw invalid("BILLING_START_INVALID","Informe o início da assinatura entre os dias 1 e 28 do mês, a partir de 2000.");
   int dueDay=request.dueDay()==null?0:request.dueDay();
   if(dueDay<1 || dueDay>28) throw invalid("BILLING_DUE_DAY_INVALID","Informe o dia de vencimento entre 1 e 28.");
   String reason=reason(request.reason());
   UUID id=UUID.randomUUID();
-  return manage(actor,assurance,"BILLING_SUBSCRIPTION_EXISTS",context->{
-   var plan=store.plan(request.planId(),false);
+  return manage(actor,assurance,Map.of("23505","BILLING_SUBSCRIPTION_EXISTS","23P01","BILLING_START_OVERLAP"),context->{
+   // Bloqueia o plano (preço e período lidos são os gravados) e as assinaturas do condomínio (encerramento concorrente).
+   var plan=store.plan(request.planId(),true);
    if(plan==null) throw notFound("BILLING_PLAN_NOT_FOUND","Plano não encontrado.");
    if(!plan.active()) throw changed("BILLING_PLAN_INACTIVE","O plano não está disponível para novas assinaturas.");
+   var previous=store.lockTenantSubscriptions(request.tenantId());
+   if(previous.active()) throw changed("BILLING_SUBSCRIPTION_EXISTS",duplicateMessage("BILLING_SUBSCRIPTION_EXISTS"));
+   if(previous.latestEnd()!=null && startsOn.isBefore(previous.latestEnd()))
+    throw changed("BILLING_START_OVERLAP",duplicateMessage("BILLING_START_OVERLAP"));
    store.insertSubscription(id,request.tenantId(),plan.planId(),plan.priceCents(),plan.period(),startsOn,dueDay,actor);
    platform.audit(actor,"BILLING_SUBSCRIPTION_CREATED",request.tenantId(),reason,details("subscriptionId",id,"planName",plan.name(),
     "priceCents",plan.priceCents(),"period",plan.period(),"startsOn",startsOn,"dueDay",dueDay));
    return store.subscription(id,false);
   });
  }
+ /**
+  * Encerramento com data posterior ao início; pode ser futura (encerramento agendado). Cobranças não canceladas não
+  * podem passar da data, e nova assinatura do condomínio só começa a partir dela.
+  */
  public BillingModels.Subscription endSubscription(UUID actor,AssuranceLevel assurance,UUID subscriptionId,BillingModels.EndSubscription request) {
   if(subscriptionId==null) throw notFound("BILLING_SUBSCRIPTION_NOT_FOUND","Assinatura não encontrada.");
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
    throw invalid("BILLING_VERSION_REQUIRED","Recarregue os dados antes de salvar.");
-  if(request.endsOn()==null) throw invalid("BILLING_END_INVALID","Informe a data de encerramento.");
+  if(request.endsOn()==null || request.endsOn().isAfter(LATEST_END)) throw invalid("BILLING_END_INVALID","Informe a data de encerramento.");
   String reason=reason(request.reason());
-  return manage(actor,assurance,null,context->{
+  return manage(actor,assurance,Map.of(),context->{
    var current=store.subscription(subscriptionId,true);
    if(current==null) throw notFound("BILLING_SUBSCRIPTION_NOT_FOUND","Assinatura não encontrada.");
    if(!"ACTIVE".equals(current.status())) throw changed("BILLING_SUBSCRIPTION_ENDED","A assinatura já está encerrada.");
@@ -129,17 +142,19 @@ public class BillingService {
  }
  /**
   * Cobrança de um período alinhado ao início da assinatura (mensal ou anual), com o valor contratado. Vencimento no
-  * primeiro dia de vencimento a partir do início do período. Um período por assinatura; sem rateio.
+  * primeiro dia de vencimento a partir do início do período. Um período por assinatura; sem rateio. Assinatura
+  * encerrada ainda aceita período que termina até o encerramento; período cancelado pode ser cobrado de novo.
   */
  public BillingModels.Charge createCharge(UUID actor,AssuranceLevel assurance,UUID subscriptionId,BillingModels.CreateCharge request) {
   if(subscriptionId==null) throw notFound("BILLING_SUBSCRIPTION_NOT_FOUND","Assinatura não encontrada.");
   LocalDate start=request==null?null:request.periodStart();
-  if(start==null) throw invalid("BILLING_PERIOD_START_INVALID","Informe o início do período.");
+  if(start==null || start.isBefore(EARLIEST) || start.isAfter(LATEST_PERIOD))
+   throw invalid("BILLING_PERIOD_START_INVALID","Informe o início do período.");
   UUID id=UUID.randomUUID();
-  return manage(actor,assurance,"BILLING_CHARGE_EXISTS",context->{
+  return manage(actor,assurance,Map.of("23505","BILLING_CHARGE_EXISTS","23P01","BILLING_CHARGE_EXISTS"),context->{
    var subscription=store.subscription(subscriptionId,true);
    if(subscription==null) throw notFound("BILLING_SUBSCRIPTION_NOT_FOUND","Assinatura não encontrada.");
-   if(!"ACTIVE".equals(subscription.status())) throw changed("BILLING_SUBSCRIPTION_ENDED","A assinatura está encerrada.");
+   // Assinatura encerrada ainda cobra períodos que terminam até a data de encerramento (cobrança esquecida).
    LocalDate end=periodEnd(subscription,start);
    if(subscription.endsOn()!=null && end.isAfter(subscription.endsOn()))
     throw invalid("BILLING_PERIOD_START_INVALID","O período passa do encerramento da assinatura.");
@@ -155,7 +170,7 @@ public class BillingService {
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
    throw invalid("BILLING_VERSION_REQUIRED","Recarregue os dados antes de salvar.");
   String reason=reason(request.reason());
-  return manage(actor,assurance,null,context->{
+  return manage(actor,assurance,Map.of(),context->{
    var charge=store.charge(chargeId,true);
    if(charge==null) throw notFound("BILLING_CHARGE_NOT_FOUND","Cobrança não encontrada.");
    if("PAID".equals(charge.status())) throw changed("BILLING_CHARGE_PAID","A cobrança está paga. Estorne o pagamento antes de cancelar.");
@@ -183,7 +198,8 @@ public class BillingService {
    "Informe a referência do comprovante (de 3 a 200 caracteres).");
   if(reference.length()<3) throw invalid("BILLING_PAYMENT_REFERENCE_REQUIRED","Informe a referência do comprovante (de 3 a 200 caracteres).");
   UUID id=UUID.randomUUID();
-  return manage(actor,assurance,"BILLING_PAYMENT_EXISTS",context->{
+  // A cobrança é bloqueada antes do pagamento: duplicidade restante é o mesmo comprovante em outra cobrança.
+  return manage(actor,assurance,Map.of("23505","BILLING_PAYMENT_REFERENCE_USED"),context->{
    var charge=store.charge(chargeId,true);
    if(charge==null) throw notFound("BILLING_CHARGE_NOT_FOUND","Cobrança não encontrada.");
    if(!"OPEN".equals(charge.status())) throw changed("BILLING_CHARGE_NOT_OPEN","A cobrança não está em aberto.");
@@ -193,6 +209,8 @@ public class BillingService {
     throw new BusinessProblem("BILLING_PAYMENT_AMOUNT_MISMATCH",422,"O valor pago precisa ser igual ao da cobrança. Pagamento parcial não é registrado.");
    if(request.paidOn().isAfter(store.today()))
     throw invalid("BILLING_PAYMENT_DATE_INVALID","A data do pagamento não pode ser futura.");
+   if(store.referenceRecorded(method,reference))
+    throw changed("BILLING_PAYMENT_REFERENCE_USED",duplicateMessage("BILLING_PAYMENT_REFERENCE_USED"));
    store.insertPayment(id,chargeId,request.amountCents(),request.paidOn(),method,reference,actor);
    if(!store.markPaid(chargeId,request.expectedVersion()))
     throw changed("BILLING_CHARGE_CHANGED","A cobrança foi alterada por outra pessoa. Recarregue os dados.");
@@ -207,7 +225,7 @@ public class BillingService {
   if(request==null || request.expectedChargeVersion()==null || request.expectedChargeVersion()<0)
    throw invalid("BILLING_VERSION_REQUIRED","Recarregue os dados antes de salvar.");
   String reason=reason(request.reason());
-  return manage(actor,assurance,null,context->{
+  return manage(actor,assurance,Map.of(),context->{
    var found=store.payment(paymentId,false);
    if(found==null) throw notFound("BILLING_PAYMENT_NOT_FOUND","Pagamento não encontrado.");
    // Mesma ordem de bloqueio do registro: cobrança primeiro, depois o pagamento.
@@ -237,7 +255,8 @@ public class BillingService {
   return dueDay>=start.getDayOfMonth()?start.withDayOfMonth(dueDay):start.plusMonths(1).withDayOfMonth(dueDay);
  }
  private static long cents(Long value) {
-  if(value==null || value<0 || value>MAX_CENTS) throw invalid("BILLING_PRICE_INVALID","Informe o valor em centavos, até R$ 1.000.000,00.");
+  if(value==null || value<1 || value>MAX_CENTS)
+   throw invalid("BILLING_PRICE_INVALID","Informe o valor em centavos, de R$ 0,01 até R$ 1.000.000,00.");
   return value;
  }
  private static String oneOf(String value,Set<String> allowed,String code,String message) {
@@ -253,22 +272,24 @@ public class BillingService {
   return result;
  }
  private <T> T read(UUID actor,AssuranceLevel assurance,Function<PlatformContext,T> action) {
-  return execute(actor,assurance,null,context->{ context.require(PlatformCapability.READ_BILLING); return action.apply(context); });
+  return execute(actor,assurance,Map.of(),context->{ context.require(PlatformCapability.READ_BILLING); return action.apply(context); });
  }
- private <T> T manage(UUID actor,AssuranceLevel assurance,String duplicate,Function<PlatformContext,T> action) {
-  return execute(actor,assurance,duplicate,context->{
+ private <T> T manage(UUID actor,AssuranceLevel assurance,Map<String,String> conflicts,Function<PlatformContext,T> action) {
+  return execute(actor,assurance,conflicts,context->{
    context.require(PlatformCapability.READ_BILLING); context.require(PlatformCapability.MANAGE_BILLING);
    return action.apply(context);
   });
  }
- private <T> T execute(UUID actor,AssuranceLevel assurance,String duplicate,Function<PlatformContext,T> action) {
+ /** Unicidade (23505) e exclusão de períodos (23P01) viram o código de conflito da operação; o resto é genérico. */
+ private <T> T execute(UUID actor,AssuranceLevel assurance,Map<String,String> conflicts,Function<PlatformContext,T> action) {
   Objects.requireNonNull(action);
   try {
    return transactions.execute(actor,assurance,action);
   } catch(DataAccessException error) {
    // Constraints e o gatilho diferido abortam a transação; traduzir somente depois do rollback do executor.
    String state=SqlStates.of(error);
-   if("23505".equals(state) && duplicate!=null) throw changed(duplicate,duplicateMessage(duplicate));
+   String conflict=state==null?null:conflicts.get(state);
+   if(conflict!=null) throw changed(conflict,duplicateMessage(conflict));
    if("23503".equals(state)) throw notFound("BILLING_REFERENCE_NOT_FOUND","Condomínio, plano ou cobrança não encontrado.");
    if("23514".equals(state)) throw changed("BILLING_STATE_CONFLICT","Os dados financeiros mudaram ou não atendem às regras. Recarregue e confira.");
    if("42501".equals(state)) throw new BusinessProblem("PLATFORM_ACCESS_DENIED",403,"Esta área é exclusiva da administração da plataforma.");
@@ -280,7 +301,8 @@ public class BillingService {
    case "BILLING_PLAN_NAME_TAKEN" -> "Já existe um plano com este nome.";
    case "BILLING_SUBSCRIPTION_EXISTS" -> "O condomínio já tem uma assinatura ativa.";
    case "BILLING_CHARGE_EXISTS" -> "Já existe cobrança para este período.";
-   case "BILLING_PAYMENT_EXISTS" -> "A cobrança já tem pagamento registrado.";
+   case "BILLING_START_OVERLAP" -> "O início precisa ser depois do encerramento da assinatura anterior do condomínio.";
+   case "BILLING_PAYMENT_REFERENCE_USED" -> "Este comprovante já quita outra cobrança. Confira a referência e a forma de pagamento.";
    default -> "Registro duplicado.";
   };
  }
