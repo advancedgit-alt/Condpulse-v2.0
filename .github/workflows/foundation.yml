@@ -42,9 +42,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.0"
-      - name: TEMPORARY annotation probe
-        run: |
-          printf '%s\n' '[ERROR] probe maven line' 'not ok 1 - probe node test' '  symbol:   class ProbeSymbol'
       - name: Foundation and contract checks
         run: node --test tests/foundation.test.mjs tests/spec-package.test.mjs tests/integration/https-bff-guard.test.mjs tests/vercel-config.test.mjs
       - name: Specification package structural validation on a temporary copy
