@@ -22,6 +22,26 @@ export interface Arrival {
 export interface PermitPage { permits: VisitPermit[]; truncated: boolean }
 export interface ArrivalPage { arrivals: Arrival[]; truncated: boolean }
 export interface PermitMutation { permit: VisitPermit; replayed: boolean }
+/**
+ * Registro manual de entrada e saída (CP-028): a entrada é sempre MANUAL_IN da portaria (nunca passagem detectada por
+ * equipamento); saída e correção são eventos adicionais e nada é apagado.
+ */
+export type AccessEvidence = 'DOCUMENT_CHECKED' | 'RECOGNIZED_BY_UNIT';
+export interface AccessCorrection { eventId: UUID; correctedAt: ISODateTime; reason: string; recordedByMe: boolean }
+export interface AccessExit { eventId: UUID; exitedAt: ISODateTime; note: string | null; recordedByMe: boolean; correction: AccessCorrection | null }
+/**
+ * linkedPermitId: convite ao qual a chegada da entrada foi vinculada (pedido de confirmação a partir do convite). note e
+ * exit.note são observações internas da portaria: na visão da unidade chegam null.
+ */
+export interface AccessRecord {
+  entryId: UUID; unitId: UUID; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
+  arrivalId: UUID | null; permitId: UUID | null; linkedPermitId: UUID | null; eventType: 'MANUAL_IN'; source: 'CONCIERGE';
+  evidence: AccessEvidence; note: string | null; enteredAt: ISODateTime; recordedByMe: boolean; correction: AccessCorrection | null;
+  exit: AccessExit | null;
+}
+export interface AccessRecordPage { records: AccessRecord[]; truncated: boolean }
+export interface AccessMutation { record: AccessRecord; replayed: boolean }
+export interface AccessEntryBody { arrivalId: string | null; permitId: string | null; evidence: AccessEvidence; note: string | null }
 export interface ArrivalMutation { arrival: Arrival; replayed: boolean }
 export interface CreatePermitBody { visitorName: string; documentLast4: string | null; purpose: string | null; validFrom: string; validUntil: string }
 export interface RegisterArrivalBody { unitId: string; visitorName: string; documentLast4: string | null; permitId: string | null }
@@ -66,6 +86,39 @@ export function arrival(value: unknown, uncertain = false): Arrival {
     decisionSource: value.decisionSource as DecisionSource | null, decisionNote: value.decisionNote as string | null,
     decidedByMe: value.decidedByMe, version: value.version, createdAt: value.createdAt };
 }
+function accessCorrection(value: unknown, uncertain: boolean): AccessCorrection | null {
+  if (value === null) return null;
+  if (!record(value) || !isUUID(value.eventId) || !instant(value.correctedAt) || !text(value.reason, 1, 300)
+      || typeof value.recordedByMe !== 'boolean') throw invalidResponse(uncertain);
+  return { eventId: value.eventId, correctedAt: value.correctedAt, reason: value.reason, recordedByMe: value.recordedByMe };
+}
+export function accessRecord(value: unknown, uncertain = false): AccessRecord {
+  if (!record(value) || !isUUID(value.entryId) || !isUUID(value.unitId) || !isString(value.unitLabel)
+      || !(value.blockName === null || isString(value.blockName)) || !text(value.visitorName, 2, 160) || !document(value.documentLast4)
+      || !(value.arrivalId === null || isUUID(value.arrivalId)) || !(value.permitId === null || isUUID(value.permitId))
+      || (value.arrivalId === null) === (value.permitId === null) || !(value.linkedPermitId === null || isUUID(value.linkedPermitId))
+      || (value.linkedPermitId !== null && value.arrivalId === null) || value.eventType !== 'MANUAL_IN' || value.source !== 'CONCIERGE'
+      || !oneOf(value.evidence, ['DOCUMENT_CHECKED', 'RECOGNIZED_BY_UNIT']) || !optional(value.note, 300) || !instant(value.enteredAt)
+      || typeof value.recordedByMe !== 'boolean' || value.correction === undefined || value.exit === undefined) throw invalidResponse(uncertain);
+  const correction = accessCorrection(value.correction, uncertain);
+  let exit: AccessExit | null = null;
+  if (value.exit !== null) {
+    const raw = value.exit;
+    if (!record(raw) || !isUUID(raw.eventId) || !instant(raw.exitedAt) || !optional(raw.note, 300) || typeof raw.recordedByMe !== 'boolean'
+        || raw.correction === undefined) throw invalidResponse(uncertain);
+    exit = { eventId: raw.eventId, exitedAt: raw.exitedAt, note: raw.note as string | null, recordedByMe: raw.recordedByMe,
+      correction: accessCorrection(raw.correction, uncertain) };
+  }
+  return { entryId: value.entryId, unitId: value.unitId, unitLabel: value.unitLabel, blockName: value.blockName as string | null,
+    visitorName: value.visitorName, documentLast4: value.documentLast4 as string | null, arrivalId: value.arrivalId as string | null,
+    permitId: value.permitId as string | null, linkedPermitId: value.linkedPermitId as string | null, eventType: 'MANUAL_IN',
+    source: 'CONCIERGE', evidence: value.evidence,
+    note: value.note as string | null, enteredAt: value.enteredAt, recordedByMe: value.recordedByMe, correction, exit };
+}
+function accessPage(value: unknown): AccessRecordPage {
+  if (!record(value) || !Array.isArray(value.records) || value.records.length > 100 || typeof value.truncated !== 'boolean') throw invalidResponse();
+  return { records: value.records.map((item) => accessRecord(item)), truncated: value.truncated };
+}
 function permitPage(value: unknown): PermitPage {
   if (!record(value) || !Array.isArray(value.permits) || value.permits.length > 100 || typeof value.truncated !== 'boolean') throw invalidResponse();
   return { permits: value.permits.map((item) => visitPermit(item)), truncated: value.truncated };
@@ -75,6 +128,7 @@ function arrivalPage(value: unknown): ArrivalPage {
   return { arrivals: value.arrivals.map((item) => arrival(item)), truncated: value.truncated };
 }
 const replayed = (response: Response) => response.headers.get('Idempotency-Replayed') === 'true';
+const accessMutation = (value: unknown, response: Response): AccessMutation => ({ record: accessRecord(value, true), replayed: replayed(response) });
 
 export function createVisitsApi(client: CondPulseApi = api) {
   const base = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}`;
@@ -106,6 +160,15 @@ export function createVisitsApi(client: CondPulseApi = api) {
       client.call(`${base(tenantId)}/arrivals/${identifier(arrivalId)}/assisted-decision`, (value) => arrival(value, true), { method: 'POST', body }),
     cancel: async (tenantId: string, arrivalId: string, reason: string) =>
       client.call(`${base(tenantId)}/arrivals/${identifier(arrivalId)}/cancel`, (value) => arrival(value, true), { method: 'POST', body: { reason } }),
+    records: async (tenantId: string, signal?: AbortSignal) => client.call(`${base(tenantId)}/access-events`, accessPage, options(signal)),
+    unitRecords: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/units/${identifier(unitId)}/access-events`, accessPage, options(signal)),
+    recordEntry: async (tenantId: string, key: string, body: AccessEntryBody) =>
+      client.call(`${base(tenantId)}/access-events/entries`, accessMutation, { method: 'POST', body, key }),
+    recordExit: async (tenantId: string, entryId: string, key: string, note: string | null) =>
+      client.call(`${base(tenantId)}/access-events/${identifier(entryId)}/exit`, accessMutation, { method: 'POST', body: { note }, key }),
+    correct: async (tenantId: string, eventId: string, key: string, reason: string) =>
+      client.call(`${base(tenantId)}/access-events/${identifier(eventId)}/correction`, accessMutation, { method: 'POST', body: { reason }, key }),
   };
 }
 export const visits = createVisitsApi();

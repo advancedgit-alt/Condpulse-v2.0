@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { collapseText, displayText } from '../api/text';
-import { visits, type Arrival, type CreatePermitBody, type VisitPermit } from '../api/visits';
+import { visits, type AccessRecord, type Arrival, type CreatePermitBody, type VisitPermit } from '../api/visits';
 import { useAuth } from './Auth';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from './primitives';
 import { dateInZone, formatWhen, toInstant, wallTimeInZone } from './dateTime';
@@ -54,11 +54,12 @@ function UnitAccess(scope: Scope) {
   const arrivals = useQuery({ queryKey: unitKey(scope, 'arrivals'), queryFn: ({ signal }) => visits.unitArrivals(scope.tenantId, scope.unitId, signal),
     refetchInterval: (query) => denied(query.state.error) || unavailable(query.state.error) ? false : 10_000 });
   const permits = useQuery({ queryKey: unitKey(scope, 'permits'), queryFn: ({ signal }) => visits.unitPermits(scope.tenantId, scope.unitId, signal) });
+  const records = useQuery({ queryKey: unitKey(scope, 'access'), queryFn: ({ signal }) => visits.unitRecords(scope.tenantId, scope.unitId, signal) });
   const refresh = () => { void queries.invalidateQueries({ queryKey: unitKey(scope) }); };
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ACESSOS</span><h1>Acessos da unidade</h1>
-      <p>Chegadas que aguardam a sua resposta e convites de {scope.tenantName}. Convite não substitui a conferência da portaria. Horários em {scope.timeZone}.</p></div>
-      <button className="button button-secondary button-compact" type="button" disabled={arrivals.isFetching || permits.isFetching} onClick={refresh}>Atualizar</button></div>
+      <p>Chegadas que aguardam a sua resposta, convites e entradas registradas em {scope.tenantName}. Convite não substitui a conferência da portaria. Horários em {scope.timeZone}.</p></div>
+      <button className="button button-secondary button-compact" type="button" disabled={arrivals.isFetching || permits.isFetching || records.isFetching} onClick={refresh}>Atualizar</button></div>
     {unavailable(arrivals.error) || unavailable(permits.error) ? <div className="panel"><Empty title="Acessos indisponíveis">Os acessos ainda não estão ativos neste ambiente.</Empty></div> : <>
       <section className="management-section" aria-labelledby="arrivals-title">
         <div className="section-heading"><div><span className="section-index">01 / CHEGADAS</span><h2 id="arrivals-title">Chegadas na portaria</h2></div></div>
@@ -73,6 +74,13 @@ function UnitAccess(scope: Scope) {
           : denied(permits.error) ? <p className="field-help">Convidar não está disponível para o seu vínculo. Peça a um responsável pela unidade.</p>
             : permits.isError && !permits.data ? <ErrorState error={permits.error} retry={() => void permits.refetch()} />
               : <Permits scope={scope} permits={permits.data?.permits ?? []} truncated={permits.data?.truncated ?? false} />}
+      </section>
+      <section className="management-section" aria-labelledby="history-title">
+        <div className="section-heading"><div><span className="section-index">03 / HISTÓRICO</span><h2 id="history-title">Entradas e saídas</h2></div></div>
+        {records.isPending ? <div className="panel"><Loading label="Consultando registros…" /></div>
+          : denied(records.error) ? <p className="field-help">O histórico de entradas desta unidade não está disponível para o seu vínculo.</p>
+            : records.isError && !records.data ? <ErrorState error={records.error} retry={() => void records.refetch()} />
+              : <AccessHistory scope={scope} records={records.data?.records ?? []} truncated={records.data?.truncated ?? false} />}
       </section>
     </>}
   </>;
@@ -133,6 +141,27 @@ function WaitingArrival({ scope, arrival, answered }: { scope: Scope; arrival: A
       <button className="button button-secondary button-compact" type="button" disabled={action.pending} onClick={() => void answer('DENY')}>Recusar</button></div>
     {closedArrivalCodes.includes(codeOf(action.failure)) ? null : action.notice}
   </li>;
+}
+
+/**
+ * Histórico de 7 dias da unidade: só o que a portaria registrou manualmente (nunca "passagem pelo equipamento"). Sem
+ * registro de saída não quer dizer que a pessoa ainda esteja no condomínio.
+ */
+function AccessHistory({ scope, records, truncated }: { scope: Scope; records: AccessRecord[]; truncated: boolean }) {
+  if (records.length === 0) return <div className="panel"><Empty title="Nenhum registro">Entradas e saídas de visitantes registradas pela portaria aparecem aqui por 7 dias.</Empty></div>;
+  return <>
+    <ol className="management-list" aria-label="Entradas e saídas registradas">{records.map((record) => {
+      const exited = record.exit !== null && record.exit.correction === null;
+      const [label, tone] = record.correction ? ['Registro corrigido', 'status-neutral'] : exited ? ['Saída registrada', 'status-ready'] : ['Sem registro de saída', 'status-pending'];
+      return <li key={record.entryId} className="management-row">
+        <div><strong><bdi>{record.visitorName}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span>
+          <span>Entrada registrada pela portaria em {formatWhen(record.enteredAt, scope.timeZone)} · {record.arrivalId ? 'chegada autorizada pela unidade' : 'convite da unidade'}</span>
+          {record.correction ? <span>Corrigido pela portaria: <bdi>{record.correction.reason}</bdi></span> : null}
+          {record.exit ? <span>Saída registrada pela portaria em {formatWhen(record.exit.exitedAt, scope.timeZone)}{record.exit.correction ? ` (corrigida: ${record.exit.correction.reason})` : ''}</span> : null}</div>
+      </li>;
+    })}</ol>
+    {truncated ? <Notice tone="warning">O histórico mostra as 100 entradas mais recentes.</Notice> : null}
+  </>;
 }
 
 const permitLabels: Record<VisitPermit['state'], [string, string]> = {

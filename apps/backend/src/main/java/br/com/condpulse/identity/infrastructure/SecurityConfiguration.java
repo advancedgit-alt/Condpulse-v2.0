@@ -81,6 +81,10 @@ public class SecurityConfiguration {
       "/v1/tenants/*/arrivals").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/permits","/v1/tenants/*/permits/*/revoke","/v1/tenants/*/arrivals",
       "/v1/tenants/*/arrivals/*/decision","/v1/tenants/*/arrivals/*/assisted-decision","/v1/tenants/*/arrivals/*/cancel").authenticated()
+    // Registro manual de entrada e saída: capacidade da portaria (AAL2) ou vínculo da unidade no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-events","/v1/tenants/*/units/*/access-events").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/access-events/entries","/v1/tenants/*/access-events/*/exit",
+      "/v1/tenants/*/access-events/*/correction").authenticated()
     // Painel master: autenticação aqui; papel de plataforma vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/session","/v1/platform/tenants","/v1/platform/audit-events").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()

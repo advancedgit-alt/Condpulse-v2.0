@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { arrival, createVisitsApi, visitPermit } from './visits';
+import { accessRecord, arrival, createVisitsApi, visitPermit } from './visits';
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -18,6 +18,12 @@ const waiting = {
   decisionNote: null, decidedByMe: false, version: 0, createdAt: '2030-01-01T12:00:00Z',
 };
 const decided = { decidedAt: '2030-01-01T12:02:00Z', version: 1 };
+const entry = {
+  entryId: '90000000-0000-4000-8000-000000000001', unitId: unit, unitLabel: '101', blockName: null, visitorName: 'Pessoa Fictícia',
+  documentLast4: null, arrivalId: waiting.arrivalId, permitId: null, linkedPermitId: null, eventType: 'MANUAL_IN', source: 'CONCIERGE', evidence: 'DOCUMENT_CHECKED',
+  note: null, enteredAt: '2030-01-01T12:03:00Z', recordedByMe: true, correction: null, exit: null,
+};
+const correction = { eventId: '90000000-0000-4000-8000-000000000003', correctedAt: '2030-01-01T12:10:00Z', reason: 'Pessoa não entrou', recordedByMe: true };
 
 describe('contratos das visitas', () => {
   it('convite: agendado, em vigor, revogado só com motivo e horário, e documento só pelo final', () => {
@@ -48,6 +54,23 @@ describe('contratos das visitas', () => {
     expect(() => arrival({ ...waiting, decidedByMe: true })).toThrow();
     expect(() => arrival({ ...waiting, ...decided, state: 'APPROVED', decisionSource: 'APP', version: 0 })).toThrow();
     expect(() => arrival({ ...waiting, state: 'AUTO_APPROVED' })).toThrow();
+  });
+  it('registro de acesso: sempre manual da portaria, com uma única base; saída e correção aninhadas', () => {
+    expect(accessRecord(entry).source).toBe('CONCIERGE');
+    const exit = { eventId: '90000000-0000-4000-8000-000000000002', exitedAt: '2030-01-01T13:00:00Z', note: null, recordedByMe: false, correction };
+    expect(accessRecord({ ...entry, exit, correction }).exit?.correction?.reason).toBe('Pessoa não entrou');
+    expect(() => accessRecord({ ...entry, eventType: 'PASSAGE_IN' })).toThrow();
+    expect(() => accessRecord({ ...entry, source: 'PROVIDER' })).toThrow();
+    expect(() => accessRecord({ ...entry, permitId: permit.permitId })).toThrow();
+    expect(() => accessRecord({ ...entry, arrivalId: null })).toThrow();
+    expect(() => accessRecord({ ...entry, evidence: 'SENSOR' })).toThrow();
+    expect(() => accessRecord({ ...entry, exit: { ...exit, correction: { ...correction, reason: '' } } })).toThrow();
+    expect(() => accessRecord({ ...entry, exit: undefined })).toThrow();
+    // Convite vinculado só existe na entrada pela chegada; a unidade recebe as observações como null.
+    expect(accessRecord({ ...entry, linkedPermitId: permit.permitId }).linkedPermitId).toBe(permit.permitId);
+    expect(() => accessRecord({ ...entry, arrivalId: null, permitId: permit.permitId, linkedPermitId: permit.permitId })).toThrow();
+    expect(() => accessRecord({ ...entry, linkedPermitId: 'convite' })).toThrow();
+    expect(() => accessRecord({ ...entry, linkedPermitId: undefined })).toThrow();
   });
   it('convite e chegada levam a chave e o CSRF; decisões sem chave; resposta incoerente vira resultado incerto', async () => {
     let reply = () => json(permit, 201, { 'Idempotency-Replayed': 'true' });
@@ -93,5 +116,19 @@ describe('contratos das visitas', () => {
     expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/arrivals?status=EXPIRED`);
     await client.unitArrivals(tenant, unit);
     expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/units/${unit}/arrivals`);
+    // Entrada, saída e correção levam chave de operação; resposta sem a correção pedida vira resultado incerto.
+    reply = () => json(entry, 201, { 'Idempotency-Replayed': 'false' });
+    const entered = await client.recordEntry(tenant, 'web:synthetic-key-0003', { arrivalId: waiting.arrivalId, permitId: null, evidence: 'DOCUMENT_CHECKED', note: null });
+    expect(entered.record.entryId).toBe(entry.entryId);
+    const entryCall = fetcher.mock.calls.at(-1)!;
+    expect(String(entryCall[0])).toBe(`/v1/tenants/${tenant}/access-events/entries`);
+    expect(new Headers(entryCall[1]?.headers).get('Idempotency-Key')).toBe('web:synthetic-key-0003');
+    reply = () => json({ ...entry, eventType: 'PASSAGE_IN' }, 201);
+    await expect(client.recordExit(tenant, entry.entryId, 'web:synthetic-key-0004', null)).rejects.toMatchObject({ uncertain: true });
+    expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/access-events/${entry.entryId}/exit`);
+    reply = () => json({ ...entry, correction }, 201, { 'Idempotency-Replayed': 'true' });
+    const corrected = await client.correct(tenant, entry.entryId, 'web:synthetic-key-0005', 'Pessoa não entrou');
+    expect(corrected.replayed).toBe(true);
+    expect(JSON.parse(String(fetcher.mock.calls.at(-1)![1]?.body))).toEqual({ reason: 'Pessoa não entrou' });
   });
 });

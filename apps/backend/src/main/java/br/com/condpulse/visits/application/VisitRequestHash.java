@@ -16,6 +16,11 @@ final class VisitRequestHash {
  static String arrival(UUID unit,String visitor,String document,UUID permit) {
   return digest("ARRIVAL|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+permit);
  }
+ static String entry(UUID arrival,UUID permit,String evidence,String note) {
+  return digest("ACCESS_ENTRY|"+arrival+"|"+permit+"|"+evidence+"|"+field(note));
+ }
+ static String exit(UUID entry,String note) { return digest("ACCESS_EXIT|"+entry+"|"+field(note)); }
+ static String correction(UUID event,String reason) { return digest("ACCESS_CORRECTION|"+event+"|"+field(reason)); }
  private static String field(String value) { return value==null?"-":value.length()+":"+value; }
  private static String digest(String value) {
   try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }

@@ -1,6 +1,6 @@
 import type { ManagementScope } from '../management/shared';
 
-export { codeOf, freshKeyCodes, repeatFailure, settleFailure, uncertain, useIntent } from '../operationIntent';
+export { codeOf, freshKeyCodes, repeatFailure, settleFailure, uncertain, useIntent, usePendingOperation } from '../operationIntent';
 
 /** Chaves de cache da portaria, separadas da gestão e do morador. */
 export const conciergeKey = (scope: Pick<ManagementScope, 'accountId' | 'tenantId'>, ...parts: unknown[]) =>
