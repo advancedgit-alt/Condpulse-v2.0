@@ -6,6 +6,9 @@ A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando
 
 ## O que já existe no repositório
 
+- Hospedagem preparada na Fly.io (app `condpulse-v2-0-worker`, login `cp_worker_*` próprio, teto 2): ver `docs/FLY_WORKER.md`.
+  Nada executado.
+
 - `infra/compose.worker.yaml`: serviço único `worker`, sem porta nem HTTP (healthcheck desligado de forma explícita),
   usuário não root, sistema de arquivos somente leitura, 1 GiB/1 CPU, pool 4, CA PostgreSQL montada somente leitura e
   TLS `verify-full`. A passada fica `false` no manifesto; ligar exige alteração revisada.

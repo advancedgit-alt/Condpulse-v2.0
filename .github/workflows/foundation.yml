@@ -51,7 +51,7 @@ jobs:
           mkdir -p "$copy" && cp -R spec "$copy/"
           python3 -I "$copy/spec/qualidade/validar_estrutura.py"
       - name: BFF staging guards and protocol without managed credentials
-        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs tests/runtime-flags.test.mjs tests/fly-api.test.mjs
+        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs tests/runtime-flags.test.mjs tests/fly-api.test.mjs tests/fly-worker.test.mjs
       - name: Manual onboarding boundary without managed credentials
         run: node --test --test-reporter=tap tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
       - name: Compile and unit tests
@@ -76,6 +76,11 @@ jobs:
         env:
           CP_FLY_JAVA_TEST_REQUIRED: "true"
         run: node --test --test-reporter=tap tests/fly-api-java.test.mjs
+      - name: Fly worker login executor and disposable provisioning
+        # Depois do harness da API na Fly, nunca em paralelo: exige zero logins cp_runtime/cp_worker no cluster ao começar.
+        env:
+          CP_FLY_WORKER_JAVA_TEST_REQUIRED: "true"
+        run: node --test --test-reporter=tap tests/fly-worker-java.test.mjs
       - name: Migrate with Flyway and validate replay
         env:
           SPRING_PROFILES_ACTIVE: migrate
@@ -218,6 +223,10 @@ jobs:
         run: |
           docker build -f Dockerfile.vercel -t condpulse-vercel:ci .
           bash tests/database/vercel-image-smoke.sh
+      - name: Build Fly worker image and verify fail-closed launcher
+        run: |
+          docker build -f infra/fly-worker/Dockerfile -t condpulse-fly-worker:ci .
+          bash tests/database/fly-worker-image-smoke.sh
   release-config:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -246,6 +255,7 @@ jobs:
         run: |
           node --test --test-reporter=tap tests/release-config.test.mjs tests/release-compose.test.mjs tests/vercel-config.test.mjs
           sh -n infra/vercel/start-api.sh
+          sh -n infra/fly-worker/start-worker.sh
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
