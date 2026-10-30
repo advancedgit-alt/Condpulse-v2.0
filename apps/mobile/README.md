@@ -52,7 +52,7 @@ Variáveis públicas embutidas no build (nunca segredo; sem `.env` no Git):
 
 - `EXPO_PUBLIC_SUPABASE_URL` — `https://{ref}.supabase.co`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — `sb_publishable_...` (chave secreta ou de serviço é recusada)
-- `EXPO_PUBLIC_API_URL` — origem HTTPS da API
+- `EXPO_PUBLIC_API_URL` — origem HTTPS da API (também usada no link do convite, `/visita#…`: na Vercel a web e a API têm a mesma origem)
 
 ## Comandos
 

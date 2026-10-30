@@ -1,5 +1,6 @@
 import { credentialPage, eventPage } from './access';
 import { currentRules, move, type CreateMove } from './moves';
+import { arrival, arrivalPage, permit, permitLink, permitPage, type CreatePermit } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
 import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type WaitlistChange } from './waitlist';
@@ -102,6 +103,34 @@ const messages: Record<string, string> = {
   WAITLIST_REQUEST_INVALID: 'O período escolhido não pode entrar na fila. Atualize e escolha outro.',
   WAITLIST_VERSION_REQUIRED: 'Atualize a fila de espera antes de continuar.',
   RESERVATION_RULE_SNAPSHOT_INVALID: 'As regras aceitas nesta entrada precisam ser revisadas pela gestão.',
+  ARRIVAL_EXPIRED: 'O prazo de resposta desta chegada terminou. Siga o procedimento da portaria.',
+  ARRIVAL_ALREADY_DECIDED: 'Esta chegada já foi respondida.',
+  ARRIVAL_CANCELLED: 'Esta chegada foi encerrada pela portaria.',
+  ARRIVAL_NOT_FOUND: 'Chegada não encontrada.',
+  ARRIVAL_DECISION_INVALID: 'Responda autorizando ou recusando a entrada.',
+  VISIT_ACCESS_DENIED: 'Esta ação não está disponível para o seu vínculo.',
+  VISIT_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
+  VISIT_PERMIT_CHANGED: 'O convite foi alterado. Atualize os convites antes de continuar.',
+  VISIT_PERMIT_EXPIRED: 'A vigência deste convite já terminou.',
+  VISIT_PERMIT_REVOKED: 'Este convite já foi revogado.',
+  VISIT_PERMIT_NOT_FOUND: 'Convite não encontrado.',
+  VISIT_PERMIT_INACTIVE: 'Quem convidou não tem mais vínculo para convidar pela unidade: o convite não vale.',
+  VISIT_PERMIT_LINK_UNAVAILABLE: 'Só convites em vigor ou agendados podem ser compartilhados.',
+  VISIT_PERIOD_INVALID: 'O convite começa a partir de agora (até 90 dias à frente), termina no futuro e dura até 7 dias.',
+  VISIT_INPUT_INVALID: 'Informe os dados da visita.',
+  VISIT_VERSION_REQUIRED: 'Atualize a lista antes de revogar.',
+  VISITOR_NAME_INVALID: 'Informe o nome do visitante, de 2 a 160 caracteres.',
+  VISITOR_DOCUMENT_INVALID: 'Informe só o final do documento, de 2 a 4 letras ou números.',
+  VISIT_RULE_CHANGED: 'A regra foi alterada. Atualize antes de continuar.',
+  VISIT_RULE_REVOKED: 'Esta regra já foi revogada.',
+  VISIT_RULE_NOT_FOUND: 'Regra não encontrada.',
+  VISIT_RULE_DAYS_INVALID: 'Escolha de 1 a 7 dias da semana, sem repetir.',
+  VISIT_RULE_PERIOD_INVALID: 'A regra começa hoje ou depois (até 90 dias à frente) e dura até 180 dias.',
+  VISIT_RULE_TIME_INVALID: 'Informe o horário no formato HH:MM, com fim depois do início no mesmo dia.',
+  RESERVATION_GUEST_LIMIT: 'A reserva já tem o número máximo de convidados da área.',
+  RESERVATION_GUEST_TOO_EARLY: 'Convidados podem ser incluídos a partir de 90 dias antes do evento.',
+  RESERVATION_GUEST_UNAVAILABLE: 'Reserva não disponível para convidados.',
+  CREDENTIAL_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
 };
 
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
@@ -181,6 +210,39 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/access-credentials`, (value) => credentialPage(value, unitId), signal ? { signal } : {}),
     unitDeviceEvents: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/device-events`, eventPage, signal ? { signal } : {}),
+    unitPermits: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/permits`, (value) => permitPage(value, unitId), signal ? { signal } : {}),
+    createPermit: (tenantId: string, unitId: string, body: CreatePermit, key: string) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/permits`, (value, response) => {
+        const created = permit(value, unitId);
+        const repeated = replayed(response);
+        // Convite novo nasce em aberto, com o nome e o período enviados; repetição devolve o estado atual.
+        if (!repeated && (!['SCHEDULED', 'ACTIVE'].includes(created.state) || created.visitorName !== body.visitorName
+          || Date.parse(created.validFrom) !== Date.parse(body.validFrom) || Date.parse(created.validUntil) !== Date.parse(body.validUntil))) throw invalid(true);
+        return { permit: created, replayed: repeated };
+      }, { method: 'POST', body, key: operationKey(key) }),
+    revokePermit: (tenantId: string, unitId: string, permitId: string, body: { reason: string; expectedVersion: number }) =>
+      request(`${tenant(tenantId)}/permits/${identifier(permitId)}/revoke`, (value) => {
+        const revoked = permit(value, unitId);
+        if (revoked.permitId !== permitId || revoked.state !== 'REVOKED') throw invalid(true);
+        return revoked;
+      }, { method: 'POST', body }),
+    shareLink: (tenantId: string, permitId: string) =>
+      request(`${tenant(tenantId)}/permits/${identifier(permitId)}/link`, permitLink, { method: 'POST' }),
+    revokeLink: (tenantId: string, unitId: string, permitId: string) =>
+      request(`${tenant(tenantId)}/permits/${identifier(permitId)}/link/revoke`, (value) => {
+        const updated = permit(value, unitId);
+        if (updated.permitId !== permitId || updated.shareLinkActive) throw invalid(true);
+        return updated;
+      }, { method: 'POST' }),
+    unitArrivals: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/arrivals`, (value) => arrivalPage(value, unitId), signal ? { signal } : {}),
+    decideArrival: (tenantId: string, unitId: string, arrivalId: string, decision: 'APPROVE' | 'DENY') =>
+      request(`${tenant(tenantId)}/arrivals/${identifier(arrivalId)}/decision`, (value) => {
+        const decided = arrival(value, unitId);
+        if (decided.arrivalId !== arrivalId) throw invalid(true);
+        return decided;
+      }, { method: 'POST', body: { decision } }),
     moveRules: (tenantId: string, signal?: AbortSignal) => request(`${tenant(tenantId)}/move-rules`, currentRules, signal ? { signal } : {}),
     unitMoves: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/moves`, (value) => {

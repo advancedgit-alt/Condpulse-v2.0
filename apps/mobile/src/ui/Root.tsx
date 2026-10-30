@@ -6,6 +6,7 @@ import { SessionError, type SessionManager } from '../session/session';
 import { colors, touch } from './theme';
 import { DeviceAccess } from './DeviceAccess';
 import { Moves, type MovePendingStore } from './Moves';
+import { Visits, type PermitPendingStore } from './Visits';
 import { Parcels, type DelegationPendingStore } from './Parcels';
 import { Reservations, type KeyFactory, type PendingStore } from './Reservations';
 import type { EventSourceFactory } from '../api/events';
@@ -17,12 +18,13 @@ const roleLabels: Record<Membership['role'], string> = {
 };
 const message = (error: unknown) => error instanceof Error && error.name !== 'Error' ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 
-export function Root({ manager, api, newKey, events = null }: { manager: SessionManager; api: CondPulseApi; newKey: KeyFactory; events?: EventSourceFactory | null }) {
+/** webOrigin: origem da web para o link do convite (na homologação a Vercel serve web e API na mesma origem, ADR-0005). */
+export function Root({ manager, api, newKey, events = null, webOrigin = null }: { manager: SessionManager; api: CondPulseApi; newKey: KeyFactory; events?: EventSourceFactory | null; webOrigin?: string | null }) {
   const state = useSyncExternalStore((listener) => manager.subscribe(listener), () => manager.getState());
   if (state.status === 'loading') return <ActivityIndicator accessibilityLabel="Abrindo" style={styles.spinner} />;
   if (state.status === 'signedOut') return <Login manager={manager} expired={state.reason === 'expired'} />;
   if (state.status === 'mfaRequired') return <Mfa manager={manager} />;
-  return <Home key={state.accountId} manager={manager} api={api} accountId={state.accountId} newKey={newKey} events={events} />;
+  return <Home key={state.accountId} manager={manager} api={api} accountId={state.accountId} newKey={newKey} events={events} webOrigin={webOrigin} />;
 }
 
 function Button({ label, onPress, disabled, secondary }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean }) {
@@ -83,7 +85,7 @@ function Mfa({ manager }: { manager: SessionManager }) {
   </ScrollView>;
 }
 
-function Home({ manager, api, accountId, newKey, events }: { manager: SessionManager; api: CondPulseApi; accountId: string; newKey: KeyFactory; events: EventSourceFactory | null }) {
+function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager: SessionManager; api: CondPulseApi; accountId: string; newKey: KeyFactory; events: EventSourceFactory | null; webOrigin: string | null }) {
   const identity = useQuery({ queryKey: ['private', accountId, 'identity'], queryFn: ({ signal }) => api.me(signal) });
   const [selected, setSelected] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -91,6 +93,7 @@ function Home({ manager, api, accountId, newKey, events }: { manager: SessionMan
   const [pending] = useState<PendingStore>(() => new Map());
   const [movePending] = useState<MovePendingStore>(() => new Map());
   const [delegationPending] = useState<DelegationPendingStore>(() => new Map());
+  const [permitPending] = useState<PermitPendingStore>(() => new Map());
   // A resposta precisa ser da mesma conta da sessão; outra conta encerra tudo.
   const mismatch = identity.data !== undefined && identity.data.accountId !== accountId;
   useEffect(() => { if (mismatch) void manager.expire(); }, [mismatch, manager]);
@@ -115,6 +118,8 @@ function Home({ manager, api, accountId, newKey, events }: { manager: SessionMan
       : active ? <Text style={styles.body}>Este vínculo não tem unidade: as reservas ficam com os moradores e com a gestão na web.</Text> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE'].includes(active.role) ? <Moves key={`moves-${active.membershipId}`} api={api} accountId={accountId}
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={movePending} /> : null}
+    {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Visits key={`visits-${active.membershipId}`} api={api}
+      accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={permitPending} webOrigin={webOrigin} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Parcels key={`parcels-${active.membershipId}`} api={api}
       accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={delegationPending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <DeviceAccess key={`device-access-${active.membershipId}`} api={api}
