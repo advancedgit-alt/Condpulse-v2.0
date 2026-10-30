@@ -52,6 +52,7 @@ export function Requests({ api, accountId, membership, newKey, pending: sharedPe
   const pending = sharedPending ?? ownPending;
   const openScope = `open|${accountId}|${tenantId}|${unitId}`;
   const scope = ['private', accountId, 'tenant', tenantId, 'unit', unitId] as const;
+  const queries = useQueryClient();
   const list = useQuery({ queryKey: [...scope, 'requests'], queryFn: ({ signal }) => api.unitRequests(tenantId, unitId, signal),
     retry: (count, error) => !hidden(error) && count < 1 });
   const [opening, setOpening] = useState(() => pending.has(openScope));
@@ -66,7 +67,10 @@ export function Requests({ api, accountId, membership, newKey, pending: sharedPe
     {!opening ? <Button label="Abrir pedido" onPress={() => { setOutcome(null); setOpening(true); }} /> : null}
     {opening ? <OpenForm api={api} scope={scope} tenantId={tenantId} unitId={unitId} newKey={newKey} store={pending} storeKey={openScope}
       close={(created) => { setOpening(false); if (created) { setOutcome(created.outcome); setSelected(created.requestId); } }} /> : null}
-    <Button label="Atualizar pedidos" secondary disabled={list.isFetching} onPress={() => void list.refetch()} />
+    <Button label="Atualizar pedidos" secondary disabled={list.isFetching} onPress={() => {
+      // A conversa aberta também: resposta ou encerramento pela gestão aparecem sem fechar e abrir de novo.
+      void list.refetch(); void queries.invalidateQueries({ queryKey: [...scope, 'request'] });
+    }} />
     {list.isPending ? <ActivityIndicator accessibilityLabel="Consultando os pedidos" />
       : list.isError && !list.data ? <View><Notice tone="error">{message(list.error)}</Notice><Button label="Tentar de novo" secondary onPress={() => void list.refetch()} /></View>
         : !list.data || list.data.requests.length === 0 ? <Text style={styles.body}>Nenhum pedido. Os pedidos abertos pela unidade aparecem aqui, com o andamento informado pela gestão.</Text>
@@ -141,7 +145,7 @@ function OpenForm({ api, scope, tenantId, unitId, newKey, store, storeKey, close
 }
 
 function author(item: RequestMessage): string {
-  if (item.mine) return 'Você';
+  if (item.mine) return item.authorRole === 'STAFF' ? 'Você, pela equipe do condomínio' : 'Você';
   return item.authorRole === 'STAFF' ? 'Equipe do condomínio' : item.authorName ?? 'Unidade';
 }
 

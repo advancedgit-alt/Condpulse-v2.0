@@ -81,6 +81,8 @@ describe('pedidos da unidade no celular', () => {
     expect(() => requestMessage({ ...staffMessage, visibility: 'INTERNAL' })).toThrow(ContractError);
     expect(() => requestMessage({ ...staffMessage, authorName: 'Pessoa da Equipe' })).toThrow(ContractError);
     expect(() => requestMessage({ ...staffMessage, authorRole: 'UNIT', authorName: null })).toThrow(ContractError);
+    // Conta com vínculo de gestão e de morador: a própria resposta da equipe chega com mine=true e sem nome.
+    expect(requestMessage({ ...staffMessage, mine: true }).mine).toBe(true);
     const wire = { ...detail(), messages: [staffMessage] };
     expect(unitRequest(wire, UNIT).messages).toHaveLength(1);
     expect(() => unitRequest(wire, OTHER_UNIT)).toThrow(ContractError);
@@ -225,5 +227,17 @@ describe('pedidos da unidade no celular', () => {
     await waitFor(() => expect(denied.api.unitRequests).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByText(/^Pedidos/)).toBeNull());
     expect(screen.queryByRole('button', { name: 'Abrir pedido' })).toBeNull();
+  }, 20000);
+
+  it('atualizar pedidos também atualiza a conversa aberta', async () => {
+    const fake = await mount(fakeApi([detail()]));
+    await press('Ver conversa: Vazamento na pia');
+    expect(await screen.findByText('Vamos verificar amanhã.')).toBeTruthy();
+    fake.state.requests = [detail({ state: 'CLOSED', closedAt: '2030-01-07T13:00:00Z', messages: [...detail().messages,
+      { messageId: '54000000-0000-4000-8000-000000000009', authorRole: 'STAFF', authorName: null, mine: false, body: 'Pedido encerrado pela gestão.', createdAt: '2030-01-07T13:00:00Z' }] })];
+    await press('Atualizar pedidos');
+    expect(await screen.findByText('Pedido encerrado pela gestão.')).toBeTruthy();
+    expect(await screen.findByText('Pedido encerrado. A conversa fica guardada; se precisar, abra um novo pedido.')).toBeTruthy();
+    expect(screen.queryByLabelText('Mensagem para a gestão')).toBeNull();
   }, 20000);
 });

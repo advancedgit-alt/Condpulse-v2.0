@@ -34,10 +34,11 @@ const oneOf = <T extends string>(value: unknown, values: readonly T[]): value is
 function check(condition: boolean): asserts condition { if (!condition) throw new ContractError(); }
 
 export function requestMessage(value: unknown): RequestMessage {
-  // Visão da unidade: só mensagens visíveis; equipe sem nome; mensagem da unidade com o nome de quem escreveu.
+  // Visão da unidade: só mensagens visíveis; equipe sem nome (mine vale também para quem tem vínculo de gestão e de
+  // morador e respondeu pela gestão); mensagem da unidade com o nome de quem escreveu.
   check(record(value) && uuid(value.messageId) && oneOf(value.authorRole, ['UNIT', 'STAFF'] as const) && typeof value.mine === 'boolean'
     && value.visibility === 'RESIDENT' && text(value.body, 1, 2000) && date(value.createdAt)
-    && (value.authorRole === 'STAFF' ? value.authorName === null && value.mine === false : text(value.authorName, 1, 160)));
+    && (value.authorRole === 'STAFF' ? value.authorName === null : text(value.authorName, 1, 160)));
   return { messageId: value.messageId as string, authorRole: value.authorRole as 'UNIT' | 'STAFF', authorName: value.authorName as string | null,
     mine: value.mine as boolean, body: value.body as string, createdAt: value.createdAt as string };
 }
