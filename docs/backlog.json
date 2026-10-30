@@ -1305,7 +1305,22 @@
         "db/migrations/V025__move_requests.sql",
         "tests/database/run.py#move_checks",
         "apps/backend/src/test/java/br/com/condpulse/database/MoveJdbcTest.java",
-        "apps/web/e2e/moves.spec.ts"
+        "apps/web/e2e/moves.spec.ts",
+        "apps/mobile/__tests__/moves.test.tsx",
+        {
+          "batch": "moves-20261030",
+          "commit": "a1dcc2f1612fd7b0fe0009eae1959620d63c4902",
+          "branch": "feat/cp-042-moves (PR #76)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41005335349",
+          "commands": [
+            "CI foundation 41004617073",
+            "database-operations migrate 41005335349",
+            "repeticao 41005493459",
+            "public-runtime-smoke 41005617433"
+          ],
+          "scope": "V025 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; RLS FORCE conferido por SQL somente leitura; smoke publico verde. Avisos a portaria dependem do worker (nao implantado); sem login real."
+        }
       ]
     },
     {
