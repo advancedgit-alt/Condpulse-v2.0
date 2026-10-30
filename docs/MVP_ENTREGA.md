@@ -32,6 +32,18 @@ morador até 28/11/2026, área "Salão de festas"; inspect 40917252737, apply
 real com MFA da gestão ainda não foi registrado, então não há aceite das jornadas;
 consultar [STATUS.md](STATUS.md) e as evidências de cada source.
 
+Atualização de 30/10/2026: a homologação está na V028. Depois do lote anterior
+entraram, com migration aplicada pelo executor protegido e smoke público verde,
+importação de unidades (V018), anexos (V019, flag desligada até a chave do Storage),
+convite por link (V020), convidados de reserva (V021), prestador recorrente (V022),
+fila de espera (V023), retirada delegada (V024, 503 até a chave do código),
+mudanças (V025), credenciais de acesso (V026), eventos dos equipamentos (V027) e
+saúde dos equipamentos (V028). Credenciais, eventos e saúde estão atrás de
+`CP_ACCESS_CREDENTIALS_ENABLED`, ainda desligada na Vercel, e só foram exercitados
+com o adaptador simulado: não há parceiro físico. Também entraram a varredura
+WCAG automática no Playwright e a carga sintética no runner (sem afirmação de
+capacidade). Nada disso foi exercitado com login real; continua sem aceite.
+
 O rótulo Vercel `Production` do deployment atual identifica o escopo de hospedagem;
 não comprova aceite de produção operacional. Nenhum recurso novo faturável foi
 criado por este lote de planejamento.
