@@ -156,6 +156,20 @@ class SimulatedAccessAdapterTest {
   assertEquals(Action.APPLY,query(1,"leitor-1").destination("leitor-1").appliedAction());
  }
 
+ @Test void pendingConflictHoldsEvenAfterTheDeviceStartsConfirming() {
+  adapter.scenario("leitor-1",Scenario.ACK_ONLY);
+  assertEquals(Outcome.ACCEPTED,revoke(1,"leitor-1").destination("leitor-1").outcome());
+  for(var scenario:List.of(Scenario.CONFIRM,Scenario.TIMEOUT_APPLIED)) {
+   adapter.scenario("leitor-1",scenario);
+   var conflicting=apply(1,"leitor-1").destination("leitor-1");
+   assertEquals(Outcome.REJECTED,conflicting.outcome(),"Ativação não substitui revogação recebida em "+scenario);
+   assertEquals("VERSION_CONFLICT",conflicting.reason());
+   assertEquals(0,adapter.applications("leitor-1"));
+  }
+  assertEquals(1,adapter.deliverPending("leitor-1"),"A revogação pendente continua na fila");
+  assertEquals(Action.REVOKE,query(1,"leitor-1").destination("leitor-1").appliedAction());
+ }
+
  @Test void olderPendingIsDroppedWhenANewerVersionIsApplied() {
   adapter.scenario("leitor-1",Scenario.ACK_ONLY);
   apply(1,"leitor-1");

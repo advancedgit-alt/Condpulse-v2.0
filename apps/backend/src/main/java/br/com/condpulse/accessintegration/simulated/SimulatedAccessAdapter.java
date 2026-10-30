@@ -263,13 +263,14 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
   if(applied!=null && (applied.version()>version || applied.version()==version && applied.action()!=action))
    return new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),
     applied.version()>version?"STALE_VERSION":"VERSION_CONFLICT",null);
+  // A pendência recebida vale em qualquer cenário: mudar o equipamento para confirmar não troca a ação já aceita.
+  var pending=device.pending.get(credentialRef);
+  if(pending!=null && pending.version()>version)
+   return new Destination(deviceId,Outcome.REJECTED,null,null,null,"STALE_VERSION",null);
+  if(pending!=null && pending.version()==version && pending.action()!=action)
+   return new Destination(deviceId,Outcome.REJECTED,null,null,null,"VERSION_CONFLICT",null);
   switch(device.scenario) {
    case ACK_ONLY:
-    var pending=device.pending.get(credentialRef);
-    if(pending!=null && pending.version()>version)
-     return new Destination(deviceId,Outcome.REJECTED,null,null,null,"STALE_VERSION",null);
-    if(pending!=null && pending.version()==version && pending.action()!=action)
-     return new Destination(deviceId,Outcome.REJECTED,null,null,null,"VERSION_CONFLICT",null);
     device.pending.put(credentialRef,new Pending(version,action,credentialRef));
     return new Destination(deviceId,Outcome.ACCEPTED,null,null,null,null,null);
    case TIMEOUT_LOST: return new Destination(deviceId,Outcome.UNKNOWN,null,null,null,"TIMEOUT",null);
