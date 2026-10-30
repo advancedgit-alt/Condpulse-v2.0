@@ -8,17 +8,44 @@ ALTER TABLE cp.visit_permits ADD COLUMN reservation_id uuid,
 CREATE INDEX visit_permits_by_reservation ON cp.visit_permits(tenant_id,reservation_id) WHERE reservation_id IS NOT NULL;
 GRANT INSERT(reservation_id) ON cp.visit_permits TO cp_api;
 
+-- Capacidade aceita na reserva (snapshot das regras). Sem valor válido, null: a inclusão falha fechado.
+CREATE FUNCTION cp.reservation_guest_capacity(snapshot jsonb) RETURNS integer
+LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT CASE WHEN snapshot->>'capacity' ~ '^[1-9][0-9]{0,5}$' THEN (snapshot->>'capacity')::integer END $$;
+REVOKE ALL ON FUNCTION cp.reservation_guest_capacity(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.reservation_guest_capacity(jsonb) TO cp_api;
+
+-- Convidados ativos da reserva, contados por inteiro mesmo para quem só enxerga os próprios convites (dependente): a marca
+-- local da transação libera a leitura só durante a contagem e devolve apenas o número, nunca os dados dos convidados.
+-- Só quem pode convidar pela unidade da reserva recebe o número; para os demais, null.
+CREATE FUNCTION cp.reservation_active_guests(target_tenant uuid,target_reservation uuid) RETURNS integer
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE previous text:=coalesce(current_setting('app.closing_reservation',true),''); total integer;
+BEGIN
+ PERFORM 1 FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.id=target_reservation
+  AND cp.visit_member(r.tenant_id,r.unit_id,'create');
+ IF NOT FOUND THEN RETURN NULL; END IF;
+ PERFORM set_config('app.closing_reservation',target_reservation::text,true);
+ SELECT count(*) INTO total FROM cp.visit_permits p
+  WHERE p.tenant_id=target_tenant AND p.reservation_id=target_reservation AND p.state='ACTIVE';
+ PERFORM set_config('app.closing_reservation',previous,true);
+ RETURN total;
+END $$;
+REVOKE ALL ON FUNCTION cp.reservation_active_guests(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.reservation_active_guests(uuid,uuid) TO cp_api;
+
 -- Convidado de reserva: mesma unidade, reserva de uso (não bloqueio) confirmada e ainda não terminada, janela igual à do
--- evento, até a capacidade da área em convidados ativos (trava por reserva contra inclusões simultâneas).
+-- evento, até a capacidade aceita na reserva (snapshot das regras; mudança posterior da área não altera a reserva) em
+-- convidados ativos. A trava é a da unidade, a mesma dos comandos de reserva e do encerramento: inclusão e cancelamento
+-- simultâneos se serializam, e cada comando seguinte à trava lê o estado já confirmado pelo outro.
 CREATE FUNCTION cp.reservation_guest_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE target record; active_guests integer;
 BEGIN
  IF NEW.reservation_id IS NULL THEN RETURN NEW; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended('cp.reservation_guests:'||NEW.tenant_id::text||':'||NEW.reservation_id::text,0));
- SELECT r.unit_id,r.kind,r.status,r.starts_at,r.ends_at,a.capacity INTO target
-  FROM cp.reservations r JOIN cp.amenities a ON a.tenant_id=r.tenant_id AND a.id=r.amenity_id
-  WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.reservation_id;
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.reservations:'||NEW.tenant_id::text||':'||NEW.unit_id::text,0));
+ SELECT r.unit_id,r.kind,r.status,r.starts_at,r.ends_at,cp.reservation_guest_capacity(r.rule_snapshot) AS capacity INTO target
+  FROM cp.reservations r WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.reservation_id;
  IF NOT FOUND THEN RAISE EXCEPTION 'reserva indisponível' USING ERRCODE='42501'; END IF;
  IF target.kind<>'BOOKING' OR target.unit_id IS DISTINCT FROM NEW.unit_id THEN
   RAISE EXCEPTION 'convidado só na reserva da própria unidade' USING ERRCODE='42501';
@@ -30,8 +57,9 @@ BEGIN
    OR NEW.valid_from>greatest(target.starts_at,clock_timestamp()) THEN
   RAISE EXCEPTION 'janela do convidado diferente da do evento' USING ERRCODE='23514';
  END IF;
- SELECT count(*) INTO active_guests FROM cp.visit_permits p
-  WHERE p.tenant_id=NEW.tenant_id AND p.reservation_id=NEW.reservation_id AND p.state='ACTIVE';
+ active_guests:=cp.reservation_active_guests(NEW.tenant_id,NEW.reservation_id);
+ IF target.capacity IS NULL THEN RAISE EXCEPTION 'reserva sem capacidade nas regras aceitas' USING ERRCODE='23514'; END IF;
+ IF active_guests IS NULL THEN RAISE EXCEPTION 'unidade sem permissão de convidar' USING ERRCODE='42501'; END IF;
  IF active_guests>=target.capacity THEN RAISE EXCEPTION 'capacidade da área atingida' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $$;
@@ -47,6 +75,12 @@ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE pending integer;
 BEGIN
  IF NEW.status NOT IN ('CANCELLED','REJECTED','EXPIRED') OR OLD.status IN ('CANCELLED','REJECTED','EXPIRED') THEN RETURN NEW; END IF;
+ -- Mesma trava da unidade que os comandos de reserva tomam antes de travar a linha (ReservationStore.lockUnit) e que a
+ -- inclusão toma antes de tudo: um convidado sendo incluído termina antes e é revogado abaixo, ou espera e vê a reserva
+ -- encerrada. Ordem única (unidade, depois linha) em todos os caminhos evita deadlock.
+ IF NEW.unit_id IS NOT NULL THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended('cp.reservations:'||NEW.tenant_id::text||':'||NEW.unit_id::text,0));
+ END IF;
  IF platform.current_actor_id() IS NULL THEN
   -- Papel sem acesso a convites (ex.: worker) não consegue conferir: falha fechado.
   IF NOT has_table_privilege(current_user,'cp.visit_permits','SELECT') THEN
