@@ -12,7 +12,7 @@ import {pathToFileURL} from 'node:url';
  * - deploy: flyctl deploy --remote-only com uma máquina em gru e espera a readiness pública.
  * Nenhum valor de segredo é lido de volta ou impresso: só nomes, códigos e fingerprints.
  */
-export const APP='condpulse-v2-0', ORG='condpulse-agencia-rami', REGION='gru';
+export const APP='condpulse-v2-0', ORG='personal', REGION='gru';
 export const PROJECT='rpnrqfrfwywglvyykgrg';
 export const VERCEL=Object.freeze({project:'prj_IeUa4Zjg1IwaPqJQwv525H14I837',team:'team_6fzA029jxhDb1LpnrnphWGQ0'});
 export const READINESS_URL=`https://${APP}.fly.dev/actuator/health/readiness`;
