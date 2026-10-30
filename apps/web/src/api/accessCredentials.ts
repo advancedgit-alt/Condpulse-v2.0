@@ -97,8 +97,9 @@ export function deviceEvent(value: unknown): DeviceEvent {
       || !(value.credentialLabel === null || text(value.credentialLabel, 1, 80)) || !(value.unitLabel === null || text(value.unitLabel, 1, 160))
       || !oneOf(value.state, ['ACCEPTED', 'QUARANTINED'] as const) || !code(value.quarantineReason)
       || !(value.exitRecorded === null || typeof value.exitRecorded === 'boolean')) throw invalidResponse();
-  // Quarentena tem motivo e não tem equipamento; "saída registrada" só existe para passagem de entrada.
-  if ((value.state === 'QUARANTINED') !== (value.quarantineReason !== null) || (value.state === 'QUARANTINED' && value.deviceLabel !== null)
+  // Quarentena tem motivo; equipamento desconhecido não tem equipamento (dado fora do formato de equipamento conhecido
+  // mantém o equipamento); "saída registrada" só existe para passagem de entrada.
+  if ((value.state === 'QUARANTINED') !== (value.quarantineReason !== null) || (value.quarantineReason === 'UNKNOWN_DEVICE' && value.deviceLabel !== null)
       || (value.exitRecorded !== null && !(value.kind === 'PASSAGE_DETECTED' && value.direction === 'ENTRY'))) throw invalidResponse();
   return { eventId: value.eventId, kind: value.kind, direction: value.direction as DeviceEvent['direction'], evidence: value.evidence as string | null,
     occurredAt: value.occurredAt, deviceLabel: value.deviceLabel as string | null, credentialLabel: value.credentialLabel as string | null,
