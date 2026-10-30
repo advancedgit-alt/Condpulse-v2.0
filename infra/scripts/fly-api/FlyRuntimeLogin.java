@@ -241,8 +241,14 @@ public final class FlyRuntimeLogin {
             try (var r = q.executeQuery()) {
                 if (!r.next()) return new Role(false, false, "", "", "ABSENT", 0);
                 String comment = r.getString(3);
-                require(comment != null && comment.startsWith(config.marker() + ":"), "FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT");
-                String state = comment.substring(config.marker().length() + 1);
+                // Mesma geração: o marker do commit atual, ou READY gravado por um commit anterior. READY só é lido e
+                // devolvido sem escrita (o apply só regrava segredos na Fly); STAGED/DISABLED de outro commit segue conflito.
+                String generationPrefix = "condpulse-runtime-fly:" + PROJECT + ":" + config.generation() + ":";
+                boolean own = comment != null && comment.startsWith(config.marker() + ":");
+                boolean earlierReady = comment != null && comment.startsWith(generationPrefix)
+                    && comment.substring(generationPrefix.length()).matches("[a-f0-9]{40}:READY");
+                require(own || earlierReady, "FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT");
+                String state = comment.substring(generationPrefix.length() + 41);
                 require(Set.of("STAGED", "DISABLED", "READY").contains(state), "FLY_RUNTIME_ROLE_STATE_INVALID");
                 return new Role(true, r.getBoolean(1), r.getString(2), comment, state, r.getInt(4));
             }

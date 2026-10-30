@@ -67,5 +67,5 @@ test('PostgreSQL descartável: SCRAM, STAGED→READY só com COMMIT, ABORT desab
     assert.equal(result.stderr.trim(),'');
     const outcome=JSON.parse(result.stdout.trim());
     assert.equal(result.status,0,`Fly login harness: ${result.stdout}`);
-    assert.deepEqual(outcome,{passed:true,logins:2,connectionLimit:4,abortDisables:true,readyReplay:true,vercelCoexists:true,budgetDenied:true,driftDenied:true});
+    assert.deepEqual(outcome,{passed:true,logins:2,connectionLimit:4,abortDisables:true,readyReplay:true,earlierCommitReady:true,vercelCoexists:true,budgetDenied:true,driftDenied:true});
   }));

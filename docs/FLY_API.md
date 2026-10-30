@@ -67,6 +67,9 @@ lidos de volta e precisam bater exatamente.
   `CP_FILES_ENABLED=true`. Ausente: nada muda (`CP_FILES_ENABLED` segue ausente ou `false` vindo da Vercel).
 - Com o login já READY, o `apply` grava só esses dois segredos em stage, sem tocar no banco, e confere os nomes de
   volta (exatamente os anteriores mais os dois). Valem no próximo `deploy`.
+- Mesmo `generation` do login existente, com o SHA novo: o executor aceita o login READY marcado por um commit
+  anterior da mesma geração, só para leitura (nenhuma escrita no banco). STAGED/DISABLED de outro commit ou marker de
+  outra geração continuam `FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT`.
 - Depois de gravada, um `apply` sem a chave é recusado (`FLY_STORAGE_KEY_REQUIRED`): o import não remove segredo.
   Desligar anexos exige `flyctl secrets unset` revisado; não há caminho automático.
 
