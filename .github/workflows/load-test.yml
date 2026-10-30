@@ -1,0 +1,81 @@
+name: CondPulse synthetic load
+# CP-052: carga sintética da API real contra PostgreSQL descartável do runner. Não acessa Supabase, Vercel nem segredo
+# real; o resultado é do runner e não declara capacidade da homologação ou da produção.
+on:
+  workflow_dispatch:
+    inputs:
+      rps:
+        description: Pedidos por segundo (1-300)
+        default: "100"
+      seconds:
+        description: Duração em segundos (10-600)
+        default: "120"
+      sessions:
+        description: Sessões sintéticas (4-2000)
+        default: "1000"
+      pool:
+        description: Conexões do pool da API (1-16; homologação usa 2)
+        default: "2"
+  push:
+    paths:
+      - tests/load/**
+      - .github/workflows/load-test.yml
+permissions:
+  contents: read
+concurrency:
+  group: condpulse-load-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_DB: condpulse_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: condpulse_ci_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d condpulse_ci"
+          --health-interval 3s --health-timeout 3s --health-retries 30
+    env:
+      # Somente credenciais sintéticas do container descartável do job.
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGDATABASE: condpulse_ci
+      PGUSER: postgres
+      PGPASSWORD: condpulse_ci_only
+      CP_DB_TEST_OK: DISPOSABLE
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Build API
+        run: mvn -B -ntp -q -f apps/backend/pom.xml -DskipTests package
+      - name: Migrate disposable database
+        env:
+          SPRING_PROFILES_ACTIVE: migrate
+          DATABASE_URL: jdbc:postgresql://localhost:5432/condpulse_ci
+          DATABASE_USER: postgres
+          DATABASE_PASSWORD: condpulse_ci_only
+        run: |
+          java -jar apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar
+          psql -X -v ON_ERROR_STOP=1 -c "CREATE ROLE cp_ci_login LOGIN PASSWORD 'synthetic_ci_runtime_only' IN ROLE cp_api"
+      - name: Synthetic mixed load (reads, availability, reservation writes)
+        env:
+          CP_LOAD_RPS: ${{ github.event.inputs.rps || '100' }}
+          CP_LOAD_SECONDS: ${{ github.event.inputs.seconds || '60' }}
+          CP_LOAD_SESSIONS: ${{ github.event.inputs.sessions || '1000' }}
+          CP_LOAD_DB_POOL: ${{ github.event.inputs.pool || '2' }}
+        run: |
+          node tests/load/api-load.mjs
+          cat "$RUNNER_TEMP/condpulse-load-report.json"
