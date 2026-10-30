@@ -17,6 +17,22 @@ export type { Outcome } from './shared';
 const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'financeiro', label: 'Financeiro' }, { id: 'auditoria', label: 'Auditoria' },
   { id: 'fila', label: 'Fila de tarefas' }] as const;
 type Section = typeof sections[number]['id'];
+/** Seções liberadas pelas capacidades da sessão; a navegação lateral e as abas usam a mesma regra (o servidor confere de novo). */
+export function visiblePlatformSections(capabilities: readonly string[]) {
+  return sections.filter((item) => (item.id !== 'financeiro' || capabilities.includes('billing.read'))
+    && (item.id !== 'fila' || capabilities.includes('outbox.operate')));
+}
+/** Seção efetivamente exibida: uma seção não liberada cai em Condomínios. */
+export function currentPlatformSection(section: string, capabilities: readonly string[]): Section {
+  return visiblePlatformSections(capabilities).find((item) => item.id === section)?.id ?? 'condominios';
+}
+/** Navegação lateral do painel master: só observa a sessão que o painel já consultou, sem requisição própria. */
+export function usePlatformNavigation(accountId: string | undefined, section: string) {
+  const session = useQuery({ queryKey: platformKey(accountId ?? '', 'session'), queryFn: ({ signal }) => platform.session(signal),
+    enabled: false });
+  const capabilities = session.data && !session.data.mfaRequired ? session.data.capabilities : [];
+  return { items: visiblePlatformSections(capabilities), current: currentPlatformSection(section, capabilities) };
+}
 /** Mensagem fiel ao que o servidor fez: repetição natural (applied=false) não aparece como sucesso desta ação. */
 export function tenantChangeOutcome(change: PlatformTenantChange, before: Pick<PlatformTenant, 'name' | 'active'>): Outcome {
   if (!change.applied) return { tone: 'info', text: 'O condomínio já estava neste estado. Nada foi alterado e o seu motivo não foi registrado.' };
@@ -73,10 +89,8 @@ function PlatformGate({ accountId, section }: { accountId: string; section: Sect
 
 function PlatformConsole({ section }: { section: Section }) {
   const scope = usePlatform();
-  const billing = scope.session.capabilities.includes('billing.read');
-  const outbox = scope.session.capabilities.includes('outbox.operate');
-  const visible = sections.filter((item) => (item.id !== 'financeiro' || billing) && (item.id !== 'fila' || outbox));
-  const current = visible.some((item) => item.id === section) ? section : 'condominios';
+  const visible = visiblePlatformSections(scope.session.capabilities);
+  const current = currentPlatformSection(section, scope.session.capabilities);
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
       <p>Cadastro, estado e assinatura dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>

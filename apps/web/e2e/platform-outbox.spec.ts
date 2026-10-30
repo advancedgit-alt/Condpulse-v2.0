@@ -79,6 +79,10 @@ test('fila de tarefas: alerta de fila antiga, falhas por condomínio e devoluç�
   const state = await installOutbox(page);
   await signIn(page);
   await page.goto('/master/fila');
+  // Navegação lateral acompanha as capacidades da sessão: fila sim, financeiro não.
+  const sidebar = page.getByRole('navigation', { name: 'Navegação principal' });
+  await expect(sidebar.getByRole('link', { name: 'Fila de tarefas' })).toHaveAttribute('aria-current', 'page');
+  await expect(sidebar.getByRole('link', { name: 'Financeiro' })).toHaveCount(0);
   const queue = page.getByRole('list', { name: 'Fila por condomínio' });
   const rowA = queue.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' });
   await expect(rowA.getByText('Fila atrasada')).toBeVisible();
@@ -120,6 +124,8 @@ test('sem a capacidade a aba não aparece; falha da consulta oferece nova tentat
   await page.goto('/master/fila');
   await expect(page.getByRole('heading', { name: 'Condomínios da plataforma' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Fila de tarefas' })).toHaveCount(0);
+  // Seção inexistente para o papel cai em Condomínios também na navegação lateral.
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Condomínios' })).toHaveAttribute('aria-current', 'page');
 });
 
 test('falha ao consultar a fila mostra erro com nova tentativa', async ({ page }) => {
