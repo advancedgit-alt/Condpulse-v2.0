@@ -151,11 +151,43 @@ REVOKE ALL ON FUNCTION cp.reservation_waitlist_offer_closed() FROM PUBLIC;
 CREATE TRIGGER reservations_waitlist_offer_closed AFTER UPDATE OF status ON cp.reservations FOR EACH ROW
  WHEN(OLD.status='HELD' AND NEW.status<>'HELD') EXECUTE FUNCTION cp.reservation_waitlist_offer_closed();
 
+-- Autor ainda elegível no momento da oferta (mesma regra de quem entra: adulto da unidade, ou dependente com
+-- reservations.create; conta e unidade ativas). Autor sem vínculo não segura o período: a entrada é encerrada e a
+-- oferta passa ao próximo. Durante a oferta (marca local da transação), a API lê os vínculos do condomínio; o worker já
+-- lê os vínculos residenciais ativos (V015).
+CREATE FUNCTION cp.waitlist_author_eligible(target_tenant uuid,target_unit uuid,target_account uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT EXISTS(SELECT 1 FROM cp.memberships m
+  JOIN cp.units u ON u.tenant_id=m.tenant_id AND u.id=m.unit_id AND u.status='ACTIVE'
+  JOIN platform.accounts a ON a.id=m.account_id AND a.status='ACTIVE'
+  WHERE m.tenant_id=target_tenant AND m.unit_id=target_unit AND m.account_id=target_account AND m.status='ACTIVE'
+   AND m.valid_from<=now() AND (m.valid_until IS NULL OR m.valid_until>now())
+   AND (m.role IN ('RESIDENT','RESPONSIBLE') OR (m.role='DEPENDENT'
+    AND coalesce(m.permissions#>ARRAY['reservations','create']='true'::jsonb,false)))) $$;
+REVOKE ALL ON FUNCTION cp.waitlist_author_eligible(uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_author_eligible(uuid,uuid,uuid) TO cp_api,cp_worker;
+-- Cota da unidade pelas regras aceitas na entrada: reservas ativas (retenção e pedido no prazo, confirmada) que ainda
+-- não terminaram, contra policy.maximumActivePerUnit. Regra ilegível não tem cota.
+CREATE FUNCTION cp.waitlist_quota_available(target_tenant uuid,target_unit uuid,snapshot jsonb) RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT CASE WHEN snapshot->'policy'->>'maximumActivePerUnit' ~ '^[1-9][0-9]{0,2}$'
+  THEN (SELECT count(*) FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.unit_id=target_unit AND r.kind='BOOKING'
+    AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND r.ends_at>clock_timestamp()
+    AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp()))
+   <(snapshot->'policy'->>'maximumActivePerUnit')::integer
+  ELSE false END $$;
+REVOKE ALL ON FUNCTION cp.waitlist_quota_available(uuid,uuid,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_quota_available(uuid,uuid,jsonb) TO cp_api,cp_worker;
+CREATE POLICY membership_waitlist_offer_read ON cp.memberships FOR SELECT TO cp_api
+ USING(tenant_id=platform.current_tenant_id() AND coalesce(current_setting('app.waitlist_offer',true),'') LIKE tenant_id::text||':%');
+CREATE POLICY account_waitlist_offer_read ON platform.accounts FOR SELECT TO cp_api
+ USING(coalesce(current_setting('app.waitlist_offer',true),'') LIKE platform.current_tenant_id()::text||':%'
+  AND EXISTS(SELECT 1 FROM cp.memberships m WHERE m.account_id=platform.accounts.id AND m.tenant_id=platform.current_tenant_id()));
+
 -- Oferta: em transação própria, sob a trava da fila da área. Expira retenções e pedidos vencidos da área (linhas
 -- travadas por outro comando ficam para a próxima passada), encerra entradas cujo período começou e oferece cada período
 -- livre ao primeiro da fila, em ordem de entrada, até o início do período (a fila vem antes da reserva direta).
--- Devolve quantas ofertas criou. Papel sem INSERT em reservas (worker)
--- não oferece.
+-- Devolve quantas ofertas criou. Papel sem INSERT em reservas não oferece; o worker recebe só as colunas da retenção.
 CREATE FUNCTION cp.waitlist_offer(target_tenant uuid,target_amenity uuid) RETURNS integer
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE offered integer:=0; entry record; stale record; held uuid; deadline timestamptz;
@@ -163,13 +195,21 @@ BEGIN
  IF target_tenant IS NULL OR target_amenity IS NULL OR target_tenant IS DISTINCT FROM platform.current_tenant_id() THEN
   RAISE EXCEPTION 'condomínio indisponível' USING ERRCODE='42501';
  END IF;
- IF NOT has_table_privilege(current_user,'cp.reservations','INSERT') THEN RETURN 0; END IF;
+ IF NOT has_column_privilege(current_user,'cp.reservations','id','INSERT') THEN RETURN 0; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('cp.waitlist:'||target_tenant::text||':'||target_amenity::text,0));
  PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||target_amenity::text,true);
  FOR stale IN SELECT r.id,r.status FROM cp.reservations r
    WHERE r.tenant_id=target_tenant AND r.amenity_id=target_amenity AND r.status IN ('HELD','PENDING_APPROVAL')
     AND r.expires_at<=clock_timestamp()
    ORDER BY r.id FOR UPDATE SKIP LOCKED LOOP
+  -- Aceite, recusa e saída travam a entrada antes da retenção; o gatilho de expiração trava a entrada depois. Para não
+  -- haver impasse, a entrada da oferta só é tentada: ocupada, a retenção fica para a próxima passada.
+  IF stale.status='HELD' AND EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant
+    AND w.offer_reservation_id=stale.id AND w.state='OFFERED') THEN
+   PERFORM 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.offer_reservation_id=stale.id
+    AND w.state='OFFERED' FOR UPDATE SKIP LOCKED;
+   IF NOT FOUND THEN CONTINUE; END IF;
+  END IF;
   UPDATE cp.reservations SET status='EXPIRED',updated_at=clock_timestamp(),version=version+1,
     decision_reason=CASE stale.status WHEN 'HELD' THEN 'Oferta da fila de espera não aceita no prazo.'
      ELSE 'Prazo de decisão encerrado sem confirmação.' END
@@ -181,14 +221,32 @@ BEGIN
  END LOOP;
  UPDATE cp.reservation_waitlist SET state='CLOSED',version=version+1
   WHERE tenant_id=target_tenant AND amenity_id=target_amenity AND state='WAITING' AND starts_at<=clock_timestamp();
+ -- Autor sem vínculo elegível não segura o período: a entrada é encerrada.
+ UPDATE cp.reservation_waitlist w SET state='CLOSED',version=w.version+1
+  WHERE w.id IN (SELECT x.id FROM cp.reservation_waitlist x WHERE x.tenant_id=target_tenant AND x.amenity_id=target_amenity
+   AND x.state='WAITING' AND NOT cp.waitlist_author_eligible(x.tenant_id,x.unit_id,x.created_by) FOR UPDATE SKIP LOCKED);
+ -- Só entradas que podem receber agora entram no lote (unidade sem cota fica aguardando sem ocupar o lote).
  FOR entry IN SELECT w.* FROM cp.reservation_waitlist w
    WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity AND w.state='WAITING'
-    AND w.starts_at>clock_timestamp()
+    AND w.starts_at>clock_timestamp() AND cp.waitlist_author_eligible(w.tenant_id,w.unit_id,w.created_by)
+    AND cp.waitlist_quota_available(w.tenant_id,w.unit_id,w.rule_snapshot)
     AND EXISTS(SELECT 1 FROM cp.amenities a WHERE a.tenant_id=w.tenant_id AND a.id=w.amenity_id AND a.active)
     AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
      AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED')
      AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)'))
    ORDER BY w.created_at,w.id LIMIT 50 FOR UPDATE OF w SKIP LOCKED LOOP
+  IF NOT cp.waitlist_author_eligible(entry.tenant_id,entry.unit_id,entry.created_by) THEN
+   UPDATE cp.reservation_waitlist SET state='CLOSED',version=version+1 WHERE id=entry.id;
+   CONTINUE;
+  END IF;
+  -- Cota da unidade pelas regras aceitas, sob a trava da unidade (a mesma da reserva direta e do aceite). A criação
+  -- toma a trava da unidade antes da trava da fila; aqui a ordem é a inversa, então só se tenta: trava ocupada encerra
+  -- esta passada (a próxima continua da mesma posição), sem impasse e sem pular a ordem da fila.
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('cp.reservations:'||entry.tenant_id::text||':'||entry.unit_id::text,0)) THEN
+   EXIT;
+  END IF;
+  -- Reconferência sob a trava: unidade que chegou ao limite (ou regra aceita ilegível) continua aguardando.
+  IF NOT cp.waitlist_quota_available(entry.tenant_id,entry.unit_id,entry.rule_snapshot) THEN CONTINUE; END IF;
   held:=gen_random_uuid();
   deadline:=least(clock_timestamp()+interval '15 minutes',entry.starts_at);
   BEGIN
@@ -279,8 +337,14 @@ BEGIN
  PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||target_amenity::text,true);
  SELECT EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity
    AND w.state='WAITING' AND w.starts_at>clock_timestamp()
-   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)'))
-  -- Período ainda ocupado: a exclusão recusa a criação como conflito comum; a prioridade vale para o período livre.
+   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')
+   -- Só bloqueia quem a oferta consegue atender: autor elegível, unidade com cota e período aguardado inteiro livre;
+   -- entrada de período ainda ocupado em parte não impede o uso dos horários livres ao lado.
+   AND cp.waitlist_author_eligible(w.tenant_id,w.unit_id,w.created_by) AND cp.waitlist_quota_available(w.tenant_id,w.unit_id,w.rule_snapshot)
+   AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
+    AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
+    AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)')))
+  -- Período pedido ainda ocupado: a exclusão recusa a criação como conflito comum; a prioridade vale para o período livre.
   AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.amenity_id=target_amenity
    AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
    AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')) INTO waiting;
@@ -289,3 +353,24 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) TO cp_api;
+
+-- Worker (cp_worker, sem conta): a mesma oferta em passadas periódicas, para a fila andar sem requisição da API
+-- (oferta vencida, pedido vencido). Tudo restrito à marca da oferta da área: o worker não lê nem altera entradas fora
+-- dela, só cria retenção HELD e só grava os eventos da própria oferta.
+GRANT EXECUTE ON FUNCTION cp.waitlist_offer(uuid,uuid),cp.waitlist_offering(uuid,uuid) TO cp_worker;
+GRANT SELECT(id,tenant_id,active) ON cp.amenities TO cp_worker;
+GRANT SELECT ON cp.reservation_waitlist TO cp_worker;
+GRANT UPDATE(state,offer_reservation_id,offered_at,offer_expires_at,closed_at,updated_at,version) ON cp.reservation_waitlist TO cp_worker;
+CREATE POLICY tenant_boundary_worker ON cp.reservation_waitlist TO cp_worker
+ USING(tenant_id=platform.current_tenant_id()) WITH CHECK(tenant_id=platform.current_tenant_id());
+CREATE POLICY reservation_waitlist_worker ON cp.reservation_waitlist AS RESTRICTIVE TO cp_worker
+ USING(cp.waitlist_offering(tenant_id,amenity_id)) WITH CHECK(cp.waitlist_offering(tenant_id,amenity_id));
+GRANT INSERT(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,expires_at,rule_snapshot,fee_cents)
+ ON cp.reservations TO cp_worker;
+CREATE POLICY reservations_worker_insert ON cp.reservations AS RESTRICTIVE FOR INSERT TO cp_worker
+ WITH CHECK(kind='BOOKING' AND status='HELD' AND cp.waitlist_offering(tenant_id,amenity_id));
+GRANT INSERT(tenant_id,event_type,aggregate_id,aggregate_version,payload) ON cp.outbox TO cp_worker;
+CREATE POLICY outbox_worker_insert ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_worker
+ WITH CHECK(event_type IN ('WAITLIST_OFFERED','RESERVATION_EXPIRED') AND state='PENDING' AND attempts=0 AND lease_until IS NULL
+  AND processed_at IS NULL AND last_error IS NULL AND jsonb_typeof(payload->'amenityId')='string'
+  AND cp.waitlist_offering(tenant_id,(payload->>'amenityId')::uuid));
