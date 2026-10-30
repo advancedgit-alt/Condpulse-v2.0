@@ -42,8 +42,8 @@ function fakeApi() {
 const clients: ReturnType<typeof newQueryClient>[] = [];
 afterEach(async () => { await cleanup(); for (const client of clients.splice(0)) client.clear(); });
 let counter = 0;
-async function mount(fake = fakeApi(), pending?: GuestPendingStore) {
-  const queries = newQueryClient(Infinity); clients.push(queries);
+async function mount(fake = fakeApi(), pending?: GuestPendingStore, queries = newQueryClient(Infinity)) {
+  clients.push(queries);
   await render(<QueryClientProvider client={queries}>
     <ReservationGuests api={fake.api} scope={['private', 'conta', 'tenant', TENANT, 'unit', UNIT]} tenantId={TENANT} unitId={UNIT} reservation={reservation}
       accountId="10000000-0000-4000-8000-000000000001" pending={pending} timeZone="America/Sao_Paulo" newKey={() => `test:guest-${String(++counter).padStart(12, '0')}`} />
@@ -133,4 +133,41 @@ describe('convidados da reserva no celular', () => {
       fetch: async () => new Response(JSON.stringify({ permits, truncated: false }), { status: 200, headers: { 'Content-Type': 'application/json' } }) });
     expect((await api.reservationGuests(TENANT, UNIT, RESERVATION)).permits).toHaveLength(150);
   });
+
+  it('chave vencida na repetição mantém o envio travado até a pessoa conferir e descartar', async () => {
+    const pending: GuestPendingStore = new Map();
+    const fake = fakeApi();
+    fake.state.addError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado.', true);
+    await mount(fake, pending);
+    await fireEvent.press((await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!);
+    await fireEvent.changeText(await screen.findByLabelText('Nome do convidado'), 'Convidado Antigo');
+    await press('Adicionar convidado');
+    fake.api.addGuest = jest.fn(async () => { throw new ApiError(409, 'IDEMPOTENCY_KEY_EXPIRED', 'O prazo para confirmar este envio terminou.', false); }) as never;
+    await press('Tentar confirmar o mesmo convidado');
+    expect(await screen.findByText('O prazo para confirmar este envio terminou.')).toBeTruthy();
+    expect(screen.getByLabelText('Nome do convidado').props.editable).toBe(false);
+    expect(pending.size).toBe(1);
+    await press('Conferi a lista: descartar este envio');
+    expect(pending.size).toBe(0);
+    expect(screen.getByLabelText('Nome do convidado').props.editable).toBe(true);
+    expect(screen.getByRole('button', { name: 'Adicionar convidado' })).toBeTruthy();
+  }, 20000);
+
+  it('adicionar ou remover convidado atualiza também os convites da unidade', async () => {
+    const queries = newQueryClient(Infinity);
+    const permitsKey = ['private', 'conta', 'tenant', TENANT, 'unit', UNIT, 'visits', 'permits'];
+    queries.setQueryData(permitsKey, { permits: [], truncated: false });
+    await mount(fakeApi(), undefined, queries);
+    await fireEvent.press((await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!);
+    await fireEvent.changeText(await screen.findByLabelText('Nome do convidado'), 'Convidado Novo');
+    await press('Adicionar convidado');
+    expect(await screen.findByText(/Convidado Novo foi convidado\(a\)/)).toBeTruthy();
+    expect(queries.getQueryState(permitsKey)?.isInvalidated).toBe(true);
+    queries.setQueryData(permitsKey, { permits: [], truncated: false });
+    expect(queries.getQueryState(permitsKey)?.isInvalidated).toBe(false);
+    await press('Remover Convidada Um');
+    await press('Confirmar remoção de Convidada Um');
+    expect(await screen.findByText('Convite de Convidada Um revogado.')).toBeTruthy();
+    expect(queries.getQueryState(permitsKey)?.isInvalidated).toBe(true);
+  }, 20000);
 });
