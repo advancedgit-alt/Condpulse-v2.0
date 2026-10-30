@@ -59,11 +59,22 @@ condomínio **dono do conector**: o condomínio nunca vem do conteúdo do evento
 - Sem webhook: o contrato v1 permite a busca por cursor. Assinatura de webhook (HMAC/mTLS) depende do que o parceiro
   oferecer (CP-044).
 
+## Histórico residencial protegido (CP-049)
+
+- **Unidade** (`GET /units/{u}/device-events`): só os eventos das **próprias** credenciais (política do banco), últimos
+  7 dias, só autorização, recusa, abertura (relé/porta) e passagem aceitas — eventos internos (credencial, equipamento)
+  e quarentena ficam de fora. A tela "Acessos" mostra também as próprias credenciais e a situação por equipamento.
+- **Distinção**: "Acesso autorizado", "Acesso negado", "Abertura acionada", "Porta aberta" e "Passagem de
+  entrada/saída/sem direção registrada" são tipos diferentes; nada vira passagem ou direção por dedução.
+- **Saída**: para passagem de entrada, `exitRecorded` diz se há passagem de saída posterior da mesma credencial; sem
+  ela a tela mostra "Sem registro de saída" e avisa que isso não significa que a pessoa continua no condomínio.
+- **Portaria/gestão** (`GET /concierge/device-events`, AAL2): últimas 24 horas do condomínio, inclusive quarentena.
+
 ## Rotas
 
 `GET /v1/tenants/{t}/access-connectors`, `GET|POST /management/access-credentials` (`Idempotency-Key`),
 `POST /management/access-credentials/{id}/revoke`, `GET /concierge/pending-revocations`,
-`GET /units/{u}/access-credentials`. Contrato em `contracts/openapi.json`.
+`GET /units/{u}/access-credentials`, `GET /units/{u}/device-events`, `GET /concierge/device-events`. Contrato em `contracts/openapi.json`.
 
 ## Evidências
 

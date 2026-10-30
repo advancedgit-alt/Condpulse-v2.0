@@ -58,6 +58,18 @@ public class CredentialService {
   });
  }
 
+ /** Histórico dos equipamentos da unidade (CP-049): eventos das próprias credenciais, sem presença inferida. */
+ public CredentialModels.EventPage unitEvents(UUID actor,UUID tenant,UUID unit) {
+  return execute(actor,tenant,AssuranceLevel.AAL1,context->{
+   if(unit==null || context.memberships().stream().noneMatch(m->unit.equals(m.unitId())))
+    throw new BusinessProblem("UNIT_ACCESS_DENIED",404,"Unidade não disponível para esta operação.");
+   return store.unitEvents(tenant,unit);
+  });
+ }
+ public CredentialModels.EventPage recentEvents(UUID actor,UUID tenant,AssuranceLevel assurance) {
+  return execute(actor,tenant,assurance,context->{ requireStaff(context); return store.recentEvents(tenant); });
+ }
+
  public CredentialModels.Mutation create(UUID actor,UUID tenant,AssuranceLevel assurance,String key,CredentialModels.Create request) {
   requireKey(key);
   if(request==null || request.connectorId()==null) throw invalid("CREDENTIAL_CONNECTOR_REQUIRED","Escolha a integração de acesso.");

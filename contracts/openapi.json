@@ -10877,6 +10877,125 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/device-events": {
+      "get": {
+        "operationId": "listUnitDeviceEvents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Histórico dos equipamentos das próprias credenciais na unidade, últimos 7 dias: autorização, recusa, abertura e passagem como tipos distintos. Direção e evidência ausentes continuam ausentes; exitRecorded só indica passagem de saída posterior registrada, nunca presença.",
+        "responses": {
+          "200": {
+            "description": "Eventos",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceEventPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/device-events": {
+      "get": {
+        "operationId": "listRecentDeviceEvents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Portaria ou gestão (AAL2): eventos dos equipamentos nas últimas 24 horas, inclusive quarentena (equipamento desconhecido) e eventos de credencial e equipamento.",
+        "responses": {
+          "200": {
+            "description": "Eventos",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceEventPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17306,6 +17425,126 @@
                 }
               }
             }
+          }
+        }
+      },
+      "DeviceEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "kind",
+          "direction",
+          "evidence",
+          "occurredAt",
+          "deviceLabel",
+          "credentialLabel",
+          "unitLabel",
+          "state",
+          "quarantineReason",
+          "exitRecorded"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "AUTHORIZED",
+              "DENIED",
+              "RELAY_TRIGGERED",
+              "DOOR_OPENED",
+              "PASSAGE_DETECTED",
+              "CREDENTIAL_APPLIED",
+              "CREDENTIAL_REJECTED",
+              "CREDENTIAL_REVOKED",
+              "DEVICE_ONLINE",
+              "DEVICE_OFFLINE"
+            ]
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "ENTRY",
+              "EXIT",
+              "UNKNOWN",
+              null
+            ]
+          },
+          "evidence": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9_]{1,60}$"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deviceLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "credentialLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unitLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACCEPTED",
+              "QUARANTINED"
+            ]
+          },
+          "quarantineReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9_]{1,60}$"
+          },
+          "exitRecorded": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Só para passagem de entrada: há passagem de saída posterior da mesma credencial. Não indica presença."
+          }
+        }
+      },
+      "DeviceEventPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "events",
+          "truncated"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DeviceEvent"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       }

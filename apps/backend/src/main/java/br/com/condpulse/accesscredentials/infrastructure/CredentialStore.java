@@ -97,6 +97,38 @@ public class CredentialStore {
    c.desiredVersion(),c.validUntil(),status,c.reason(),c.revokedAt(),c.createdAt(),c.version(),devices);
  }
 
+ private static final String EVENT_SELECT="""
+  select e.id,e.kind,e.direction,e.evidence,e.occurred_at,d.label as device_label,c.label as credential_label,u.label as unit_label,e.state,
+   e.quarantine_reason,
+   case when e.kind='PASSAGE_DETECTED' and e.direction='ENTRY' and e.credential_id is not null then exists(select 1 from cp.device_events x
+    where x.tenant_id=e.tenant_id and x.credential_id=e.credential_id and x.kind='PASSAGE_DETECTED' and x.direction='EXIT'
+     and x.occurred_at>e.occurred_at) end as exit_recorded
+  from cp.device_events e
+  left join cp.access_devices d on d.tenant_id=e.tenant_id and d.id=e.device_id
+  left join cp.access_credentials c on c.tenant_id=e.tenant_id and c.id=e.credential_id
+  left join cp.units u on u.tenant_id=e.tenant_id and u.id=e.unit_id
+  """;
+ private static CredentialModels.DeviceEvent event(ResultSet r) throws SQLException {
+  return new CredentialModels.DeviceEvent(r.getObject("id",UUID.class),r.getString("kind"),r.getString("direction"),r.getString("evidence"),
+   instant(r.getTimestamp("occurred_at")),r.getString("device_label"),r.getString("credential_label"),r.getString("unit_label"),r.getString("state"),
+   r.getString("quarantine_reason"),r.getObject("exit_recorded",Boolean.class));
+ }
+ /** Unidade: últimos 7 dias, só autorização, recusa, abertura e passagem (a política do banco limita às próprias credenciais). */
+ public CredentialModels.EventPage unitEvents(UUID tenant,UUID unit) {
+  var rows=jdbc.query(EVENT_SELECT+"""
+   where e.tenant_id=? and e.unit_id=? and e.state='ACCEPTED' and e.occurred_at>clock_timestamp()-interval '7 days'
+    and e.kind in ('AUTHORIZED','DENIED','RELAY_TRIGGERED','DOOR_OPENED','PASSAGE_DETECTED')
+   order by e.occurred_at desc,e.id limit ?
+   """,(r,n)->event(r),tenant,unit,PAGE+1);
+  return new CredentialModels.EventPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+ }
+ /** Portaria e gestão: últimas 24 horas do condomínio, inclusive quarentena e eventos de equipamento e credencial. */
+ public CredentialModels.EventPage recentEvents(UUID tenant) {
+  var rows=jdbc.query(EVENT_SELECT+" where e.tenant_id=? and e.occurred_at>clock_timestamp()-interval '24 hours' order by e.occurred_at desc,e.id limit ?",
+   (r,n)->event(r),tenant,PAGE+1);
+  return new CredentialModels.EventPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+ }
+
  public CredentialModels.Connectors connectors(UUID tenant) {
   Map<UUID,List<CredentialModels.Device>> devices=new LinkedHashMap<>();
   jdbc.query("select id,connector_id,label,direction,status from cp.access_devices where tenant_id=? order by label,id",r->{

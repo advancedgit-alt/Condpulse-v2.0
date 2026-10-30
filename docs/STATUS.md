@@ -28,6 +28,10 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: ligar `CP_ACCESS_CREDENTIALS_ENABLED=true` (Production) no projeto Vercel `condpulse` — responsável — painel da Vercel, ou reconectar o conector da Vercel desta sessão com acesso ao projeto `condpulse` (em 30/10/2026 o conector só enxerga `app-advanced`, que não pode ser alterado). Sem a flag a API responde 404 e a web mostra "Credenciais indisponíveis"; nada mais muda.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável. Roteiro em ordem, sem execução: [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
 
+## Histórico residencial dos equipamentos — CP-049
+
+- API e web: a unidade vê as próprias credenciais e os eventos das próprias credenciais (7 dias), com autorização, recusa, abertura e passagem distintas, direção ausente como ausente e "Sem registro de saída" sem inferir presença; a portaria vê as últimas 24 horas com quarentena. Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (desligada na Vercel). Sem migration nova. Pendentes: tela do celular e eventos reais (parceiro, CP-044).
+
 ## Eventos dos equipamentos — CP-047
 
 - V027: eventos buscados pelo worker em cada conector ativo, gravados no condomínio do conector, deduplicados por eventId; equipamento desconhecido em quarentena; unidade só pela credencial; direção e evidência ausentes continuam ausentes; confirmação de credencial por evento só para a versão desejada atual. Mesma flag do worker (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Merge `4aecd42` (PR #82, CI 41015244529 verde). V027 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41016020661; repetição 41016239482 sem linha nova; 26 linhas no histórico; ENABLE/FORCE RLS nas duas tabelas novas, nenhuma tabela `cp` sem RLS completa, nenhum evento gravado). Smoke público 41016429982 verde. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).

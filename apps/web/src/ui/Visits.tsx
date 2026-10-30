@@ -1,3 +1,4 @@
+import { UnitDeviceAccess } from './AccessCredentials';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
@@ -91,6 +92,7 @@ function UnitAccess(scope: Scope) {
             : records.isError && !records.data ? <ErrorState error={records.error} retry={() => void records.refetch()} />
               : <AccessHistory scope={scope} records={records.data?.records ?? []} truncated={records.data?.truncated ?? false} />}
       </section>
+      <UnitDeviceAccess accountId={scope.accountId} tenantId={scope.tenantId} unitId={scope.unitId} timeZone={scope.timeZone} />
     </>}
   </>;
 }
