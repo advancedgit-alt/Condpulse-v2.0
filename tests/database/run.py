@@ -1841,6 +1841,12 @@ def reservation_guest_checks():
 
 def visit_rule_checks():
     """V022: regra de prestador gera janelas explicitas no fuso do condominio; fora da janela nao ha convite; revogar derruba janelas."""
+    # As janelas sao "hoje 00:00-23:59" no fuso do condominio: perto da meia-noite local a de hoje ja terminou e o
+    # "hoje" muda no meio do teste (CI 40994604349 falhou as 23:58-23:59 de Sao Paulo). Espera o dia virar antes de comecar.
+    left = float(value(f"SELECT extract(epoch FROM (date_trunc('day', clock_timestamp() AT TIME ZONE t.time_zone) + interval '1 day') "
+                       f"- (clock_timestamp() AT TIME ZONE t.time_zone)) FROM platform.tenants t WHERE t.id='{TA}'"))
+    if left < 600:
+        time.sleep(left + 5)
     CONR, DEPR, RESR, UR = ("10000000-0000-4000-8000-0000000000b1", "10000000-0000-4000-8000-0000000000b2",
                             "10000000-0000-4000-8000-0000000000b3", "20000000-0000-4000-8000-0000000000b4")
     VR1, VR2, VR3 = ("76000000-0000-4000-8000-0000000000b1", "76000000-0000-4000-8000-0000000000b2", "76000000-0000-4000-8000-0000000000b3")
