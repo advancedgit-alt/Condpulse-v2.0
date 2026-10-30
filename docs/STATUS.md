@@ -26,6 +26,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Adaptador simulado de acesso — CP-043
+
+- Contrato interno de acesso em código (`AccessAdapter`/`AccessModels`) e simulador determinístico com cenários de confirmação, só recebimento, tempo esgotado (aplicado ou perdido), recusa, limite e fora do ar; idempotência por versão, confirmação parcial por destino, revogação prioritária e abertura remota desligada. Sem banco, API ou tela; nenhum equipamento real. Detalhes em [ADAPTADOR_ACESSO.md](ADAPTADOR_ACESSO.md).
+- Pendentes: adaptador real (CP-044, BLOQUEADO no parceiro), orquestração de credenciais e caixa de entrada de eventos.
+
 ## Prestador recorrente — CP-039
 
 - V022: regra de dias, horário local e período gera janelas (convites) por dia no fuso do condomínio; fora delas não há convite; revogar a regra revoga as janelas na mesma transação. Atrás de `CP_VISITS_ENABLED` (ligada); V022 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [VISITAS.md](VISITAS.md).

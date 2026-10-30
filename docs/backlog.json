@@ -1254,8 +1254,11 @@
       "id": "CP-043",
       "delivery": "Adaptador simulado de acesso. Implementar contrato interno com cenários de timeout, duplicata e confirmação parcial.",
       "acceptance": "Testes determinísticos cobrem cada estado sem contato com dispositivo real.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "apps/backend/src/main/java/br/com/condpulse/accessintegration/simulated/SimulatedAccessAdapter.java",
+        "apps/backend/src/test/java/br/com/condpulse/accessintegration/simulated/SimulatedAccessAdapterTest.java"
+      ]
     },
     {
       "id": "CP-044",
