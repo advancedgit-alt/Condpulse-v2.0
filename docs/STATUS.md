@@ -26,6 +26,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Adaptador simulado de acesso — CP-043
+
+- Contrato interno de acesso em código (`AccessAdapter`/`AccessModels`) e simulador determinístico com cenários de confirmação, só recebimento, tempo esgotado (aplicado ou perdido), recusa, limite e fora do ar; idempotência por versão, confirmação parcial por destino, revogação prioritária e abertura remota desligada. Sem banco, API ou tela; nenhum equipamento real. Detalhes em [ADAPTADOR_ACESSO.md](ADAPTADOR_ACESSO.md).
+- Pendentes: adaptador real (CP-044, BLOQUEADO no parceiro), orquestração de credenciais e caixa de entrada de eventos.
+
 ## Fila de espera de reservas — CP-040
 
 - V023: entrada num período ocupado com as regras vigentes; período liberado vira retenção `HELD` de até 15 minutos ao primeiro da fila (exclusão GiST impede duas ofertas no mesmo período); aceitar confirma ou vira pedido; recusar ou vencer passa a vez; passada periódica no worker atrás de `CP_WORKER_WAITLIST_ENABLED=false` (worker não implantado). Atrás de `CP_RESERVATIONS_ENABLED` (ligada); Merge `867d8ff` (PR #68, CI 40992527169 verde). V023 aplicada na homologação em 29/10/2026 pelo executor protegido (migrate 40993166940; repetição 40993369928 sem linha nova; 22 linhas no histórico; RLS FORCE na fila, 8 funções `waitlist_*`, nenhuma tabela `cp` sem RLS completa, zero entradas). Smoke público 40993532095 verde no deployment do merge. Não homologado com login real. Detalhes em [FILA_ESPERA.md](FILA_ESPERA.md).
