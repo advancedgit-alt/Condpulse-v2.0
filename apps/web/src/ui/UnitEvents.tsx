@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { connectUnitEvents, unitEventsUrl, type EventSourceFactory, type Topic } from '../api/events';
 import { scopeKey } from './Operations';
+import { invalidateFresh } from './invalidateFresh';
 
 /** Partes da chave de consulta de cada assunto, dentro do escopo da unidade. */
 export const topicKeys: Record<Topic, string[]> = {
@@ -27,9 +28,9 @@ export function UnitEvents({ accountId, tenantId, unitId, create = browserSource
     const scope = scopeKey({ accountId, tenantId, unitId });
     return connectUnitEvents(unitEventsUrl(tenantId, unitId), {
       changed: (topics) => {
-        for (const part of new Set(topics.flatMap((topic) => topicKeys[topic]))) void queries.invalidateQueries({ queryKey: [...scope, part] });
+        for (const part of new Set(topics.flatMap((topic) => topicKeys[topic]))) void invalidateFresh(queries, [...scope, part]);
       },
-      resync: () => { void queries.invalidateQueries({ queryKey: scope }); },
+      resync: () => { void invalidateFresh(queries, scope); },
       // Revogado: a identidade decide para onde a tela vai. Expirado: a consulta seguinte renova a sessão.
       ended: (reason) => { void queries.invalidateQueries({ queryKey: reason === 'revoked' ? ['identity'] : scope }); },
     }, create);

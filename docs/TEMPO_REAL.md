@@ -36,7 +36,9 @@ existem, como `cp_api`, pelas mesmas políticas de leitura.
 
 ## Web
 
-`UnitEvents` fica montado só nas telas da unidade com vínculo residencial. `changed` invalida só as consultas do assunto;
+`UnitEvents` fica montado só nas telas da unidade com vínculo residencial. `changed` invalida só as consultas do assunto
+(consulta ainda na primeira carga é feita de novo quando termina: a resposta em andamento pode ser anterior à mudança —
+`invalidateFresh`, na web e no celular);
 toda abertura do canal (inclusive a primeira, que pode começar depois de uma mudança) invalida todas as da unidade; `revoked` confere a identidade de novo e não reconecta; `expired` faz a consulta
 seguinte renovar a sessão e reabre em 5 s. Recusa do servidor (função desligada, 401, 429, 503) não mostra erro: nova
 tentativa com espera de 30 s, dobrando até 5 min. Sem o canal, a tela funciona como antes (consulta ao abrir e botões de
