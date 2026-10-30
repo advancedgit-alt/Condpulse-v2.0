@@ -206,8 +206,11 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
   if(!openEnabled) result=new AccessModels.OpenResult(request.requestId(),AccessModels.OpenOutcome.REJECTED,"OPEN_NOT_ENABLED");
   else if(!clock.instant().isBefore(request.expiresAt())) result=new AccessModels.OpenResult(request.requestId(),AccessModels.OpenOutcome.REJECTED,"EXPIRED");
   else if(device.scenario==Scenario.OFFLINE) result=new AccessModels.OpenResult(request.requestId(),AccessModels.OpenOutcome.REJECTED,"DEVICE_OFFLINE");
-  else if(device.scenario==Scenario.TIMEOUT_APPLIED || device.scenario==Scenario.TIMEOUT_LOST)
+  else if(device.scenario==Scenario.TIMEOUT_APPLIED || device.scenario==Scenario.TIMEOUT_LOST) {
+   // Resposta perdida: o relé acionou (TIMEOUT_APPLIED) ou não (TIMEOUT_LOST); os eventos mostram qual foi.
+   if(device.scenario==Scenario.TIMEOUT_APPLIED) emit(request.deviceId(),null,AccessModels.EventKind.RELAY_TRIGGERED,null,null,null);
    result=new AccessModels.OpenResult(request.requestId(),AccessModels.OpenOutcome.UNKNOWN,"TIMEOUT");
+  }
   else if(device.scenario==Scenario.REJECT || device.scenario==Scenario.RATE_LIMITED)
    result=new AccessModels.OpenResult(request.requestId(),AccessModels.OpenOutcome.REJECTED,device.scenario.name());
   else {

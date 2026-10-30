@@ -27,7 +27,8 @@ Determinístico, em memória, com relógio injetado e um cenário por equipament
   `VERSION_CONFLICT`; nada reativa credencial revogada.
 - Eventos duplicados mantêm o mesmo `eventId` (a deduplicação é da caixa de entrada, CP-047).
 - Abertura remota desligada por padrão; ligada no simulador, pedido vencido, equipamento fora do ar ou repetição
-  nunca abre de novo nem vira fila.
+  nunca abre de novo nem vira fila. Resposta perdida é `UNKNOWN`: em `TIMEOUT_APPLIED` o relé aciona e o evento
+  `RELAY_TRIGGERED` aparece na consulta de eventos; em `TIMEOUT_LOST`, não.
 
 ## Evidências
 

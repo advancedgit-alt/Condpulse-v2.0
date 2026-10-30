@@ -270,6 +270,21 @@ class SimulatedAccessAdapterTest {
   assertThrows(IllegalArgumentException.class,()->adapter.getEvents(new AccessModels.EventQuery(CONNECTOR,"outro-cursor",START,START.plus(Duration.ofHours(1)),10)));
  }
 
+ @Test void openingTimeoutDistinguishesTriggeredFromLost() {
+  var enabled=new SimulatedAccessAdapter(CONNECTOR,clock,true,List.of("leitor-1"));
+  var window=new AccessModels.EventQuery(CONNECTOR,null,START,START.plus(Duration.ofHours(1)),10);
+  enabled.scenario("leitor-1",Scenario.TIMEOUT_LOST);
+  var lost=enabled.requestOpen(new AccessModels.OpenRequest(CONNECTOR,"abrir-l","leitor-1","autorizacao-1",START.plus(Duration.ofSeconds(10))));
+  assertEquals(AccessModels.OpenOutcome.UNKNOWN,lost.outcome());
+  assertEquals(0,enabled.getEvents(window).events().stream().filter(e->e.kind()==AccessModels.EventKind.RELAY_TRIGGERED).count());
+  enabled.scenario("leitor-1",Scenario.TIMEOUT_APPLIED);
+  var applied=new AccessModels.OpenRequest(CONNECTOR,"abrir-a","leitor-1","autorizacao-1",START.plus(Duration.ofSeconds(10)));
+  assertEquals(AccessModels.OpenOutcome.UNKNOWN,enabled.requestOpen(applied).outcome(),"Resposta perdida continua incerta");
+  assertEquals(AccessModels.OpenOutcome.UNKNOWN,enabled.requestOpen(applied).outcome());
+  assertEquals(1,enabled.getEvents(window).events().stream().filter(e->e.kind()==AccessModels.EventKind.RELAY_TRIGGERED).count(),
+   "O acionamento aconteceu e aparece nos eventos uma só vez");
+ }
+
  @Test void remoteOpeningIsDisabledAndNeverQueued() {
   var request=new AccessModels.OpenRequest(CONNECTOR,"abrir-1","leitor-1","autorizacao-1",START.plus(Duration.ofSeconds(10)));
   assertEquals(AccessModels.OpenOutcome.REJECTED,adapter.requestOpen(request).outcome());
