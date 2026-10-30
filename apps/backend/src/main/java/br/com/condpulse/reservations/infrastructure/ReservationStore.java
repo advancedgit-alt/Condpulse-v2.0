@@ -107,6 +107,7 @@ public class ReservationStore {
   Long count=jdbc.queryForObject("""
    select count(*) from cp.reservations where tenant_id=? and unit_id=? and kind='BOOKING'
     and status in ('HELD','PENDING_APPROVAL','CONFIRMED') and ends_at>?
+    and not (status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp())
    """,Long.class,tenant,unit,Timestamp.from(now));
   return count==null?0:count;
  }

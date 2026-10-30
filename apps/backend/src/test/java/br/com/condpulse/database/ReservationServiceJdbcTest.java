@@ -214,7 +214,7 @@ class ReservationServiceJdbcTest {
   for(String status:List.of("CANCELLED","EXPIRED","REJECTED"))
    occupied(db.tenantA,amenityA,db.otherUnitA,db.accountC,"BOOKING",status,start.minusSeconds(3600),end.plusSeconds(7200),
     start.minusSeconds(3600),end.plusSeconds(7200),null);
-  // Retenção HELD de fila só sai com a transição real (fila ainda não implementada). Pedido de aprovação vencido
+  // Retenção HELD (aqui sem entrada de fila) só sai com a transição real; a oferta da fila a expira antes. Pedido de aprovação vencido
   // não pode mais ser confirmado e a próxima criação o expira sob trava: não aparece como ocupação.
   assertEquals(List.of(new ReservationModels.BlockedInterval(start,end)),
    service.availability(db.accountA,db.tenantA,db.unitA,amenityA,start.minusSeconds(3600),end.plusSeconds(7200)).blockedIntervals());
