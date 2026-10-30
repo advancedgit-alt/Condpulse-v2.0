@@ -50,6 +50,8 @@ e-mail nem SMS neste recorte.
 | `ARRIVAL_REQUESTED` (chegada ainda aguardando) | `ARRIVAL_WAITING` | Morador e responsável da unidade; dependente só com `visits.decide` |
 | `PARCEL_RECEIVED` (encomenda ainda a retirar) | `PARCEL_RECEIVED` | Morador e responsável; dependente só com `parcels.view` |
 | `WAITLIST_OFFERED` (retenção da fila ainda no prazo, V030) | `WAITLIST_OFFERED` | Só quem entrou na fila (autor da retenção); dependente autor só com `reservations.create` |
+| `REQUEST_UPDATED` e `REQUEST_MESSAGE_ADDED` de autor STAFF (V031) | `REQUEST_UPDATED` | Morador e responsável da unidade do pedido |
+| `MOVE_APPROVED`/`MOVE_REJECTED`, decisão ainda valendo (V031) | `MOVE_DECIDED` | Morador e responsável da unidade |
 
 - Vínculo vigente, conta ativa e unidade ativa no momento do processamento; o banco recusa aviso para destinatário
   inapto, para outra unidade ou para unidade diferente da do registro (`notifications_worker_insert`).

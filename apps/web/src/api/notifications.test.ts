@@ -27,6 +27,11 @@ describe('contrato da caixa da unidade', () => {
     expect(inboxNotification({ ...notice, kind: 'WAITLIST_OFFERED', resourceState: 'OFFERED' }).kind).toBe('WAITLIST_OFFERED');
     expect(inboxNotification({ ...notice, kind: 'WAITLIST_OFFERED', resourceState: 'ACCEPTED' }).resourceState).toBe('ACCEPTED');
     expect(() => inboxNotification({ ...notice, kind: 'WAITLIST_OFFERED', resourceState: 'RECEIVED' })).toThrow();
+    // Pedido e mudança (V031).
+    expect(inboxNotification({ ...notice, kind: 'REQUEST_UPDATED', resourceState: 'WAITING_RESIDENT' }).kind).toBe('REQUEST_UPDATED');
+    expect(inboxNotification({ ...notice, kind: 'MOVE_DECIDED', resourceState: 'REJECTED' }).resourceState).toBe('REJECTED');
+    expect(() => inboxNotification({ ...notice, kind: 'MOVE_DECIDED', resourceState: 'IN_PROGRESS' })).toThrow();
+    expect(() => inboxNotification({ ...notice, kind: 'REQUEST_UPDATED', resourceState: 'APPROVED' })).toThrow();
   });
   it('lista sem cache de dados alheios e abertura só pelo POST, confirmando a leitura devolvida', async () => {
     let reply: () => Response = () => json({ items: [notice], unread: 1 });

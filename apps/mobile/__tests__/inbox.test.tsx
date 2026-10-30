@@ -53,6 +53,8 @@ describe('caixa da unidade no celular', () => {
     expect(inboxPage({ items: [item()], unread: 3 }, UNIT).unread).toBe(3);
     expect(inboxNotification(item({ kind: 'WAITLIST_OFFERED', resourceState: 'OFFERED' }), UNIT).kind).toBe('WAITLIST_OFFERED');
     expect(() => inboxNotification(item({ kind: 'WAITLIST_OFFERED', resourceState: 'RECEIVED' }), UNIT)).toThrow(ContractError);
+    expect(inboxNotification(item({ kind: 'REQUEST_UPDATED', resourceState: 'WAITING_RESIDENT' }), UNIT).kind).toBe('REQUEST_UPDATED');
+    expect(() => inboxNotification(item({ kind: 'MOVE_DECIDED', resourceState: 'IN_PROGRESS' }), UNIT)).toThrow(ContractError);
     const calls: { url: string; init: RequestInit }[] = [];
     let reply = new Response(JSON.stringify({ ...item(), state: 'READ_IN_APP', readAt: '2030-01-07T11:10:00Z' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     const api = createApi({ baseUrl: 'https://api.example.invalid', tokens: { accessToken: async () => 'synthetic', refresh: async () => null, expire: async () => {} } as never,
@@ -134,5 +136,27 @@ describe('caixa da unidade no celular', () => {
     expect(await screen.findByText('Aviso aberto. A oferta aparece em “Fila de espera”, nas reservas desta tela, para aceitar no prazo.')).toBeTruthy();
     expect(fake.state.opens).toEqual([N1]);
     expect(queries.getQueryState(waitlistKey)?.isInvalidated).toBe(true);
+  }, 20000);
+
+  it('resposta do pedido e decisão da mudança apontam a seção e atualizam a consulta', async () => {
+    const queries = newQueryClient(Infinity);
+    const requestsKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'requests'];
+    const movesKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'moves'];
+    queries.setQueryData(requestsKey, { requests: [] }); queries.setQueryData(movesKey, { moves: [] });
+    const detailKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'request', item().resourceId];
+    queries.setQueryData(detailKey, { messages: [] });
+    const fake = await mount(fakeApi([item({ kind: 'REQUEST_UPDATED', resourceState: 'WAITING_RESIDENT' }),
+      item({ notificationId: N2, kind: 'MOVE_DECIDED', resourceState: 'REJECTED' })]), queries);
+    expect(await screen.findByText('Atualização no pedido da unidade · Não aberto')).toBeTruthy();
+    expect(screen.getByText('Situação atual: aguardando a resposta da unidade.')).toBeTruthy();
+    expect(screen.getByText('Situação atual: mudança recusada.')).toBeTruthy();
+    await press(/^Abrir: Atualização no pedido da unidade/);
+    expect(await screen.findByText('Aviso aberto. O pedido está em “Pedidos”, nesta tela.')).toBeTruthy();
+    expect(queries.getQueryState(requestsKey)?.isInvalidated).toBe(true);
+    expect(queries.getQueryState(detailKey)?.isInvalidated).toBe(true);
+    await press(/^Abrir: Decisão sobre a mudança/);
+    expect(await screen.findByText('Aviso aberto. A mudança está em “Mudança e entrega de móveis”, nesta tela.')).toBeTruthy();
+    expect(queries.getQueryState(movesKey)?.isInvalidated).toBe(true);
+    expect(fake.state.opens).toEqual([N1, N2]);
   }, 20000);
 });

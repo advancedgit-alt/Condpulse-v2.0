@@ -10,12 +10,22 @@ import './management/Management.css';
 
 const kindText: Record<InboxNotification['kind'], string> = {
   ARRIVAL_WAITING: 'Chegada aguardando resposta da unidade', PARCEL_RECEIVED: 'Encomenda recebida na portaria',
-  WAITLIST_OFFERED: 'Vaga da fila de espera',
+  WAITLIST_OFFERED: 'Vaga da fila de espera', REQUEST_UPDATED: 'Atualização no pedido da unidade', MOVE_DECIDED: 'Decisão sobre a mudança',
 };
-/** Página do detalhe e rótulo do botão de cada tipo. */
-const destination: Record<InboxNotification['kind'], [string, string]> = {
+/** Página do detalhe e rótulo do botão de cada tipo; pedido e mudança ficam nesta mesma página (sem navegação). */
+const destination: Record<InboxNotification['kind'], [string | null, string]> = {
   ARRIVAL_WAITING: ['acessos', 'Abrir e ver acessos'], PARCEL_RECEIVED: ['encomendas', 'Abrir e ver encomendas'],
-  WAITLIST_OFFERED: ['reservas', 'Abrir e ver reservas'],
+  WAITLIST_OFFERED: ['reservas', 'Abrir e ver reservas'], REQUEST_UPDATED: [null, 'Abrir e ver pedidos'], MOVE_DECIDED: [null, 'Abrir e ver mudanças'],
+};
+/** Consultas da própria página a atualizar ao abrir o aviso (a conversa aberta do pedido também). */
+export function localRefresh(kind: InboxNotification['kind'], resourceId: string): string[][] {
+  if (kind === 'REQUEST_UPDATED') return [['requests'], ['request', resourceId]];
+  if (kind === 'MOVE_DECIDED') return [['moves']];
+  return [];
+}
+const here: Partial<Record<InboxNotification['kind'], string>> = {
+  REQUEST_UPDATED: 'Aviso aberto. O pedido está na seção “Pedidos”, nesta página.',
+  MOVE_DECIDED: 'Aviso aberto. A mudança está na seção “Mudança e entrega de móveis”, nesta página.',
 };
 const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> = {
   ARRIVAL_WAITING: {
@@ -29,6 +39,17 @@ const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> =
     LEFT: 'Situação atual: você saiu da fila ou recusou a oferta.', EXPIRED: 'Situação atual: prazo da oferta encerrado; a vaga seguiu na fila.',
     CLOSED: 'Situação atual: o período começou e a entrada foi encerrada.',
   },
+  REQUEST_UPDATED: {
+    OPEN: 'Situação atual: enviado.', TRIAGED: 'Situação atual: em análise.', IN_PROGRESS: 'Situação atual: em execução.',
+    WAITING_RESIDENT: 'Situação atual: aguardando a resposta da unidade.', RESOLVED: 'Situação atual: concluído.', CLOSED: 'Situação atual: encerrado.',
+  },
+  MOVE_DECIDED: {
+    REQUESTED: 'Situação atual: aguardando a gestão.', APPROVED: 'Situação atual: mudança aprovada.', REJECTED: 'Situação atual: mudança recusada.',
+    CANCELLED: 'Situação atual: pedido de mudança cancelado.',
+  },
+};
+const icons: Record<InboxNotification['kind'], 'door' | 'box' | 'calendar' | 'bell' | 'home'> = {
+  ARRIVAL_WAITING: 'door', PARCEL_RECEIVED: 'box', WAITLIST_OFFERED: 'calendar', REQUEST_UPDATED: 'bell', MOVE_DECIDED: 'home',
 };
 /** Recurso desligado no ambiente ou vínculo que mudou: a caixa some sem erro técnico (o resumo trata o vínculo). */
 const hidden = (error: unknown) => ['API_NOT_AVAILABLE', 'UNIT_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'].includes(codeOf(error));
@@ -45,6 +66,7 @@ export function UnitInbox({ scope, timeZone }: { scope: Scope; timeZone: string 
     refetchInterval: (query) => hidden(query.state.error) ? false : 30_000 });
   const [opening, setOpening] = useState<string | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
   // Abertura pendente não leva a pessoa de volta a uma unidade que ela já deixou: a navegação só acontece se esta caixa
   // continua na tela e no mesmo condomínio e unidade de quando o botão foi clicado.
   const active = useRef({ mounted: true, scope: `${scope.tenantId}:${scope.unitId}` });
@@ -53,12 +75,18 @@ export function UnitInbox({ scope, timeZone }: { scope: Scope; timeZone: string 
   if (hidden(inbox.error)) return null;
   async function open(item: InboxNotification) {
     if (opening) return;
-    setOpening(item.notificationId); setFailure(null);
+    setOpening(item.notificationId); setFailure(null); setOutcome(null);
     const origin = `${scope.tenantId}:${scope.unitId}`;
     try {
       await notifications.open(scope.tenantId, item.notificationId);
       await queries.invalidateQueries({ queryKey: key });
       if (!active.current.mounted || active.current.scope !== origin) return;
+      const local = here[item.kind];
+      if (local) {
+        for (const part of localRefresh(item.kind, item.resourceId)) void queries.invalidateQueries({ queryKey: [...scopeKey(scope), ...part] });
+        setOutcome(local);
+        return;
+      }
       navigate(`/morador/${scope.tenantId}/${scope.unitId}/${destination[item.kind][0]}`);
     } catch (error) {
       setFailure(error);
@@ -69,13 +97,14 @@ export function UnitInbox({ scope, timeZone }: { scope: Scope; timeZone: string 
     <div className="section-heading"><div><span className="section-index">AVISOS DA UNIDADE</span>
       <h2 id="inbox-title">Caixa da unidade{inbox.data && inbox.data.unread > 0 ? ` · ${inbox.data.unread} ${inbox.data.unread === 1 ? 'novo' : 'novos'}` : ''}</h2></div>
       <button className="button button-secondary button-compact" type="button" disabled={inbox.isFetching} onClick={() => void inbox.refetch()}>Atualizar</button></div>
-    <p className="field-help">Avisos da portaria para quem pode agir nesta unidade. Aparecer aqui não quer dizer que alguém leu: só abrir o aviso registra a leitura. Ainda não há notificação no celular.</p>
+    <p className="field-help">Avisos da portaria e da gestão para quem pode agir nesta unidade. Aparecer aqui não quer dizer que alguém leu: só abrir o aviso registra a leitura. Ainda não há notificação no celular.</p>
+    {outcome ? <Notice tone="success">{outcome}</Notice> : null}
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}{uncertain(failure) ? ' Atualize e confira antes de repetir.' : ''}</Notice> : null}
     {inbox.isPending ? <div className="panel"><Loading label="Consultando os avisos da unidade…" /></div>
       : inbox.isError && !inbox.data ? <ErrorState error={inbox.error} retry={() => void inbox.refetch()} />
-        : !inbox.data || inbox.data.items.length === 0 ? <div className="panel"><Empty title="Nenhum aviso">Chegadas que pedem a sua resposta, encomendas recebidas pela portaria e vagas da fila de espera aparecem aqui.</Empty></div>
+        : !inbox.data || inbox.data.items.length === 0 ? <div className="panel"><Empty title="Nenhum aviso">Chegadas que pedem a sua resposta, encomendas, vagas da fila de espera, respostas da gestão nos pedidos e decisões de mudança aparecem aqui.</Empty></div>
           : <ol className="management-list" aria-label="Avisos da unidade">{inbox.data.items.map((item) => <li key={item.notificationId} className="management-row">
-            <div><strong><Icon name={item.kind === 'ARRIVAL_WAITING' ? 'door' : item.kind === 'WAITLIST_OFFERED' ? 'calendar' : 'box'} /> {kindText[item.kind]}</strong>{' '}
+            <div><strong><Icon name={icons[item.kind]} /> {kindText[item.kind]}</strong>{' '}
               {item.state === 'AVAILABLE' ? <span className="status-pill status-pending">Não aberto</span> : <span className="status-pill status-neutral">Aberto</span>}
               <span>Gerado em {formatWhen(item.createdAt, timeZone)}{item.readAt ? ` · aberto por você em ${formatWhen(item.readAt, timeZone)}` : ''}</span>
               <span className="field-help">{item.resourceState ? resourceTexts[item.kind][item.resourceState] : 'Este registro não está mais disponível para o seu vínculo.'}</span></div>

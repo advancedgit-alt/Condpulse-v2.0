@@ -38,5 +38,6 @@ Atrás de `CP_REQUESTS_ENABLED` (a mesma flag dos pedidos da unidade). Banco: V0
 
 ## Pendentes
 
-Aviso à portaria e à unidade pela caixa interna/push (os eventos `MOVE_*` vão ao outbox; o worker não está implantado —
-BLOQUEADO na implantação do worker), ensaio em aparelho real e ensaio com Auth real.
+Aviso à portaria e push. A decisão (`MOVE_APPROVED`/`MOVE_REJECTED`) vira aviso `MOVE_DECIDED` na caixa interna de morador e
+responsável desde a V031, enquanto a decisão vale; a entrega depende do worker contínuo, que não está implantado —
+BLOQUEADO na implantação do worker. Ensaio em aparelho real e com Auth real.

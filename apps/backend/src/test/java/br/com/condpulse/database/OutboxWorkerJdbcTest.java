@@ -13,9 +13,15 @@ import br.com.condpulse.notifications.application.WorkerTransactions;
 import br.com.condpulse.notifications.infrastructure.InboxStore;
 import br.com.condpulse.notifications.infrastructure.NotificationStore;
 import br.com.condpulse.notifications.infrastructure.OutboxStore;
+import br.com.condpulse.moves.application.MoveModels;
+import br.com.condpulse.moves.application.MoveService;
+import br.com.condpulse.moves.infrastructure.MoveStore;
 import br.com.condpulse.parcels.application.ParcelModels;
 import br.com.condpulse.parcels.application.ParcelService;
 import br.com.condpulse.parcels.infrastructure.ParcelStore;
+import br.com.condpulse.requests.application.RequestModels;
+import br.com.condpulse.requests.application.RequestService;
+import br.com.condpulse.requests.infrastructure.RequestStore;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
@@ -47,7 +53,9 @@ class OutboxWorkerJdbcTest {
  private static OutboxStore outbox;
  private static InboxStore inboxStore;
  private static OutboxWorker worker;
- private static UUID concierge,dependent;
+ private static RequestService requests;
+ private static MoveService moves;
+ private static UUID concierge,dependent,manager;
 
  @BeforeAll static void setup() throws Exception {
   db=new JdbcDisposableDatabase(1);
@@ -60,6 +68,12 @@ class OutboxWorkerJdbcTest {
   outbox=new OutboxStore(workerDb.jdbc);
   inboxStore=new InboxStore(workerDb.jdbc);
   worker=new OutboxWorker(transactions,outbox,List.of(new InboxEffect(inboxStore)));
+  requests=new RequestService(api,new RequestStore(db.jdbc),new AuditRecorder(db.jdbc));
+  moves=new MoveService(api,new MoveStore(db.jdbc),new AuditRecorder(db.jdbc));
+  manager=UUID.randomUUID(); db.extraAccounts.add(manager);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",manager);
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) values(?,?,null,'GESTAO WORKER JDBC','MANAGER','ACTIVE')",
+   db.tenantA,manager);
   concierge=UUID.randomUUID(); dependent=UUID.randomUUID();
   db.extraAccounts.add(concierge); db.extraAccounts.add(dependent);
   db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE'),(?,'ACTIVE')",concierge,dependent);
@@ -152,6 +166,50 @@ class OutboxWorkerJdbcTest {
   // Sem a permissão, o aviso deixa de aparecer para o dependente.
   db.adminUpdate("update cp.memberships set permissions='{}'::jsonb where tenant_id=? and account_id=?",db.tenantA,dependent);
   assertTrue(inbox.unit(dependent,db.tenantA,db.unitA).items().isEmpty());
+ }
+
+ @Test void staffReplyRequestProgressAndMoveDecisionNotifyTheUnitButNotItsOwnMessages() throws Exception {
+  var request=requests.open(db.accountA,db.tenantA,db.unitA,key(),new RequestModels.Open("MAINTENANCE","Vazamento fictício","Água no teto.")).request();
+  requests.unitMessage(db.accountA,db.tenantA,request.requestId(),key(),new RequestModels.UnitMessage("Mais detalhes da unidade."));
+  requests.staffMessage(manager,db.tenantA,AAL2,request.requestId(),key(),new RequestModels.StaffMessage("Comentário interno.","INTERNAL"));
+  requests.staffMessage(manager,db.tenantA,AAL2,request.requestId(),key(),new RequestModels.StaffMessage("Vamos verificar amanhã.","RESIDENT"));
+  var head=requests.managedRequest(manager,db.tenantA,AAL2,request.requestId());
+  requests.update(manager,db.tenantA,AAL2,request.requestId(),new RequestModels.Update("IN_PROGRESS",null,null,null,head.version()));
+  worker.runTenant(db.tenantA);
+  assertEquals("SKIPPED:1",task(request.requestId(),"REQUEST_OPENED"),"Abertura pela própria unidade não é aviso");
+  assertEquals("1",db.adminString("select count(*) from cp.outbox where tenant_id=? and aggregate_id=? and event_type='REQUEST_MESSAGE_ADDED' and state='SKIPPED'",
+   db.tenantA,request.requestId()),"Mensagem da própria unidade não gera aviso");
+  assertEquals("1",db.adminString("select count(*) from cp.outbox where tenant_id=? and aggregate_id=? and event_type='REQUEST_MESSAGE_ADDED' and state='DELIVERED'",
+   db.tenantA,request.requestId()),"Resposta visível da equipe vira aviso; comentário interno não gera evento");
+  assertEquals("DELIVERED:1",task(request.requestId(),"REQUEST_UPDATED"));
+  assertEquals(2,notices(db.accountA),"Morador recebe resposta e andamento");
+  assertEquals(0,notices(dependent),"Dependente não acompanha pedidos");
+  assertEquals(0,notices(db.accountC),"Outra unidade não recebe");
+  var page=inbox.unit(db.accountA,db.tenantA,db.unitA);
+  assertTrue(page.items().stream().allMatch(item->"REQUEST_UPDATED".equals(item.kind()) && "IN_PROGRESS".equals(item.resourceState())
+   && request.requestId().equals(item.resourceId())));
+
+  var zone=java.time.ZoneId.of("America/Sao_Paulo");
+  var day=java.time.LocalDate.now(zone).plusDays(3);
+  moves.updateRules(manager,db.tenantA,AAL2,new MoveModels.RulesUpdate("Use o elevador de serviço.",List.of(1,2,3,4,5,6,7),"08:00","18:00",24,240,null));
+  var move=moves.create(db.accountA,db.tenantA,db.unitA,key(),new MoveModels.Create("MOVE_IN",day.atTime(9,0).atZone(zone).toInstant(),
+   day.atTime(12,0).atZone(zone).toInstant(),"Transportadora Fictícia",null,null,1)).move();
+  moves.decide(manager,db.tenantA,AAL2,move.moveId(),new MoveModels.Decision("APPROVE",null,move.version()));
+  worker.runTenant(db.tenantA);
+  assertEquals("SKIPPED:1",task(move.moveId(),"MOVE_REQUESTED"),"Pedido de mudança da própria unidade não é aviso");
+  assertEquals("DELIVERED:1",task(move.moveId(),"MOVE_APPROVED"));
+  var notice=inbox.unit(db.accountA,db.tenantA,db.unitA).items().stream().filter(item->"MOVE_DECIDED".equals(item.kind())).findFirst().orElseThrow();
+  assertEquals("APPROVED",notice.resourceState()); assertEquals(move.moveId(),notice.resourceId());
+  assertEquals(0,notices(dependent),"Dependente não acompanha mudanças");
+  // Decisão que deixou de valer antes do worker (pedido cancelado) não vira aviso.
+  var second=moves.create(db.accountA,db.tenantA,db.unitA,key(),new MoveModels.Create("MOVE_OUT",day.atTime(13,0).atZone(zone).toInstant(),
+   day.atTime(15,0).atZone(zone).toInstant(),"Transportadora Fictícia",null,null,1)).move();
+  moves.decide(manager,db.tenantA,AAL2,second.moveId(),new MoveModels.Decision("REJECT","Data indisponível",second.version()));
+  db.adminUpdateWithoutTriggers("update cp.move_requests set state='CANCELLED',cancelled_by=? where id=?",db.accountA,second.moveId());
+  worker.runTenant(db.tenantA);
+  assertEquals("SKIPPED:1",task(second.moveId(),"MOVE_REJECTED"));
+  assertEquals(3,notices(db.accountA));
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
  }
 
  @Test void closedRecordsAndEventsWithoutConsumerAreSkippedNotDelivered() throws Exception {

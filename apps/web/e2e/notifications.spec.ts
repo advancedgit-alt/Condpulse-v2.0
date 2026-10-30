@@ -8,9 +8,11 @@ const WAITING = '93000000-0000-4000-8000-000000000001';
 const DELIVERED = '93000000-0000-4000-8000-000000000002';
 const VOIDED = '93000000-0000-4000-8000-000000000003';
 const OFFER = '93000000-0000-4000-8000-000000000004';
+const REQUEST = '93000000-0000-4000-8000-000000000005';
+const MOVE = '93000000-0000-4000-8000-000000000006';
 
 interface Notice {
-  notificationId: string; unitId: string; kind: 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED'; resourceId: string; resourceState: string | null;
+  notificationId: string; unitId: string; kind: 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED'; resourceId: string; resourceState: string | null;
   state: 'AVAILABLE' | 'READ_IN_APP'; createdAt: string; readAt: string | null;
 }
 async function json(route: Route, status: number, body: unknown) {
@@ -81,6 +83,30 @@ test('oferta da fila de espera aparece só para quem entrou e leva às reservas 
   await offer.getByRole('button', { name: 'Abrir e ver reservas' }).click();
   await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
   expect(state.opens.map((item) => item.id)).toEqual([OFFER]);
+});
+
+test('resposta do pedido e decisão da mudança abrem na própria página e registram a leitura', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installInbox(page);
+  state.items = [
+    { notificationId: REQUEST, unitId: UNIT_A, kind: 'REQUEST_UPDATED', resourceId: '84000000-0000-4000-8000-000000000001', resourceState: 'WAITING_RESIDENT',
+      state: 'AVAILABLE', createdAt: minutes(-2), readAt: null },
+    { notificationId: MOVE, unitId: UNIT_A, kind: 'MOVE_DECIDED', resourceId: '86000000-0000-4000-8000-000000000001', resourceState: 'APPROVED',
+      state: 'AVAILABLE', createdAt: minutes(-1), readAt: null },
+  ];
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  const inbox = page.getByRole('list', { name: 'Avisos da unidade' });
+  const request = inbox.getByRole('listitem').filter({ hasText: 'Atualização no pedido da unidade' });
+  await expect(request.getByText('Situação atual: aguardando a resposta da unidade.')).toBeVisible();
+  const move = inbox.getByRole('listitem').filter({ hasText: 'Decisão sobre a mudança' });
+  await expect(move.getByText('Situação atual: mudança aprovada.')).toBeVisible();
+  await request.getByRole('button', { name: 'Abrir e ver pedidos' }).click();
+  await expect(page.getByText('Aviso aberto. O pedido está na seção “Pedidos”, nesta página.')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/inicio$`));
+  await move.getByRole('button', { name: 'Abrir e ver mudanças' }).click();
+  await expect(page.getByText('Aviso aberto. A mudança está na seção “Mudança e entrega de móveis”, nesta página.')).toBeVisible();
+  expect(state.opens.map((item) => item.id)).toEqual([REQUEST, MOVE]);
 });
 
 test('abertura que termina depois de a pessoa sair da página não a leva de volta para outra tela', async ({ page }) => {

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateFresh } from './invalidateFresh';
 import { connectUnitEvents, unitEventsPath, type EventSourceFactory, type Timers, type Topic } from '../api/events';
 
 /** Partes da chave de consulta de cada assunto no escopo da unidade; assuntos sem tela no celular não consultam nada. */
@@ -26,9 +27,9 @@ export function useUnitEvents({ accountId, tenantId, unitId, create, timers }: {
       stop?.();
       stop = connectUnitEvents(unitEventsPath(tenantId, unitId), {
         changed: (topics) => {
-          for (const part of new Set(topics.flatMap((topic) => topicKeys[topic] ?? []))) void queries.invalidateQueries({ queryKey: [...scope, part] });
+          for (const part of new Set(topics.flatMap((topic) => topicKeys[topic] ?? []))) void invalidateFresh(queries, [...scope, part]);
         },
-        resync: () => { void queries.invalidateQueries({ queryKey: scope }); },
+        resync: () => { void invalidateFresh(queries, scope); },
         ended: (reason) => { void queries.invalidateQueries({ queryKey: reason === 'revoked' ? ['private', accountId, 'identity'] : scope }); },
       }, create, timers);
     };
