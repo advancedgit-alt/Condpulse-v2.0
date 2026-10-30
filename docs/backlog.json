@@ -1253,6 +1253,7 @@
         "tests/database/run.py#waitlist_checks",
         "apps/backend/src/test/java/br/com/condpulse/database/WaitlistJdbcTest.java",
         "apps/web/e2e/waitlist.spec.ts",
+        "apps/mobile/__tests__/waitlist.test.tsx",
         {
           "batch": "waitlist-20261029",
           "commit": "867d8ff06008127d966d0436f47fa1dbaf27a4ec",
@@ -1278,7 +1279,21 @@
         "db/migrations/V024__parcel_delegations.sql",
         "tests/database/run.py#delegation_checks",
         "apps/backend/src/test/java/br/com/condpulse/database/DelegationJdbcTest.java",
-        "apps/web/e2e/parcel-delegation.spec.ts"
+        "apps/web/e2e/parcel-delegation.spec.ts",
+        {
+          "batch": "parcel-delegation-20261030",
+          "commit": "cd3150548a9dcd2cc8609f93b4fd4d0c5b4d7e5d",
+          "branch": "feat/cp-041-parcel-delegation (PR #72)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41000850664",
+          "commands": [
+            "CI foundation 40999901120",
+            "database-operations migrate 41000850664",
+            "repeticao 41001042891",
+            "public-runtime-smoke 41001237346"
+          ],
+          "scope": "V024 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; RLS FORCE em cp.parcel_delegations conferido por SQL somente leitura; smoke publico verde. CP_PARCEL_CODE_KEY nao cadastrada: delegacao responde 503 DELEGATION_UNAVAILABLE ate o responsavel cadastrar; sem login real."
+        }
       ]
     },
     {
