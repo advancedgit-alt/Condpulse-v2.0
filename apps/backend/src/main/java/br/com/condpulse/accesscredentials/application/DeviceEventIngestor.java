@@ -14,7 +14,8 @@ import org.springframework.dao.DataAccessException;
 /**
  * Busca os eventos de cada conector ativo pelo adaptador (CP-047) e grava no condomínio dono do conector — o condomínio
  * nunca vem do evento. Janela limitada (até 24 h, contrato v1) a partir do último recebimento gravado, com sobreposição
- * de 5 minutos: a deduplicação por eventId absorve a repetição. Equipamento desconhecido vai para quarentena; campo
+ * de 5 minutos: a deduplicação por eventId absorve a repetição. Passada que para no limite de páginas guarda a
+ * continuação e a janela; falha de gravação não avança a posição. Equipamento desconhecido vai para quarentena; campo
  * fora do formato também. Confirmação de credencial por evento (CREDENTIAL_APPLIED/REVOKED com versão) só vale se for
  * a versão e a ação desejadas atuais (guarda da V026); confirmação antiga é ignorada.
  */
@@ -28,8 +29,15 @@ public class DeviceEventIngestor {
  private final CredentialSyncStore syncs;
  private final DeviceEventStore events;
  private final CredentialReconciler.Adapters adapters;
+ private final int pageSize,maxPages;
  public DeviceEventIngestor(WorkerTransactions transactions,CredentialSyncStore syncs,DeviceEventStore events,CredentialReconciler.Adapters adapters) {
-  this.transactions=transactions; this.syncs=syncs; this.events=events; this.adapters=adapters;
+  this(transactions,syncs,events,adapters,PAGE,MAX_PAGES);
+ }
+ /** Página e limite de páginas por passada configuráveis para os ensaios. */
+ public DeviceEventIngestor(WorkerTransactions transactions,CredentialSyncStore syncs,DeviceEventStore events,CredentialReconciler.Adapters adapters,
+     int pageSize,int maxPages) {
+  if(pageSize<1 || pageSize>100 || maxPages<1) throw new IllegalArgumentException("Página de 1 a 100 eventos e ao menos uma página.");
+  this.transactions=transactions; this.syncs=syncs; this.events=events; this.adapters=adapters; this.pageSize=pageSize; this.maxPages=maxPages;
  }
 
  public Pass runOnce() {
@@ -47,43 +55,55 @@ public class DeviceEventIngestor {
 
  Pass ingest(UUID tenant,UUID connector,AccessAdapter adapter) {
   Instant now=transactions.inTenant(tenant,events::now);
-  Instant last=transactions.inTenant(tenant,()->events.cursor(tenant,connector));
+  var saved=transactions.inTenant(tenant,()->events.position(tenant,connector));
+  Instant from,until;
+  String cursor;
   Instant floor=now.minus(AccessModels.EventQuery.MAX_WINDOW).plusSeconds(60);
-  Instant from=last==null?now.minus(FIRST_WINDOW):last.minus(OVERLAP);
-  if(from.isBefore(floor)) from=floor;
-  Instant until=now.plusSeconds(1);
+  if(saved.continuation()!=null && !saved.windowFrom().isBefore(floor)) {
+   // A passada anterior parou no limite de páginas: continua da mesma página, na mesma janela.
+   from=saved.windowFrom(); until=saved.windowUntil(); cursor=saved.continuation();
+  } else {
+   from=saved.lastReceived()==null?now.minus(FIRST_WINDOW):saved.lastReceived().minus(OVERLAP);
+   if(from.isBefore(floor)) from=floor;
+   until=now.plusSeconds(1); cursor=null;
+  }
   int stored=0,duplicates=0,quarantined=0,confirmations=0;
   Instant newest=null;
-  String cursor=null;
-  for(int page=0;page<MAX_PAGES;page++) {
+  boolean failed=false;
+  for(int page=0;page<maxPages && !failed;page++) {
    AccessModels.EventPage result;
-   try { result=adapter.getEvents(new AccessModels.EventQuery(connector.toString(),cursor,from,until,PAGE)); }
+   try { result=adapter.getEvents(new AccessModels.EventQuery(connector.toString(),cursor,from,until,pageSize)); }
    catch(RuntimeException failure) {
     LOG.log(System.Logger.Level.WARNING,"Eventos do conector adiados: {0}",failure.getClass().getSimpleName());
+    failed=true;
     break;
    }
    for(var event:result.events()) {
     if(event.eventId().length()>200) { LOG.log(System.Logger.Level.WARNING,"Evento com identificador fora do limite descartado."); continue; }
     var outcome=store(tenant,connector,event);
+    if(outcome==Stored.FAILED) { failed=true; break; }
     switch(outcome) {
      case STORED -> stored++;
      case QUARANTINED -> quarantined++;
      case DUPLICATE -> duplicates++;
      case CONFIRMED -> { stored++; confirmations++; }
+     default -> {}
     }
     if(newest==null || event.receivedAt().isAfter(newest)) newest=event.receivedAt();
    }
+   if(failed) break;
    cursor=result.nextCursor();
    if(cursor==null) break;
   }
-  if(newest!=null) {
-   Instant position=newest;
-   transactions.inTenant(tenant,()->{ events.advance(tenant,connector,position); return null; });
+  // Falha ao gravar ou ao buscar: posição e continuação ficam como estavam; a próxima passada repete (sem duplicar).
+  if(!failed) {
+   Instant position=newest; String next=cursor; Instant windowFrom=next==null?null:from, windowUntil=next==null?null:until;
+   transactions.inTenant(tenant,()->{ events.save(tenant,connector,position,next,windowFrom,windowUntil); return null; });
   }
   return new Pass(stored,duplicates,quarantined,confirmations,0);
  }
 
- enum Stored { STORED, QUARANTINED, DUPLICATE, CONFIRMED }
+ enum Stored { STORED, QUARANTINED, DUPLICATE, CONFIRMED, FAILED }
  private Stored store(UUID tenant,UUID connector,AccessModels.Event event) {
   record Mapped(UUID device,UUID credential,String reason,boolean fresh) {}
   Mapped mapped;
@@ -101,8 +121,9 @@ public class DeviceEventIngestor {
     return new Mapped(device,credential,reason,fresh);
    });
   } catch(DataAccessException failure) {
+   // Falha de gravação não é repetição: a passada para aqui sem avançar a posição.
    LOG.log(System.Logger.Level.WARNING,"Evento não gravado: {0}",failure.getClass().getSimpleName());
-   return Stored.DUPLICATE;
+   return Stored.FAILED;
   }
   if(!mapped.fresh()) return Stored.DUPLICATE;
   if(mapped.reason()!=null) return Stored.QUARANTINED;

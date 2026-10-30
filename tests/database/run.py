@@ -2611,6 +2611,11 @@ def device_event_checks():
            "aplicacao nao grava evento de equipamento")
     expect(error(f"UPDATE cp.device_events SET direction='EXIT' WHERE external_event_id='ev-1'", "42501", tenant=TA, actor=None, role="cp_worker"),
            "evento recebido nao muda")
+    expect(error(f"INSERT INTO cp.device_event_cursors(tenant_id,connector_id,continuation) VALUES('{TA}','{KA}','pagina-2')", "23514", tenant=TA, actor=None, role="cp_worker"),
+           "continuacao exige a janela em que vale")
+    worker(f"INSERT INTO cp.device_event_cursors(tenant_id,connector_id,last_received_at,continuation,window_from,window_until) "
+           f"VALUES('{TA}','{KA}',clock_timestamp(),'pagina-2',clock_timestamp()-interval '1 hour',clock_timestamp())")
+    expect(value(f"select continuation from cp.device_event_cursors where connector_id='{KA}'") == "pagina-2", "worker guarda a continuacao com a janela")
     for table in ("device_events", "device_event_cursors"):
         expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text||has_table_privilege('cp_worker','cp.{table}','DELETE')::text") == "falsefalse",
                f"ninguem apaga cp.{table}")

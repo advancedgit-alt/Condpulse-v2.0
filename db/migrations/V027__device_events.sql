@@ -38,13 +38,19 @@ CREATE INDEX device_events_recent ON cp.device_events(tenant_id,occurred_at DESC
 CREATE INDEX device_events_by_unit ON cp.device_events(tenant_id,unit_id,occurred_at DESC,id) WHERE unit_id IS NOT NULL;
 CREATE INDEX device_events_by_credential ON cp.device_events(tenant_id,credential_id,occurred_at DESC) WHERE credential_id IS NOT NULL;
 
--- Posição da busca por conector (horário de recebimento do último evento gravado).
+-- Posição da busca por conector: horário de recebimento do último evento gravado e, quando a passada parou no limite de
+-- páginas, a continuação do parceiro com a janela em que ela vale (a próxima passada continua dali).
 CREATE TABLE cp.device_event_cursors (
  tenant_id uuid NOT NULL REFERENCES platform.tenants(id),
  connector_id uuid NOT NULL,
- last_received_at timestamptz NOT NULL,
+ last_received_at timestamptz,
+ continuation text CHECK(continuation IS NULL OR length(continuation) BETWEEN 1 AND 500),
+ window_from timestamptz,
+ window_until timestamptz,
  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(tenant_id,connector_id),
+ CHECK((continuation IS NULL)=(window_from IS NULL) AND (continuation IS NULL)=(window_until IS NULL)),
+ CHECK(window_from IS NULL OR window_from<window_until),
  FOREIGN KEY(tenant_id,connector_id) REFERENCES cp.access_connectors(tenant_id,id)
 );
 
@@ -94,5 +100,6 @@ CREATE POLICY device_events_read ON cp.device_events AS RESTRICTIVE FOR SELECT T
 GRANT SELECT(id,tenant_id,connector_id,external_event_id) ON cp.device_events TO cp_worker;
 GRANT INSERT(tenant_id,connector_id,external_event_id,device_id,credential_id,kind,direction,evidence,applied_version,occurred_at,received_at,
  state,quarantine_reason) ON cp.device_events TO cp_worker;
-GRANT SELECT,INSERT(tenant_id,connector_id,last_received_at),UPDATE(last_received_at,updated_at) ON cp.device_event_cursors TO cp_worker;
+GRANT SELECT,INSERT(tenant_id,connector_id,last_received_at,continuation,window_from,window_until),
+ UPDATE(last_received_at,continuation,window_from,window_until,updated_at) ON cp.device_event_cursors TO cp_worker;
 GRANT SELECT(id,tenant_id,connector_id,unit_id) ON cp.access_credentials TO cp_worker;

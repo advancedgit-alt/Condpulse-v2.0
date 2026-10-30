@@ -14,18 +14,30 @@ public class DeviceEventStore {
  public DeviceEventStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
  public Instant now() { return jdbc.queryForObject("select clock_timestamp()",Timestamp.class).toInstant(); }
- public Instant cursor(UUID tenant,UUID connector) {
-  var rows=jdbc.query("select last_received_at from cp.device_event_cursors where tenant_id=? and connector_id=?",
-   (r,n)->r.getTimestamp("last_received_at").toInstant(),tenant,connector);
-  return rows.isEmpty()?null:rows.getFirst();
+ /** Posição salva: último recebimento e, se a passada anterior parou no limite de páginas, continuação e janela. */
+ public record Position(Instant lastReceived,String continuation,Instant windowFrom,Instant windowUntil) {}
+ public Position position(UUID tenant,UUID connector) {
+  var rows=jdbc.query("select last_received_at,continuation,window_from,window_until from cp.device_event_cursors where tenant_id=? and connector_id=?",
+   (r,n)->new Position(instant(r.getTimestamp("last_received_at")),r.getString("continuation"),instant(r.getTimestamp("window_from")),
+    instant(r.getTimestamp("window_until"))),tenant,connector);
+  return rows.isEmpty()?new Position(null,null,null,null):rows.getFirst();
  }
- public void advance(UUID tenant,UUID connector,Instant lastReceived) {
+ /**
+  * Grava o fim da passada: avança o último recebimento (nunca volta) e guarda a continuação com a janela, ou limpa a
+  * continuação quando a busca chegou ao fim.
+  */
+ public void save(UUID tenant,UUID connector,Instant lastReceived,String continuation,Instant windowFrom,Instant windowUntil) {
   jdbc.update("""
-   insert into cp.device_event_cursors(tenant_id,connector_id,last_received_at) values(?,?,?)
-   on conflict(tenant_id,connector_id) do update set last_received_at=greatest(cp.device_event_cursors.last_received_at,excluded.last_received_at),
-    updated_at=clock_timestamp()
-   """,tenant,connector,Timestamp.from(lastReceived));
+   insert into cp.device_event_cursors(tenant_id,connector_id,last_received_at,continuation,window_from,window_until) values(?,?,?,?,?,?)
+   on conflict(tenant_id,connector_id) do update set
+    last_received_at=case when cp.device_event_cursors.last_received_at is null then excluded.last_received_at
+     when excluded.last_received_at is null then cp.device_event_cursors.last_received_at
+     else greatest(cp.device_event_cursors.last_received_at,excluded.last_received_at) end,
+    continuation=excluded.continuation,window_from=excluded.window_from,window_until=excluded.window_until,updated_at=clock_timestamp()
+   """,tenant,connector,ts(lastReceived),continuation,ts(windowFrom),ts(windowUntil));
  }
+ private static Instant instant(Timestamp value) { return value==null?null:value.toInstant(); }
+ private static Timestamp ts(Instant value) { return value==null?null:Timestamp.from(value); }
  public UUID device(UUID tenant,UUID connector,String externalId) {
   var rows=jdbc.query("select id from cp.access_devices where tenant_id=? and connector_id=? and external_id=?",
    (r,n)->r.getObject("id",UUID.class),tenant,connector,externalId);
