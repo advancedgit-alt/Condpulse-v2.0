@@ -70,8 +70,8 @@ class WaitlistWorkerJdbcTest {
   try { if(workerDb!=null) workerDb.close(); } finally { if(db!=null) db.close(); }
  }
  private static String key() { return "waitlist-worker-"+UUID.randomUUID(); }
- private String state(UUID entry) { return db.adminString("select state from cp.reservation_waitlist where id=?",entry); }
- private String offerOf(UUID entry) { return db.adminString("select offer_reservation_id from cp.reservation_waitlist where id=?",entry); }
+ private String state(UUID entry) throws Exception { return db.adminString("select state from cp.reservation_waitlist where id=?",entry); }
+ private String offerOf(UUID entry) throws Exception { return db.adminString("select offer_reservation_id from cp.reservation_waitlist where id=?",entry); }
 
  @Test void workerOffersFreedPeriodsAndExpiresUnansweredOffersWithoutRequests() throws Exception {
   var booked=reservations.create(db.accountC,db.tenantA,key(),new ReservationModels.Create(db.otherUnitA,amenity,start,start.plusSeconds(7200),1)).reservation();

@@ -12,15 +12,20 @@ import org.springframework.stereotype.Repository;
  */
 @Repository @Profile("worker")
 public class WaitlistSweepStore {
- public static final int AMENITY_LIMIT=200;
+ public static final int AMENITY_PAGE=200;
  private final JdbcTemplate jdbc;
  public WaitlistSweepStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
  public List<UUID> activeTenants() {
   return jdbc.query("select id from platform.tenants where active order by id",(r,n)->r.getObject("id",UUID.class));
  }
- /** Todas as áreas, ativas ou não: área inativa ainda precisa vencer retenção e pedido parados. */
- public List<UUID> amenities(UUID tenant) {
-  return jdbc.query("select id from cp.amenities where tenant_id=? order by id limit ?",(r,n)->r.getObject("id",UUID.class),tenant,AMENITY_LIMIT);
+ /**
+  * Uma página de áreas depois de {@code after} (null: do início), ativas ou não: área inativa ainda precisa vencer
+  * retenção e pedido parados. A passada percorre todas as páginas.
+  */
+ public List<UUID> amenities(UUID tenant,UUID after) {
+  return after==null
+   ?jdbc.query("select id from cp.amenities where tenant_id=? order by id limit ?",(r,n)->r.getObject("id",UUID.class),tenant,AMENITY_PAGE)
+   :jdbc.query("select id from cp.amenities where tenant_id=? and id>? order by id limit ?",(r,n)->r.getObject("id",UUID.class),tenant,after,AMENITY_PAGE);
  }
  public int offer(UUID tenant,UUID amenity) {
   Integer created=jdbc.queryForObject("select cp.waitlist_offer(?,?)",Integer.class,tenant,amenity);

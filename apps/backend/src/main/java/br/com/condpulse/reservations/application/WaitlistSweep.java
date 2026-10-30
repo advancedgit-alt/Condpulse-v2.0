@@ -22,12 +22,18 @@ public class WaitlistSweep {
  public int runOnce() {
   int offered=0;
   for(UUID tenant:transactions.catalog(store::activeTenants)) {
-   List<UUID> amenities=transactions.inTenant(tenant,()->store.amenities(tenant));
-   for(UUID amenity:amenities) {
-    try { offered+=transactions.inTenant(tenant,()->store.offer(tenant,amenity)); }
-    catch(DataAccessException failure) {
-     LOG.log(System.Logger.Level.WARNING,"Passada da fila adiada para uma área: {0}",failure.getClass().getSimpleName());
+   UUID after=null;
+   while(true) {
+    UUID cursor=after;
+    List<UUID> amenities=transactions.inTenant(tenant,()->store.amenities(tenant,cursor));
+    for(UUID amenity:amenities) {
+     try { offered+=transactions.inTenant(tenant,()->store.offer(tenant,amenity)); }
+     catch(DataAccessException failure) {
+      LOG.log(System.Logger.Level.WARNING,"Passada da fila adiada para uma área: {0}",failure.getClass().getSimpleName());
+     }
     }
+    if(amenities.size()<WaitlistSweepStore.AMENITY_PAGE) break;
+    after=amenities.getLast();
    }
   }
   return offered;
