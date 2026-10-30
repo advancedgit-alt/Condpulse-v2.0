@@ -270,9 +270,8 @@ class DelegationJdbcTest {
     catch(BusinessProblem problem) { return problem.code(); }
    });
    Thread.sleep(1500);
-   // A portaria anula a encomenda enquanto a criação espera a trava.
+   // A portaria anula a encomenda enquanto a criação espera a trava, com gatilhos e constraints ativos.
    try(var change=holder.prepareStatement("update cp.parcels set status='VOIDED',void_reason='Registro duplicado fictício',voided_by=?,voided_at=clock_timestamp(),version=version+1 where id=?")) {
-    try(var replica=holder.createStatement()) { replica.execute("set local session_replication_role=replica"); }
     change.setObject(1,concierge); change.setObject(2,parcel.parcelId()); change.executeUpdate();
    }
    holder.commit();
