@@ -2850,14 +2850,23 @@ def outbox_replay_checks():
            "sessao do condominio nao reprocessa")
     expect(error(replay.format(F1), "23514", tenant=TA, role="cp_worker"), "worker nao reprocessa falha definitiva")
     expect(error(op + replay.format(F1), "23514", tenant=TA, role="cp_worker"), "worker nao reprocessa nem declarando a capacidade da plataforma")
-    query(op + replay.format(F1), actor=OP, role="cp_api")
+    # Devolução e auditoria na mesma transação, como o serviço faz.
+    audit = (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) "
+             f"VALUES('{OP}','OUTBOX_TASK_REPLAYED','{TA}','Consumidor corrigido',jsonb_build_object('taskId','{F1}'))")
+    expect(error("SET LOCAL app.platform_capabilities='tenants.read'; " + audit, "42501", actor=OP, role="cp_api"),
+           "auditoria da devolucao exige outbox.operate")
+    query(op + replay.format(F1) + "; " + audit, actor=OP, role="cp_api")
+    expect(value(f"select count(*) from platform.platform_audit_log where actor_id='{OP}' and action='OUTBOX_TASK_REPLAYED'") == "1",
+           "devolucao grava a trilha da plataforma")
+    expect(error(op + f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) VALUES('{OP}','TENANT_SUSPENDED','{TA}','x')",
+                 "42501", actor=OP, role="cp_api"), "operacao da fila nao grava acao de outra area")
     expect(value(f"select state||':'||attempts||':'||(last_error is null)||':'||(processed_at is null)||':'||(available_at<=clock_timestamp()) "
                  f"from cp.outbox where id='{F1}'") == "PENDING:0:true:true:true", "falha volta para a fila sem tentativa nem erro, disponivel ja")
     query(op + replay.format(S1), actor=OP, role="cp_api")
     expect(value(f"select state from cp.outbox where id='{S1}'") == "PENDING", "tarefa ignorada volta para a fila (consumidor novo)")
     query(f"UPDATE cp.outbox SET state='LEASED',attempts=1,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{F1}'", tenant=TA, role="cp_worker")
     expect(value(f"select state||':'||attempts from cp.outbox where id='{F1}'") == "LEASED:1", "worker arrenda a tarefa devolvida")
-    query(f"SET session_replication_role=replica; DELETE FROM cp.outbox WHERE id in ('{F1}','{S1}','{D1}','{P1}'); DELETE FROM platform.accounts WHERE id='{OP}'")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.outbox WHERE id in ('{F1}','{S1}','{D1}','{P1}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{OP}'; DELETE FROM platform.accounts WHERE id='{OP}'")
 
 def main():
     guard()

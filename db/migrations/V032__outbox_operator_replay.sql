@@ -42,3 +42,11 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
+
+-- Trilha da plataforma por capacidade e prefixo da ação: a operação da fila só registra OUTBOX_*.
+DROP POLICY platform_audit_insert ON platform.platform_audit_log;
+CREATE POLICY platform_audit_insert ON platform.platform_audit_log FOR INSERT TO cp_api
+ WITH CHECK(actor_id = platform.current_actor_id() AND (
+  (platform.has_platform_capability('tenants.manage') AND action LIKE 'TENANT\_%')
+  OR (platform.has_platform_capability('billing.manage') AND action LIKE 'BILLING\_%')
+  OR (platform.has_platform_capability('outbox.operate') AND action LIKE 'OUTBOX\_%')));

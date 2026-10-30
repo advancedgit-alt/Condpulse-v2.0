@@ -12,12 +12,14 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * V032 com PostgreSQL real e o login da API: a operação da plataforma vê a fila de todos os condomínios (sem conteúdo),
  * recebe o alerta de fila antiga e devolve FAILED/SKIPPED para a fila com motivo auditado; sem papel ou sem AAL2, nada.
  */
+@EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class OutboxOperationsJdbcTest {
  private static final AssuranceLevel AAL2=AssuranceLevel.AAL2;
  private static JdbcDisposableDatabase db;
