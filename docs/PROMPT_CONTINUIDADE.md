@@ -69,7 +69,7 @@ Leia antes: `CLAUDE.md`, `AGENTS.md`, `docs/STATUS.md`, `docs/FLY_API.md`, `docs
    uso, cobrança da plataforma, criação de condomínio pela interface (substituir o manifesto manual com o mesmo
    rigor: auditoria, AAL2, papel de plataforma), suspensão/reativação. Papel de plataforma já existe
    (`PLATFORM_ADMIN` da conta do responsável).
-6. **Financeiro por condomínio com Asaas (sandbox)**: cadastro de pagador por unidade, emissão de boleto/PIX,
+6. **Financeiro por condomínio com Asaas (sandbox)** — escopo aprovado na [ADR-0008](adr/0008-financeiro-condominial-asaas.md): cadastro de pagador por unidade, emissão de boleto/PIX,
    cobranças avulsas e recorrentes (taxa condominial, reservas, multas), consulta de status, webhook assinado
    do Asaas (idempotente, auditado), conciliação, segunda via para o morador, inadimplência na gestão, relatórios.
    Chave `CP_ASAAS_API_KEY` chega à API pelo `fly-api` (mesmo padrão do Storage). Nada em produção sem OK.
