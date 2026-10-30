@@ -106,6 +106,7 @@ test('pagamento manual só vira "paga" com a confirmação do servidor; divergê
   await signIn(page);
   await page.goto('/master/financeiro');
   await expect(page.getByRole('heading', { name: 'Assinatura dos condomínios' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Financeiro' })).toHaveAttribute('aria-current', 'page');
   const row = page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' });
   await expect(row.getByText('Vencida', { exact: true })).toBeVisible();
   await expect(row.getByText('R$ 499,00', { exact: false })).toBeVisible();
