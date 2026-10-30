@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { CondPulseApi, Membership } from '../api/client';
 import { SessionError, type SessionManager } from '../session/session';
 import { colors, touch } from './theme';
+import { Announcements } from './Announcements';
 import { DeviceAccess } from './DeviceAccess';
 import { Moves, type MovePendingStore } from './Moves';
 import { Visits, type PermitPendingStore } from './Visits';
@@ -112,6 +113,8 @@ function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager:
               <Text style={styles.body}>{roleLabels[item.role]}{item.unitId ? ' · unidade vinculada' : ''}</Text>
             </Pressable>)}</View>}
     {active ? <Notice tone="info">{`Contexto: ${active.tenantName} (${roleLabels[active.role]}).`}</Notice> : null}
+    {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER'].includes(active.role) ? <Announcements key={`announcements-${active.membershipId}`} api={api}
+      accountId={accountId} tenantId={active.tenantId} unitId={active.unitId} timeZone={active.timeZone} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <UnitEvents accountId={accountId} tenantId={active.tenantId} unitId={active.unitId} create={events} key={`events-${active.membershipId}`} /> : null}
     {active && active.unitId ? <Reservations key={active.membershipId} api={api} accountId={accountId}
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={pending} />

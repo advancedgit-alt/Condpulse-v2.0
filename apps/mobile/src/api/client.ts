@@ -1,4 +1,5 @@
 import { credentialPage, eventPage } from './access';
+import { announcementPage, openedAnnouncement } from './announcements';
 import { currentRules, move, type CreateMove } from './moves';
 import { arrival, arrivalPage, permit, permitLink, permitPage, type CreatePermit } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
@@ -131,6 +132,9 @@ const messages: Record<string, string> = {
   RESERVATION_GUEST_TOO_EARLY: 'Convidados podem ser incluídos a partir de 90 dias antes do evento.',
   RESERVATION_GUEST_UNAVAILABLE: 'Reserva não disponível para convidados.',
   CREDENTIAL_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
+  ANNOUNCEMENT_NOT_FOUND: 'Aviso não encontrado. Ele pode ter sido arquivado pela gestão.',
+  ANNOUNCEMENT_ARCHIVED: 'Este aviso foi arquivado pela gestão.',
+  ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
 };
 
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
@@ -243,6 +247,13 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
         if (decided.arrivalId !== arrivalId) throw invalid(true);
         return decided;
       }, { method: 'POST', body: { decision } }),
+    unitAnnouncements: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/announcements`, announcementPage, signal ? { signal } : {}),
+    /** Abertura autenticada: devolve o texto e registra a primeira abertura (repetir não muda o horário). */
+    openAnnouncement: (tenantId: string, announcementId: string) =>
+      request(`${tenant(tenantId)}/announcements/${identifier(announcementId)}/open`, (value) => {
+        try { return openedAnnouncement(value, announcementId); } catch { throw invalid(true); }
+      }, { method: 'POST' }),
     moveRules: (tenantId: string, signal?: AbortSignal) => request(`${tenant(tenantId)}/move-rules`, currentRules, signal ? { signal } : {}),
     unitMoves: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/moves`, (value) => {
