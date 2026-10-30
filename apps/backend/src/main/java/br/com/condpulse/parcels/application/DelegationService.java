@@ -98,7 +98,7 @@ public class DelegationService {
 
  public DelegationModels.Delegation revoke(UUID actor,UUID tenant,UUID parcelId,DelegationModels.Revoke request) {
   if(parcelId==null) throw parcelNotFound();
-  if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
+  if(request==null || request.delegationId()==null || request.expectedVersion()==null || request.expectedVersion()<0)
    throw invalid("DELEGATION_VERSION_REQUIRED","Atualize a encomenda antes de cancelar a autorização.");
   return execute(actor,tenant,AssuranceLevel.AAL1,context->{
    var parcel=parcels.parcel(tenant,parcelId,false);
@@ -107,7 +107,8 @@ public class DelegationService {
    var current=store.latest(tenant,parcelId);
    if(current==null || !"ACTIVE".equals(current.state()) && !"EXPIRED".equals(current.state()))
     throw new BusinessProblem("DELEGATION_NOT_ACTIVE",409,"Não há autorização em vigor para esta encomenda.");
-   if(current.version()!=request.expectedVersion() || !store.revoke(tenant,current.delegationId(),request.expectedVersion(),actor))
+   // Só a autorização exibida é cancelada: confirmação de uma autorização já substituída é conflito.
+   if(!current.delegationId().equals(request.delegationId()) || current.version()!=request.expectedVersion() || !store.revoke(tenant,current.delegationId(),request.expectedVersion(),actor))
     throw new BusinessProblem("DELEGATION_CHANGED",409,"A autorização foi alterada. Atualize a encomenda.");
    var revoked=store.delegation(tenant,current.delegationId());
    audit.record(tenant,actor,"DELEGATION_REVOKED","PARCEL_DELEGATION",current.delegationId(),null);
@@ -139,6 +140,11 @@ public class DelegationService {
    }
    var current=parcels.parcel(tenant,parcelId,true);
    if(current==null) throw parcelNotFound();
+   // Repetição simultânea com a mesma chave: a primeira pode ter concluído enquanto esta esperava a trava da encomenda.
+   if(store.keyExists(tenant,actor,route,key)) {
+    var previous=parcels.begin(tenant,actor,route,key,hash);
+    return new Outcome(new ParcelModels.Mutation(previous.parcel(),true,previous.responseStatus()),null);
+   }
    if("DELIVERED".equals(current.status())) throw new BusinessProblem("PARCEL_ALREADY_DELIVERED",409,"Esta encomenda já foi retirada.");
    if("VOIDED".equals(current.status()))
     throw new BusinessProblem("PARCEL_VOIDED",409,"Este registro de encomenda foi anulado e não está mais para retirada.");
