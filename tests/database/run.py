@@ -1075,7 +1075,8 @@ def worker_checks():
                 f"VALUES('{TA}','{account}','{unit}','{event}','{kind}','{resource}')")
     expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload,state) "
                  f"VALUES('{TA}','TEST','{ROLL}',9,'{{}}','DELIVERED')", "42501", tenant=TA, role="cp_api"), "aplicacao cria somente tarefa pendente")
-    expect(error(f"UPDATE cp.outbox SET state='DELIVERED' WHERE id='{E1}'", "42501", tenant=TA, role="cp_api"), "aplicacao nao processa tarefa")
+    expect(value(f"WITH u AS (UPDATE cp.outbox SET state='DELIVERED' WHERE id='{E1}' RETURNING 1) SELECT count(*) FROM u", tenant=TA, role="cp_api") == "0",
+           "aplicacao nao processa tarefa (V032: so a operacao da plataforma altera, e so devolvendo para a fila)")
     expect(error(lease(E1, until="clock_timestamp()-interval '1 second'"), "23514", tenant=TA, role="cp_worker"), "arrendamento exige prazo futuro")
     expect(error(lease(E1, until="clock_timestamp()+interval '1 hour'"), "23514", tenant=TA, role="cp_worker"), "arrendamento tem prazo curto")
     expect(error(f"UPDATE cp.outbox SET payload='{{}}' WHERE id='{E1}'", "42501", tenant=TA, role="cp_worker"), "worker nao muda o conteudo da tarefa")
@@ -2814,6 +2815,66 @@ def unit_notice_checks():
           f"DELETE FROM cp.move_requests WHERE id='{MV}'; DELETE FROM cp.memberships WHERE account_id in ('{RX}','{DX}','{RO}'); "
           f"DELETE FROM cp.units WHERE id='{UO}'; DELETE FROM platform.accounts WHERE id in ('{RX}','{DX}','{RO}')")
 
+def outbox_replay_checks():
+    """V032: operacao da plataforma ve a fila de tarefas de todos os condominios sem o conteudo e devolve para a fila so
+    tarefa FAILED ou SKIPPED, zerando tentativa e erro; condominio e worker nao reprocessam."""
+    OP = "10000000-0000-4000-8000-0000000006a1"
+    F1, S1, D1, P1 = ("88000000-0000-4000-8000-000000000001", "88000000-0000-4000-8000-000000000002",
+                      "88000000-0000-4000-8000-000000000003", "88000000-0000-4000-8000-000000000004")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{OP}','ACTIVE');
+        SET session_replication_role=replica;
+        INSERT INTO cp.outbox(id,tenant_id,event_type,aggregate_id,aggregate_version,payload,state,attempts,last_error,processed_at) VALUES
+          ('{F1}','{TA}','PARCEL_RECEIVED','{PA}',90,jsonb_build_object('unitId','{UA}'),'FAILED',6,'Falha saneada',clock_timestamp()),
+          ('{S1}','{TB}','REQUEST_UPDATED','{RQ}',91,jsonb_build_object('unitId','{UB}'),'SKIPPED',1,null,clock_timestamp()),
+          ('{D1}','{TA}','PARCEL_RECEIVED','{PA}',92,jsonb_build_object('unitId','{UA}'),'DELIVERED',1,null,clock_timestamp());
+        INSERT INTO cp.outbox(id,tenant_id,event_type,aggregate_id,aggregate_version,payload,available_at)
+          VALUES('{P1}','{TA}','PARCEL_RECEIVED','{PA}',93,jsonb_build_object('unitId','{UA}'),clock_timestamp()-interval '5 minutes');
+    """)
+    op = "SET LOCAL app.platform_capabilities='outbox.operate'; "
+    expect(value(f"{op}select count(*) from cp.outbox where id in ('{F1}','{S1}','{D1}','{P1}')", actor=OP, role="cp_api") == "4",
+           "operacao da plataforma ve as tarefas de todos os condominios")
+    expect(error(f"{op}select payload from cp.outbox where id='{F1}'", "42501", actor=OP, role="cp_api"),
+           "operacao nao le o conteudo da tarefa")
+    expect(value(f"select count(*) from cp.outbox where id in ('{F1}','{P1}')", tenant=TA, role="cp_api") == "0",
+           "sessao do condominio nao le a fila de tarefas")
+    expect(value(f"SET LOCAL app.platform_capabilities='tenants.manage'; select count(*) from cp.outbox", actor=OP, role="cp_api") == "0",
+           "outra capacidade da plataforma nao ve a fila")
+    replay = "UPDATE cp.outbox SET state='PENDING' WHERE id='{}'"
+    expect(error(op + replay.format(D1), "23514", actor=OP, role="cp_api"), "tarefa entregue nao volta para a fila")
+    expect(error(op + replay.format(P1), "23514", actor=OP, role="cp_api"), "tarefa pendente nao e reprocessada de novo")
+    expect(error(op + f"UPDATE cp.outbox SET state='DELIVERED' WHERE id='{F1}'", "23514", actor=OP, role="cp_api"),
+           "operacao nao conclui tarefa")
+    expect(error(op + f"UPDATE cp.outbox SET payload='{{}}' WHERE id='{F1}'", "42501", actor=OP, role="cp_api"), "operacao nao muda o conteudo")
+    expect(value(f"WITH u AS ({replay.format(F1)} RETURNING 1) SELECT count(*) FROM u", tenant=TA, role="cp_api") == "0",
+           "sessao do condominio nao reprocessa")
+    expect(error(replay.format(F1), "23514", tenant=TA, role="cp_worker"), "worker nao reprocessa falha definitiva")
+    expect(error(op + replay.format(F1), "23514", tenant=TA, role="cp_worker"), "worker nao reprocessa nem declarando a capacidade da plataforma")
+    # Devolução e auditoria na mesma transação, como o serviço faz.
+    audit = (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) "
+             f"VALUES('{OP}','OUTBOX_TASK_REPLAYED','{TA}','Consumidor corrigido',jsonb_build_object('taskId','{F1}'))")
+    expect(error("SET LOCAL app.platform_capabilities='tenants.read'; " + audit, "42501", actor=OP, role="cp_api"),
+           "auditoria da devolucao exige outbox.operate")
+    query(op + replay.format(F1) + "; " + audit, actor=OP, role="cp_api")
+    expect(value(f"select count(*) from platform.platform_audit_log where actor_id='{OP}' and action='OUTBOX_TASK_REPLAYED'") == "1",
+           "devolucao grava a trilha da plataforma")
+    expect(error(op + f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) VALUES('{OP}','TENANT_SUSPENDED','{TA}','x')",
+                 "42501", actor=OP, role="cp_api"), "operacao da fila nao grava acao de outra area")
+    expect(value(f"select state||':'||attempts||':'||(last_error is null)||':'||(processed_at is null)||':'||(available_at<=clock_timestamp()) "
+                 f"from cp.outbox where id='{F1}'") == "PENDING:6:true:true:true", "falha volta para a fila sem erro, disponivel ja")
+    expect(value(f"select attempts-attempt_base from cp.outbox where id='{F1}'") == "0",
+           "devolucao renova as tentativas sem reutilizar o numero da tentativa (cerca do arrendamento antigo)")
+    query(op + replay.format(S1), actor=OP, role="cp_api")
+    expect(value(f"select state from cp.outbox where id='{S1}'") == "PENDING", "tarefa ignorada volta para a fila (consumidor novo)")
+    expect(error(f"UPDATE cp.outbox SET state='LEASED',attempts=1,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{F1}'", "23514",
+                 tenant=TA, role="cp_worker"), "tentativa nao volta ao comeco depois da devolucao")
+    query(f"UPDATE cp.outbox SET state='LEASED',attempts=7,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{F1}'", tenant=TA, role="cp_worker")
+    expect(value(f"select state||':'||attempts from cp.outbox where id='{F1}'") == "LEASED:7", "worker arrenda a tarefa devolvida com tentativa nova")
+    expect(value(f"WITH u AS (UPDATE cp.outbox SET state='DELIVERED' WHERE id='{F1}' AND state='LEASED' AND attempts=6 RETURNING 1) SELECT count(*) FROM u",
+                 tenant=TA, role="cp_worker") == "0", "worker atrasado da tentativa antiga nao conclui o arrendamento novo")
+    expect(error(f"UPDATE cp.outbox SET attempt_base=0 WHERE id='{F1}'", "42501", tenant=TA, role="cp_worker"), "worker nao muda a base das tentativas")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.outbox WHERE id in ('{F1}','{S1}','{D1}','{P1}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{OP}'; DELETE FROM platform.accounts WHERE id='{OP}'")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2929,6 +2990,7 @@ def main():
     waitlist_management_checks()
     waitlist_offer_notice_checks()
     unit_notice_checks()
+    outbox_replay_checks()
     delegation_checks()
     move_checks()
     credential_checks()

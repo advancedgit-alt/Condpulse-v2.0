@@ -87,6 +87,8 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT UPDATE(note) ON cp.access_events TO cp_api","REVOKE UPDATE(note) ON cp.access_events FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(unit_id) ON cp.access_events TO cp_api","REVOKE INSERT(unit_id) ON cp.access_events FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(state) ON cp.outbox TO cp_api","REVOKE INSERT(state) ON cp.outbox FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(payload) ON cp.outbox TO cp_api","REVOKE UPDATE(payload) ON cp.outbox FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(event_type) ON cp.outbox TO cp_worker","REVOKE UPDATE(event_type) ON cp.outbox FROM cp_worker",true);
   assertRefusedWith("GRANT UPDATE(kind) ON cp.notifications TO cp_api","REVOKE UPDATE(kind) ON cp.notifications FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(published_at) ON cp.announcements TO cp_api","REVOKE UPDATE(published_at) ON cp.announcements FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(read_at) ON cp.announcement_reads TO cp_api","REVOKE INSERT(read_at) ON cp.announcement_reads FROM cp_api",false);

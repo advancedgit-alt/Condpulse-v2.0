@@ -3,7 +3,7 @@ import { codePoints } from './text';
 import type { ISODateTime, UUID } from './types';
 
 /** Painel master (OPS-01): somente dados da plataforma; nunca conteúdo dos moradores. */
-export type PlatformCapability = 'billing.manage' | 'billing.read' | 'platform.audit.read' | 'tenants.manage' | 'tenants.read';
+export type PlatformCapability = 'billing.manage' | 'billing.read' | 'outbox.operate' | 'platform.audit.read' | 'tenants.manage' | 'tenants.read';
 export interface PlatformSession { accountId: UUID; role: 'PLATFORM_ADMIN'; capabilities: PlatformCapability[]; mfaRequired: boolean }
 export interface OnboardingReceipt {
   operationId: UUID; accounts: number | null; units: number | null; memberships: number | null; amenities: number | null;
@@ -22,8 +22,20 @@ export interface PlatformAuditEvent {
   createdAt: ISODateTime;
 }
 export interface PlatformAuditPage { events: PlatformAuditEvent[]; nextCursor: string | null }
+/** Fila de tarefas (CP-034): estado, tentativas, erro saneado e horários; nunca o conteúdo da tarefa. */
+export interface OutboxTenantQueue {
+  tenantId: UUID; tenantName: string | null; pending: number; ready: number; oldestReadySeconds: number | null; expiredLeases: number;
+  failed: number; skipped: number; stale: boolean;
+}
+export interface OutboxSummary { tenants: OutboxTenantQueue[]; staleAfterSeconds: number; generatedAt: ISODateTime }
+export type OutboxTaskState = 'PENDING' | 'LEASED' | 'DELIVERED' | 'SKIPPED' | 'FAILED';
+export interface OutboxTask {
+  taskId: UUID; tenantId: UUID; eventType: string; aggregateId: UUID; state: OutboxTaskState; attempts: number; lastError: string | null;
+  createdAt: ISODateTime; availableAt: ISODateTime; processedAt: ISODateTime | null;
+}
+export interface OutboxTaskPage { tasks: OutboxTask[]; truncated: boolean }
 
-const CAPABILITIES: readonly PlatformCapability[] = ['billing.manage', 'billing.read', 'platform.audit.read', 'tenants.manage', 'tenants.read'];
+const CAPABILITIES: readonly PlatformCapability[] = ['billing.manage', 'billing.read', 'outbox.operate', 'platform.audit.read', 'tenants.manage', 'tenants.read'];
 const nullableCount = (value: unknown): value is number | null => value === null || isInteger(value);
 
 export function platformSession(value: unknown): PlatformSession {
@@ -69,6 +81,36 @@ function auditPage(value: unknown): PlatformAuditPage {
   return { events: value.events.map(auditEvent), nextCursor: value.nextCursor as string | null };
 }
 
+function count(value: unknown): value is number { return isInteger(value) && value >= 0; }
+function tenantQueue(value: unknown): OutboxTenantQueue {
+  if (!record(value) || !isUUID(value.tenantId) || !(value.tenantName === null || isString(value.tenantName)) || !count(value.pending) || !count(value.ready)
+      || !(value.oldestReadySeconds === null || count(value.oldestReadySeconds)) || !count(value.expiredLeases) || !count(value.failed)
+      || !count(value.skipped) || typeof value.stale !== 'boolean' || value.ready > value.pending
+      || (value.ready > 0) !== (value.oldestReadySeconds !== null)) throw invalidResponse();
+  return { tenantId: value.tenantId, tenantName: value.tenantName as string | null, pending: value.pending, ready: value.ready,
+    oldestReadySeconds: value.oldestReadySeconds as number | null, expiredLeases: value.expiredLeases, failed: value.failed, skipped: value.skipped, stale: value.stale };
+}
+export function outboxSummary(value: unknown): OutboxSummary {
+  if (!record(value) || !Array.isArray(value.tenants) || value.tenants.length > 200 || value.staleAfterSeconds !== 60 || !isDate(value.generatedAt)) throw invalidResponse();
+  return { tenants: value.tenants.map(tenantQueue), staleAfterSeconds: 60, generatedAt: value.generatedAt };
+}
+const TASK_STATES: readonly OutboxTaskState[] = ['PENDING', 'LEASED', 'DELIVERED', 'SKIPPED', 'FAILED'];
+export function outboxTask(value: unknown, uncertain = false): OutboxTask {
+  if (!record(value) || !isUUID(value.taskId) || !isUUID(value.tenantId) || !isString(value.eventType) || !/^[A-Z][A-Z_]{1,63}$/.test(value.eventType)
+      || !isUUID(value.aggregateId) || !oneOf(value.state, TASK_STATES) || !count(value.attempts)
+      || !(value.lastError === null || (isString(value.lastError) && codePoints(value.lastError) <= 300)) || !isDate(value.createdAt)
+      || !isDate(value.availableAt) || !(value.processedAt === null || isDate(value.processedAt))
+      || (value.state === 'FAILED' && value.lastError === null)
+      || (['DELIVERED', 'SKIPPED', 'FAILED'].includes(value.state)) !== (value.processedAt !== null)) throw invalidResponse(uncertain);
+  return { taskId: value.taskId, tenantId: value.tenantId, eventType: value.eventType, aggregateId: value.aggregateId, state: value.state,
+    attempts: value.attempts, lastError: value.lastError as string | null, createdAt: value.createdAt, availableAt: value.availableAt,
+    processedAt: value.processedAt as string | null };
+}
+function taskPage(value: unknown): OutboxTaskPage {
+  if (!record(value) || !Array.isArray(value.tasks) || value.tasks.length > 100 || typeof value.truncated !== 'boolean') throw invalidResponse();
+  return { tasks: value.tasks.map((item) => outboxTask(item)), truncated: value.truncated };
+}
+
 export function createPlatformApi(client: CondPulseApi = api) {
   return {
     session: async (signal?: AbortSignal) => client.call('/v1/platform/session', platformSession, signal ? { signal } : {}),
@@ -82,6 +124,19 @@ export function createPlatformApi(client: CondPulseApi = api) {
       if (cursor) query.set('cursor', cursor);
       return client.call(`/v1/platform/audit-events?${query}`, auditPage, signal ? { signal } : {});
     },
+    outbox: async (signal?: AbortSignal) => client.call('/v1/platform/outbox', outboxSummary, signal ? { signal } : {}),
+    outboxTasks: async (state: 'FAILED' | 'SKIPPED', tenantId: string | null, signal?: AbortSignal) => {
+      const query = new URLSearchParams({ state });
+      if (tenantId) query.set('tenantId', identifier(tenantId));
+      return client.call(`/v1/platform/outbox/tasks?${query}`, taskPage, signal ? { signal } : {});
+    },
+    /** Devolução com motivo; a resposta precisa ser a mesma tarefa, de volta à fila sem tentativa nem erro. */
+    replayTask: async (taskId: string, reason: string) =>
+      client.call(`/v1/platform/outbox/tasks/${identifier(taskId)}/replay`, (value) => {
+        const task = outboxTask(value, true);
+        if (task.taskId !== taskId || task.state !== 'PENDING' || task.lastError !== null || task.processedAt !== null) throw invalidResponse(true);
+        return task;
+      }, { method: 'POST', body: { reason } }),
   };
 }
 export const platform = createPlatformApi();

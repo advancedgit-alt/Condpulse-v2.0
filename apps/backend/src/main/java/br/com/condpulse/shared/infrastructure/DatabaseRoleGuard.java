@@ -27,7 +27,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // muda, e o banco grava os horários. Regras de prestador (V022): nunca apagadas; só a revogação muda. Credenciais (V026): nunca apagadas; só a
   // revogação muda; confirmação por equipamento vem do banco; conector e equipamento só pela operação da plataforma. Eventos de
   // equipamento (V027): nunca alterados nem apagados; unidade e horário de ingestão vêm do banco. Saúde (V028): nunca apagada;
-  // horários de verificação, observação e mudança de estado vêm do banco.
+  // horários de verificação, observação e mudança de estado vêm do banco. Outbox (V032): a operação da plataforma só devolve
+  // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -52,6 +53,9 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.access_events') and c.attname in ('unit_id','visitor_id','occurred_at','received_at','source')),false)
      or has_table_privilege(current_user,'cp.outbox','DELETE,TRUNCATE')
+     or coalesce(to_regclass('cp.notifications') is not null and (select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE'))
+       from pg_attribute c where c.attrelid='cp.outbox'::regclass
+        and c.attname in ('tenant_id','event_type','aggregate_id','aggregate_version','payload','created_at','attempt_base')),false)
      or coalesce(to_regclass('cp.notifications') is not null and (select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT'))
        from pg_attribute c where c.attrelid='cp.outbox'::regclass
         and c.attname in ('state','attempts','available_at','lease_until','last_error','processed_at')),false)

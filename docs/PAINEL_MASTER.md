@@ -12,6 +12,9 @@ continua fixado em V003–V005 e qualquer aplicação exige revisão e autoriza�
 | Catálogo de condomínios: nome, fuso, estado, versão, contagens do onboarding; busca opcional `q` | `GET /v1/platform/tenants` | `tenants.read` |
 | Renomear, suspender ou reativar pela versão lida, com motivo | `PUT /v1/platform/tenants/{id}` | `tenants.manage` |
 | Auditoria da plataforma, por cursor | `GET /v1/platform/audit-events` | `platform.audit.read` |
+| Fila de tarefas por condomínio, com alerta de fila antiga (V032) | `GET /v1/platform/outbox` | `outbox.operate` e `tenants.read` |
+| Tarefas com falha ou ignoradas (sem conteúdo) | `GET /v1/platform/outbox/tasks?state=&tenantId=` | `outbox.operate` |
+| Devolver tarefa FAILED/SKIPPED para a fila, com motivo auditado | `POST /v1/platform/outbox/tasks/{id}/replay` | `outbox.operate` |
 
 - **Papel**: `PLATFORM_ADMIN` em `platform.platform_roles`, um por conta, `ACTIVE` ou `REVOKED`, com motivo.
   A role runtime só lê o próprio papel; não concede, altera nem revoga papéis.

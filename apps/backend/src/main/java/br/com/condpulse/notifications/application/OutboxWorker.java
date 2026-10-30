@@ -83,7 +83,7 @@ public class OutboxWorker {
   } catch(RuntimeException error) {
    var failure=error instanceof OutboxModels.PermanentFailure permanent
     ?new OutboxModels.Failure(false,java.time.Duration.ZERO,RetryPolicy.limit(permanent.getMessage()))
-    :RetryPolicy.after(event.attempts(),effect==null || effect.idempotent(),sanitize(error),random);
+    :RetryPolicy.after(event.budgetUsed(),effect==null || effect.idempotent(),sanitize(error),random);
    try {
     boolean recorded=transactions.inTenant(tenant,()->failure.retry()?store.retry(tenant,event,failure.delay(),failure.error())
      :store.fail(tenant,event,failure.error()));

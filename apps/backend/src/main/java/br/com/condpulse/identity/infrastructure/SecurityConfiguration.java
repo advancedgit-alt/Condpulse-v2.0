@@ -131,6 +131,8 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/notifications/*/open").authenticated()
     // Painel master: autenticação aqui; papel de plataforma vigente e AAL2 são exigidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/session","/v1/platform/tenants","/v1/platform/audit-events").authenticated()
+    .requestMatchers(HttpMethod.GET,"/v1/platform/outbox","/v1/platform/outbox/tasks").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/platform/outbox/tasks/*/replay").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",
       "/v1/platform/billing/charges").authenticated()

@@ -13,7 +13,9 @@ public enum PlatformCapability {
  READ_AUDIT("platform.audit.read"),
  /** Financeiro da assinatura CondPulse (fase 5): planos, assinaturas, cobranças e pagamentos manuais. */
  READ_BILLING("billing.read"),
- MANAGE_BILLING("billing.manage");
+ MANAGE_BILLING("billing.manage"),
+ /** Fila de tarefas (CP-034): estado e erro saneado de todos os condomínios, sem conteúdo; devolve FAILED/SKIPPED à fila. */
+ OPERATE_OUTBOX("outbox.operate");
 
  private final String key;
  PlatformCapability(String key) { this.key=key; }
