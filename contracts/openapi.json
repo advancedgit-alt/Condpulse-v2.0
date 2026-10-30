@@ -10237,7 +10237,7 @@
             }
           }
         ],
-        "description": "Gestão (requests.manage, AAL2): pedidos de mudança por situação (sem filtro: dos últimos 30 dias em diante), em ordem de início, até 100.",
+        "description": "Gestão (requests.manage, AAL2): pedidos de mudança por situação, até 100. Sem filtro: dos últimos 30 dias em diante, em ordem de início. REQUESTED: só os ainda decidíveis (período não começou), do mais próximo. Demais situações: os de início mais recente primeiro.",
         "responses": {
           "200": {
             "description": "Pedidos",

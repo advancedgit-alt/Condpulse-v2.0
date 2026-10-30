@@ -82,6 +82,19 @@ class MoveJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void requestsWhosePeriodAlreadyStartedLeaveTheDecisionQueue() throws Exception {
+  configure();
+  var stale=moves.create(db.accountA,db.tenantA,db.unitA,key(),request(9,10,1)).move();
+  var fresh=moves.create(db.accountA,db.tenantA,db.unitA,key(),request(11,12,1)).move();
+  // Pedido esquecido: o período começou sem decisão. Não pode mais ser decidido, então não ocupa a fila da gestão.
+  db.adminUpdateWithoutTriggers("update cp.move_requests set starts_at=clock_timestamp()-interval '1 hour',ends_at=clock_timestamp()+interval '1 hour' where id=?",
+   stale.moveId());
+  assertEquals(List.of(fresh.moveId()),moves.managed(manager,db.tenantA,AAL2,"REQUESTED").moves().stream().map(MoveModels.Move::moveId).toList());
+  assertTrue(moves.managed(manager,db.tenantA,AAL2,null).moves().stream().anyMatch(item->item.moveId().equals(stale.moveId())),
+   "Continua visível na lista geral");
+  db.assertEmptyContext();
+ }
+
  @Test void periodsOutsideTheRulesAndChangedRulesAreRefused() throws Exception {
   configure();
   assertEquals("MOVE_WINDOW_OUTSIDE_RULES",assertThrows(BusinessProblem.class,()->moves.create(db.accountA,db.tenantA,db.unitA,key(),request(7,9,1))).code());

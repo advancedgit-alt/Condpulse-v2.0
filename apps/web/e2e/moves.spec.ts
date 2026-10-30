@@ -195,6 +195,32 @@ test('regras alteradas durante o pedido pedem novo aceite da versão atual', asy
   expect(state.creates[1]!.key).not.toBe(state.creates[0]!.key);
 });
 
+test('regras novas trazidas por atualização desfazem o aceite da versão anterior', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installMovesApi(page, { rules: rules() });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  const section = page.getByRole('region', { name: 'Mudança e entrega de móveis' });
+  await section.getByRole('button', { name: 'Pedir mudança' }).click();
+  const form = page.getByRole('form', { name: 'Pedir mudança' });
+  await form.getByLabel('Data').fill(localDate(3));
+  await form.getByLabel('Início').fill('10:00');
+  await form.getByLabel('Fim').fill('11:00');
+  await form.getByLabel('Responsável ou transportadora').fill('Pessoa Fictícia');
+  await form.getByLabel('Li e aceito as regras de mudança (versão 1)').check();
+  // A gestão publica outra versão e a tela é atualizada antes do envio: o aceite da versão 1 não vale para a 2.
+  state.rules = { ...rules(2), rulesText: 'Regras novas: proteja o piso.' };
+  await section.getByRole('button', { name: 'Atualizar mudanças' }).click();
+  await expect(section.getByText('Regras de mudança (versão 2)', { exact: true })).toBeVisible();
+  await expect(form.getByLabel('Li e aceito as regras de mudança (versão 2)')).not.toBeChecked();
+  await expect(form.getByRole('button', { name: 'Enviar pedido de mudança' })).toBeDisabled();
+  expect(state.creates).toHaveLength(0);
+  await form.getByLabel('Li e aceito as regras de mudança (versão 2)').check();
+  await form.getByRole('button', { name: 'Enviar pedido de mudança' }).click();
+  await expect(section.getByText('Pedido de mudança de entrada enviado', { exact: false })).toBeVisible();
+  expect(state.creates.map((item) => item.body.acceptedRulesVersion)).toEqual([2]);
+});
+
 test('gestão publica as regras, aprova, recusa com motivo e cancela aprovada com motivo', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });

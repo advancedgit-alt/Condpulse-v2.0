@@ -4,7 +4,7 @@ import { newQueryClient } from '../src/App';
 import { ApiError, createApi, type CondPulseApi } from '../src/api/client';
 import type { Move, MoveRules } from '../src/api/moves';
 import { move, normalizePlate } from '../src/api/moves';
-import { Moves } from '../src/ui/Moves';
+import { Moves, type MovePendingStore } from '../src/ui/Moves';
 
 const TENANT = '00000000-0000-4000-8000-000000000001';
 const UNIT = '20000000-0000-4000-8000-000000000001';
@@ -44,10 +44,10 @@ function fakeApi(initialRules: MoveRules | null = rules) {
 const clients: ReturnType<typeof newQueryClient>[] = [];
 afterEach(async () => { await cleanup(); for (const client of clients.splice(0)) client.clear(); });
 let counter = 0;
-async function mount(fake = fakeApi()) {
+async function mount(fake = fakeApi(), pending?: MovePendingStore) {
   const queries = newQueryClient(Infinity); clients.push(queries);
   await render(<QueryClientProvider client={queries}>
-    <Moves api={fake.api} accountId={ACCOUNT} now={now} newKey={() => `test:move-${String(++counter).padStart(12, '0')}`}
+    <Moves api={fake.api} accountId={ACCOUNT} now={now} newKey={() => `test:move-${String(++counter).padStart(12, '0')}`} pending={pending}
       membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
         timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
   </QueryClientProvider>);
@@ -153,4 +153,48 @@ test('contrato: decisão coerente, placa no formato gravado e pedido novo confer
   await expect(api.createMove(TENANT, UNIT, { kind: 'MOVE_IN', startsAt: requested.startsAt, endsAt: requested.endsAt, providerName: 'Fulano',
     vehiclePlate: null, items: null, acceptedRulesVersion: 1 }, 'test:move-key-000000001')).rejects.toMatchObject({ uncertain: true });
   expect(String((fetcher.mock.calls[0] as unknown[])[0])).toBe(`https://api.example.org/v1/tenants/${TENANT}/units/${UNIT}/moves`);
+});
+
+async function fillForm() {
+  await press('Pedir mudança');
+  await fireEvent.changeText(screen.getByLabelText('Data (AAAA-MM-DD)'), '2030-01-10');
+  await fireEvent.changeText(screen.getByLabelText('Início (HH:MM)'), '09:00');
+  await fireEvent.changeText(screen.getByLabelText('Fim (HH:MM)'), '11:00');
+  await fireEvent.changeText(screen.getByLabelText('Responsável ou transportadora'), 'Pessoa Fictícia');
+}
+
+test('pedido incerto continua travado depois de trocar de vínculo e voltar: repete a mesma chave', async () => {
+  const pending: MovePendingStore = new Map();
+  const fake = fakeApi();
+  await mount(fake, pending);
+  await fillForm();
+  await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras de mudança (versão 1)' }));
+  fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado.', true);
+  await press('Enviar pedido de mudança');
+  expect(await screen.findByRole('button', { name: 'Tentar confirmar o mesmo pedido' })).toBeTruthy();
+  // Trocar de vínculo desmonta a seção; ao voltar, o envio pendente é retomado em vez de liberar uma chave nova.
+  await cleanup();
+  await mount(fake, pending);
+  await press('Tentar confirmar o mesmo pedido');
+  expect(await screen.findByText(/Este pedido já estava enviado/)).toBeTruthy();
+  expect(fake.state.creates).toHaveLength(2);
+  expect(fake.state.creates[1]!.key).toBe(fake.state.creates[0]!.key);
+  expect(fake.state.creates[1]!.body).toEqual(fake.state.creates[0]!.body);
+  expect(pending.size).toBe(0);
+});
+
+test('regras novas trazidas por atualização desfazem o aceite da versão anterior', async () => {
+  const fake = await mount();
+  await fillForm();
+  await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras de mudança (versão 1)' }));
+  fake.state.rules = { ...rules, rulesText: 'Regras novas: proteja o piso.', version: 2 };
+  await press('Atualizar mudanças');
+  expect(await screen.findByText('Regras de mudança (versão 2)')).toBeTruthy();
+  const accept = screen.getByRole('checkbox', { name: 'Li e aceito as regras de mudança (versão 2)' });
+  expect(accept.props.accessibilityState.checked).toBe(false);
+  expect(screen.getByRole('button', { name: 'Enviar pedido de mudança' })).toBeDisabled();
+  await fireEvent.press(accept);
+  await press('Enviar pedido de mudança');
+  expect(await screen.findByText(/Pedido de entrega de móveis enviado|Pedido de mudança de entrada enviado/)).toBeTruthy();
+  expect(fake.state.creates.map((item) => item.body.acceptedRulesVersion)).toEqual([2]);
 });

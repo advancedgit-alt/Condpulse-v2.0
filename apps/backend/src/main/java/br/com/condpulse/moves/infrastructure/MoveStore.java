@@ -54,7 +54,12 @@ public class MoveStore {
  public MoveModels.Page managed(UUID tenant,String state) {
   var rows=state==null
    ?jdbc.query(MOVE_SELECT+" where m.tenant_id=? and m.ends_at>clock_timestamp()-interval '30 days' order by m.starts_at,m.id limit ?",(r,n)->move(r),tenant,PAGE+1)
-   :jdbc.query(MOVE_SELECT+" where m.tenant_id=? and m.state=? order by m.starts_at,m.id limit ?",(r,n)->move(r),tenant,state,PAGE+1);
+   // Fila de decisão: só pedidos ainda decidíveis (período não começou), do mais próximo ao mais distante; pedido
+   // esquecido sai da fila e segue na lista geral. Demais estados: os mais recentes primeiro.
+   :"REQUESTED".equals(state)
+    ?jdbc.query(MOVE_SELECT+" where m.tenant_id=? and m.state='REQUESTED' and m.starts_at>clock_timestamp() order by m.starts_at,m.id limit ?",
+     (r,n)->move(r),tenant,PAGE+1)
+    :jdbc.query(MOVE_SELECT+" where m.tenant_id=? and m.state=? order by m.starts_at desc,m.id limit ?",(r,n)->move(r),tenant,state,PAGE+1);
   return new MoveModels.Page(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
  /** Aprovadas que se sobrepõem ao intervalo (a política de leitura da portaria só deixa ver aprovadas). */

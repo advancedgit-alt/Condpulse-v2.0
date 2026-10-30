@@ -105,7 +105,9 @@ function MoveForm({ scope, rules, timeZone, close }: { scope: Scope; rules: Move
   const pending = intent.lockedBody as (MoveDraft & { version: number }) | null;
   const [draft, setDraft] = useState<MoveDraft>(pending ?? { kind: 'MOVE_IN', date: addDays(dateInZone(timeZone), Math.max(1, Math.ceil(rules.minNoticeHours / 24) + 1)),
     start: rules.startTime, end: rules.endTime, provider: '', plate: '', items: '' });
-  const [accepted, setAccepted] = useState(pending !== null);
+  // Aceite preso à versão lida: regras novas trazidas por atualização exigem novo aceite.
+  const [acceptedVersion, setAcceptedVersion] = useState<number | null>(pending?.version ?? null);
+  const accepted = acceptedVersion !== null && acceptedVersion === rules.version;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const locked = intent.locked;
@@ -128,7 +130,7 @@ function MoveForm({ scope, rules, timeZone, close }: { scope: Scope; rules: Move
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid || busy || intent.inFlight) return;
-    const version = pending?.version ?? rules.version;
+    const version = pending?.version ?? acceptedVersion!;
     const body: CreateMoveBody = { kind: draft.kind, startsAt: window!.startsAt, endsAt: window!.endsAt, providerName: provider!,
       vehiclePlate: plate, items, acceptedRulesVersion: version };
     const operationKey = intent.keyFor(JSON.stringify(body), { ...draft, version });
@@ -143,7 +145,7 @@ function MoveForm({ scope, rules, timeZone, close }: { scope: Scope; rules: Move
     } catch (error) {
       setFailure(repeatFailure(error));
       settleFailure(error, intent.locked, intent, intent.setLocked);
-      if (codeOf(error) === 'MOVE_RULES_CHANGED') { setAccepted(false); void queries.invalidateQueries({ queryKey: [...scopeKey(scope), 'move-rules'] }); }
+      if (codeOf(error) === 'MOVE_RULES_CHANGED') { setAcceptedVersion(null); void queries.invalidateQueries({ queryKey: [...scopeKey(scope), 'move-rules'] }); }
       void queries.invalidateQueries({ queryKey: [...scopeKey(scope), 'moves'] });
     } finally { intent.settle(); setBusy(false); }
   }
@@ -167,7 +169,7 @@ function MoveForm({ scope, rules, timeZone, close }: { scope: Scope; rules: Move
     {plate === '' ? <span className="field-error" role="status">Informe a placa com 5 a 8 letras e números, ou deixe em branco.</span> : null}
     <label htmlFor="move-items">Itens (opcional)</label>
     <textarea id="move-items" maxLength={500} rows={2} value={draft.items} disabled={disabled} onChange={(event) => set({ items: event.target.value })} />
-    <label className="weekday-option"><input type="checkbox" checked={accepted || locked} disabled={disabled} onChange={(event) => setAccepted(event.target.checked)} />
+    <label className="weekday-option"><input type="checkbox" checked={accepted || locked} disabled={disabled} onChange={(event) => setAcceptedVersion(event.target.checked ? rules.version : null)} />
       Li e aceito as regras de mudança (versão {pending?.version ?? rules.version})</label>
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}</Notice> : null}
     {intent.completedElsewhere ? <Notice>Este pedido já foi enviado pelo formulário aberto antes. Enviar de novo só confirma o mesmo pedido, sem criar outro; confira a lista.</Notice> : null}
@@ -227,6 +229,7 @@ export function MoveManagementSection() {
         </select>
         <button className="button button-secondary button-compact" type="button" disabled={list.isFetching} onClick={() => void list.refetch()}>Atualizar</button>
       </div></div>
+    {filter === 'REQUESTED' ? <p className="field-help">Pedidos sem decisão cujo período já começou não podem mais ser decididos: saem desta fila e continuam em “Todos”.</p> : null}
     {unavailable ? <div className="panel"><Empty title="Mudanças indisponíveis">As mudanças ainda não estão ativas neste ambiente.</Empty></div> : <>
       <MoveRulesEditor />
       {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}

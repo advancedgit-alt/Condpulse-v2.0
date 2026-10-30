@@ -18,6 +18,8 @@ const dayNames = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', '
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain;
 /** Recurso desligado, dependente ou vínculo que mudou: a seção some sem erro técnico. */
+/** Envio de pedido com resultado incerto, por conta/condomínio/unidade, fora do formulário: sobrevive à troca de vínculo. */
+export type MovePendingStore = Map<string, { key: string; body: CreateMove }>;
 const hidden = (error: unknown) => error instanceof ApiError && (error.status === 404 || ['UNIT_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'].includes(error.code));
 
 export function rulesSummary(rules: MoveRules): string {
@@ -40,16 +42,19 @@ function Field({ label, value, onChange, disabled, placeholder }: { label: strin
       autoCapitalize="none" autoCorrect={false} /></View>;
 }
 
-export function Moves({ api, accountId, membership, newKey, now = () => new Date() }: {
-  api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date;
+export function Moves({ api, accountId, membership, newKey, now = () => new Date(), pending: sharedPending }: {
+  api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date; pending?: MovePendingStore;
 }) {
   const { tenantId, unitId, timeZone } = membership;
+  const [ownPending] = useState<MovePendingStore>(() => new Map());
+  const pending = sharedPending ?? ownPending;
+  const pendingScope = `${accountId}|${tenantId}|${unitId}`;
   const scope = ['private', accountId, 'tenant', tenantId, 'unit', unitId] as const;
   const list = useQuery({ queryKey: [...scope, 'moves'], queryFn: ({ signal }) => api.unitMoves(tenantId, unitId, signal),
     retry: (count, error) => !hidden(error) && count < 1 });
   const rules = useQuery({ queryKey: [...scope, 'move-rules'], queryFn: ({ signal }) => api.moveRules(tenantId, signal), enabled: !hidden(list.error),
     retry: (count, error) => !hidden(error) && count < 1 });
-  const [opening, setOpening] = useState(false);
+  const [opening, setOpening] = useState(() => pending.has(pendingScope));
   const [outcome, setOutcome] = useState<string | null>(null);
   if (hidden(list.error) || hidden(rules.error)) return null;
   const current = rules.data ?? null;
@@ -66,7 +71,7 @@ export function Moves({ api, accountId, membership, newKey, now = () => new Date
           </View>}
     {outcome ? <Notice tone="success">{outcome}</Notice> : null}
     {current && !opening ? <Button label="Pedir mudança" onPress={() => { setOutcome(null); setOpening(true); }} /> : null}
-    {current && opening ? <MoveForm api={api} scope={scope} membership={membership} rules={current} newKey={newKey} now={now}
+    {current && opening ? <MoveForm api={api} scope={scope} membership={membership} rules={current} newKey={newKey} now={now} store={pending} storeKey={pendingScope}
       close={(text) => { setOpening(false); if (text) setOutcome(text); }} /> : null}
     <Button label="Atualizar mudanças" secondary disabled={list.isFetching} onPress={() => { void list.refetch(); void rules.refetch(); }} />
     {list.isPending ? <ActivityIndicator accessibilityLabel="Consultando os pedidos de mudança" />
@@ -108,8 +113,9 @@ function MoveCard({ api, scope, tenantId, item, timeZone, now, done }: {
   </View>;
 }
 
-function MoveForm({ api, scope, membership, rules, newKey, now, close }: {
+function MoveForm({ api, scope, membership, rules, newKey, now, close, store, storeKey }: {
   api: CondPulseApi; scope: readonly unknown[]; membership: Membership & { unitId: string }; rules: MoveRules; newKey: KeyFactory; now(): Date;
+  store: MovePendingStore; storeKey: string;
   close(text: string | null): void;
 }) {
   const queries = useQueryClient();
@@ -121,11 +127,13 @@ function MoveForm({ api, scope, membership, rules, newKey, now, close }: {
   const [provider, setProvider] = useState('');
   const [plate, setPlate] = useState('');
   const [items, setItems] = useState('');
-  const [accepted, setAccepted] = useState(false);
+  // Aceite preso à versão lida: regras novas trazidas por atualização exigem novo aceite.
+  const [acceptedVersion, setAcceptedVersion] = useState<number | null>(null);
+  const accepted = acceptedVersion !== null && acceptedVersion === rules.version;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   // Pedido com resultado incerto: mesma chave e mesmo corpo até a confirmação; os campos ficam travados.
-  const [pending, setPending] = useState<{ key: string; body: CreateMove } | null>(null);
+  const [pending, setPending] = useState<{ key: string; body: CreateMove } | null>(() => store.get(storeKey) ?? null);
   let window: { startsAt: string; endsAt: string } | null = null;
   let problem: string | null = null;
   try {
@@ -144,20 +152,22 @@ function MoveForm({ api, scope, membership, rules, newKey, now, close }: {
   async function submit() {
     if (!valid || busy) return;
     const attempt = pending ?? { key: newKey(), body: { kind, startsAt: window!.startsAt, endsAt: window!.endsAt, providerName: name,
-      vehiclePlate: normalizedPlate, items: normalizedItems, acceptedRulesVersion: rules.version } };
+      vehiclePlate: normalizedPlate, items: normalizedItems, acceptedRulesVersion: acceptedVersion! } };
+    // Guardado antes do envio: se a seção for desmontada no meio, a volta retoma a mesma chave.
+    store.set(storeKey, attempt);
     setBusy(true); setFailure(null);
     try {
       const result = await api.createMove(tenantId, unitId, attempt.body, attempt.key);
-      setPending(null);
+      setPending(null); store.delete(storeKey);
       close(result.replayed ? `Este pedido já estava enviado (${stateLabels[result.move.state].toLowerCase()}).`
         : `Pedido de ${kindLabels[result.move.kind].toLowerCase()} enviado para ${formatWhen(result.move.startsAt, timeZone)}. A gestão decide por aqui.`);
     } catch (error) {
       setFailure(error);
       if (uncertain(error)) setPending(attempt);
       else {
-        setPending(null);
+        setPending(null); store.delete(storeKey);
         if (error instanceof ApiError && error.code === 'MOVE_RULES_CHANGED') {
-          setAccepted(false);
+          setAcceptedVersion(null);
           void queries.invalidateQueries({ queryKey: [...scope, 'move-rules'] });
         }
       }
@@ -180,7 +190,7 @@ function MoveForm({ api, scope, membership, rules, newKey, now, close }: {
     {normalizedPlate === '' && !locked ? <Text style={styles.fieldError}>Informe a placa com 5 a 8 letras e números, ou deixe em branco.</Text> : null}
     <Field label="Itens (opcional)" value={items} onChange={setItems} disabled={locked || busy} />
     <Pressable accessibilityRole="checkbox" accessibilityLabel={`Li e aceito as regras de mudança (versão ${pending?.body.acceptedRulesVersion ?? rules.version})`}
-      accessibilityState={{ checked: accepted || locked, disabled: locked || busy }} disabled={locked || busy} onPress={() => setAccepted(!accepted)} style={styles.row}>
+      accessibilityState={{ checked: accepted || locked, disabled: locked || busy }} disabled={locked || busy} onPress={() => setAcceptedVersion(accepted ? null : rules.version)} style={styles.row}>
       <Text style={styles.check}>{accepted || locked ? '☑' : '☐'}</Text>
       <Text style={styles.label}>{`Li e aceito as regras de mudança (versão ${pending?.body.acceptedRulesVersion ?? rules.version})`}</Text>
     </Pressable>

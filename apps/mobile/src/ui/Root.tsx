@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { CondPulseApi, Membership } from '../api/client';
 import { SessionError, type SessionManager } from '../session/session';
 import { colors, touch } from './theme';
-import { Moves } from './Moves';
+import { Moves, type MovePendingStore } from './Moves';
 import { Reservations, type KeyFactory, type PendingStore } from './Reservations';
 import type { EventSourceFactory } from '../api/events';
 import { useUnitEvents } from './UnitEvents';
@@ -87,6 +87,7 @@ function Home({ manager, api, accountId, newKey, events }: { manager: SessionMan
   const [leaving, setLeaving] = useState(false);
   // Pedidos incertos sobrevivem à troca de vínculo; somem com a conta (Home é recriada por conta) e ao sair.
   const [pending] = useState<PendingStore>(() => new Map());
+  const [movePending] = useState<MovePendingStore>(() => new Map());
   // A resposta precisa ser da mesma conta da sessão; outra conta encerra tudo.
   const mismatch = identity.data !== undefined && identity.data.accountId !== accountId;
   useEffect(() => { if (mismatch) void manager.expire(); }, [mismatch, manager]);
@@ -110,7 +111,7 @@ function Home({ manager, api, accountId, newKey, events }: { manager: SessionMan
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={pending} />
       : active ? <Text style={styles.body}>Este vínculo não tem unidade: as reservas ficam com os moradores e com a gestão na web.</Text> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE'].includes(active.role) ? <Moves key={`moves-${active.membershipId}`} api={api} accountId={accountId}
-      membership={{ ...active, unitId: active.unitId }} newKey={newKey} /> : null}
+      membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={movePending} /> : null}
     <Button label={leaving ? 'Saindo…' : 'Sair'} secondary disabled={leaving}
       onPress={() => { setLeaving(true); void manager.signOut().finally(() => setLeaving(false)); }} />
   </ScrollView>;

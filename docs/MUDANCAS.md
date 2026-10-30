@@ -13,6 +13,8 @@ Atrás de `CP_REQUESTS_ENABLED` (a mesma flag dos pedidos da unidade). Banco: V0
   fim no mesmo dia e dentro do horário, antecedência mínima e duração máxima (`MOVE_WINDOW_OUTSIDE_RULES`). Regras
   alteradas depois da leitura respondem `MOVE_RULES_CHANGED` e a tela pede novo aceite. Chave de operação obrigatória.
 - **Decisão**: a gestão aprova (nota opcional) ou recusa (motivo obrigatório) antes do início, pela versão lida.
+  A fila "Aguardando decisão" mostra só os pedidos ainda decidíveis; pedido sem decisão cujo período começou sai
+  da fila e continua na lista geral (não bloqueia os seguintes).
 - **Cancelamento**: a unidade retira o pedido aguardando ou aprovado antes do início; a gestão cancela com motivo até o fim.
 - **Portaria**: vê somente os pedidos aprovados do dia escolhido (até 14 dias por consulta), com responsável, placa e itens.
 - **O que a aprovação não faz**: não reserva elevador nem área (não existem no sistema) e não autoriza obra.
