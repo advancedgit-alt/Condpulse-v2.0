@@ -16,3 +16,12 @@
 **Limite**: API, banco e gerador dividem a mesma máquina, sem rede nem TLS real. O número serve para comparar versões e
 achar regressão; **não declara capacidade** da homologação ou da produção, nem custo. A carga representativa depende de
 ambiente dedicado, contas de teste e OK do responsável (ver BLOQUEADO no STATUS).
+
+## Execuções
+
+| Data | Commit | Run | Alvo | Obtido | p50 / p95 / p99 (ms) | Erros | 4xx de regra | Conexões | CPU API |
+|---|---|---|---|---:|---|---:|---:|---:|---:|
+| 30/10/2026 | `d0a2b64` | 41019237444 | 100 rps, 60 s, 1.000 sessões, pool 2 | 100 rps | 3,7 / 9,1 / 28,3 | 0 de 5.999 | 27 (25 janela inválida, 2 conflitos) | 2 | 0,38 núcleo |
+
+Pior cauda nessa execução: cancelamento p99 140,2 ms e criação p99 67,8 ms. Números do runner; não comparar com metas
+de produção.

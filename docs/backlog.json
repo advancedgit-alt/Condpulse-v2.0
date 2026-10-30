@@ -1460,8 +1460,17 @@
       "id": "CP-052",
       "delivery": "Teste de carga representativo. 100 rps/1.000 sessões como carga-alvo inicial; misturar leituras e gravações.",
       "acceptance": "Relatório p50/p95/p99, erros, saturação e custo; comparar com metas, sem declarar capacidade sem dados.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        {
+          "commit": "d0a2b64bc900d2ed4a32420650e42d3d4e0e0806",
+          "environment": "GitHub Actions runner: API real, PostgreSQL 17.11 descartável e gerador na mesma máquina; JWKS sintético",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41019237444",
+          "commands": ["node tests/load/api-load.mjs"],
+          "result": "RUNNER_ONLY_NO_CAPACITY_CLAIM",
+          "scope": "100 rps por 60 s, 1.000 sessões, pool 2: 5.999 pedidos, 0 erros, p50/p95/p99 3,7/9,1/28,3 ms, 2 conexões, 0,38 núcleo. Carga representativa fora do runner e custo pendentes (BLOQUEADO no STATUS)."
+        }
+      ]
     },
     {
       "id": "CP-053",
