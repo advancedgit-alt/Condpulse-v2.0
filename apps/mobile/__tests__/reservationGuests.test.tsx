@@ -4,7 +4,8 @@ import { newQueryClient } from '../src/App';
 import { ApiError, type CondPulseApi } from '../src/api/client';
 import type { Reservation } from '../src/api/reservations';
 import type { Permit } from '../src/api/visits';
-import { ReservationGuests } from '../src/ui/ReservationGuests';
+import { ReservationGuests, type GuestPendingStore } from '../src/ui/ReservationGuests';
+import { createApi } from '../src/api/client';
 
 const TENANT = '00000000-0000-4000-8000-000000000001';
 const UNIT = '20000000-0000-4000-8000-000000000001';
@@ -41,11 +42,11 @@ function fakeApi() {
 const clients: ReturnType<typeof newQueryClient>[] = [];
 afterEach(async () => { await cleanup(); for (const client of clients.splice(0)) client.clear(); });
 let counter = 0;
-async function mount(fake = fakeApi(), capacity: number | null = 3) {
+async function mount(fake = fakeApi(), pending?: GuestPendingStore) {
   const queries = newQueryClient(Infinity); clients.push(queries);
   await render(<QueryClientProvider client={queries}>
     <ReservationGuests api={fake.api} scope={['private', 'conta', 'tenant', TENANT, 'unit', UNIT]} tenantId={TENANT} unitId={UNIT} reservation={reservation}
-      capacity={capacity} timeZone="America/Sao_Paulo" newKey={() => `test:guest-${String(++counter).padStart(12, '0')}`} />
+      accountId="10000000-0000-4000-8000-000000000001" pending={pending} timeZone="America/Sao_Paulo" newKey={() => `test:guest-${String(++counter).padStart(12, '0')}`} />
   </QueryClientProvider>);
   return fake;
 }
@@ -84,12 +85,14 @@ describe('convidados da reserva no celular', () => {
     expect(screen.getByText(/Cancelar a reserva revoga todos/)).toBeTruthy();
   }, 20000);
 
-  it('capacidade cheia não oferece novo convidado; falha ao consultar oferece nova tentativa', async () => {
-    await mount(fakeApi(), 1);
-    const toggle = (await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!;
-    await fireEvent.press(toggle);
-    expect(await screen.findByText('A área permite até 1 convidados nesta reserva.')).toBeTruthy();
-    expect(screen.queryByLabelText('Nome do convidado')).toBeNull();
+  it('limite de convidados é decidido pelo servidor; falha ao consultar oferece nova tentativa', async () => {
+    const fake = fakeApi();
+    fake.state.addError = new ApiError(409, 'RESERVATION_GUEST_LIMIT', 'A reserva já tem o número máximo de convidados da área.', false);
+    await mount(fake);
+    await fireEvent.press((await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!);
+    await fireEvent.changeText(await screen.findByLabelText('Nome do convidado'), 'Convidado Extra');
+    await press('Adicionar convidado');
+    expect(await screen.findByText('A reserva já tem o número máximo de convidados da área.')).toBeTruthy();
     await cleanup();
     const failing = fakeApi();
     failing.state.listError = new ApiError(503, 'VISIT_DEPENDENCY_UNAVAILABLE', 'Convidados indisponíveis agora.', false);
@@ -100,4 +103,34 @@ describe('convidados da reserva no celular', () => {
     await press('Tentar consultar convidados de novo');
     expect(await screen.findByText('Convidada Um · Agendado')).toBeTruthy();
   }, 20000);
+
+  it('envio incerto sobrevive à troca de vínculo e repete a mesma chave', async () => {
+    const pending: GuestPendingStore = new Map();
+    const fake = fakeApi();
+    fake.state.addError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado.', true);
+    await mount(fake, pending);
+    await fireEvent.press((await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!);
+    await fireEvent.changeText(await screen.findByLabelText('Nome do convidado'), 'Convidado Incerto');
+    await press('Adicionar convidado');
+    expect(await screen.findByRole('button', { name: 'Tentar confirmar o mesmo convidado' })).toBeTruthy();
+    await cleanup();
+    await mount(fake, pending);
+    await fireEvent.press((await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!);
+    expect(await screen.findByRole('button', { name: 'Tentar confirmar o mesmo convidado' })).toBeTruthy();
+    expect(screen.getByLabelText('Nome do convidado').props.value).toBe('Convidado Incerto');
+    await press('Tentar confirmar o mesmo convidado');
+    expect(await screen.findByText(/Convidado Incerto já estava convidado\(a\)/)).toBeTruthy();
+    expect(fake.state.adds).toHaveLength(2);
+    expect(fake.state.adds[1]!.key).toBe(fake.state.adds[0]!.key);
+    expect(pending.size).toBe(0);
+  }, 20000);
+
+  it('lista de convidados aceita até 500 itens, como o servidor devolve', async () => {
+    const permits = Array.from({ length: 150 }, (_, index) => guest({ permitId: `48000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      visitorName: `Convidado ${index}`, state: index % 2 ? 'REVOKED' : 'SCHEDULED', revokedAt: index % 2 ? '2030-01-07T12:00:00Z' : null,
+      revokeReason: index % 2 ? 'Removido' : null, version: index % 2 }));
+    const api = createApi({ baseUrl: 'https://api.example.invalid', tokens: { accessToken: async () => 'synthetic', refresh: async () => null, expire: async () => {} } as never,
+      fetch: async () => new Response(JSON.stringify({ permits, truncated: false }), { status: 200, headers: { 'Content-Type': 'application/json' } }) });
+    expect((await api.reservationGuests(TENANT, UNIT, RESERVATION)).permits).toHaveLength(150);
+  });
 });
