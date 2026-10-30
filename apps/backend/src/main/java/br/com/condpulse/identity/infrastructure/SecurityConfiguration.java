@@ -57,6 +57,9 @@ public class SecurityConfiguration {
    .authorizeHttpRequests(a->a
     // Despacho assíncrono só existe depois de uma requisição já autorizada (canal SSE): não autenticar de novo nele.
     .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+    // Despacho de erro do contêiner (ex.: 404 de módulo desligado) não carrega o cookie autenticado: negar aqui
+    // transformava o 404 em 401 e o navegador encerrava a sessão. O despacho só relata o erro já decidido.
+    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
     .requestMatchers("/actuator/health","/actuator/health/liveness","/actuator/health/readiness").permitAll()
     .requestMatchers("/v1/me").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units","/v1/tenants/*/amenities",
