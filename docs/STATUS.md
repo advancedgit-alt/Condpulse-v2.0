@@ -26,6 +26,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Prestador recorrente — CP-039
+
+- V022: regra de dias, horário local e período gera janelas (convites) por dia no fuso do condomínio; fora delas não há convite; revogar a regra revoga as janelas na mesma transação. Atrás de `CP_VISITS_ENABLED` (ligada); V022 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [VISITAS.md](VISITAS.md).
+- Pendentes: prestador pelo celular, expansão contínua pelo worker e ensaio com Auth real.
+
 ## Convidados de reserva — CP-038
 
 - V021: convidado é convite da unidade com a janela do evento, até a capacidade da área; encerrar a reserva revoga todos na mesma transação por gatilho, com evento por convidado. Atrás de `CP_VISITS_ENABLED` (ligada); V021 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [VISITAS.md](VISITAS.md).

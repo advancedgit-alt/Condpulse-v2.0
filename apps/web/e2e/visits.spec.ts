@@ -13,7 +13,7 @@ const minutes = (value: number) => new Date(Date.now() + value * 60_000).toISOSt
 interface SyntheticPermit {
   permitId: string; unitId: string; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
   purpose: string | null; validFrom: string; validUntil: string; state: 'SCHEDULED' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'; createdByMe: boolean;
-  revokedAt: string | null; revokeReason: string | null; version: number; createdAt: string; shareLinkActive: boolean; reservationId: string | null;
+  revokedAt: string | null; revokeReason: string | null; version: number; createdAt: string; shareLinkActive: boolean; reservationId: string | null; ruleId: string | null;
 }
 interface SyntheticArrival {
   arrivalId: string; unitId: string; unitLabel: string; blockName: string | null; visitorName: string; documentLast4: string | null;
@@ -45,7 +45,7 @@ async function problem(route: Route, status: number, code: string) {
 }
 const permitFixture = (overrides: Partial<SyntheticPermit> = {}): SyntheticPermit => ({ permitId: PERMIT, unitId: UNIT_A, unitLabel: '101 — Sintética A',
   blockName: 'Bloco 1', visitorName: 'Visita Prevista', documentLast4: '12AB', purpose: 'Visita familiar', validFrom: minutes(-30), validUntil: minutes(90),
-  state: 'ACTIVE', createdByMe: false, revokedAt: null, revokeReason: null, version: 0, createdAt: minutes(-60), shareLinkActive: false, reservationId: null, ...overrides });
+  state: 'ACTIVE', createdByMe: false, revokedAt: null, revokeReason: null, version: 0, createdAt: minutes(-60), shareLinkActive: false, reservationId: null, ruleId: null, ...overrides });
 const arrivalFixture = (overrides: Partial<SyntheticArrival> = {}): SyntheticArrival => ({ arrivalId: ARRIVAL, unitId: UNIT_A, unitLabel: '101 — Sintética A',
   blockName: 'Bloco 1', visitorName: 'Pessoa Fictícia', documentLast4: null, permitId: null, state: 'WAITING', expiresAt: minutes(5), decidedAt: null,
   decisionSource: null, decisionNote: null, decidedByMe: false, version: 0, createdAt: minutes(0), ...overrides });

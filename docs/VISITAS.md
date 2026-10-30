@@ -152,3 +152,27 @@ Atrás de `CP_VISITS_ENABLED`. Banco: V021 (`cp.visit_permits.reservation_id`).
 - **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 19 verificações), `ReservationGuestJdbcTest`,
   `VisitSecurityIntegrationTest`; web `e2e/reservation-guests.spec.ts`.
 - **Pendentes**: convidados pelo celular, aviso aos convidados quando a reserva é cancelada e ensaio com Auth real.
+
+## Prestador recorrente (CP-039)
+
+Atrás de `CP_VISITS_ENABLED`. Banco: V022 (`cp.visit_rules`, `cp.visit_permits.rule_id`/`window_date`).
+
+- **Quem**: quem pode convidar pela unidade (adulto, ou dependente com a permissão de convidar). O dependente revoga só
+  as regras que criou; o adulto revoga qualquer regra da unidade.
+- **O quê**: nome, final do documento (opcional), serviço, dias da semana (ISO, 1 = segunda), horário local de início e fim
+  no mesmo dia e período de até 180 dias, começando hoje ou em até 90 dias, sempre no fuso do condomínio (nunca no do
+  celular). A regra sozinha não autoriza: ela gera janelas, que são convites comuns da unidade com `ruleId`.
+- **Expansão**: as janelas de hoje e dos 7 dias seguintes são geradas ao criar a regra e ao consultar convites ou regras
+  da unidade; a portaria gera as de hoje e amanhã ao consultar as visitas previstas. Uma janela por regra e dia (índice único);
+  repetir a expansão não duplica. Fora dos dias e horários da regra não há convite e a portaria segue o procedimento de
+  chegada sem convite.
+- **Revogação**: revogar a regra (motivo e versão lida) revoga na mesma transação as janelas em vigor e futuras, com
+  evento por janela no outbox. Revogar uma janela cancela só aquele dia.
+- **API**: `GET` e `POST /v1/tenants/{t}/units/{u}/visit-rules` (`Idempotency-Key` obrigatória) e
+  `POST /v1/tenants/{t}/visit-rules/{id}/revoke`.
+- **Web**: seção "Prestadores recorrentes" em Acessos (lista com próxima janela, cadastro com dias, horários e período
+  validados antes do envio e chave de operação travada em resultado incerto, revogação com motivo); a janela aparece em
+  Visitas previstas marcada como de prestador recorrente.
+- **Evidências**: `tests/database/run.py` (`visit_rule_checks`, 25 verificações), `VisitRuleJdbcTest`,
+  `DatabaseRoleGuardJdbcTest`; web `e2e/visit-rules.spec.ts`.
+- **Pendentes**: prestador pelo celular, expansão contínua pelo worker (hoje só sob demanda) e ensaio com Auth real.

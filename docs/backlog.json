@@ -1221,8 +1221,13 @@
       "id": "CP-039",
       "delivery": "Prestador recorrente. Dias locais, horas, vigência, revogação e expansão da próxima janela.",
       "acceptance": "Acesso fora de dia/horário falha; fuso da unidade não depende do celular.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V022__recurring_visit_rules.sql",
+        "tests/database/run.py#visit_rule_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/VisitRuleJdbcTest.java",
+        "apps/web/e2e/visit-rules.spec.ts"
+      ]
     },
     {
       "id": "CP-040",

@@ -16,11 +16,27 @@ public final class VisitModels {
   */
  public record Permit(UUID permitId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,String purpose,
    Instant validFrom,Instant validUntil,String state,boolean createdByMe,Instant revokedAt,String revokeReason,long version,Instant createdAt,
-   boolean shareLinkActive,UUID reservationId) {}
+   boolean shareLinkActive,UUID reservationId,UUID ruleId) {}
  public record PermitPage(List<Permit> permits,boolean truncated) {
   public PermitPage { permits=List.copyOf(permits); }
  }
  public record CreatePermit(String visitorName,String documentLast4,String purpose,Instant validFrom,Instant validUntil) {}
+ /**
+  * Prestador recorrente (CP-039). A regra não autoriza sozinha: gera janelas (convites) no fuso do condomínio; state
+  * efetivo ACTIVE, REVOKED ou EXPIRED (período terminado). nextWindow*: próxima janela em vigor ou agendada, se houver.
+  */
+ public record VisitRule(UUID ruleId,UUID unitId,String visitorName,String documentLast4,String purpose,List<Integer> weekDays,
+   String startTime,String endTime,java.time.LocalDate validFrom,java.time.LocalDate validUntil,String state,boolean createdByMe,
+   Instant revokedAt,String revokeReason,long version,Instant createdAt,Instant nextWindowFrom,Instant nextWindowUntil) {
+  public VisitRule { weekDays=List.copyOf(weekDays); }
+ }
+ public record RulePage(List<VisitRule> rules,boolean truncated) {
+  public RulePage { rules=List.copyOf(rules); }
+ }
+ public record CreateRule(String visitorName,String documentLast4,String purpose,List<Integer> weekDays,String startTime,String endTime,
+   java.time.LocalDate validFrom,java.time.LocalDate validUntil) {}
+ public record RevokeRule(String reason,Long expectedVersion) {}
+ public record RuleMutation(VisitRule rule,boolean replayed,int status) {}
  /** Convidado de reserva (CP-038): só a pessoa; a janela e a finalidade vêm do evento. */
  public record AddGuest(String visitorName,String documentLast4) {}
  public record RevokePermit(String reason,Long expectedVersion) {}

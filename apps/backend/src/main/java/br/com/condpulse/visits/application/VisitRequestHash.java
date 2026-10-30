@@ -16,6 +16,10 @@ final class VisitRequestHash {
  static String guest(UUID reservation,String visitor,String document) {
   return digest("RESERVATION_GUEST|"+reservation+"|"+field(visitor)+"|"+field(document));
  }
+ static String rule(UUID unit,String visitor,String document,String purpose,java.util.List<Integer> days,String start,String end,
+   java.time.LocalDate from,java.time.LocalDate until) {
+  return digest("VISIT_RULE|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+field(purpose)+"|"+days+"|"+start+"|"+end+"|"+from+"|"+until);
+ }
  static String arrival(UUID unit,String visitor,String document,UUID permit) {
   return digest("ARRIVAL|"+unit+"|"+field(visitor)+"|"+field(document)+"|"+permit);
  }

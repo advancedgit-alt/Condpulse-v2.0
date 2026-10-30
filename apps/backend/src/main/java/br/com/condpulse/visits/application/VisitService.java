@@ -36,6 +36,9 @@ public class VisitService {
  static final Duration MAX_PERMIT=Duration.ofDays(7);
  static final Duration MAX_LEAD=Duration.ofDays(90);
  static final Duration START_TOLERANCE=Duration.ofMinutes(10);
+ static final int RULE_HORIZON_DAYS=7;
+ static final int RULE_MAX_DAYS=180;
+ private static final java.util.regex.Pattern LOCAL_TIME=java.util.regex.Pattern.compile("([01][0-9]|2[0-3]):[0-5][0-9]");
  private final TenantTransactionExecutor transactions;
  private final VisitStore store;
  private final AuditRecorder audit;
@@ -47,6 +50,8 @@ public class VisitService {
  public VisitModels.PermitPage unitPermits(UUID actor,UUID tenant,UUID unit) {
   return execute(actor,tenant,AssuranceLevel.AAL1,Map.of(),context->{
    requireMember(tenant,unit,"create");
+   // Janelas de prestador recorrente dos próximos dias aparecem junto com os convites.
+   store.expandRules(tenant,unit,RULE_HORIZON_DAYS);
    return store.unitPermits(tenant,unit);
   });
  }
@@ -109,6 +114,87 @@ public class VisitService {
    return revoked;
   });
  }
+ /** Regras de prestador recorrente da unidade (CP-039), com a próxima janela. */
+ public VisitModels.RulePage unitRules(UUID actor,UUID tenant,UUID unit) {
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of(),context->{
+   requireMember(tenant,unit,"create");
+   store.expandRules(tenant,unit,RULE_HORIZON_DAYS);
+   return store.unitRules(tenant,unit);
+  });
+ }
+ /**
+  * Regra de prestador recorrente: dias da semana, horário local e período de até 180 dias, começando hoje ou depois (no
+  * fuso do condomínio). As janelas dos próximos dias são geradas na mesma transação; fora delas não há convite.
+  */
+ public VisitModels.RuleMutation createRule(UUID actor,UUID tenant,UUID unit,String key,VisitModels.CreateRule request) {
+  requireKey(key);
+  if(unit==null) throw unitDenied();
+  if(request==null) throw invalid("VISIT_INPUT_INVALID","Informe os dados do prestador.");
+  String visitor=visitorName(request.visitorName());
+  String document=document(request.documentLast4());
+  String purpose=request.purpose()==null || DisplayText.collapse(request.purpose()).isEmpty()?null
+   :text(request.purpose(),200,"VISIT_PURPOSE_INVALID","Use até 200 caracteres na finalidade.");
+  var days=request.weekDays()==null?java.util.List.<Integer>of():request.weekDays().stream().distinct().sorted().toList();
+  if(days.isEmpty() || days.size()!=request.weekDays().size() || days.stream().anyMatch(d->d==null || d<1 || d>7))
+   throw invalid("VISIT_RULE_DAYS_INVALID","Escolha de 1 a 7 dias da semana, sem repetir.");
+  if(request.startTime()==null || request.endTime()==null || !LOCAL_TIME.matcher(request.startTime()).matches()
+     || !LOCAL_TIME.matcher(request.endTime()).matches() || request.startTime().compareTo(request.endTime())>=0)
+   throw invalid("VISIT_RULE_TIME_INVALID","Informe o horário no formato HH:MM, com fim depois do início no mesmo dia.");
+  var from=request.validFrom(); var until=request.validUntil();
+  if(from==null || until==null || until.isBefore(from) || until.isAfter(from.plusDays(RULE_MAX_DAYS)))
+   throw invalid("VISIT_RULE_PERIOD_INVALID","Informe o período, com fim no mesmo dia ou depois do início e até 180 dias.");
+  String hash=VisitRequestHash.rule(unit,visitor,document,purpose,days,request.startTime(),request.endTime(),from,until);
+  String route="/v1/tenants/"+tenant+"/units/"+unit+"/visit-rules";
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of("23514",VisitService::rulePeriodInvalid),context->{
+   if(!store.member(tenant,unit,"create")) throw unitDenied();
+   var previous=store.begin(tenant,actor,route,key,hash);
+   if(!previous.fresh()) {
+    var replay=store.rule(tenant,previous.resource(),false);
+    if(replay==null) throw ruleNotFound();
+    return new VisitModels.RuleMutation(replay,true,previous.responseStatus());
+   }
+   var today=store.today(tenant);
+   if(today==null || from.isBefore(today) || from.isAfter(today.plusDays(90))) throw rulePeriodInvalid();
+   UUID visitorId=UUID.randomUUID(), id=UUID.randomUUID();
+   store.insertVisitor(visitorId,tenant,visitor,document,actor);
+   store.insertRule(id,tenant,unit,visitorId,purpose,days,request.startTime(),request.endTime(),from,until,actor);
+   store.expandRules(tenant,unit,RULE_HORIZON_DAYS);
+   var rule=store.rule(tenant,id,false);
+   if(rule==null) throw new IllegalStateException("Regra criada não foi encontrada na mesma transação.");
+   audit.record(tenant,actor,"VISIT_RULE_CREATED","VISIT_RULE",id,null);
+   store.event(tenant,"VISIT_RULE_CREATED",id,rule.version(),unit,rule.state());
+   store.finish(tenant,actor,route,key,id,201);
+   return new VisitModels.RuleMutation(rule,false,201);
+  });
+ }
+ /** Revogação pela versão lida, com motivo; as janelas ainda válidas caem na mesma transação (gatilho do banco). */
+ public VisitModels.VisitRule revokeRule(UUID actor,UUID tenant,UUID ruleId,VisitModels.RevokeRule request) {
+  if(ruleId==null) throw ruleNotFound();
+  if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
+   throw invalid("VISIT_VERSION_REQUIRED","Atualize as regras antes de revogar.");
+  String reason=text(request.reason(),500,"VISIT_REVOKE_REASON_REQUIRED","Informe o motivo da revogação, com até 500 caracteres.");
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of("23514",VisitService::ruleChanged),context->{
+   var current=store.rule(tenant,ruleId,true);
+   if(current==null) throw ruleNotFound();
+   boolean adult=store.member(tenant,current.unitId(),null);
+   if(!adult && !(current.createdByMe() && store.member(tenant,current.unitId(),"create"))) throw ruleNotFound();
+   if("REVOKED".equals(current.state())) throw new BusinessProblem("VISIT_RULE_REVOKED",409,"Esta regra já foi revogada.");
+   if(current.version()!=request.expectedVersion() || !store.revokeRule(tenant,ruleId,request.expectedVersion(),actor,reason)) throw ruleChanged();
+   var revoked=store.rule(tenant,ruleId,false);
+   if(revoked==null) throw new IllegalStateException("Regra revogada não foi encontrada na mesma transação.");
+   audit.record(tenant,actor,"VISIT_RULE_REVOKED","VISIT_RULE",ruleId,reason);
+   store.event(tenant,"VISIT_RULE_REVOKED",ruleId,revoked.version(),revoked.unitId(),revoked.state());
+   return revoked;
+  });
+ }
+ private static BusinessProblem ruleNotFound() { return new BusinessProblem("VISIT_RULE_NOT_FOUND",404,"Regra não encontrada."); }
+ private static BusinessProblem ruleChanged() {
+  return new BusinessProblem("VISIT_RULE_CHANGED",409,"A regra foi alterada. Atualize antes de continuar.");
+ }
+ private static BusinessProblem rulePeriodInvalid() {
+  return invalid("VISIT_RULE_PERIOD_INVALID","A regra começa hoje ou depois (até 90 dias à frente) e dura até 180 dias.");
+ }
+
  /** Convidados da reserva (CP-038), para quem pode convidar pela unidade da reserva. */
  public VisitModels.PermitPage reservationGuests(UUID actor,UUID tenant,UUID reservation) {
   if(reservation==null) throw reservationUnavailable();
@@ -236,6 +322,8 @@ public class VisitService {
    :text(visitor,80,"VISIT_FILTER_INVALID","Use até 80 caracteres visíveis na busca por nome.");
   return execute(actor,tenant,assurance,Map.of(),context->{
    context.requireCapability(StaffCapability.OPERATE_CONCIERGE);
+   // A portaria materializa as janelas de hoje e de amanhã (determinísticas a partir das regras) antes de listar.
+   store.expandRules(tenant,unit,1);
    return store.expected(tenant,unit,filter);
   });
  }

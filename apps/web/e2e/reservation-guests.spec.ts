@@ -26,7 +26,7 @@ test('convidados da reserva: adicionar com chave, repetir incerto sem duplicar, 
       unitLabel: '101', blockName: null, visitorName: body.visitorName, documentLast4: body.documentLast4, purpose: 'Convidado: Área',
       validFrom: new Date(Date.parse(reservation.startsAt) - 3_600_000).toISOString(), validUntil: reservation.endsAt, state: 'SCHEDULED',
       createdByMe: true, revokedAt: null, revokeReason: null, version: 0, createdAt: new Date().toISOString(), shareLinkActive: false,
-      reservationId: reservation.reservationId });
+      reservationId: reservation.reservationId, ruleId: null });
     if (loseNext) { loseNext = false; await request.abort('connectionreset'); return; }
     const { key: _key, ...permit } = guests.find((item) => item.key === key)!;
     await json(request, 201, permit, { 'Idempotency-Replayed': existing ? 'true' : 'false' });
@@ -95,7 +95,7 @@ test('capacidade da área atingida esconde o formulário', async ({ page }) => {
   const guest = (n: number) => ({ permitId: `75000000-0000-4000-8000-${String(n).padStart(12, '0')}`, unitId: UNIT_A, unitLabel: '101', blockName: null,
     visitorName: `Convidado ${n}`, documentLast4: null, purpose: 'Convidado: Área', validFrom: reservation.startsAt, validUntil: reservation.endsAt,
     state: 'SCHEDULED', createdByMe: true, revokedAt: null, revokeReason: null, version: 0, createdAt: new Date().toISOString(), shareLinkActive: false,
-    reservationId: reservation.reservationId });
+    reservationId: reservation.reservationId, ruleId: null });
   await page.route(`**/v1/tenants/${TENANT_A}/reservations/${reservation.reservationId}/guests`, (request) =>
     json(request, 200, { permits: Array.from({ length: 12 }, (_, index) => guest(index + 1)), truncated: false }));
   await signIn(page);

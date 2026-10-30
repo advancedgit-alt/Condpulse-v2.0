@@ -41,6 +41,23 @@ public class VisitController {
      @RequestBody VisitModels.RevokePermit request) {
   return ok(service.revokePermit(account(jwt),tenantId,permitId,request));
  }
+ /** Prestador recorrente (CP-039). */
+ @GetMapping("/v1/tenants/{tenantId}/units/{unitId}/visit-rules")
+ public ResponseEntity<VisitModels.RulePage> unitRules(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID unitId) {
+  return ok(service.unitRules(account(jwt),tenantId,unitId));
+ }
+ @PostMapping("/v1/tenants/{tenantId}/units/{unitId}/visit-rules")
+ public ResponseEntity<VisitModels.VisitRule> createRule(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID unitId,
+     @RequestHeader("Idempotency-Key") String key,@RequestBody VisitModels.CreateRule request) {
+  var result=service.createRule(account(jwt),tenantId,unitId,key,request);
+  return ResponseEntity.status(result.status()).cacheControl(CacheControl.noStore())
+   .header("Idempotency-Replayed",Boolean.toString(result.replayed())).body(result.rule());
+ }
+ @PostMapping("/v1/tenants/{tenantId}/visit-rules/{ruleId}/revoke")
+ public ResponseEntity<VisitModels.VisitRule> revokeRule(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID ruleId,
+     @RequestBody VisitModels.RevokeRule request) {
+  return ok(service.revokeRule(account(jwt),tenantId,ruleId,request));
+ }
  /** Convidados da reserva (CP-038). */
  @GetMapping("/v1/tenants/{tenantId}/reservations/{reservationId}/guests")
  public ResponseEntity<VisitModels.PermitPage> guests(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID reservationId) {
