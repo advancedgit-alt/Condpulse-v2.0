@@ -27,6 +27,7 @@ function fakeApi() {
   const api = {
     unitArrivals: jest.fn(async () => { if (state.arrivalsError) throw state.arrivalsError; return { arrivals: state.arrivals, truncated: false }; }),
     unitPermits: jest.fn(async () => { if (state.permitsError) throw state.permitsError; return { permits: state.permits, truncated: false }; }),
+    unitRules: jest.fn(async () => ({ rules: [], truncated: false })),
     decideArrival: jest.fn(async (_t: string, _u: string, id: string, decision: 'APPROVE' | 'DENY') => {
       state.decisions.push(decision);
       if (state.decideError) throw state.decideError;
@@ -61,8 +62,9 @@ function fakeApi() {
 const clients: ReturnType<typeof newQueryClient>[] = [];
 afterEach(async () => { await cleanup(); for (const client of clients.splice(0)) client.clear(); });
 let counter = 0;
-async function mount(fake = fakeApi(), options: { pending?: PermitPendingStore; share?: (message: string) => Promise<void>; webOrigin?: string | null } = {}) {
-  const queries = newQueryClient(Infinity); clients.push(queries);
+async function mount(fake = fakeApi(), options: { pending?: PermitPendingStore; share?: (message: string) => Promise<void>; webOrigin?: string | null;
+  queries?: ReturnType<typeof newQueryClient> } = {}) {
+  const queries = options.queries ?? newQueryClient(Infinity); clients.push(queries);
   await render(<QueryClientProvider client={queries}>
     <Visits api={fake.api} accountId={ACCOUNT} now={now} newKey={() => `test:visit-${String(++counter).padStart(12, '0')}`} pending={options.pending}
       webOrigin={options.webOrigin === undefined ? 'https://condpulse.example.invalid' : options.webOrigin} share={options.share}
@@ -222,6 +224,18 @@ describe('acessos da unidade no celular', () => {
     expect(fake.state.revokes).toEqual([{ reason: 'Mudança de planos', expectedVersion: 0 }]);
     expect(await screen.findByText('Visita Prevista · Revogado')).toBeTruthy();
     expect(screen.getByText('Nenhum convite em aberto. A portaria vê o nome e o período e confere a pessoa na chegada.')).toBeTruthy();
+  }, 15000);
+
+  it('revogar um convite atualiza também a lista de convidados das reservas', async () => {
+    const queries = newQueryClient(Infinity);
+    const guestsKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'guests', '41000000-0000-4000-8000-000000000001'];
+    queries.setQueryData(guestsKey, { permits: [], truncated: false });
+    await mount(fakeApi(), { queries });
+    await press('Revogar convite');
+    await fireEvent.changeText(screen.getByLabelText('Motivo da revogação'), 'Mudança de planos');
+    await press('Confirmar revogação');
+    expect(await screen.findByText('Convite de Visita Prevista revogado. A portaria deixa de vê-lo como autorização.')).toBeTruthy();
+    expect(queries.getQueryState(guestsKey)?.isInvalidated).toBe(true);
   }, 15000);
 
   it('consulta de chegadas que para de funcionar avisa que a lista pode estar desatualizada', async () => {
