@@ -113,8 +113,8 @@ class WaitlistJdbcTest {
   var stale=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
   // Passada da fila parada: a entrada continua WAITING no banco, mas o período começou há 10 dias (encerrada pelo tempo).
   // Fixture: período movido para o passado sem o gatilho (que, com razão, impede mudar o período de uma entrada).
-  db.adminUpdateWithoutTriggers("update cp.reservation_waitlist set starts_at=clock_timestamp()-interval '10 days',ends_at=clock_timestamp()-interval '10 days'+interval '2 hours',"
-   +"occupied_from=clock_timestamp()-interval '10 days',occupied_until=clock_timestamp()-interval '10 days'+interval '2 hours' where id=?",stale.waitlistId());
+  db.adminUpdateWithoutTriggers("update cp.reservation_waitlist w set starts_at=t.s,ends_at=t.s+interval '2 hours',occupied_from=t.s,"
+   +"occupied_until=t.s+interval '2 hours' from (select now()-interval '10 days' as s) t where w.id=?",stale.waitlistId());
   var all=management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,false).entries();
   assertTrue(all.stream().noneMatch(e->e.waitlistId().equals(stale.waitlistId())),"Encerrada pelo tempo há mais de 7 dias não aparece entre as recentes");
   assertTrue(management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,true).entries().stream().noneMatch(e->e.waitlistId().equals(stale.waitlistId())));
