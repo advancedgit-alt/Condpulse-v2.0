@@ -304,7 +304,9 @@ public final class FlyWorkerLogin {
                 }
             }
         }
-        try (var q = query(c, "select count(*) from pg_auth_members m join pg_roles g on g.oid=m.roleid join pg_roles u on u.oid=m.member where g.rolname='cp_worker' and u.rolname<>?")) {
+        // A única outra associação tolerada é a de bootstrap que o PostgreSQL 16+ cria para quem criou o grupo:
+        // postgres com ADMIN, sem INHERIT nem SET (não herda nem assume os privilégios de cp_worker).
+        try (var q = query(c, "select count(*) from pg_auth_members m join pg_roles g on g.oid=m.roleid join pg_roles u on u.oid=m.member where g.rolname='cp_worker' and u.rolname<>? and not (u.rolname='postgres' and m.admin_option and not m.inherit_option and not m.set_option)")) {
             q.setString(1, config.role());
             try (var r = q.executeQuery()) { require(r.next() && r.getLong(1) == 0, "FLY_WORKER_UNKNOWN_GROUP_MEMBER"); }
         }
