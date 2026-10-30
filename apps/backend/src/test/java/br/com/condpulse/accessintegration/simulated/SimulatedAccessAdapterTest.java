@@ -180,6 +180,17 @@ class SimulatedAccessAdapterTest {
   assertEquals(query(1,"leitor-1").destination("leitor-1").reason(),repeated.reason(),"Repetição e consulta concordam");
  }
 
+ @Test void repeatingAConfirmedCommandAfterANewerVersionIsStale() {
+  assertEquals(Outcome.APPLIED,apply(1,"leitor-1").destination("leitor-1").outcome());
+  assertEquals(Outcome.APPLIED,revoke(2,"leitor-1").destination("leitor-1").outcome());
+  var repeated=apply(1,"leitor-1");
+  assertEquals(Outcome.REJECTED,repeated.destination("leitor-1").outcome(),"Confirmação superada não volta como aplicada");
+  assertEquals("STALE_VERSION",repeated.destination("leitor-1").reason());
+  assertFalse(repeated.fullyApplied());
+  assertEquals(query(1,"leitor-1").destination("leitor-1").reason(),repeated.destination("leitor-1").reason());
+  assertEquals(2,adapter.applications("leitor-1"),"Nada é reenviado");
+ }
+
  @Test void partialRepetitionKeepsTheOmittedDestinations() {
   adapter.scenario("leitor-1",Scenario.REJECT);
   assertEquals(Outcome.REJECTED,apply(1,"leitor-1","leitor-2").destination("leitor-1").outcome());

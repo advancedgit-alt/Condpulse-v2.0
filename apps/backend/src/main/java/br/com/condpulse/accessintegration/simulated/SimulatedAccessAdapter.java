@@ -245,7 +245,8 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
 
  /** Destino já resolvido: ACCEPTED vira APPLIED se a confirmação chegou depois, ou recusa se outra versão passou à frente. */
  private Destination refresh(String deviceId,String credentialRef,long version,Action action,Destination before) {
-  if(before.outcome()!=Outcome.ACCEPTED) return before;
+  // Recusa é definitiva; recebido ou confirmado é revalidado contra o estado atual (sem reenviar o comando).
+  if(before.outcome()!=Outcome.ACCEPTED && before.outcome()!=Outcome.APPLIED) return before;
   var applied=device(deviceId).applied.get(credentialRef);
   if(applied==null || applied.version()<version) {
    // Versão maior recebida depois substituiu esta na fila: não há mais confirmação a aguardar.
