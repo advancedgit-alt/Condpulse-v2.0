@@ -66,8 +66,12 @@ test('abas da gestão em uma linha, roláveis e com a aba atual visível no celu
     const tops = new Set(links.map((link) => Math.round(link.getBoundingClientRect().top)));
     const box = nav.getBoundingClientRect();
     const active = nav.querySelector('[aria-current="page"]')!.getBoundingClientRect();
-    return { rows: tops.size, scrolls: nav.scrollWidth > nav.clientWidth, activeVisible: active.left >= box.left - 1 && active.right <= box.right + 1 };
+    return { rows: tops.size, scrolls: nav.scrollWidth > nav.clientWidth, activeVisible: active.left >= box.left - 1 && active.right <= box.right + 1,
+      // Alvo de toque mínimo de 48 px (PRD) mantido nas abas compactas.
+      touchTargets: links.every((link) => link.getBoundingClientRect().height >= 48) };
   });
-  expect(metrics).toEqual({ rows: 1, scrolls: true, activeVisible: true });
+  expect(metrics).toEqual({ rows: 1, scrolls: true, activeVisible: true, touchTargets: true });
+  const toggle = await page.getByRole('button', { name: 'Abrir menu' }).boundingBox();
+  expect(toggle && toggle.height >= 48 && toggle.width >= 48).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

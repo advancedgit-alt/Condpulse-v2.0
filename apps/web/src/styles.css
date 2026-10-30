@@ -27,7 +27,7 @@
 .sidebar-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 9px;flex:none}
 .sidebar-label{flex:none;margin:32px 14px 10px;color:#9db4c6;letter-spacing:.12em}
 .sidebar-nav{flex:1 1 auto;min-height:0;display:grid;align-content:start;gap:2px;overflow-y:auto;overscroll-behavior:contain;margin:0 -6px;padding:4px 6px;scrollbar-width:thin;scrollbar-color:#ffffff40 transparent}
-.nav-item{min-height:44px;padding:10px 14px;border:1px solid transparent}
+.nav-item{min-height:48px;padding:11px 14px;border:1px solid transparent}
 .nav-item:hover{background:#ffffff0a;color:#fff}
 .nav-item>svg{width:20px;height:20px;color:#8fb3c6}
 .nav-item>span:not(.nav-dot){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -38,7 +38,7 @@
 .sidebar-bottom p{margin-top:10px}
 @media(max-height:820px){.sidebar-caption{display:none}.sidebar-bottom p{margin-top:0}.sidebar-label{margin-top:24px}}
 .header-start{display:flex;align-items:center;gap:12px;min-width:0}
-.menu-toggle,.menu-close{display:none;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border-radius:10px;background:transparent;color:inherit;flex:none}
+.menu-toggle,.menu-close{display:none;align-items:center;justify-content:center;width:48px;height:48px;padding:0;border-radius:10px;background:transparent;color:inherit;flex:none}
 .sidebar-backdrop{display:none}
 @media(max-width:1023px){
 .sidebar{width:min(300px,86vw);transform:translateX(-100%);visibility:hidden;transition:transform .2s ease,visibility 0s linear .2s;z-index:40}

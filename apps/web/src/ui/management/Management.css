@@ -1,7 +1,7 @@
 /* Abas de seção: uma linha compacta com rolagem horizontal; sombras laterais indicam que há mais abas. */
 .management-tabs{display:flex;flex-wrap:nowrap;gap:4px;margin:0 0 26px;padding:5px;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#bfceda transparent;
   background:linear-gradient(90deg,var(--surface) 30%,#fff0) 0 0/36px 100% no-repeat local,linear-gradient(270deg,var(--surface) 30%,#fff0) 100% 0/36px 100% no-repeat local,radial-gradient(farthest-side at 0 50%,#102a432e,#102a4300) 0 0/12px 100% no-repeat scroll,radial-gradient(farthest-side at 100% 50%,#102a432e,#102a4300) 100% 0/12px 100% no-repeat scroll,var(--surface)}
-.management-tabs>a{flex:0 0 auto;min-height:44px;display:inline-flex;align-items:center;padding:8px 14px;border-radius:9px;text-decoration:none;color:var(--muted);font-size:.84rem;font-weight:650;white-space:nowrap;scroll-snap-align:start}
+.management-tabs>a{flex:0 0 auto;min-height:48px;display:inline-flex;align-items:center;padding:8px 14px;border-radius:9px;text-decoration:none;color:var(--muted);font-size:.84rem;font-weight:650;white-space:nowrap;scroll-snap-align:start}
 .management-tabs>a:hover{color:var(--navy);background:#f1f6f8}
 .management-tabs>a:focus-visible{outline-offset:-3px}
 .management-tabs>a[aria-current=page]{background:#e8f4f3;color:#006b72;font-weight:750}
