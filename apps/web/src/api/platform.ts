@@ -134,7 +134,7 @@ export function createPlatformApi(client: CondPulseApi = api) {
     replayTask: async (taskId: string, reason: string) =>
       client.call(`/v1/platform/outbox/tasks/${identifier(taskId)}/replay`, (value) => {
         const task = outboxTask(value, true);
-        if (task.taskId !== taskId || task.state !== 'PENDING' || task.attempts !== 0 || task.lastError !== null) throw invalidResponse(true);
+        if (task.taskId !== taskId || task.state !== 'PENDING' || task.lastError !== null || task.processedAt !== null) throw invalidResponse(true);
         return task;
       }, { method: 'POST', body: { reason } }),
   };

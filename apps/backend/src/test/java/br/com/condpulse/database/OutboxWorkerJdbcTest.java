@@ -17,6 +17,11 @@ import br.com.condpulse.moves.application.MoveModels;
 import br.com.condpulse.moves.application.MoveService;
 import br.com.condpulse.moves.infrastructure.MoveStore;
 import br.com.condpulse.parcels.application.ParcelModels;
+import br.com.condpulse.platform.application.OutboxOperationsModels;
+import br.com.condpulse.platform.application.OutboxOperationsService;
+import br.com.condpulse.platform.application.PlatformTransactionExecutor;
+import br.com.condpulse.platform.infrastructure.OutboxOperationsStore;
+import br.com.condpulse.platform.infrastructure.PlatformStore;
 import br.com.condpulse.parcels.application.ParcelService;
 import br.com.condpulse.parcels.infrastructure.ParcelStore;
 import br.com.condpulse.requests.application.RequestModels;
@@ -209,6 +214,36 @@ class OutboxWorkerJdbcTest {
   worker.runTenant(db.tenantA);
   assertEquals("SKIPPED:1",task(second.moveId(),"MOVE_REJECTED"));
   assertEquals(3,notices(db.accountA));
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
+ @Test void replayedTaskGetsNewAttemptsWithoutReusingTheOldLeaseNumber() throws Exception {
+  var parcel=receive(db.unitA);
+  db.adminUpdateWithoutTriggers("""
+   update cp.outbox set state='FAILED',attempts=6,last_error='Falha saneada',processed_at=clock_timestamp()
+   where tenant_id=? and aggregate_id=? and event_type='PARCEL_RECEIVED'
+   """,db.tenantA,parcel.parcelId());
+  assertEquals(0,worker.runTenant(db.tenantA),"Falha definitiva não volta sozinha");
+  UUID task=UUID.fromString(db.adminString("select id from cp.outbox where tenant_id=? and aggregate_id=? and event_type='PARCEL_RECEIVED'",
+   db.tenantA,parcel.parcelId()));
+  var stale=new OutboxModels.LeasedEvent(task,"PARCEL_RECEIVED",parcel.parcelId(),0,db.unitA,6);
+  UUID operator=UUID.randomUUID(); db.extraAccounts.add(operator);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",operator);
+  db.grantPlatformAdmin(operator);
+  try {
+   var operations=new OutboxOperationsService(new PlatformTransactionExecutor(db.jdbc,db.manager),new OutboxOperationsStore(db.jdbc),
+    new PlatformStore(db.jdbc));
+   assertEquals("PENDING",operations.replay(operator,AAL2,task,new OutboxOperationsModels.Replay("Destinatário corrigido")).state());
+   assertFalse(transactions.inTenant(db.tenantA,()->outbox.complete(db.tenantA,stale,OutboxModels.Outcome.DELIVERED)),
+    "Worker atrasado da tentativa 6 não conclui a tarefa devolvida");
+   assertEquals(1,worker.runTenant(db.tenantA));
+   assertEquals("DELIVERED:7",task(parcel.parcelId(),"PARCEL_RECEIVED"),"Tentativa nova com número novo; orçamento renovado");
+   assertEquals(1,notices(db.accountA));
+  } finally {
+   db.adminUpdate("delete from platform.platform_audit_log where actor_id=?",operator);
+   db.adminUpdate("delete from platform.platform_roles where account_id=?",operator);
+   db.adminUpdate("delete from platform.platform_role_events where account_id=?",operator);
+  }
   db.assertEmptyContext(); workerDb.assertEmptyContext();
  }
 

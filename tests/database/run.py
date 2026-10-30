@@ -2861,11 +2861,18 @@ def outbox_replay_checks():
     expect(error(op + f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) VALUES('{OP}','TENANT_SUSPENDED','{TA}','x')",
                  "42501", actor=OP, role="cp_api"), "operacao da fila nao grava acao de outra area")
     expect(value(f"select state||':'||attempts||':'||(last_error is null)||':'||(processed_at is null)||':'||(available_at<=clock_timestamp()) "
-                 f"from cp.outbox where id='{F1}'") == "PENDING:0:true:true:true", "falha volta para a fila sem tentativa nem erro, disponivel ja")
+                 f"from cp.outbox where id='{F1}'") == "PENDING:6:true:true:true", "falha volta para a fila sem erro, disponivel ja")
+    expect(value(f"select attempts-attempt_base from cp.outbox where id='{F1}'") == "0",
+           "devolucao renova as tentativas sem reutilizar o numero da tentativa (cerca do arrendamento antigo)")
     query(op + replay.format(S1), actor=OP, role="cp_api")
     expect(value(f"select state from cp.outbox where id='{S1}'") == "PENDING", "tarefa ignorada volta para a fila (consumidor novo)")
-    query(f"UPDATE cp.outbox SET state='LEASED',attempts=1,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{F1}'", tenant=TA, role="cp_worker")
-    expect(value(f"select state||':'||attempts from cp.outbox where id='{F1}'") == "LEASED:1", "worker arrenda a tarefa devolvida")
+    expect(error(f"UPDATE cp.outbox SET state='LEASED',attempts=1,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{F1}'", "23514",
+                 tenant=TA, role="cp_worker"), "tentativa nao volta ao comeco depois da devolucao")
+    query(f"UPDATE cp.outbox SET state='LEASED',attempts=7,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{F1}'", tenant=TA, role="cp_worker")
+    expect(value(f"select state||':'||attempts from cp.outbox where id='{F1}'") == "LEASED:7", "worker arrenda a tarefa devolvida com tentativa nova")
+    expect(value(f"WITH u AS (UPDATE cp.outbox SET state='DELIVERED' WHERE id='{F1}' AND state='LEASED' AND attempts=6 RETURNING 1) SELECT count(*) FROM u",
+                 tenant=TA, role="cp_worker") == "0", "worker atrasado da tentativa antiga nao conclui o arrendamento novo")
+    expect(error(f"UPDATE cp.outbox SET attempt_base=0 WHERE id='{F1}'", "42501", tenant=TA, role="cp_worker"), "worker nao muda a base das tentativas")
     query(f"SET session_replication_role=replica; DELETE FROM cp.outbox WHERE id in ('{F1}','{S1}','{D1}','{P1}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{OP}'; DELETE FROM platform.accounts WHERE id='{OP}'")
 
 def main():

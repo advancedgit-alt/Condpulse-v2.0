@@ -28,7 +28,7 @@ public class OutboxStore {
  public int failExhausted(UUID tenant,int maxAttempts) {
   return jdbc.update("""
    with picked as(
-    select id from cp.outbox where tenant_id=? and state='LEASED' and lease_until<=clock_timestamp() and attempts>=?
+    select id from cp.outbox where tenant_id=? and state='LEASED' and lease_until<=clock_timestamp() and attempts-attempt_base>=?
     order by lease_until,id limit 100 for update skip locked)
    update cp.outbox o set state='FAILED',last_error=? from picked where o.tenant_id=? and o.id=picked.id
    """,tenant,maxAttempts,EXHAUSTED,tenant);
@@ -38,14 +38,15 @@ public class OutboxStore {
   if(batch<1 || batch>100 || leaseSeconds<5 || leaseSeconds>600) throw new IllegalArgumentException("Lote ou arrendamento fora do limite.");
   return jdbc.query("""
    with picked as(
-    select id from cp.outbox where tenant_id=? and attempts<?
+    select id from cp.outbox where tenant_id=? and attempts-attempt_base<?
      and((state='PENDING' and available_at<=clock_timestamp()) or(state='LEASED' and lease_until<=clock_timestamp()))
     order by available_at,created_at,id limit ? for update skip locked)
    update cp.outbox o set state='LEASED',attempts=o.attempts+1,lease_until=clock_timestamp()+make_interval(secs=>?)
    from picked where o.tenant_id=? and o.id=picked.id
-   returning o.id,o.event_type,o.aggregate_id,o.aggregate_version,o.payload->>'unitId' as unit_id,o.attempts
+   returning o.id,o.event_type,o.aggregate_id,o.aggregate_version,o.payload->>'unitId' as unit_id,o.attempts,o.attempt_base
    """,(r,n)->new OutboxModels.LeasedEvent(r.getObject("id",UUID.class),r.getString("event_type"),
-    r.getObject("aggregate_id",UUID.class),r.getLong("aggregate_version"),uuid(r.getString("unit_id")),r.getInt("attempts")),
+    r.getObject("aggregate_id",UUID.class),r.getLong("aggregate_version"),uuid(r.getString("unit_id")),r.getInt("attempts"),
+    r.getInt("attempt_base")),
    tenant,maxAttempts,batch,(double)leaseSeconds,tenant);
  }
  /**

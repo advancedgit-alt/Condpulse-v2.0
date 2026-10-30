@@ -64,7 +64,7 @@ async function installOutbox(page: Page, options: { capability?: boolean; summar
       state.replays.push({ id: replay[1]!, reason: body.reason, csrf: request.headers()['x-csrf-token'] });
       if (state.conflict) { await problem(route, 409, 'OUTBOX_TASK_NOT_REPLAYABLE'); return; }
       const task = state.tasks.find((item) => item.taskId === replay[1])!;
-      Object.assign(task, { state: 'PENDING', attempts: 0, lastError: null, processedAt: null, availableAt: new Date().toISOString() });
+      Object.assign(task, { state: 'PENDING', lastError: null, processedAt: null, availableAt: new Date().toISOString() });
       await json(route, 200, task);
       return;
     }

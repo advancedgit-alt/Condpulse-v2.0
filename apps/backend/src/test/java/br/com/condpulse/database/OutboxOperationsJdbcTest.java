@@ -77,7 +77,8 @@ class OutboxOperationsJdbcTest {
   assertEquals("AUDIT_REASON_REQUIRED",assertThrows(BusinessProblem.class,
    ()->outbox.replay(db.accountA,AAL2,failed,new OutboxOperationsModels.Replay("  "))).code());
   var replayed=outbox.replay(db.accountA,AAL2,failed,new OutboxOperationsModels.Replay("Consumidor corrigido no deploy fictício"));
-  assertEquals("PENDING",replayed.state()); assertEquals(0,replayed.attempts()); assertNull(replayed.lastError()); assertNull(replayed.processedAt());
+  assertEquals("PENDING",replayed.state()); assertEquals(6,replayed.attempts(),"O número da tentativa não volta atrás"); assertNull(replayed.lastError()); assertNull(replayed.processedAt());
+  assertEquals("6",db.adminString("select attempt_base from cp.outbox where id=?",failed),"Orçamento de tentativas renovado");
   assertEquals("OUTBOX_TASK_REPLAYED:FAILED:PARCEL_RECEIVED",db.adminString("""
    select action||':'||(details->>'previousState')||':'||(details->>'eventType') from platform.platform_audit_log
    where actor_id=? and details->>'taskId'=?
