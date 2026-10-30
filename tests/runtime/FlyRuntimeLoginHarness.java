@@ -131,6 +131,28 @@ public final class FlyRuntimeLoginHarness {
         var replay = run(config(generation, "apply", ready.fingerprint(), maxConnections), "", true);
         require(replay.alreadyApplied() && !replay.applied() && replay.code().isEmpty() && logins == 2);
 
+        stage = "earlier-commit-ready";
+        // Login READY criado por um commit anterior da mesma geração: lido como READY, sem escrita nem novo login.
+        String current = "condpulse-runtime-fly:rpnrqfrfwywglvyykgrg:" + generation + ":" + SHA;
+        String earlier = "condpulse-runtime-fly:rpnrqfrfwywglvyykgrg:" + generation + ":" + "e".repeat(40);
+        try (var c = owner()) { sql(c, "COMMENT ON ROLE " + role + " IS '" + earlier + ":READY'"); }
+        try {
+            var earlierInspect = run(config(generation, "inspect", "", maxConnections), "", false);
+            require(earlierInspect.alreadyApplied() && "READY".equals(earlierInspect.state()) && earlierInspect.code().isEmpty());
+            var earlierReplay = run(config(generation, "apply", earlierInspect.fingerprint(), maxConnections), "", true);
+            require(earlierReplay.alreadyApplied() && !earlierReplay.applied() && earlierReplay.code().isEmpty() && logins == 2);
+            role(role, true, "READY");
+            try (var c = owner()) { require((earlier + ":READY").equals(text(c, "select shobj_description(oid,'pg_authid') from pg_roles where rolname='" + role + "'"))); }
+            // Fora de READY, marker de outro commit continua conflito e nada é escrito.
+            try (var c = owner()) { sql(c, "COMMENT ON ROLE " + role + " IS '" + earlier + ":STAGED'"); }
+            require("FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT".equals(run(config(generation, "inspect", "", maxConnections), "", false).code()));
+            require("FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT".equals(run(config(generation, "apply", earlierInspect.fingerprint(), maxConnections), password(), true).code()) && logins == 2);
+            String other = "condpulse-runtime-fly:rpnrqfrfwywglvyykgrg:" + UUID.randomUUID() + ":" + "e".repeat(40);
+            try (var c = owner()) { sql(c, "COMMENT ON ROLE " + role + " IS '" + other + ":READY'"); }
+            require("FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT".equals(run(config(generation, "inspect", "", maxConnections), "", false).code()));
+        } finally { try (var c = owner()) { sql(c, "COMMENT ON ROLE " + role + " IS '" + current + ":READY'"); } }
+        role(role, true, "READY");
+
         stage = "direct-grant-denied";
         try (var c = owner()) { sql(c, "GRANT SELECT ON platform.tenants TO " + role); }
         try { require("FLY_RUNTIME_DIRECT_GRANT_FORBIDDEN".equals(run(config(generation, "inspect", "", maxConnections), "", false).code())); }
@@ -200,7 +222,7 @@ public final class FlyRuntimeLoginHarness {
                     sql(admin, "DROP DATABASE " + database);
                 }
             }
-            System.out.println("{\"passed\":true,\"logins\":" + logins + ",\"connectionLimit\":4,\"abortDisables\":true,\"readyReplay\":true,\"vercelCoexists\":true,\"budgetDenied\":true,\"driftDenied\":true}");
+            System.out.println("{\"passed\":true,\"logins\":" + logins + ",\"connectionLimit\":4,\"abortDisables\":true,\"readyReplay\":true,\"earlierCommitReady\":true,\"vercelCoexists\":true,\"budgetDenied\":true,\"driftDenied\":true}");
         } catch (Throwable ignored) {
             System.out.println("{\"passed\":false,\"code\":\"FLY_HARNESS_FAILED\",\"stage\":\"" + stage + "\"}"); System.exit(1);
         }
