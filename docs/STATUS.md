@@ -34,7 +34,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Fila de espera de reservas — CP-040
 
 - V023: entrada num período ocupado com as regras vigentes; período liberado vira retenção `HELD` de até 15 minutos ao primeiro da fila (exclusão GiST impede duas ofertas no mesmo período); aceitar confirma ou vira pedido; recusar ou vencer passa a vez; passada periódica no worker atrás de `CP_WORKER_WAITLIST_ENABLED=false` (worker não implantado). Atrás de `CP_RESERVATIONS_ENABLED` (ligada); Merge `867d8ff` (PR #68, CI 40992527169 verde). V023 aplicada na homologação em 29/10/2026 pelo executor protegido (migrate 40993166940; repetição 40993369928 sem linha nova; 22 linhas no histórico; RLS FORCE na fila, 8 funções `waitlist_*`, nenhuma tabela `cp` sem RLS completa, zero entradas). Smoke público 40993532095 verde no deployment do merge. Não homologado com login real. Detalhes em [FILA_ESPERA.md](FILA_ESPERA.md).
-- Pendentes: aviso da oferta (worker), fila pelo celular, visão da gestão e ensaio com Auth real.
+- Celular: entrar na fila nos horários ocupados ou quando a reserva direta é recusada por prioridade; aceitar, recusar e sair com confirmação (testes Jest simulados; sem ensaio em aparelho).
+- Pendentes: aviso da oferta (worker), visão da gestão e ensaio com Auth real.
 
 ## Prestador recorrente — CP-039
 

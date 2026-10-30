@@ -60,8 +60,16 @@ Atrás de `CP_RESERVATIONS_ENABLED` (a mesma flag das reservas). Banco: V023 (`c
 `WaitlistSchedulingTest`, `DatabaseRoleGuardJdbcTest`; web
 `api/waitlist.test.ts` e `e2e/waitlist.spec.ts`.
 
+## Celular
+
+No aplicativo (tela Reservas): horários ocupados ganham a opção "Entrar na fila de …" com aceite da versão das regras;
+reserva direta recusada com `WAITLIST_PRIORITY` oferece entrar na fila do mesmo período; seção "Fila de espera" com
+posição, prazo da oferta, aceitar (vira pedido quando a área exige aprovação), recusar e sair com confirmação, e
+atualização a cada 30 s enquanto houver entrada aberta (também pelo canal da unidade, assunto `reservations`). Entrar e
+aceitar usam `Idempotency-Key`; resultado incerto repete com a mesma chave. Testes: `apps/mobile/__tests__/waitlist.test.tsx`.
+
 ## Pendentes
 
-Aviso da oferta na caixa interna/push (o evento `WAITLIST_OFFERED` vai ao outbox; o worker não está implantado — BLOQUEADO na implantação do worker), fila
-pelo celular, visão da fila para a gestão, conferência de vínculo do autor no momento da oferta (hoje conferido no
+Aviso da oferta na caixa interna/push (o evento `WAITLIST_OFFERED` vai ao outbox; o worker não está implantado — BLOQUEADO na implantação do worker),
+visão da fila para a gestão, conferência de vínculo do autor no momento da oferta (hoje conferido no
 aceite) e ensaio com Auth real.

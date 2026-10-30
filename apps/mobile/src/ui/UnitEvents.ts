@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { connectUnitEvents, unitEventsPath, type EventSourceFactory, type Timers, type Topic } from '../api/events';
 
 /** Partes da chave de consulta de cada assunto no escopo da unidade; assuntos sem tela no celular não consultam nada. */
-export const topicKeys: Partial<Record<Topic, string[]>> = { reservations: ['reservations', 'availability'] };
+export const topicKeys: Partial<Record<Topic, string[]>> = { reservations: ['reservations', 'availability', 'waitlist'] };
 
 /**
  * Mantém a unidade aberta atualizada (CP-036) enquanto o aplicativo está em primeiro plano. Em segundo plano o canal é
