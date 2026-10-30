@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { CondPulseApi, Membership } from '../api/client';
 import { SessionError, type SessionManager } from '../session/session';
 import { colors, touch } from './theme';
+import { DeviceAccess } from './DeviceAccess';
 import { Moves, type MovePendingStore } from './Moves';
 import { Parcels, type DelegationPendingStore } from './Parcels';
 import { Reservations, type KeyFactory, type PendingStore } from './Reservations';
@@ -116,6 +117,8 @@ function Home({ manager, api, accountId, newKey, events }: { manager: SessionMan
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={movePending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Parcels key={`parcels-${active.membershipId}`} api={api}
       accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={delegationPending} /> : null}
+    {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <DeviceAccess key={`device-access-${active.membershipId}`} api={api}
+      accountId={accountId} tenantId={active.tenantId} unitId={active.unitId} timeZone={active.timeZone} /> : null}
     <Button label={leaving ? 'Saindo…' : 'Sair'} secondary disabled={leaving}
       onPress={() => { setLeaving(true); void manager.signOut().finally(() => setLeaving(false)); }} />
   </ScrollView>;
