@@ -6,6 +6,7 @@ import type { Amenity, CreateReservation as ReservationBody, Reservation, Reserv
 import { bookableDates, daySlots, durations, type Slot } from '../reservations/slots';
 import { addDays, dateInZone, formatDay, formatTime, formatWhen, money, toInstant } from '../time';
 import { colors, touch } from './theme';
+import { JoinWaitlist, WaitlistSection } from './Waitlist';
 
 /**
  * Reservas no celular (CP-024): áreas, dia, duração, horário livre, regras e taxa informativa, e o estado do pedido.
@@ -149,6 +150,7 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
       </View>;
     })() : null}
     {cursor ? <Button label="Voltar ao início do período" secondary onPress={() => setCursor(null)} /> : null}
+    <WaitlistSection api={api} scope={scope} tenantId={tenantId} unitId={unitId} timeZone={timeZone} names={names} newKey={newKey} now={now} />
   </View>;
 }
 
@@ -200,6 +202,8 @@ function Booking({ api, scope, membership, area, newKey, now, close, pending, pe
   const visibleDates = dates.slice(page * DATES_PER_PAGE, (page + 1) * DATES_PER_PAGE);
   const [length, setLength] = useState(saved?.length ?? (lengths.includes(60) ? 60 : lengths[0] ?? null));
   const [slot, setSlot] = useState<Slot | null>(saved?.slot ?? null);
+  // Horário ocupado escolhido para entrar na fila de espera (não é reserva).
+  const [queueSlot, setQueueSlot] = useState<Slot | null>(null);
   // Aceite preso à versão lida: se a gestão mudar regras ou taxa enquanto a tela está aberta, o aceite cai e precisa ser refeito.
   const [acceptedVersion, setAcceptedVersion] = useState<number | null>(null);
   const accepted = acceptedVersion === area.policyVersion;
@@ -218,7 +222,8 @@ function Booking({ api, scope, membership, area, newKey, now, close, pending, pe
   const locked = pendingKey !== null && uncertain(failure);
 
   const versionChanged = acceptedVersion !== null && !accepted && !locked;
-  function choose(next: Slot | null) { setSlot(next); setAcceptedVersion(null); setFailure(null); }
+  function choose(next: Slot | null) { setSlot(next); setQueueSlot(null); setAcceptedVersion(null); setFailure(null); }
+  function chooseQueue(next: Slot) { setSlot(null); setQueueSlot(next); setAcceptedVersion(null); setFailure(null); }
   async function submit() {
     if (busy || !slot) return;
     let attempt: { intent: string; key: string; body: ReservationBody };
@@ -296,6 +301,13 @@ function Booking({ api, scope, membership, area, newKey, now, close, pending, pe
                 accessibilityLabel={item.state === 'blocked' ? `${item.label} ocupado` : `Horário ${item.label}`}
                 selected={slot?.startsAt === item.startsAt && slot.endsAt === item.endsAt} disabled={item.state === 'blocked' || busy || locked}
                 onPress={() => choose(item)} />)}</View>}
+      {slots.some((item) => item.state === 'blocked') ? <View accessibilityLabel="Fila de espera dos horários ocupados">
+        <Text style={styles.label}>Horário ocupado? Entre na fila de espera</Text>
+        <View style={styles.row}>{slots.filter((item) => item.state === 'blocked').map((item) =>
+          <Chip key={`fila-${item.startsAt}`} label={`Fila ${item.label}`} accessibilityLabel={`Entrar na fila de ${item.label}`}
+            selected={queueSlot?.startsAt === item.startsAt && queueSlot.endsAt === item.endsAt} disabled={busy || locked}
+            onPress={() => chooseQueue(item)} />)}</View>
+      </View> : null}
       {availability.data ? <Text style={styles.small}>{`Ocupação consultada às ${formatTime(availability.data.observedAt, timeZone)}. O servidor confere de novo ao enviar.`}</Text> : null}
     </>}
     {slot ? <View style={styles.confirm} accessibilityLabel="Confirmação da reserva">
@@ -309,7 +321,20 @@ function Booking({ api, scope, membership, area, newKey, now, close, pending, pe
         disabled={(!accepted && !locked) || busy} onPress={() => void submit()} />
       {versionChanged ? <Notice tone="warning">{`As regras desta área mudaram (agora versão ${area.policyVersion}). Leia de novo e marque o aceite para continuar.`}</Notice> : null}
     </View> : null}
+    {queueSlot ? <View style={styles.confirm} accessibilityLabel="Entrada na fila de espera">
+      <Text style={styles.body}>{`${formatDay(date!, timeZone)}, ${queueSlot.label} · ocupado agora. Na fila, a vaga é oferecida por ordem de entrada se for liberada.`}</Text>
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: accepted }}
+        accessibilityLabel={`Li e aceito as regras da área (versão ${area.policyVersion})`} onPress={() => setAcceptedVersion(accepted ? null : area.policyVersion)} style={styles.check}>
+        <Text style={styles.checkBox}>{accepted ? '☑' : '☐'}</Text>
+        <Text style={styles.body}>{`Li e aceito as regras da área (versão ${area.policyVersion})`}</Text>
+      </Pressable>
+      <JoinWaitlist key={`${queueSlot.startsAt}:${queueSlot.endsAt}`} api={api} scope={scope} tenantId={tenantId} newKey={newKey} disabled={!accepted}
+        body={{ unitId, amenityId: area.amenityId, startsAt: queueSlot.startsAt, endsAt: queueSlot.endsAt, acceptedPolicyVersion: area.policyVersion }} />
+    </View> : null}
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{message(failure)}</Notice> : null}
+    {slot && accepted && failure instanceof ApiError && failure.code === 'WAITLIST_PRIORITY'
+      ? <JoinWaitlist key={`prioridade-${slot.startsAt}:${slot.endsAt}`} api={api} scope={scope} tenantId={tenantId} newKey={newKey} disabled={false}
+        body={{ unitId, amenityId: area.amenityId, startsAt: slot.startsAt, endsAt: slot.endsAt, acceptedPolicyVersion: area.policyVersion }} /> : null}
     <Button label="Voltar às áreas" secondary disabled={busy || locked} onPress={() => close(null)} />
   </View>;
 }

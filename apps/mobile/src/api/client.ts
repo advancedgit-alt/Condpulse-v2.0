@@ -1,4 +1,5 @@
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
+import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type WaitlistChange } from './waitlist';
 /**
  * Chamadas à API do CondPulse com o access token do Auth no cabeçalho Bearer (o aplicativo não usa o BFF de cookies).
  * Um 401 tenta uma renovação e repete uma vez; recusa de novo encerra a sessão. Respostas são validadas antes da tela.
@@ -59,6 +60,20 @@ const messages: Record<string, string> = {
   IDEMPOTENCY_KEY_EXPIRED: 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.',
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
   TENANT_ACCESS_DENIED: 'Condomínio não disponível para este acesso.',
+  WAITLIST_SLOT_AVAILABLE: 'O período está livre. Faça a reserva diretamente.',
+  WAITLIST_OWN_RESERVATION: 'A unidade já tem reserva ou pedido neste período.',
+  WAITLIST_ALREADY_JOINED: 'A unidade já está na fila deste período.',
+  WAITLIST_LIMIT_REACHED: 'A unidade já está em 5 filas de espera abertas.',
+  WAITLIST_NOT_FOUND: 'Entrada da fila não encontrada.',
+  WAITLIST_CHANGED: 'A fila de espera mudou. Atualize antes de continuar.',
+  WAITLIST_OFFER_EXPIRED: 'O prazo da oferta terminou e a vaga seguiu para o próximo da fila.',
+  WAITLIST_CLOSED: 'Esta entrada da fila já foi encerrada.',
+  WAITLIST_AUTHOR_REQUIRED: 'Somente quem entrou na fila pode alterar esta entrada.',
+  WAITLIST_PRIORITY: 'Há fila de espera para este período: a vaga vai primeiro para quem aguarda. Entre na fila ou escolha outro horário.',
+  AMENITY_INACTIVE: 'A área foi desativada pela gestão. A oferta não pode ser aceita.',
+  WAITLIST_REQUEST_INVALID: 'O período escolhido não pode entrar na fila. Atualize e escolha outro.',
+  WAITLIST_VERSION_REQUIRED: 'Atualize a fila de espera antes de continuar.',
+  RESERVATION_RULE_SNAPSHOT_INVALID: 'As regras aceitas nesta entrada precisam ser revisadas pela gestão.',
 };
 
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
@@ -137,6 +152,15 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
     cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
         (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),
+    unitWaitlist: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/waitlist`, waitlistPage, signal ? { signal } : {}),
+    joinWaitlist: (tenantId: string, body: JoinWaitlist, key: string) =>
+      request(`${tenant(tenantId)}/waitlist`, (value, response) => ({ entry: waitlistEntry(value), replayed: replayed(response) }),
+        { method: 'POST', body, key: operationKey(key) }),
+    leaveWaitlist: (tenantId: string, waitlistId: string, body: WaitlistChange) =>
+      request(`${tenant(tenantId)}/waitlist/${identifier(waitlistId)}/leave`, waitlistEntry, { method: 'POST', body }),
+    acceptOffer: (tenantId: string, waitlistId: string, body: WaitlistChange, key: string) =>
+      request(`${tenant(tenantId)}/waitlist/${identifier(waitlistId)}/accept`, acceptance, { method: 'POST', body, key: operationKey(key) }),
   };
 }
 export type CondPulseApi = ReturnType<typeof createApi>;
