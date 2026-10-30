@@ -82,6 +82,6 @@ inclusive com Bearer; clientes dessa fatia devem obter o token CSRF pelo BFF con
 Não habilitar publicamente sem validar JDBC, Auth real, HTTPS, limitação de tentativas,
 configuração revisada das áreas e ambiente isolado. Não foi criado dado de demonstração remoto.
 
-Aprovação/expiração, bloqueios administrativos, fila, recorrência, convidados e propagação
+Aprovação/expiração, bloqueios administrativos, fila (CP-040, ver FILA_ESPERA.md), recorrência, convidados e propagação
 de revogação física não pertencem a esta entrega. Cancelamento com convidados depende
 de CP-038 e não pode ser declarado atendido por gravar somente um evento no outbox.

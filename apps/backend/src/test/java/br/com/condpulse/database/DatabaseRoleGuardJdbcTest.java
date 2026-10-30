@@ -101,6 +101,9 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT DELETE ON cp.permit_links TO cp_api","REVOKE DELETE ON cp.permit_links FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(week_days) ON cp.visit_rules TO cp_api","REVOKE UPDATE(week_days) ON cp.visit_rules FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.visit_rules TO cp_api","REVOKE DELETE ON cp.visit_rules FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(starts_at) ON cp.reservation_waitlist TO cp_api","REVOKE UPDATE(starts_at) ON cp.reservation_waitlist FROM cp_api",false);
+  assertRefusedWith("GRANT INSERT(state) ON cp.reservation_waitlist TO cp_api","REVOKE INSERT(state) ON cp.reservation_waitlist FROM cp_api",false);
+  assertRefusedWith("GRANT DELETE ON cp.reservation_waitlist TO cp_api","REVOKE DELETE ON cp.reservation_waitlist FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.outbox TO cp_worker","REVOKE DELETE ON cp.outbox FROM cp_worker",true);
   assertRefusedWith("GRANT UPDATE(account_id) ON cp.notifications TO cp_worker","REVOKE UPDATE(account_id) ON cp.notifications FROM cp_worker",true);
   // Depois de desfeitos os grants, as duas roles voltam a iniciar.

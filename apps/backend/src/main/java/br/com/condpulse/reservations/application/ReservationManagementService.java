@@ -37,9 +37,15 @@ public class ReservationManagementService {
  private final ReservationStore reservations;
  private final ReservationManagementStore store;
  private final AuditRecorder audit;
+ private final WaitlistOffers offers;
  public ReservationManagementService(TenantTransactionExecutor transactions,ReservationStore reservations,
      ReservationManagementStore store,AuditRecorder audit) {
-  this.transactions=transactions; this.reservations=reservations; this.store=store; this.audit=audit;
+  this(transactions,reservations,store,audit,WaitlistOffers.NONE);
+ }
+ @org.springframework.beans.factory.annotation.Autowired
+ public ReservationManagementService(TenantTransactionExecutor transactions,ReservationStore reservations,
+     ReservationManagementStore store,AuditRecorder audit,WaitlistOffers offers) {
+  this.transactions=transactions; this.reservations=reservations; this.store=store; this.audit=audit; this.offers=offers;
  }
 
  public ReservationManagementModels.ManagedReservationPage reservations(UUID actor,UUID tenant,AssuranceLevel assurance,
@@ -102,6 +108,8 @@ public class ReservationManagementService {
    reservations.event(tenant,approve?"RESERVATION_CONFIRMED":"RESERVATION_REJECTED",decided);
    return new Outcome(required(store.reservation(tenant,reservationId)),false,true);
   });
+  // Rejeição ou expiração liberam o período: oferta ao próximo da fila depois do commit.
+  if(outcome.expired() || (outcome.applied() && !approve)) offers.offerForReservation(actor,tenant,reservationId);
   // A expiração já foi gravada pelo commit acima; somente então a decisão tardia é recusada (AC-013).
   if(outcome.expired()) throw decisionExpired();
   return new DecisionOutcome(outcome.reservation(),outcome.applied());
@@ -138,6 +146,7 @@ public class ReservationManagementService {
    reservations.event(tenant,block?"AMENITY_BLOCK_CANCELLED":"RESERVATION_CANCELLED",cancelled);
    return new Outcome(required(store.reservation(tenant,reservationId)),false,true);
   });
+  if(outcome.expired() || outcome.applied()) offers.offerForReservation(actor,tenant,reservationId);
   if(outcome.expired()) throw decisionExpired();
   return outcome.reservation();
  }

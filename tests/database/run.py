@@ -1976,6 +1976,10 @@ def waitlist_checks():
                  f"VALUES('{TA}','{AW}','{UW1}','{W1}','BOOKING','HELD',{slot(96)[0]},{slot(96)[1]},{slot(96)[0]},{slot(96)[1]},{slot(96)[0]},'{{}}'::jsonb)",
                  "42501", tenant=TA, actor=W1, role="cp_api"), "retencao HELD so nasce pela oferta da fila")
     expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "0", "periodo ocupado nao gera oferta")
+    expect(value(f"select cp.waitlist_position('{TA}','{e2}')", tenant=TA, actor=W2, role="cp_api") == "2", "segunda unidade ve a propria posicao na fila")
+    expect(value(f"select coalesce(cp.waitlist_position('{TA}','{e1}')::text,'null')", tenant=TA, actor=W2, role="cp_api") == "null",
+           "posicao de entrada de outra unidade nao aparece")
+    expect(value(f"select count(*) from cp.reservation_waitlist", tenant=TA, actor=W2, role="cp_api") == "1", "marca da posicao nao sobra depois")
     expect(entry(e1) == "WAITING:0" and entry(e2) == "WAITING:0", "fila continua aguardando")
 
     # Cancelamento libera o periodo: a oferta vai ao primeiro da fila, em nome dele, por ate 15 minutos.
@@ -2035,7 +2039,7 @@ def waitlist_checks():
     e5, sql = join(168, UW2, W2)
     query(sql, tenant=TA, actor=W2, role="cp_api")
     query(f"ALTER TABLE cp.reservation_waitlist DISABLE TRIGGER reservation_waitlist_guard; "
-          f"UPDATE cp.reservation_waitlist SET starts_at=clock_timestamp()-interval '1 minute' WHERE id='{e5}'; "
+          f"UPDATE cp.reservation_waitlist SET starts_at=now()-interval '1 minute',occupied_from=now()-interval '1 minute' WHERE id='{e5}'; "
           f"ALTER TABLE cp.reservation_waitlist ENABLE TRIGGER reservation_waitlist_guard")
     query(offer, tenant=TA, actor=AA, role="cp_api")
     expect(entry(e5) == "CLOSED:1", "periodo iniciado sem vaga encerra a entrada")

@@ -154,49 +154,6 @@ REVOKE ALL ON FUNCTION cp.reservation_waitlist_offer_closed() FROM PUBLIC;
 CREATE TRIGGER reservations_waitlist_offer_closed AFTER UPDATE OF status ON cp.reservations FOR EACH ROW
  WHEN(OLD.status='HELD' AND NEW.status<>'HELD') EXECUTE FUNCTION cp.reservation_waitlist_offer_closed();
 
--- Convidados só existem em reserva confirmada (V021): encerrar retenção ou pedido não confere convidados nem toma a trava
--- da unidade, o que mantém a oferta (trava da fila e linhas com SKIP LOCKED) livre de esperar comandos de unidade.
-CREATE OR REPLACE FUNCTION cp.reservation_guests_close() RETURNS trigger
-LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE pending integer;
-BEGIN
- IF OLD.status<>'CONFIRMED' OR NEW.status NOT IN ('CANCELLED','REJECTED','EXPIRED') THEN RETURN NEW; END IF;
- -- Mesma trava da unidade que os comandos de reserva tomam antes de travar a linha (ReservationStore.lockUnit) e que a
- -- inclusão toma antes de tudo: um convidado sendo incluído termina antes e é revogado abaixo, ou espera e vê a reserva
- -- encerrada. Ordem única (unidade, depois linha) em todos os caminhos evita deadlock.
- IF NEW.unit_id IS NOT NULL THEN
-  PERFORM pg_advisory_xact_lock(hashtextextended('cp.reservations:'||NEW.tenant_id::text||':'||NEW.unit_id::text,0));
- END IF;
- IF platform.current_actor_id() IS NULL THEN
-  -- Papel sem acesso a convites (ex.: worker) não consegue conferir: falha fechado.
-  IF NOT has_table_privilege(current_user,'cp.visit_permits','SELECT') THEN
-   RAISE EXCEPTION 'encerramento sem conta não confere convidados' USING ERRCODE='42501';
-  END IF;
-  PERFORM set_config('app.closing_reservation',NEW.id::text,true);
-  SELECT count(*) INTO pending FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.reservation_id=NEW.id
-   AND p.state='ACTIVE' AND p.valid_until>clock_timestamp();
-  PERFORM set_config('app.closing_reservation','',true);
-  IF pending>0 THEN RAISE EXCEPTION 'encerramento sem conta não revoga convidados' USING ERRCODE='42501'; END IF;
-  RETURN NEW;
- END IF;
- PERFORM set_config('app.closing_reservation',NEW.id::text,true);
- WITH revoked AS (
-  UPDATE cp.visit_permits SET state='REVOKED',revoked_by=platform.current_actor_id(),
-    revoke_reason=CASE NEW.status WHEN 'CANCELLED' THEN 'Reserva cancelada' WHEN 'REJECTED' THEN 'Reserva rejeitada' ELSE 'Reserva vencida' END,
-    version=version+1
-   WHERE tenant_id=NEW.tenant_id AND reservation_id=NEW.id AND state='ACTIVE' AND valid_until>clock_timestamp()
-   RETURNING id,unit_id,version)
- INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload)
-  SELECT NEW.tenant_id,'VISIT_PERMIT_REVOKED',r.id,r.version,
-   jsonb_build_object('id',r.id,'unitId',r.unit_id,'state','REVOKED','version',r.version,'reservationId',NEW.id)
-  FROM revoked r;
- SELECT count(*) INTO pending FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.reservation_id=NEW.id
-  AND p.state='ACTIVE' AND p.valid_until>clock_timestamp();
- PERFORM set_config('app.closing_reservation','',true);
- IF pending>0 THEN RAISE EXCEPTION 'convidados da reserva não foram revogados' USING ERRCODE='42501'; END IF;
- RETURN NEW;
-END $$;
-
 -- Oferta: em transação própria, sob a trava da fila da área. Expira retenções e pedidos vencidos da área (linhas
 -- travadas por outro comando ficam para a próxima passada), encerra entradas cujo período começou e oferece cada período
 -- livre ao primeiro da fila, em ordem de entrada. Devolve quantas ofertas criou. Papel sem INSERT em reservas (worker)
@@ -285,3 +242,23 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION cp.waitlist_accept(uuid,uuid,bigint) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_accept(uuid,uuid,bigint) TO cp_api;
+
+-- Posição na fila: quantas entradas aguardam antes desta (por ordem de entrada) disputando um período que se sobrepõe,
+-- mais um. Só para quem enxerga a própria entrada; devolve apenas o número, nunca dados de outras unidades.
+CREATE FUNCTION cp.waitlist_position(target_tenant uuid,target_entry uuid) RETURNS integer
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE entry record; previous text:=coalesce(current_setting('app.waitlist_offer',true),''); ahead integer;
+BEGIN
+ SELECT w.amenity_id,w.state,w.created_at,w.id,w.occupied_from,w.occupied_until INTO entry FROM cp.reservation_waitlist w
+  WHERE w.tenant_id=target_tenant AND w.id=target_entry;
+ IF NOT FOUND OR entry.state<>'WAITING' THEN RETURN NULL; END IF;
+ PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||entry.amenity_id::text,true);
+ SELECT count(*) INTO ahead FROM cp.reservation_waitlist w
+  WHERE w.tenant_id=target_tenant AND w.amenity_id=entry.amenity_id AND w.state='WAITING'
+   AND (w.created_at,w.id)<(entry.created_at,entry.id)
+   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(entry.occupied_from,entry.occupied_until,'[)');
+ PERFORM set_config('app.waitlist_offer',previous,true);
+ RETURN ahead+1;
+END $$;
+REVOKE ALL ON FUNCTION cp.waitlist_position(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_position(uuid,uuid) TO cp_api;
