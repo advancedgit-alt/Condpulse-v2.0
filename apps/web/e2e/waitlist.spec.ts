@@ -67,7 +67,7 @@ async function installWaitlist(page: Page, api: ApiState): Promise<WaitState> {
 }
 async function openBooking(page: Page) {
   await signIn(page); await chooseContext(page);
-  await page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true }).click();
+  await page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true }).click();
 }
 
 test('período ocupado: entrar na fila exige aceite das regras, repete na mesma chave e sai da fila com confirmação', async ({ page }) => {
