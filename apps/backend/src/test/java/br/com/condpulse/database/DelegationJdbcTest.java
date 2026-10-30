@@ -236,4 +236,49 @@ class DelegationJdbcTest {
    new DelegationModels.CodeHandoff(issued.code(),true,parcel.version()))).code());
   db.assertEmptyContext();
  }
+
+ /** Trava da encomenda tomada por uma criação em andamento (mesma chave consultiva da delegação). */
+ private java.sql.Connection holdDelegationLock(UUID parcel) throws Exception {
+  var holder=db.adminSession();
+  holder.setAutoCommit(false);
+  try(var lock=holder.prepareStatement("select pg_advisory_xact_lock(hashtextextended(?,0))")) {
+   lock.setString(1,"cp.parcel_delegations:"+db.tenantA+":"+parcel); lock.executeQuery();
+  }
+  return holder;
+ }
+
+ @Test void voidingWaitsForAnAuthorizationBeingCreated() throws Exception {
+  var parcel=receive(db.unitA);
+  var pool=Executors.newSingleThreadExecutor();
+  try(var holder=holdDelegationLock(parcel.parcelId())) {
+   var voiding=pool.submit(()->parcels.voidParcel(concierge,db.tenantA,AAL2,parcel.parcelId(),key(),
+    new ParcelModels.VoidRequest("Registro duplicado fictício",parcel.version())));
+   Thread.sleep(1500);
+   assertFalse(voiding.isDone(),"A anulação espera a criação da autorização em andamento");
+   holder.commit();
+   assertEquals("VOIDED",voiding.get(20,TimeUnit.SECONDS).parcel().status());
+  } finally { pool.shutdownNow(); }
+  db.assertEmptyContext();
+ }
+
+ @Test void creationAfterTheParcelWasClosedMeanwhileIsRefusedWithoutAuthorization() throws Exception {
+  var parcel=receive(db.unitA);
+  var pool=Executors.newSingleThreadExecutor();
+  try(var holder=holdDelegationLock(parcel.parcelId())) {
+   var creating=pool.submit(()->{
+    try { delegations.create(db.accountA,db.tenantA,parcel.parcelId(),key(),new DelegationModels.Create("Terceiro",null,null)); return "OK"; }
+    catch(BusinessProblem problem) { return problem.code(); }
+   });
+   Thread.sleep(1500);
+   // A portaria anula a encomenda enquanto a criação espera a trava.
+   try(var change=holder.prepareStatement("update cp.parcels set status='VOIDED',void_reason='Registro duplicado fictício',voided_by=?,voided_at=clock_timestamp(),version=version+1 where id=?")) {
+    try(var replica=holder.createStatement()) { replica.execute("set local session_replication_role=replica"); }
+    change.setObject(1,concierge); change.setObject(2,parcel.parcelId()); change.executeUpdate();
+   }
+   holder.commit();
+   assertEquals("PARCEL_NOT_FOUND",creating.get(20,TimeUnit.SECONDS),"Encomenda anulada no meio não recebe autorização");
+  } finally { pool.shutdownNow(); }
+  assertEquals("0",db.adminString("select count(*) from cp.parcel_delegations where parcel_id=?",parcel.parcelId()));
+  db.assertEmptyContext();
+ }
 }
