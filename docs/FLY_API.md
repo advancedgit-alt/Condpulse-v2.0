@@ -35,9 +35,10 @@ Vercel. Se a Fly falhar, nada precisa ser desfeito.
     `cp_api`).
   - O login da Vercel continua existindo. Só ele (marker da Vercel) é tolerado; outra geração da Fly ou role
     `cp_runtime_*` desconhecida bloqueia.
-  - **CONNECTION LIMIT 8**, não 16. Pela margem da ADR-0006 (max_connections 60, folga mínima 20), com o login da
-    Vercel em 16: as amostras registradas tinham 12-13 backends não runtime; 13 + 16 + 16 + 20 = 65 não cabe, e
-    13 + 16 + 8 + 20 = 57 cabe. A Fly usa uma máquina com Hikari 2; 8 comporta a sobreposição de um deploy. O
+  - **CONNECTION LIMIT 4**, não 16. Pela margem da ADR-0006 (max_connections 60, folga mínima 20), com o login da
+    Vercel em 16: o inspect 41106739389 recusou o teto 8 (`FLY_RUNTIME_BUDGET_INSUFFICIENT`); leitura de 30/10 mostrou
+    18 backends não runtime, logo 18 + 16 + 8 + 20 = 62 não cabe e 18 + 16 + 4 + 20 = 58 cabe. A Fly usa uma máquina
+    com Hikari 2; 4 comporta a sobreposição de um deploy (2 + 2). O
     executor relê max_connections (precisa ser 60), backends não runtime e tetos das outras roles runtime antes de criar.
 - Consequência: enquanto o login da Fly existir, o executor `runtime-configuration` (Vercel) recusa novas gerações
   (`RUNTIME_OTHER_GENERATION_EXISTS`). Esse executor também já não aceita o histórico atual (só até V005).

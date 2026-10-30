@@ -53,10 +53,10 @@ public final class FlyRuntimeLoginHarness {
             }, new FlyRuntimeLogin.Channel() {
                 @Override public String password() { return secret; }
                 @Override public boolean confirmStaged() throws Exception {
-                    // Durante a gravação na Fly o login está STAGED, com validade curta e teto 8.
+                    // Durante a gravação na Fly o login está STAGED, com validade curta e teto 4.
                     try (var o = owner(); var q = o.prepareStatement("select rolcanlogin,rolvaliduntil<=clock_timestamp()+interval '11 minutes',rolconnlimit,shobj_description(oid,'pg_authid') from pg_roles where rolname=?")) {
                         q.setString(1, role); try (var r = q.executeQuery()) {
-                            require(r.next() && r.getBoolean(1) && r.getBoolean(2) && r.getInt(3) == 8 && (config.marker() + ":STAGED").equals(r.getString(4)));
+                            require(r.next() && r.getBoolean(1) && r.getBoolean(2) && r.getInt(3) == 4 && (config.marker() + ":STAGED").equals(r.getString(4)));
                         }
                     }
                     return commit;
@@ -67,7 +67,7 @@ public final class FlyRuntimeLoginHarness {
     private static void role(String role, boolean login, String state) throws Exception {
         try (var c = owner(); var q = c.prepareStatement("select rolcanlogin,rolvaliduntil::text,rolconnlimit,shobj_description(oid,'pg_authid'),(select count(*) from pg_auth_members m where m.member=r.oid) from pg_roles r where rolname=?")) {
             q.setString(1, role); try (var r = q.executeQuery()) {
-                require(r.next() && r.getBoolean(1) == login && r.getInt(3) == 8 && r.getString(4).endsWith(":" + state) && r.getLong(5) == 1);
+                require(r.next() && r.getBoolean(1) == login && r.getInt(3) == 4 && r.getString(4).endsWith(":" + state) && r.getLong(5) == 1);
                 if ("READY".equals(state)) require("infinity".equals(r.getString(2)));
             }
         }
@@ -153,7 +153,7 @@ public final class FlyRuntimeLoginHarness {
 
         stage = "budget";
         require("FLY_RUNTIME_BUDGET_INSUFFICIENT".equals(run(config(next, "inspect", "", maxConnections + 1), "", false).code()));
-        try (var c = owner()) { sql(c, "ALTER ROLE " + vercel + " CONNECTION LIMIT " + (maxConnections - 20 - 8)); }
+        try (var c = owner()) { sql(c, "ALTER ROLE " + vercel + " CONNECTION LIMIT " + (maxConnections - 20 - 4)); }
         require("FLY_RUNTIME_BUDGET_INSUFFICIENT".equals(run(config(next, "inspect", "", maxConnections), "", false).code()));
         try (var c = owner()) { sql(c, "ALTER ROLE " + vercel + " CONNECTION LIMIT -1"); }
         require("FLY_RUNTIME_BUDGET_UNBOUNDED".equals(run(config(next, "inspect", "", maxConnections), "", false).code()));
@@ -200,7 +200,7 @@ public final class FlyRuntimeLoginHarness {
                     sql(admin, "DROP DATABASE " + database);
                 }
             }
-            System.out.println("{\"passed\":true,\"logins\":" + logins + ",\"connectionLimit\":8,\"abortDisables\":true,\"readyReplay\":true,\"vercelCoexists\":true,\"budgetDenied\":true,\"driftDenied\":true}");
+            System.out.println("{\"passed\":true,\"logins\":" + logins + ",\"connectionLimit\":4,\"abortDisables\":true,\"readyReplay\":true,\"vercelCoexists\":true,\"budgetDenied\":true,\"driftDenied\":true}");
         } catch (Throwable ignored) {
             System.out.println("{\"passed\":false,\"code\":\"FLY_HARNESS_FAILED\",\"stage\":\"" + stage + "\"}"); System.exit(1);
         }
