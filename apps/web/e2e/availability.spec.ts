@@ -5,7 +5,7 @@ test.use({ timezoneId: 'UTC' });
 
 async function openBooking(page: Page) {
   await signIn(page); await chooseContext(page);
-  await page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true }).click();
+  await page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true }).click();
 }
 async function fillWindow(page: Page) {
   const window = futureWindow();
@@ -100,7 +100,7 @@ test('consulta atrasada de A não reaparece depois da troca para B', async ({ pa
     await openBooking(page); await wasRequested;
     await page.getByRole('button', { name: 'Trocar unidade', exact: true }).click();
     await chooseContext(page, 'B');
-    await page.getByRole('button', { name: 'Reservar Área Sintética B', exact: true }).click();
+    await page.getByRole('button', { name: 'Reservar esta área: Área Sintética B', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_B}/${UNIT_B}/reservas`));
     await expect(page.getByText(/Nenhum intervalo bloqueado nesta consulta/)).toBeVisible();
     release(); await wasSettled;

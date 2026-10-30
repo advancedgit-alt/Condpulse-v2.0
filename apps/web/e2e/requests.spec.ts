@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { scanAccessibility } from './a11y';
 import { TENANT_A, UNIT_A, chooseContext, installSyntheticApi, signIn } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
@@ -220,6 +221,8 @@ test('gestão registra comentário interno, define responsável e prazo e conclu
   await page.goto(`/gestao/${TENANT_A}/pedidos`);
   await expect(page.getByRole('heading', { name: 'Pedidos das unidades' })).toBeVisible();
   const row = page.getByRole('list', { name: 'Pedidos das unidades' }).getByRole('listitem').filter({ hasText: 'Barulho fictício' });
+  await expect(row).toBeVisible();
+  await scanAccessibility(page, 'gestão/pedidos');
   await row.getByRole('button', { name: 'Abrir pedido' }).click();
   await row.getByLabel('Mensagem', { exact: true }).fill('Conferir câmera do corredor.');
   await row.getByLabel('Comentário interno (não aparece para a unidade)').check();

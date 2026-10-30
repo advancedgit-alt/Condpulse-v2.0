@@ -7,8 +7,8 @@ test('área com aprovação envia pedido pendente que nunca aparece como confirm
   const state = await installSyntheticApi(page, { approvalRequired: true });
   await signIn(page); await chooseContext(page);
   await expect(page.getByText('Sujeita a aprovação', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Solicitar Área Sintética A', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Solicitar esta área: Área Sintética A', exact: true }).click();
   await expect(page.getByText(/Esta área exige aprovação da gestão/)).toBeVisible();
   const window = futureWindow();
   await page.getByLabel('Início', { exact: true }).fill(window.startLocal);

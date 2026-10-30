@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { scanAccessibility } from './a11y';
 import { ACCOUNT, TENANT_A, UNIT_A, installSyntheticApi, signIn, type ApiState } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
@@ -249,6 +250,7 @@ test('morador responde a chegada uma vez, convida com chave de operação e revo
   await signIn(page);
   await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
   await expect(page.getByRole('heading', { name: 'Acessos da unidade' })).toBeVisible();
+  await scanAccessibility(page, 'unidade/acessos');
   const waiting = page.getByRole('list', { name: 'Chegadas aguardando resposta' });
   await expect(waiting.getByText('Pessoa Fictícia')).toBeVisible();
   await expect(waiting.getByText('Sem resposta no prazo nada é liberado', { exact: false })).toBeVisible();
@@ -330,6 +332,7 @@ test('portaria registra chegada uma vez, sem ação de entrada, e anota a confir
   await page.getByRole('navigation', { name: 'Seções da portaria' }).getByRole('link', { name: 'Visitas' }).click();
   await expect(page).toHaveURL(new RegExp(`/portaria/${TENANT_A}/visitas$`));
   await expect(page.getByRole('heading', { name: 'Registrar chegada' })).toBeVisible();
+  await scanAccessibility(page, 'portaria/visitas');
   const form = page.getByRole('form', { name: 'Registrar chegada' });
   await form.getByLabel('Unidade de destino', { exact: true }).selectOption(UNIT_A);
   await form.getByLabel('Nome informado pela pessoa').fill('  Pessoa   Visitante ');

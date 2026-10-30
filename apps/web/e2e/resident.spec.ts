@@ -9,7 +9,7 @@ test('login por teclado e contexto residencial em viewport móvel', async ({ pag
   const state = await installSyntheticApi(page);
   await signIn(page);
   await chooseContext(page);
-  await expect(page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true })).toBeVisible();
   expect(state.loginRequests).toBe(1);
   expect(await page.evaluate(() => window.localStorage.length)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -31,13 +31,13 @@ test('resposta atrasada de A não reaparece após trocar para B', async ({ page 
     await page.getByRole('button', { name: 'Trocar unidade', exact: true }).click();
     await chooseContext(page, 'B');
     await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_B}/${UNIT_B}/reservas`));
-    await expect(page.getByRole('button', { name: 'Reservar Área Sintética B', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reservar esta área: Área Sintética B', exact: true })).toBeVisible();
     releaseA();
     await aWasSettled;
     // Conferir depois de entregar/abortar A e de o navegador poder renderizar a resposta tardia.
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await expect(page.getByText('Área Sintética A', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Reservar Área Sintética B', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reservar esta área: Área Sintética B', exact: true })).toBeVisible();
   } finally { releaseA(); }
 });
 
@@ -45,7 +45,7 @@ test('resposta perdida não confirma visualmente e retry preserva a intenção i
   const state = await installSyntheticApi(page, { loseFirstCreationResponse: true });
   await signIn(page);
   await chooseContext(page);
-  await page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true }).click();
+  await page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true }).click();
   const window = futureWindow();
   await page.getByLabel('Início', { exact: true }).fill(window.startLocal);
   await page.getByLabel('Fim', { exact: true }).fill(window.endLocal);
@@ -82,7 +82,7 @@ test('refetch de áreas negado remove nome, regras e formulário antigos antes d
   const state = await installSyntheticApi(page);
   await signIn(page);
   await chooseContext(page);
-  await page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true }).click();
+  await page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true }).click();
   await expect(page.getByLabel('Início', { exact: true })).toBeVisible();
   await expect(page.getByText('Condições da versão 1', { exact: true })).toBeVisible();
   state.denyAmenitiesA = true;
@@ -105,7 +105,7 @@ test('refetch válido com a mesma versão preserva horários e aceite do rascunh
   const state = await installSyntheticApi(page);
   await signIn(page);
   await chooseContext(page);
-  await page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true }).click();
+  await page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true }).click();
   const window = futureWindow();
   const start = page.getByLabel('Início', { exact: true });
   const end = page.getByLabel('Fim', { exact: true });
@@ -131,7 +131,7 @@ test('logout remove contexto e navegação direta exige nova autenticação', as
   const state = await installSyntheticApi(page);
   await signIn(page);
   await chooseContext(page);
-  await expect(page.getByRole('button', { name: 'Reservar Área Sintética A', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reservar esta área: Área Sintética A', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
   expect(state.logoutRequests).toBe(1);
