@@ -46,6 +46,8 @@ export interface ManagedRequestSummary {
   assigneeMembershipId: UUID | null; assigneeName: string | null; dueOn: CivilDate | null; createdAt: ISODateTime; updatedAt: ISODateTime;
   version: number;
 }
+/** Mensagens anteriores a uma já exibida (até 200), em ordem de conversa; truncated: há outras mais antigas. */
+export interface RequestMessagePage { messages: RequestMessage[]; truncated: boolean }
 export interface ManagedRequestPage { requests: ManagedRequestSummary[]; truncated: boolean }
 export interface ManagedRequest extends ManagedRequestSummary {
   description: string; resolution: string | null; requesterName: string; resolvedAt: ISODateTime | null; closedAt: ISODateTime | null;
@@ -85,6 +87,16 @@ export function requestMessage(value: unknown, staffView: boolean, uncertain = f
 function messages(value: unknown, staffView: boolean, uncertain: boolean): RequestMessage[] {
   if (!Array.isArray(value) || value.length > 200) throw invalidResponse(uncertain);
   return list(value, (item) => requestMessage(item, staffView, uncertain));
+}
+/** Página anterior: ordem de conversa, sem a mensagem de referência; a unidade nunca recebe comentário interno. */
+export function messagePage(value: unknown, staffView: boolean, before: string): RequestMessagePage {
+  if (!record(value) || typeof value.truncated !== 'boolean') throw invalidResponse();
+  const items = messages(value.messages, staffView, false);
+  for (let index = 0; index < items.length; index += 1) {
+    if (items[index]!.messageId === before) throw invalidResponse();
+    if (index > 0 && Date.parse(items[index - 1]!.createdAt) > Date.parse(items[index]!.createdAt)) throw invalidResponse();
+  }
+  return { messages: items, truncated: value.truncated };
 }
 export function unitRequestSummary(value: unknown): UnitRequestSummary {
   // A lista da unidade não traz o texto do pedido nem a conversa.
@@ -168,6 +180,9 @@ export function createRequestsApi(client: CondPulseApi = api) {
         if (request.requestId !== requestId) throw invalidResponse();
         return request;
       }, signal ? { signal } : {}),
+    olderMessages: async (tenantId: string, requestId: string, before: string, signal?: AbortSignal) =>
+      client.call(`${tenant(tenantId)}/requests/${identifier(requestId)}/messages?before=${identifier(before)}`,
+        (value) => messagePage(value, false, before), signal ? { signal } : {}),
     unitMessage: async (tenantId: string, requestId: string, key: string, body: string) =>
       client.call(`${tenant(tenantId)}/requests/${identifier(requestId)}/messages`, (value, response): MessageResult => {
         const message = requestMessage(value, false, true);
@@ -182,6 +197,9 @@ export function createRequestsApi(client: CondPulseApi = api) {
         if (request.requestId !== requestId) throw invalidResponse();
         return request;
       }, signal ? { signal } : {}),
+    staffOlderMessages: async (tenantId: string, requestId: string, before: string, signal?: AbortSignal) =>
+      client.call(`${management(tenantId)}/${identifier(requestId)}/messages?before=${identifier(before)}`,
+        (value) => messagePage(value, true, before), signal ? { signal } : {}),
     staffMessage: async (tenantId: string, requestId: string, key: string, body: string, visibility: 'RESIDENT' | 'INTERNAL') =>
       client.call(`${management(tenantId)}/${identifier(requestId)}/messages`, (value, response): MessageResult => {
         const message = requestMessage(value, true, true);

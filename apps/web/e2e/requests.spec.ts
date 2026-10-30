@@ -19,19 +19,29 @@ interface Request {
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store', ...headers }, body: JSON.stringify(body) });
 }
+/** Janela de mensagens do detalhe (no servidor real, 200); páginas anteriores do mesmo tamanho. */
+let windowSize = Number.POSITIVE_INFINITY;
+const unitMessages = (item: Request) => item.messages.filter((message) => message.visibility === 'RESIDENT')
+  .map((message) => ({ ...message, authorName: message.authorRole === 'STAFF' ? null : message.authorName, mine: message.authorRole === 'UNIT' }));
+const staffMessages = (item: Request) => item.messages.map((message) => ({ ...message, mine: message.authorRole === 'STAFF' }));
+function olderPage<T extends { messageId: string }>(all: T[], before: string) {
+  const index = all.findIndex((message) => message.messageId === before);
+  if (index < 0) return null;
+  const start = Math.max(0, index - windowSize);
+  return { messages: all.slice(start, index), truncated: start > 0 };
+}
 const unitView = (item: Request) => ({
   requestId: item.requestId, unitId: item.unitId, category: item.category, title: item.title, description: item.description, state: item.state,
   assigned: item.assigneeMembershipId !== null, dueOn: item.dueOn, resolution: item.resolution, requesterName: item.requesterName, openedByMe: true,
-  createdAt: item.createdAt, updatedAt: item.updatedAt, resolvedAt: item.resolvedAt, closedAt: item.closedAt, messagesTruncated: false,
-  messages: item.messages.filter((message) => message.visibility === 'RESIDENT')
-    .map((message) => ({ ...message, authorName: message.authorRole === 'STAFF' ? null : message.authorName, mine: message.authorRole === 'UNIT' })),
+  createdAt: item.createdAt, updatedAt: item.updatedAt, resolvedAt: item.resolvedAt, closedAt: item.closedAt,
+  messagesTruncated: unitMessages(item).length > windowSize, messages: unitMessages(item).slice(-Math.min(windowSize, 200)),
 });
 const managedView = (item: Request) => ({
   requestId: item.requestId, unitId: item.unitId, unitLabel: 'FICTÍCIA 101', category: item.category, title: item.title, description: item.description,
   state: item.state, assigneeMembershipId: item.assigneeMembershipId, assigneeName: item.assigneeMembershipId ? 'PORTARIA FICTÍCIA' : null,
   dueOn: item.dueOn, resolution: item.resolution, requesterName: item.requesterName, createdAt: item.createdAt, updatedAt: item.updatedAt,
-  resolvedAt: item.resolvedAt, closedAt: item.closedAt, version: item.version, messagesTruncated: false,
-  messages: item.messages.map((message) => ({ ...message, mine: message.authorRole === 'STAFF' })),
+  resolvedAt: item.resolvedAt, closedAt: item.closedAt, version: item.version,
+  messagesTruncated: staffMessages(item).length > windowSize, messages: staffMessages(item).slice(-Math.min(windowSize, 200)),
   team: [{ membershipId: PORTER, name: 'PORTARIA FICTÍCIA', role: 'CONCIERGE' }],
 });
 const summary = (view: ReturnType<typeof managedView>) => {
@@ -43,7 +53,7 @@ const summary = (view: ReturnType<typeof managedView>) => {
 /** API sintética dos pedidos (unidade e gestão), registrada depois da API base. */
 async function installRequestsApi(page: Page) {
   const state = { items: [] as Request[], opens: [] as { key: string; body: unknown }[], messages: [] as { key: string; body: unknown }[],
-    updates: [] as unknown[], loseNextOpen: false, keys: new Map<string, Request>(), messageKeys: new Map<string, Message>(),
+    updates: [] as unknown[], loseNextOpen: false, failNextOlder: false, olderCalls: [] as string[], keys: new Map<string, Request>(), messageKeys: new Map<string, Message>(),
     holdMessage: null as Promise<void> | null };
   await page.route(`**/v1/tenants/${TENANT_A}/units/${UNIT_A}/requests`, async (route) => {
     const request = route.request();
@@ -73,6 +83,15 @@ async function installRequestsApi(page: Page) {
     if (path.endsWith('/attachments')) { await route.fulfill({ status: 404 }); return; }
     const item = state.items.find((candidate) => candidate.requestId === path.split('/')[0]);
     if (!item) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
+    const before = new URL(request.url()).searchParams.get('before');
+    if (request.method() === 'GET' && path.endsWith('/messages')) {
+      state.olderCalls.push(`unit:${before}`);
+      if (state.failNextOlder) { state.failNextOlder = false; await json(route, 503, { code: 'SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE', status: 503 }); return; }
+      const older = olderPage(unitMessages(item), before ?? '');
+      if (!older) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
+      await json(route, 200, older);
+      return;
+    }
     if (request.method() === 'GET') { await json(route, 200, unitView(item)); return; }
     const body = request.postDataJSON() as { body: string };
     const messageKey = request.headers()['idempotency-key']!;
@@ -93,6 +112,13 @@ async function installRequestsApi(page: Page) {
     if (request.method() === 'GET' && path === '') { await json(route, 200, { requests: state.items.map((item) => summary(managedView(item))), truncated: false }); return; }
     const item = state.items.find((candidate) => candidate.requestId === path.split('/')[1]);
     if (!item) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
+    if (request.method() === 'GET' && path.endsWith('/messages')) {
+      state.olderCalls.push(`staff:${url.searchParams.get('before')}`);
+      const older = olderPage(staffMessages(item), url.searchParams.get('before') ?? '');
+      if (!older) { await json(route, 404, { code: 'SERVICE_REQUEST_NOT_FOUND', status: 404 }); return; }
+      await json(route, 200, older);
+      return;
+    }
     if (request.method() === 'GET') { await json(route, 200, managedView(item)); return; }
     if (path.endsWith('/messages')) {
       const body = request.postDataJSON() as { body: string; visibility: 'RESIDENT' | 'INTERNAL' };
@@ -251,4 +277,68 @@ test('pedidos desligados no ambiente não aparecem para a unidade nem mostram er
   await expect(page.getByRole('heading', { name: 'Um espaço para a sua rotina.' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Pedidos/ })).toHaveCount(0);
   await expect(page.getByText('Esta função ainda não está disponível', { exact: false })).toHaveCount(0);
+});
+
+const at = (n: number) => new Date(Date.UTC(2030, 0, 1, 12, n)).toISOString();
+const historyMessage = (n: number, role: 'UNIT' | 'STAFF', visibility: 'RESIDENT' | 'INTERNAL' = 'RESIDENT'): Message => ({
+  messageId: `97000000-0000-4000-8000-0000000002${String(n).padStart(2, '0')}`, authorRole: role,
+  authorName: role === 'UNIT' ? 'PESSOA FICTÍCIA' : 'GESTÃO FICTÍCIA', mine: false, visibility, body: `Mensagem ${n}`, createdAt: at(n) });
+const longRequest = (): Request => ({ requestId: REQUEST, unitId: UNIT_A, category: 'MAINTENANCE', title: 'Vazamento antigo', description: 'Água no teto.',
+  state: 'IN_PROGRESS', assigneeMembershipId: null, dueOn: null, resolution: null, requesterName: 'PESSOA FICTÍCIA', createdAt: at(0), updatedAt: at(6),
+  resolvedAt: null, closedAt: null, version: 1, messages: [historyMessage(1, 'UNIT'), historyMessage(2, 'STAFF'), historyMessage(3, 'STAFF', 'INTERNAL'),
+    historyMessage(4, 'UNIT'), historyMessage(5, 'STAFF'), historyMessage(6, 'UNIT')] });
+
+test('conversa longa: a unidade carrega mensagens anteriores, sem comentário interno, e falha oferece nova tentativa', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installRequestsApi(page);
+  windowSize = 2;
+  try {
+    state.items.push(longRequest());
+    await signIn(page);
+    await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+    await page.getByRole('button', { name: 'Ver conversa' }).click();
+    const conversation = page.getByRole('list', { name: 'Conversa do pedido' });
+    await expect(conversation.getByRole('listitem')).toHaveCount(2);
+    await expect(page.getByText('A conversa mostra as mensagens mais recentes.')).toBeVisible();
+    state.failNextOlder = true;
+    await page.getByRole('button', { name: 'Carregar mensagens anteriores' }).click();
+    await expect(page.getByRole('button', { name: 'Tentar novamente' })).toBeVisible();
+    await expect(conversation.getByRole('listitem')).toHaveCount(2);
+    await page.getByRole('button', { name: 'Tentar novamente' }).click();
+    await expect(conversation.getByRole('listitem')).toHaveCount(4);
+    await expect(page.getByRole('button', { name: 'Tentar novamente' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Carregar mensagens anteriores' }).click();
+    await expect(conversation.getByRole('listitem')).toHaveCount(5);
+    await expect(page.getByRole('button', { name: 'Carregar mensagens anteriores' })).toHaveCount(0);
+    await expect(page.getByText('A conversa mostra as mensagens mais recentes.')).toHaveCount(0);
+    await expect(conversation.getByRole('listitem').locator('p')).toHaveText(['Mensagem 1', 'Mensagem 2', 'Mensagem 4', 'Mensagem 5', 'Mensagem 6']);
+    await expect(page.getByText('Mensagem 3')).toHaveCount(0);
+    await scanAccessibility(page, 'conversa longa da unidade');
+    expect(state.olderCalls).toEqual(['unit:97000000-0000-4000-8000-000000000205', 'unit:97000000-0000-4000-8000-000000000205',
+      'unit:97000000-0000-4000-8000-000000000202']);
+  } finally { windowSize = Number.POSITIVE_INFINITY; }
+});
+
+test('conversa longa na gestão: histórico completo, inclusive o comentário interno', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const state = await installRequestsApi(page);
+  windowSize = 2;
+  try {
+    state.items.push(longRequest());
+    await signIn(page);
+    await page.goto(`/gestao/${TENANT_A}/pedidos`);
+    const row = page.getByRole('list', { name: 'Pedidos das unidades' }).getByRole('listitem').filter({ hasText: 'Vazamento antigo' });
+    await row.getByRole('button', { name: 'Abrir pedido' }).click();
+    const conversation = row.getByRole('list', { name: 'Conversa do pedido' });
+    await expect(conversation.getByRole('listitem')).toHaveCount(2);
+    for (const count of [4, 6]) {
+      await row.getByRole('button', { name: 'Carregar mensagens anteriores' }).click();
+      await expect(conversation.getByRole('listitem')).toHaveCount(count);
+    }
+    await expect(row.getByRole('button', { name: 'Carregar mensagens anteriores' })).toHaveCount(0);
+    await expect(conversation.getByText('comentário interno, não aparece para a unidade', { exact: false })).toHaveCount(1);
+    expect(state.olderCalls).toEqual(['staff:97000000-0000-4000-8000-000000000205', 'staff:97000000-0000-4000-8000-000000000203']);
+    await scanAccessibility(page, 'conversa longa da gestão');
+  } finally { windowSize = Number.POSITIVE_INFINITY; }
 });

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, type CondPulseApi, type Membership } from '../api/client';
-import { multiline, requestCategories, singleLine, type OpenRequest, type RequestCategory, type RequestMessage, type RequestState,
+import { multiline, requestCategories, singleLine, type OpenRequest, type RequestCategory, type RequestMessage, type RequestMessagePage, type RequestState,
   type UnitRequest } from '../api/requests';
 import { formatWhen } from '../time';
 import type { KeyFactory } from './Reservations';
@@ -164,18 +164,60 @@ function Detail({ api, scope, tenantId, unitId, accountId, requestId, timeZone, 
     <Text style={styles.text}>{request.description}</Text>
     <Text style={styles.body}>{`Aberto por ${request.openedByMe ? 'você' : request.requesterName}`}</Text>
     {request.resolution ? <Notice tone="success">{`Resolução: ${request.resolution}`}</Notice> : null}
-    {request.messagesTruncated ? <Notice tone="info">A conversa mostra as 200 mensagens mais recentes.</Notice> : null}
-    {request.messages.length === 0 ? <Text style={styles.body}>Nenhuma mensagem ainda.</Text>
-      : <View accessibilityRole="list" accessibilityLabel="Mensagens do pedido">{request.messages.map((item) =>
-        <View key={item.messageId} style={styles.message}>
-          <Text style={styles.label}>{`${author(item)} · ${formatWhen(item.createdAt, timeZone)}`}</Text>
-          <Text style={styles.text}>{item.body}</Text>
-        </View>)}</View>}
+    <Conversation key={request.messages[0]?.messageId ?? 'vazia'} messages={request.messages} truncated={request.messagesTruncated} timeZone={timeZone}
+      load={(before) => api.olderRequestMessages(tenantId, request.requestId, before)} />
     {detail.isError ? <Notice tone="error">{`${message(detail.error)} A conversa mostra a última consulta.`}</Notice> : null}
     {request.state === 'CLOSED' ? <Notice tone="info">Pedido encerrado. A conversa fica guardada; se precisar, abra um novo pedido.</Notice>
       : <Reply api={api} scope={scope} tenantId={tenantId} request={request} newKey={newKey} store={store} storeKey={`message|${accountId}|${tenantId}|${request.requestId}`} />}
     <Button label="Fechar conversa" secondary onPress={close} />
   </View>;
+}
+
+/**
+ * Conversa: o detalhe traz as mensagens mais recentes; "Carregar mensagens anteriores" busca as anteriores pela mais
+ * antiga já exibida, sem repetir. Mensagem nova que muda a janela recomeça o histórico (a chave do componente muda).
+ */
+function Conversation({ messages, truncated, timeZone, load }: {
+  messages: RequestMessage[]; truncated: boolean; timeZone: string; load(before: string): Promise<RequestMessagePage>;
+}) {
+  const [older, setOlder] = useState<RequestMessage[]>([]);
+  const [more, setMore] = useState(truncated);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const all = [...older, ...messages];
+  async function loadMore() {
+    const before = all[0]?.messageId;
+    if (!before || busy) return;
+    setBusy(true); setFailure(null);
+    try {
+      const page = await load(before);
+      if (!mounted.current) return;
+      setOlder((previous) => {
+        const seen = new Set([...previous, ...messages].map((item) => item.messageId));
+        return [...page.messages.filter((item) => !seen.has(item.messageId)), ...previous];
+      });
+      setMore(page.truncated);
+    } catch (error) {
+      if (mounted.current) setFailure(error);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+  return <>
+    {more ? <View style={styles.gap}>
+      <Notice tone="info">{older.length ? 'Há mensagens ainda mais antigas.' : 'A conversa mostra as mensagens mais recentes.'}</Notice>
+      {failure ? <Notice tone="error">{message(failure)}</Notice> : null}
+      <Button label={busy ? 'Carregando…' : 'Carregar mensagens anteriores'} secondary disabled={busy} onPress={() => void loadMore()} />
+    </View> : null}
+    {all.length === 0 ? <Text style={styles.body}>Nenhuma mensagem ainda.</Text>
+      : <View accessibilityRole="list" accessibilityLabel="Mensagens do pedido">{all.map((item) =>
+        <View key={item.messageId} style={styles.message}>
+          <Text style={styles.label}>{`${author(item)} · ${formatWhen(item.createdAt, timeZone)}`}</Text>
+          <Text style={styles.text}>{item.body}</Text>
+        </View>)}</View>}
+  </>;
 }
 
 function Reply({ api, scope, tenantId, request, newKey, store, storeKey }: {

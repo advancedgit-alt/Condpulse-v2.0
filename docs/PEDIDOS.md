@@ -62,4 +62,11 @@ Dependente e proprietário ficam fora deste recorte (nenhum fluxo concede permis
   autor STAFF) viram aviso `REQUEST_UPDATED` na caixa interna de morador e responsável; mensagem da própria unidade não
   avisa. Concluir com resolução gera dois avisos (andamento e a resolução que entra na conversa). Entrega depende do worker
   contínuo (BLOQUEADO).
-- Paginação além dos 100 pedidos e das 200 mensagens mais recentes, retenção e acesso do proprietário e do dependente.
+- Histórico da conversa (30/10/2026): o detalhe traz as 200 mensagens mais recentes; "Carregar mensagens anteriores"
+  (web da unidade e da gestão, celular) busca até 200 anteriores à mais antiga exibida em
+  `GET .../requests/{id}/messages?before=` (unidade) e `GET .../management/requests/{id}/messages?before=` (gestão, com
+  comentários internos). A referência precisa ser visível a quem consulta, no mesmo pedido; senão, 404. Ordem por horário
+  e identificador, sem lacuna nem repetição (`RequestJdbcTest` com 449 mensagens).
+- Lista além dos 100 pedidos mais recentes (aviso na tela) e retenção: sem regra no PRD; ficam para a política de retenção.
+- Acesso do proprietário não residente e do dependente: o PRD condiciona a "consultas que a política do condomínio
+  autorizar" — BLOQUEADO: decisão da política — responsável — matriz P0/P1 do CP-001.

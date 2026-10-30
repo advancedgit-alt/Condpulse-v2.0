@@ -2,7 +2,7 @@ import { credentialPage, eventPage } from './access';
 import { accessRecordPage } from './accessHistory';
 import { announcementPage, openedAnnouncement } from './announcements';
 import { currentRules, move, type CreateMove } from './moves';
-import { requestMessage, unitRequest, unitRequestPage, type OpenRequest } from './requests';
+import { messagePage, requestMessage, unitRequest, unitRequestPage, type OpenRequest } from './requests';
 import { inboxNotification, inboxPage } from './notifications';
 import { arrival, arrivalPage, permit, permitLink, permitPage, rulePage, visitRule, type CreatePermit, type CreateRule } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
@@ -339,6 +339,9 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
         if (found.requestId.toLowerCase() !== requestId.toLowerCase()) throw invalid();
         return found;
       }, signal ? { signal } : {}),
+    olderRequestMessages: (tenantId: string, requestId: string, before: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/requests/${identifier(requestId)}/messages?before=${identifier(before)}`,
+        (value) => messagePage(value, before), signal ? { signal } : {}),
     requestMessage: (tenantId: string, requestId: string, body: string, key: string) =>
       request(`${tenant(tenantId)}/requests/${identifier(requestId)}/messages`, (value, response) => {
         const sent = requestMessage(value);

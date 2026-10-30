@@ -247,4 +247,50 @@ class RequestJdbcTest {
    """,db.tenantA,id));
   db.assertEmptyContext();
  }
+
+ /** Conversa longa: detalhe com as 200 mais recentes e páginas anteriores pela mensagem de referência, sem repetir nem pular. */
+ @Test void longConversationsPageBackwardsWithoutGapsAndKeepInternalCommentsFromTheUnit() throws Exception {
+  UUID id=open(db.accountA,"Vazamento recorrente na garagem").requestId();
+  UUID other=open(db.accountA,"Outro pedido da unidade").requestId();
+  // 449 mensagens: a 300ª é comentário interno; a 100ª e a 101ª têm o mesmo horário (desempate pelo identificador).
+  db.adminUpdateWithoutTriggers("""
+   insert into cp.request_messages(tenant_id,request_id,author_id,author_role,author_name,body,visibility,created_at)
+   select ?,?,case when n=300 then ? else ? end,case when n%2=0 or n=300 then 'STAFF' else 'UNIT' end,'Autor',
+    'Mensagem '||n,case when n=300 then 'INTERNAL' else 'RESIDENT' end,
+    timestamptz '2030-01-01 00:00:00+00'+make_interval(secs=>case when n=101 then 100 else n end)
+   from generate_series(1,449) n
+   """,db.tenantA,id,manager,db.accountA);
+  var detail=requests.unitRequest(db.accountA,db.tenantA,id);
+  assertEquals(200,detail.messages().size()); assertTrue(detail.messagesTruncated());
+  var unitSeen=new ArrayList<>(detail.messages());
+  var page=requests.unitOlderMessages(db.accountA,db.tenantA,id,unitSeen.getFirst().messageId());
+  assertEquals(200,page.messages().size()); assertTrue(page.truncated());
+  unitSeen.addAll(0,page.messages());
+  page=requests.unitOlderMessages(db.accountA,db.tenantA,id,unitSeen.getFirst().messageId());
+  assertEquals(48,page.messages().size()); assertFalse(page.truncated());
+  unitSeen.addAll(0,page.messages());
+  assertEquals(db.adminString("""
+   select string_agg(body,'|' order by created_at,id) from cp.request_messages where tenant_id=? and request_id=? and visibility='RESIDENT'
+   """,db.tenantA,id),unitSeen.stream().map(RequestModels.Message::body).collect(Collectors.joining("|")),"Ordem da conversa, sem lacuna nem repetição");
+  assertTrue(unitSeen.stream().noneMatch(message->"INTERNAL".equals(message.visibility())));
+  // A gestão vê também o comentário interno.
+  var managed=requests.managedRequest(manager,db.tenantA,AAL2,id);
+  var staffSeen=new ArrayList<>(managed.messages());
+  RequestModels.MessagePage staffPage;
+  do {
+   staffPage=requests.staffOlderMessages(manager,db.tenantA,AAL2,id,staffSeen.getFirst().messageId());
+   staffSeen.addAll(0,staffPage.messages());
+  } while(staffPage.truncated());
+  assertEquals(449,staffSeen.size()); assertEquals(449,staffSeen.stream().map(RequestModels.Message::messageId).distinct().count());
+  UUID internal=UUID.fromString(db.adminString("select id from cp.request_messages where request_id=? and visibility='INTERNAL'",id));
+  // Referência invisível para a unidade, de outro pedido, inexistente, ou consulta de fora da unidade: não encontrado.
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.unitOlderMessages(db.accountA,db.tenantA,id,internal)));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.unitOlderMessages(db.accountA,db.tenantA,other,unitSeen.getLast().messageId())));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.unitOlderMessages(db.accountA,db.tenantA,id,UUID.randomUUID())));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.unitOlderMessages(db.accountC,db.tenantA,id,unitSeen.getLast().messageId())));
+  assertThrows(BusinessProblem.class,()->requests.unitOlderMessages(db.accountB,db.tenantB,id,unitSeen.getLast().messageId()));
+  assertEquals("MFA_REQUIRED",code(()->requests.staffOlderMessages(manager,db.tenantA,AssuranceLevel.AAL1,id,internal)));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.staffOlderMessages(manager,db.tenantA,AAL2,other,internal)));
+  db.assertEmptyContext();
+ }
 }

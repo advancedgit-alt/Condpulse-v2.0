@@ -20,6 +20,10 @@ public final class RequestModels {
  public record UnitMessage(String body) {}
  /** Mensagem: na visão da unidade, autor da equipe aparece sem nome (authorName null) e nunca há comentário interno. */
  public record Message(UUID messageId,String authorRole,String authorName,boolean mine,String visibility,String body,Instant createdAt) {}
+ /** Mensagens anteriores a uma já exibida, em ordem de conversa; truncated indica que há outras ainda mais antigas. */
+ public record MessagePage(List<Message> messages,boolean truncated) {
+  public MessagePage { messages=List.copyOf(messages); }
+ }
  public record UnitSummary(UUID requestId,UUID unitId,String category,String title,String state,boolean assigned,LocalDate dueOn,
    Instant createdAt,Instant updatedAt) {}
  public record UnitPage(List<UnitSummary> requests,boolean truncated) {

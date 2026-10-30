@@ -8,6 +8,7 @@ import { formatWhen } from './dateTime';
 import { codeOf, repeatFailure, settleFailure, uncertain, usePendingOperation } from './operationIntent';
 import { categoryLabels, civilDate, stateLabels } from './requestLabels';
 import { RequestAttachments } from './RequestAttachments';
+import { RequestConversation } from './RequestConversation';
 import './management/Management.css';
 
 /** Recurso desligado no ambiente ou vínculo que mudou: a seção some sem erro técnico (o resumo trata o vínculo). */
@@ -127,11 +128,10 @@ function RequestDetail({ scope, requestId, timeZone, close }: { scope: Scope; re
     <p className="announcement-body"><bdi>{request.description}</bdi></p>
     <span>Aberto por {request.openedByMe ? 'você' : <bdi>{request.requesterName}</bdi>}</span>
     {request.resolution ? <Notice tone="success">Resolução: <bdi>{request.resolution}</bdi></Notice> : null}
-    {request.messagesTruncated ? <Notice tone="warning">A conversa mostra as 200 mensagens mais recentes.</Notice> : null}
-    {request.messages.length === 0 ? <p className="field-help">Nenhuma mensagem ainda.</p>
-      : <ol className="request-messages" aria-label="Conversa do pedido">{request.messages.map((message) =>
-        <li key={message.messageId}><strong>{author(message)}</strong> <span>{formatWhen(message.createdAt, timeZone)}</span>
-          <p className="announcement-body"><bdi>{message.body}</bdi></p></li>)}</ol>}
+    <RequestConversation messages={request.messages} truncated={request.messagesTruncated}
+      load={(before) => requests.olderMessages(scope.tenantId, request.requestId, before)}
+      render={(message) => <li key={message.messageId}><strong>{author(message)}</strong> <span>{formatWhen(message.createdAt, timeZone)}</span>
+        <p className="announcement-body"><bdi>{message.body}</bdi></p></li>} />
     <RequestAttachments tenantId={scope.tenantId} requestId={request.requestId} queryKey={scopeKey(scope)} canUpload={request.state !== 'CLOSED'} timeZone={timeZone} />
     {request.state === 'CLOSED' ? <Notice tone="info">Pedido encerrado. A conversa fica guardada; se precisar, abra um novo pedido.</Notice>
       : <ReplyForm scope={scope} request={request} />}
