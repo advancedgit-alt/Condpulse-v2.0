@@ -153,7 +153,7 @@ Atrás de `CP_VISITS_ENABLED`. Banco: V021 (`cp.visit_permits.reservation_id`).
   comum do convite.
 - **Web**: "Convidados" na reserva confirmada (lista, adicionar com chave de operação travada em resultado incerto,
   remover com confirmação); a confirmação de cancelamento avisa que os convidados perdem o convite.
-- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 33 verificações, incluindo inclusão e cancelamento simultâneos nas duas ordens e na ordem de travas da API), `ReservationGuestJdbcTest`,
+- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 36 verificações, incluindo inclusão e cancelamento simultâneos nas duas ordens e na ordem de travas da API, expiração de pedido de outra unidade e remoção de convidado concorrente), `ReservationGuestJdbcTest`,
   `VisitSecurityIntegrationTest`; web `e2e/reservation-guests.spec.ts`.
 - **Pendentes**: convidados pelo celular, aviso aos convidados quando a reserva é cancelada e ensaio com Auth real.
 
@@ -177,6 +177,6 @@ Atrás de `CP_VISITS_ENABLED`. Banco: V022 (`cp.visit_rules`, `cp.visit_permits.
 - **Web**: seção "Prestadores recorrentes" em Acessos (lista com próxima janela, cadastro com dias, horários e período
   validados antes do envio e chave de operação travada em resultado incerto, revogação com motivo); a janela aparece em
   Visitas previstas marcada como de prestador recorrente.
-- **Evidências**: `tests/database/run.py` (`visit_rule_checks`, 25 verificações), `VisitRuleJdbcTest`,
+- **Evidências**: `tests/database/run.py` (`visit_rule_checks`, 27 verificações, incluindo revogação de janela e da regra concorrentes), `VisitRuleJdbcTest`,
   `DatabaseRoleGuardJdbcTest`; web `e2e/visit-rules.spec.ts`.
 - **Pendentes**: prestador pelo celular, expansão contínua pelo worker (hoje só sob demanda) e ensaio com Auth real.

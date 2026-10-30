@@ -1806,6 +1806,35 @@ def reservation_guest_checks():
     expect(error(sql, "23514", tenant=TA, role="cp_api"), "aumento posterior da area nao amplia a capacidade aceita")
     _, sql = guest(RG10)
     expect(error(sql, "23514", tenant=TA, role="cp_api"), "reserva sem capacidade nas regras aceitas nao recebe convidados")
+    # Expiracao de pedido vencido de outra unidade (caminho da criacao) nao toma a trava daquela unidade: sem deadlock.
+    RG11 = "31000000-0000-4000-8000-0000000000db"
+    start = "date_trunc('hour',clock_timestamp())+interval '266 hours'"
+    query(f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,expires_at) "
+          f"VALUES('{RG11}','{TA}','{AG}','{UG}','{RESG}','BOOKING','PENDING_APPROVAL',{start},{start}+interval '2 hours',{start},{start}+interval '2 hours','{{}}'::jsonb,clock_timestamp()-interval '1 minute')")
+    lock = "SELECT pg_advisory_xact_lock(hashtextextended('cp.reservations:{}:{}',0)); "
+    expire_other = (lock.format(TA, UA) + f"SELECT 1 FROM cp.reservations WHERE id='{RG11}' FOR UPDATE; SELECT pg_sleep(2); "
+                    f"UPDATE cp.reservations SET status='EXPIRED',version=version+1 WHERE id='{RG11}'")
+    expire_own = lock.format(TA, UG) + f"SELECT 1 FROM cp.reservations WHERE id='{RG11}' FOR UPDATE"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(query, expire_other, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        second = pool.submit(query, expire_own, tenant=TA, actor=RESG, role="cp_api", check=False)
+        first, second = first.result(), second.result()
+    expect(first.returncode == 0 and second.returncode == 0, "expiracao de pedido de outra unidade e comando da unidade sem deadlock")
+    # Revogacao individual de convidado (trava do convite e depois a linha) e cancelamento da reserva sem deadlock.
+    RG12 = "31000000-0000-4000-8000-0000000000dc"
+    query(booking(RG12, 290), tenant=TA, role="cp_api")
+    g12, sql = guest(RG12)
+    query(sql, tenant=TA, role="cp_api")
+    revoke_one = (f"SELECT cp.lock_permit_access('{TA}','{g12}'); SELECT pg_sleep(2); "
+                  f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Removido',version=version+1 WHERE id='{g12}' AND state='ACTIVE'")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        removing = pool.submit(query, revoke_one, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        cancelling = pool.submit(query, cancel.format(RG12), tenant=TA, actor=MGRG, role="cp_api", check=False)
+        removed, cancelled = removing.result(), cancelling.result()
+    expect(removed.returncode == 0 and cancelled.returncode == 0, "remocao de convidado e cancelamento da reserva sem deadlock")
+    expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g12}'") == f"REVOKED:{AA}", "convidado removido antes do cancelamento continua revogado")
 
 def visit_rule_checks():
     """V022: regra de prestador gera janelas explicitas no fuso do condominio; fora da janela nao ha convite; revogar derruba janelas."""
@@ -1863,6 +1892,18 @@ def visit_rule_checks():
     expect(error(f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until) "
                  f"VALUES(gen_random_uuid(),'{TA}','{VR1}','{UA}','X','{AA}',clock_timestamp(),clock_timestamp()+interval '1 hour')", "23514", tenant=TA, role="cp_api"),
            "pessoa da regra nao vira convite comum")
+    # Revogacao individual de janela (trava do convite e depois a linha) concorrente com a revogacao da regra: sem deadlock.
+    w3 = value(f"select id from cp.visit_permits where rule_id='{R3}' and state='ACTIVE' order by id limit 1")
+    one = (f"SELECT cp.lock_permit_access('{TA}','{w3}'); SELECT pg_sleep(2); "
+           f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Hoje nao',version=version+1 WHERE id='{w3}' AND state='ACTIVE'")
+    whole = f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{AA}',revoke_reason='Encerrado',version=version+1 WHERE id='{R3}'"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        single = pool.submit(query, one, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        bulk = pool.submit(query, whole, tenant=TA, role="cp_api", check=False)
+        single, bulk = single.result(), bulk.result()
+    expect(single.returncode == 0 and bulk.returncode == 0, "revogacao de janela e da regra concorrentes sem deadlock")
+    expect(value(f"select count(*) from cp.visit_permits where rule_id='{R3}' and state='ACTIVE'") == "0", "nenhuma janela ativa depois das duas revogacoes")
     # Revogar a regra derruba as janelas validas na mesma transacao, com evento.
     def revoke(identifier, actor=AA):
         return (f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{actor}',revoke_reason='Contrato encerrado',version=version+1 WHERE id='{identifier}'")
