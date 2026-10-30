@@ -86,6 +86,11 @@ export async function execute(env,{request=createRequester(),randomBytes=secureR
 }
 
 if(import.meta.url===pathToFileURL(process.argv[1]).href){
- try{console.log(JSON.stringify(await execute(process.env)));}
+ try{
+  const result=JSON.stringify(await execute(process.env));
+  console.log(result);
+  // Anotação legível pela API de checks (o log bruto pode não estar acessível); só metadados, nunca valor de segredo.
+  console.log(`::notice title=runtime-flags::${result}`);
+ }
  catch(error){console.error(error instanceof SafeFailure?error.code:'FLAGS_UNEXPECTED_FAILURE');process.exitCode=1;}
 }
