@@ -149,12 +149,12 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
    else if(applied!=null && applied.version()==query.desiredVersion()) {
     action=applied.action();
     result.add(new Destination(deviceId,Outcome.APPLIED,applied.version(),applied.action(),applied.at(),null,null));
+   } else if(applied!=null && applied.version()>query.desiredVersion()) {
+    result.add(new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"STALE_VERSION",null));
    } else if(pending!=null && pending.version()==query.desiredVersion()) {
     action=pending.action();
     result.add(new Destination(deviceId,Outcome.ACCEPTED,applied==null?null:applied.version(),applied==null?null:applied.action(),
      applied==null?null:applied.at(),null,null));
-   } else if(applied!=null && applied.version()>query.desiredVersion()) {
-    result.add(new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"STALE_VERSION",null));
    } else {
     // Equipamento respondeu e a versão não está lá: o comando pode ser repetido (idempotente por versão).
     result.add(new Destination(deviceId,Outcome.UNKNOWN,applied==null?null:applied.version(),applied==null?null:applied.action(),
@@ -227,7 +227,7 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
   for(String deviceId:destinations) {
    Destination before=previous==null?null:previous.destinations().stream().filter(d->d.deviceId().equals(deviceId)).findFirst().orElse(null);
    if(before!=null && (before.outcome()==Outcome.APPLIED || before.outcome()==Outcome.REJECTED || before.outcome()==Outcome.ACCEPTED)) {
-    result.add(refresh(deviceId,credentialRef,version,before));
+    result.add(refresh(deviceId,credentialRef,version,action,before));
     continue;
    }
    result.add(send(deviceId,credentialRef,version,action));
@@ -238,11 +238,12 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
  }
 
  /** Destino já resolvido: ACCEPTED vira APPLIED se a confirmação chegou depois, ou recusa se outra versão passou à frente. */
- private Destination refresh(String deviceId,String credentialRef,long version,Destination before) {
+ private Destination refresh(String deviceId,String credentialRef,long version,Action action,Destination before) {
   if(before.outcome()!=Outcome.ACCEPTED) return before;
   var applied=device(deviceId).applied.get(credentialRef);
   if(applied==null || applied.version()<version) return before;
-  if(applied.version()==version) return new Destination(deviceId,Outcome.APPLIED,applied.version(),applied.action(),applied.at(),null,null);
+  if(applied.version()==version && applied.action()==action) return new Destination(deviceId,Outcome.APPLIED,applied.version(),applied.action(),applied.at(),null,null);
+  if(applied.version()==version) return new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"VERSION_CONFLICT",null);
   return new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"STALE_VERSION",null);
  }
 
@@ -263,7 +264,11 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
   switch(device.scenario) {
    case ACK_ONLY:
     var pending=device.pending.get(credentialRef);
-    if(pending==null || pending.version()<version) device.pending.put(credentialRef,new Pending(version,action,credentialRef));
+    if(pending!=null && pending.version()>version)
+     return new Destination(deviceId,Outcome.REJECTED,null,null,null,"STALE_VERSION",null);
+    if(pending!=null && pending.version()==version && pending.action()!=action)
+     return new Destination(deviceId,Outcome.REJECTED,null,null,null,"VERSION_CONFLICT",null);
+    device.pending.put(credentialRef,new Pending(version,action,credentialRef));
     return new Destination(deviceId,Outcome.ACCEPTED,null,null,null,null,null);
    case TIMEOUT_LOST: return new Destination(deviceId,Outcome.UNKNOWN,null,null,null,"TIMEOUT",null);
    case TIMEOUT_APPLIED:
@@ -282,6 +287,8 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
   if(applied!=null && applied.version()>=version) return false;
   device.applied.put(credentialRef,new Applied(version,action,clock.instant()));
   device.applications++;
+  var pending=device.pending.get(credentialRef);
+  if(pending!=null && pending.version()<=version) device.pending.remove(credentialRef);
   emit(deviceId,credentialRef,action==Action.APPLY?AccessModels.EventKind.CREDENTIAL_APPLIED:AccessModels.EventKind.CREDENTIAL_REVOKED,null,null,version);
   return true;
  }

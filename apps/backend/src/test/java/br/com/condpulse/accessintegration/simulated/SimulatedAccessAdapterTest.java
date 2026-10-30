@@ -142,6 +142,32 @@ class SimulatedAccessAdapterTest {
   assertEquals(2,adapter.applications("leitor-1"));
  }
 
+ @Test void conflictingActionOnAPendingVersionIsRejectedAndNeverReportedAsApplied() {
+  adapter.scenario("leitor-1",Scenario.ACK_ONLY);
+  assertEquals(Outcome.ACCEPTED,apply(1,"leitor-1").destination("leitor-1").outcome());
+  var conflicting=revoke(1,"leitor-1");
+  assertEquals(Outcome.REJECTED,conflicting.destination("leitor-1").outcome());
+  assertEquals("VERSION_CONFLICT",conflicting.destination("leitor-1").reason());
+  assertEquals(1,adapter.deliverPending("leitor-1"));
+  var again=revoke(1,"leitor-1");
+  assertEquals(Outcome.REJECTED,again.destination("leitor-1").outcome(),"Revogação que nunca aconteceu não vira aplicada");
+  assertFalse(again.fullyApplied());
+  assertEquals(Action.APPLY,query(1,"leitor-1").destination("leitor-1").appliedAction());
+ }
+
+ @Test void olderPendingIsDroppedWhenANewerVersionIsApplied() {
+  adapter.scenario("leitor-1",Scenario.ACK_ONLY);
+  apply(1,"leitor-1");
+  adapter.scenario("leitor-1",Scenario.CONFIRM);
+  assertEquals(Outcome.APPLIED,revoke(2,"leitor-1").destination("leitor-1").outcome());
+  var old=query(1,"leitor-1").destination("leitor-1");
+  assertEquals(Outcome.REJECTED,old.outcome(),"Pendência antiga não aparece como recebida depois da revogação");
+  assertEquals("STALE_VERSION",old.reason());
+  assertEquals(0,adapter.health(CONNECTOR).pendingCommands());
+  assertEquals(Outcome.REJECTED,apply(1,"leitor-1").destination("leitor-1").outcome(),"Repetir a v1 também mostra a recusa");
+  assertEquals(1,adapter.applications("leitor-1"));
+ }
+
  @Test void rateLimitAndOfflineKeepThePendingWithoutApplying() {
   adapter.scenario("leitor-1",Scenario.RATE_LIMITED);
   adapter.scenario("leitor-2",Scenario.OFFLINE);
