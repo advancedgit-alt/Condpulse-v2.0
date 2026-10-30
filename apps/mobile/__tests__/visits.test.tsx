@@ -106,6 +106,21 @@ describe('contrato de visitas no celular', () => {
   });
 });
 
+describe('códigos de problema das visitas', () => {
+  it('a decisão recusada pelo servidor mantém o código para a tela explicar o que aconteceu', async () => {
+    const problems: Record<string, number> = { ARRIVAL_EXPIRED: 409, ARRIVAL_ALREADY_DECIDED: 409, ARRIVAL_CANCELLED: 409, VISIT_PERMIT_CHANGED: 409,
+      VISIT_RULE_CHANGED: 409, RESERVATION_GUEST_LIMIT: 409, VISITOR_NAME_INVALID: 400, VISIT_ACCESS_DENIED: 403 };
+    for (const [code, status] of Object.entries(problems)) {
+      const api = createApi({ baseUrl: 'https://api.example.invalid', tokens: { accessToken: async () => 'synthetic', refresh: async () => null, expire: async () => {} } as never,
+        fetch: async () => new Response(JSON.stringify({ code, status, detail: 'PRIVATE-SERVER-DETAIL' }), { status, headers: { 'Content-Type': 'application/problem+json' } }) });
+      const error = await api.decideArrival(TENANT, UNIT, ARRIVAL, 'APPROVE').then(() => null, (failure: unknown) => failure);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).code).toBe(code);
+      expect((error as ApiError).message).not.toContain('PRIVATE');
+    }
+  });
+});
+
 describe('acessos da unidade no celular', () => {
   it('autoriza a chegada uma vez e mostra quem decidiu; prazo vencido não registra a resposta', async () => {
     const fake = await mount();
@@ -193,6 +208,18 @@ describe('acessos da unidade no celular', () => {
     expect(fake.state.revokes).toEqual([{ reason: 'Mudança de planos', expectedVersion: 0 }]);
     expect(await screen.findByText('Visita Prevista · Revogado')).toBeTruthy();
     expect(screen.getByText('Nenhum convite em aberto. A portaria vê o nome e o período e confere a pessoa na chegada.')).toBeTruthy();
+  }, 15000);
+
+  it('consulta de chegadas que para de funcionar avisa que a lista pode estar desatualizada', async () => {
+    const fake = await mount();
+    expect(await screen.findByText('Pessoa Visitante · Aguardando resposta')).toBeTruthy();
+    fake.state.arrivalsError = new ApiError(503, 'VISIT_DEPENDENCY_UNAVAILABLE', 'Não foi possível concluir a operação.', false);
+    await press('Atualizar acessos');
+    expect(await screen.findByText('Não foi possível atualizar as chegadas. A lista é da última consulta: novas chegadas podem não aparecer.', {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByText('Pessoa Visitante · Aguardando resposta')).toBeTruthy();
+    fake.state.arrivalsError = null;
+    await press('Atualizar acessos');
+    await waitFor(() => expect(screen.queryByText(/Não foi possível atualizar as chegadas/)).toBeNull());
   }, 15000);
 
   it('falha na primeira consulta oferece nova tentativa; vínculo sem permissão ou função desligada esconde', async () => {
