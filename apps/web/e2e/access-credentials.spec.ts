@@ -20,6 +20,7 @@ interface Synthetic {
 interface CredentialState {
   connectors: unknown[]; credentials: Synthetic[]; creates: { key: string; body: Record<string, unknown> }[]; keys: Map<string, Synthetic>;
   revokes: unknown[]; managedQueries: string[]; loseNextCreate: boolean; listFailures: number; unavailable: boolean; revokeConflict: boolean;
+  pendingFailures: number;
 }
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store', ...headers }, body: JSON.stringify(body) });
@@ -38,7 +39,7 @@ const connector = { connectorId: CONNECTOR, provider: 'SIMULATED', label: 'Integ
 
 async function installCredentialsApi(page: Page, initial: Partial<CredentialState> = {}): Promise<CredentialState> {
   const state: CredentialState = { connectors: [connector], credentials: [], creates: [], keys: new Map(), revokes: [], managedQueries: [],
-    loseNextCreate: false, listFailures: 0, unavailable: false, revokeConflict: false, ...initial };
+    loseNextCreate: false, listFailures: 0, unavailable: false, revokeConflict: false, pendingFailures: 0, ...initial };
   await page.route(`**/v1/tenants/${TENANT_A}/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -85,6 +86,7 @@ async function installCredentialsApi(page: Page, initial: Partial<CredentialStat
       return;
     }
     if (path === '/concierge/pending-revocations') {
+      if (state.pendingFailures > 0) { state.pendingFailures--; await problem(route, 503, 'CREDENTIAL_DEPENDENCY_UNAVAILABLE'); return; }
       await json(route, 200, { credentials: state.credentials.filter((item) => item.status === 'REVOKING'), truncated: false });
       return;
     }
@@ -211,4 +213,31 @@ test('portaria vê revogações pendentes com os equipamentos e o vazio quando c
   state.credentials = [];
   await section.getByRole('button', { name: 'Atualizar' }).click();
   await expect(section.getByText('Todas as revogações foram confirmadas pelos equipamentos.')).toBeVisible();
+});
+
+test('portaria: falha ao atualizar não afirma que as revogações foram confirmadas', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  await openConcierge(page, api);
+  const state = await installCredentialsApi(page);
+  await signIn(page);
+  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  const section = page.getByRole('region', { name: 'Revogações pendentes' });
+  await expect(section.getByText('Todas as revogações foram confirmadas pelos equipamentos.')).toBeVisible();
+  state.pendingFailures = 1;
+  await section.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(section.getByText(/Não foi possível atualizar as revogações pendentes/)).toBeVisible();
+  await expect(section.getByText('Todas as revogações foram confirmadas pelos equipamentos.')).toHaveCount(0);
+  await section.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(section.getByText('Todas as revogações foram confirmadas pelos equipamentos.')).toBeVisible();
+  await expect(section.getByText(/Não foi possível atualizar as revogações pendentes/)).toHaveCount(0);
+});
+
+test('gestão: falha ao atualizar a lista avisa que os dados podem estar desatualizados', async ({ page }) => {
+  const state = await openManagement(page, { credentials: [synthetic({ status: 'ACTIVE', devices: devices('CONFIRMED', true) })] });
+  const section = page.getByRole('region', { name: 'Credenciais de acesso' });
+  await expect(section.getByText('Ativa em todos os equipamentos')).toBeVisible();
+  state.listFailures = 1;
+  await section.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(section.getByText(/Não foi possível atualizar as credenciais/)).toBeVisible();
 });

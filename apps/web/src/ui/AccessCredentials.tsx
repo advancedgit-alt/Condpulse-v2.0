@@ -71,6 +71,7 @@ export function CredentialManagementSection() {
             {active.length === 0 ? <Notice tone="info">Nenhuma integração de acesso ativa. O cadastro de credenciais depende do parceiro físico contratado e configurado pela operação da plataforma.</Notice>
               : <p className="field-help">Integração: {active.map((item) => `${item.label} (${item.devices.filter((entry) => entry.status === 'ACTIVE').length} equipamentos)`).join('; ')}.</p>}
             {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
+            {list.isError && list.data && !list.isFetching ? <Notice tone="warning">{`Não foi possível atualizar as credenciais (${errorMessage(list.error)}). A lista abaixo é da última consulta e pode estar desatualizada.`}</Notice> : null}
             {active.length > 0 && !creating ? <div className="button-row"><button className="button button-compact" type="button"
               onClick={() => { setOutcome(null); setCreating(true); }}>Cadastrar credencial</button></div> : null}
             {creating ? <CredentialForm connectors={active.map((item) => ({ id: item.connectorId, label: item.label }))}
@@ -180,13 +181,18 @@ export function ConciergePendingRevocations() {
     refetchInterval: (query) => hidden(query.state.error) ? false : 60_000 });
   if (useAccessGuard(list.error)) return null;
   if (hidden(list.error)) return null;
+  // Atualização falhou e a tela ainda mostra a consulta anterior: nunca afirmar que tudo foi confirmado.
+  const stale = list.isError && list.data !== undefined && !list.isFetching;
   return <section className="management-section" aria-labelledby="pending-revocations-title">
     <div className="section-heading"><div><span className="section-index">ACESSO</span><h2 id="pending-revocations-title">Revogações pendentes</h2></div>
       <div className="button-row"><button className="button button-secondary button-compact" type="button" disabled={list.isFetching} onClick={() => void list.refetch()}>Atualizar</button></div></div>
     <p className="field-help">Credenciais revogadas que algum equipamento ainda não confirmou. Não trate como bloqueadas: siga a contingência local e acione o integrador se a pendência continuar.</p>
+    {stale ? <Notice tone="warning">{`Não foi possível atualizar as revogações pendentes (${errorMessage(list.error)}). A lista abaixo é da última consulta e pode não mostrar revogações novas: siga a contingência local até conseguir atualizar.`}</Notice> : null}
     {list.isPending ? <div className="panel"><Loading label="Consultando revogações pendentes…" /></div>
       : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-        : !list.data || list.data.credentials.length === 0 ? <div className="panel"><Empty title="Nenhuma revogação pendente">Todas as revogações foram confirmadas pelos equipamentos.</Empty></div>
+        : !list.data || list.data.credentials.length === 0 ? <div className="panel">{stale
+          ? <Empty title="Sem confirmação atual">A última consulta não tinha revogações pendentes, mas a atualização falhou.</Empty>
+          : <Empty title="Nenhuma revogação pendente">Todas as revogações foram confirmadas pelos equipamentos.</Empty>}</div>
           : <ol className="management-list" aria-label="Revogações pendentes">{list.data.credentials.map((item) =>
             <li key={item.credentialId} className="management-row"><CredentialDetails item={item} timeZone={scope.timeZone} /></li>)}</ol>}
     {list.data?.truncated ? <Notice tone="warning">A lista mostra as 100 revogações pendentes mais antigas.</Notice> : null}
