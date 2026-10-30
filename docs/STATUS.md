@@ -31,11 +31,13 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 ## Acessibilidade automática — CP-007/CP-053
 
+- Merge `2749b42` (PR #88, CI 41022714090 verde).
+
 - Varredura axe (WCAG 2.1 A/AA) no Playwright em desktop e 390 px: entrada, contextos, início/reservas/encomendas/acessos da unidade, cinco seções da gestão, portaria (visitas e encomendas), recuperação de acesso e link de visita. Achado corrigido: o botão da área anunciava nome diferente do texto visível (WCAG 2.5.3); agora o nome começa pelo texto visível ("Reservar esta área: <área>"). APIs sintéticas; ensaio com leitor de tela, fonte ampliada e aparelhos reais segue pendente (CP-053, bloqueio do CP-012).
 
 ## Saúde dos equipamentos e reconciliação — CP-048
 
-- V028: saúde por conector e por equipamento gravada pelo worker com horários do banco; leitura só para gestão e portaria (AAL2). "No ar" só com observação recente e conector respondendo; conector sem resposta ou observação antiga aparecem como "sem informação recente". Pendências por equipamento contra o estado desejado atual; reconciliação depois de queda envia só o estado final (simulador). Mesmas flags (`CP_ACCESS_CREDENTIALS_ENABLED`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`). Testado só com o adaptador simulado; V028 aplicada na homologação só depois do merge.
+- V028: saúde por conector e por equipamento gravada pelo worker com horários do banco; leitura só para gestão e portaria (AAL2). "No ar" só com observação recente e conector respondendo; conector sem resposta ou observação antiga aparecem como "sem informação recente". Pendências por equipamento contra o estado desejado atual; reconciliação depois de queda envia só o estado final (simulador). Mesmas flags (`CP_ACCESS_CREDENTIALS_ENABLED`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`). Testado só com o adaptador simulado. Merge `621956e` (PR #85, CI 41024999794 verde). V028 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41025772450; repetição 41025967635 sem linha nova; 27 linhas no histórico; ENABLE/FORCE RLS nas duas tabelas novas, nenhuma tabela `cp` sem RLS completa, nenhuma linha de saúde). Smoke público 41026165134 verde.
 
 ## Histórico residencial dos equipamentos — CP-049
 
@@ -49,7 +51,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Credenciais de acesso e revogação prioritária — CP-046
 
 - V026: estado desejado versionado (ACTIVE na versão 1; revogação final na versão 2); confirmação por equipamento só vale para a versão e a ação desejadas no momento da gravação — confirmação atrasada da ativação nunca reativa credencial revogada (guarda no banco). Gestão (AAL2) cadastra cartão/QR para morador e revoga com motivo; encerrar o vínculo revoga as credenciais na mesma transação; portaria vê as revogações pendentes por equipamento; reconciliação no worker com revogação primeiro e consulta antes de reenviar (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (ainda desligada na Vercel, ver bloqueio). Merge `b85456e` (PR #79, CI 41010219497 verde). V026 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41010872734; repetição 41011021111 sem linha nova; 25 linhas no histórico; ENABLE/FORCE RLS nas quatro tabelas, nenhuma tabela `cp` sem RLS completa, nenhum conector cadastrado). Smoke público 41011276577 verde. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
-- Pendentes: adaptador do parceiro (CP-044, BLOQUEADO), worker contínuo, tela do celular e alerta de pendência acima de 60 s.
+- Atenção de revogação pendente há mais de 60 s (PRD, fila de revogações) na seção "Saúde dos equipamentos" da gestão e da portaria, medida só com horários do servidor (`generatedAt` e revogação mais antiga pendente por equipamento); Playwright.
+- Pendentes: adaptador do parceiro (CP-044, BLOQUEADO), worker contínuo e escalonamento conforme parceiro.
 
 ## Mudança e entrega de móveis — CP-042
 

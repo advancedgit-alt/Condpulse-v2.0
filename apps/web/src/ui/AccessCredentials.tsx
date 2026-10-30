@@ -284,12 +284,18 @@ const deviceReasonText: Record<NonNullable<DeviceHealth['reason']>, string> = {
 };
 const plural = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`;
 
-function DeviceHealthRow({ device, timeZone }: { device: DeviceHealth; timeZone: string }) {
+/** Atenção do PRD: revogação pendente há mais de 60 s, medida só com horários do servidor (não com o relógio do aparelho). */
+const REVOCATION_ATTENTION_MS = 60_000;
+const revocationOverdue = (device: DeviceHealth, generatedAt: string) => device.pendingRevoke > 0 && device.oldestPendingRevocation !== null
+  && Date.parse(generatedAt) - Date.parse(device.oldestPendingRevocation) > REVOCATION_ATTENTION_MS;
+
+function DeviceHealthRow({ device, timeZone, generatedAt }: { device: DeviceHealth; timeZone: string; generatedAt: string }) {
   const [label, tone] = deviceHealthText[device.status];
   const pending = [device.pendingRevoke ? plural(device.pendingRevoke, 'revogação pendente', 'revogações pendentes') : null,
     device.pendingApply ? plural(device.pendingApply, 'ativação pendente', 'ativações pendentes') : null,
     device.rejected ? plural(device.rejected, 'recusa do equipamento', 'recusas do equipamento') : null].filter(Boolean).join(' · ');
   return <li className="management-row"><div><strong><bdi>{device.label}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span>
+    {revocationOverdue(device, generatedAt) ? <span className="status-pill status-overdue">Revogação pendente há mais de 1 minuto</span> : null}
     {device.clockDrift ? <span className="status-pill status-overdue">{`Relógio diferente em ${Math.abs(device.clockSkewSeconds ?? 0)} s`}</span> : null}
     <span>{device.reason ? `${deviceReasonText[device.reason]}. ` : ''}{device.status === 'OFFLINE' && device.stateSince && !device.reason ? `Fora do ar desde ${formatWhen(device.stateSince, timeZone)}. ` : ''}
       {device.observedAt ? `Última observação em ${formatWhen(device.observedAt, timeZone)}.` : 'Nenhuma observação ainda.'}</span>
@@ -309,11 +315,13 @@ export function AccessHealthSection() {
   if (hidden(query.error)) return null;
   const stale = query.isError && query.data !== undefined && !query.isFetching;
   const attention = (query.data?.connectors ?? []).some((item) => item.devices.some((device) => device.status !== 'ONLINE' && device.status !== 'RETIRED' && device.pendingRevoke > 0));
+  const overdue = query.data ? query.data.connectors.flatMap((item) => item.devices).filter((device) => device.status !== 'RETIRED' && revocationOverdue(device, query.data!.generatedAt)).length : 0;
   return <section className="management-section" aria-labelledby="access-health-title">
     <div className="section-heading"><div><span className="section-index">ACESSO</span><h2 id="access-health-title">Saúde dos equipamentos</h2></div>
       <div className="button-row"><button className="button button-secondary button-compact" type="button" disabled={query.isFetching} onClick={() => void query.refetch()}>Atualizar saúde</button></div></div>
     <p className="field-help">Situação informada pela integração na última consulta. Quando volta ao ar, o equipamento recebe só o estado atual de cada credencial, sem repetir comandos antigos.</p>
     {stale ? <Notice tone="warning">{`Não foi possível atualizar a saúde (${errorMessage(query.error)}). Os dados abaixo são da última consulta e podem não refletir a situação atual.`}</Notice> : null}
+    {overdue > 0 ? <Notice tone="error">{`Revogação pendente há mais de 1 minuto em ${plural(overdue, 'equipamento', 'equipamentos')}. Não trate o acesso como bloqueado: siga a contingência local e acione o integrador.`}</Notice> : null}
     {attention ? <Notice tone="warning">Há revogação pendente em equipamento fora do ar ou sem informação recente. Siga a contingência local nesse acesso.</Notice> : null}
     {query.isPending ? <div className="panel"><Loading label="Consultando a saúde dos equipamentos…" /></div>
       : query.isError && !query.data ? <ErrorState error={query.error} retry={() => void query.refetch()} />
@@ -327,7 +335,7 @@ export function AccessHealthSection() {
                 {connector.status === 'OK' && connector.pendingCommands !== null ? `; ${plural(connector.pendingCommands, 'comando na fila', 'comandos na fila')} do parceiro` : ''}.</p>
               {connector.devices.length === 0 ? <Empty title="Nenhum equipamento">Nenhum equipamento cadastrado nesta integração.</Empty>
                 : <ol className="management-list" aria-label={`Equipamentos de ${connector.label}`}>{connector.devices.map((device) =>
-                  <DeviceHealthRow key={device.deviceId} device={device} timeZone={scope.timeZone} />)}</ol>}
+                  <DeviceHealthRow key={device.deviceId} device={device} timeZone={scope.timeZone} generatedAt={query.data!.generatedAt} />)}</ol>}
             </div>;
           })}
   </section>;

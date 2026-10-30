@@ -170,6 +170,20 @@ describe('acessos da unidade no celular', () => {
     expect(await screen.findByText('Visita Nova · Agendado')).toBeTruthy();
   }, 15000);
 
+  it('convite pendente restaurado mostra o período que será enviado, não o horário atual', async () => {
+    const pending: PermitPendingStore = new Map([[`${ACCOUNT}|${TENANT}|${UNIT}`, { key: 'test:visit-restaurado-0001', body: { visitorName: 'Visita Restaurada',
+      documentLast4: null, purpose: null, validFrom: '2030-01-09T22:00:00.000Z', validUntil: '2030-01-10T01:00:00.000Z' } }]]);
+    const fake = await mount(fakeApi(), { pending });
+    expect(await screen.findByRole('button', { name: 'Tentar confirmar o mesmo convite' })).toBeTruthy();
+    expect(screen.getByLabelText('Nome de quem vai chegar').props.value).toBe('Visita Restaurada');
+    expect(screen.getByLabelText('Início (AAAA-MM-DD HH:MM)').props.value).toBe('2030-01-09 19:00');
+    expect(screen.getByLabelText('Fim (AAAA-MM-DD HH:MM)').props.value).toBe('2030-01-09 22:00');
+    expect(screen.getByLabelText('Início (AAAA-MM-DD HH:MM)').props.editable).toBe(false);
+    await press('Tentar confirmar o mesmo convite');
+    expect(await screen.findByText(/Convite para Visita Restaurada registrado/)).toBeTruthy();
+    expect(fake.state.creates[0]!.key).toBe('test:visit-restaurado-0001');
+  }, 15000);
+
   it('link aparece uma vez, vai pelo compartilhamento do aparelho e pode ser revogado sem revogar o convite', async () => {
     const shared: string[] = [];
     const fake = await mount(fakeApi(), { share: async (message) => { shared.push(message); } });

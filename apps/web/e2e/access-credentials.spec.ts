@@ -418,3 +418,20 @@ test('saúde: função desligada esconde a seção', async ({ page }) => {
   await expect(page.getByText('As credenciais de acesso ainda não estão ativas neste ambiente.')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Saúde dos equipamentos' })).toHaveCount(0);
 });
+
+test('revogação pendente há mais de 1 minuto pede atenção pelos horários do servidor', async ({ page }) => {
+  const generatedAt = new Date(Date.UTC(2030, 0, 7, 12, 0, 0)).toISOString();
+  const at = (seconds: number) => new Date(Date.parse(generatedAt) - seconds * 1000).toISOString();
+  const report = (oldest: string) => ({ ...health({}, [deviceHealth({ observedAt: generatedAt, stateSince: generatedAt, lastHeartbeat: generatedAt, pendingRevoke: 1, oldestPendingRevocation: oldest }),
+    deviceHealth({ deviceId: DEVICE_OUT, label: 'Garagem', direction: 'BOTH', observedAt: generatedAt, stateSince: generatedAt, lastHeartbeat: generatedAt })]), generatedAt });
+  const state = await openManagement(page, { health: report(at(30)) });
+  const section = page.getByRole('region', { name: 'Saúde dos equipamentos' });
+  const entrance = section.getByRole('listitem').filter({ hasText: 'Entrada social' });
+  await expect(entrance.getByText('1 revogação pendente')).toBeVisible();
+  await expect(section.getByText('Revogação pendente há mais de 1 minuto')).toHaveCount(0);
+  state.health = report(at(90));
+  await section.getByRole('button', { name: 'Atualizar saúde' }).click();
+  await expect(entrance.getByText('Revogação pendente há mais de 1 minuto')).toBeVisible();
+  await expect(section.getByText(/Revogação pendente há mais de 1 minuto em 1 equipamento\. Não trate o acesso como bloqueado/)).toBeVisible();
+  await expect(section.getByRole('listitem').filter({ hasText: 'Garagem' }).getByText('Revogação pendente há mais de 1 minuto')).toHaveCount(0);
+});
