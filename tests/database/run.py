@@ -2198,6 +2198,25 @@ def waitlist_checks():
     expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(el1) == "OFFERED:1" and entry(el2) == "WAITING:0",
            "liberada a trava, o primeiro da fila recebe a oferta")
     query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{el1}')")
+    # Entradas sem cota nao ocupam o lote da passada: alem das 50 primeiras, a elegivel ainda recebe a oferta.
+    query(f"UPDATE cp.reservation_waitlist SET state='LEFT',version=version+1 WHERE amenity_id='{AW}' AND state='WAITING'")
+    full = active(UW1)
+    for index in range(52):
+        rb = booking(700 + index * 3)
+        eb, sql = join(700 + index * 3, UW1, W1, quota=full)
+        query(sql, tenant=TA, actor=W1, role="cp_api")
+        query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rb}'")
+    rlast = booking(900)
+    elast, sql = join(900, UW2, W2, quota=active(UW2) + 1)
+    query(sql, tenant=TA, actor=W2, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rlast}'")
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(elast) == "OFFERED:1",
+           "entradas de unidade sem cota nao impedem a oferta a quem vem depois das 50 primeiras")
+    s0, s1 = f"date_trunc('hour',clock_timestamp())+interval '703 hours'", f"date_trunc('hour',clock_timestamp())+interval '704 hours'"
+    expect(value(f"SELECT cp.waitlist_blocks('{TA}','{AW}',{s0},{s1})::text", tenant=TA, actor=AA, role="cp_api") == "false",
+           "quem aguarda sem cota nao bloqueia a reserva direta do periodo liberado")
+    query(f"UPDATE cp.reservation_waitlist SET state='LEFT',version=version+1 WHERE unit_id='{UW1}' AND state='WAITING'", tenant=TA, actor=W1, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{elast}')")
     # Bloqueio da reserva direta so por quem aguarda periodo inteiro livre.
     rp = booking(600)  # 600-602 ocupado
     ep, sql = join(599, UW3, W3, length=3)  # aguarda 599-602, ainda ocupado em parte

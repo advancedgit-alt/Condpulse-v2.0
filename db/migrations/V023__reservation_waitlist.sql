@@ -166,6 +166,18 @@ AS $$ SELECT EXISTS(SELECT 1 FROM cp.memberships m
     AND coalesce(m.permissions#>ARRAY['reservations','create']='true'::jsonb,false)))) $$;
 REVOKE ALL ON FUNCTION cp.waitlist_author_eligible(uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_author_eligible(uuid,uuid,uuid) TO cp_api,cp_worker;
+-- Cota da unidade pelas regras aceitas na entrada: reservas ativas (retenção e pedido no prazo, confirmada) que ainda
+-- não terminaram, contra policy.maximumActivePerUnit. Regra ilegível não tem cota.
+CREATE FUNCTION cp.waitlist_quota_available(target_tenant uuid,target_unit uuid,snapshot jsonb) RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT CASE WHEN snapshot->'policy'->>'maximumActivePerUnit' ~ '^[1-9][0-9]{0,2}$'
+  THEN (SELECT count(*) FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.unit_id=target_unit AND r.kind='BOOKING'
+    AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND r.ends_at>clock_timestamp()
+    AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp()))
+   <(snapshot->'policy'->>'maximumActivePerUnit')::integer
+  ELSE false END $$;
+REVOKE ALL ON FUNCTION cp.waitlist_quota_available(uuid,uuid,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_quota_available(uuid,uuid,jsonb) TO cp_api,cp_worker;
 CREATE POLICY membership_waitlist_offer_read ON cp.memberships FOR SELECT TO cp_api
  USING(tenant_id=platform.current_tenant_id() AND coalesce(current_setting('app.waitlist_offer',true),'') LIKE tenant_id::text||':%');
 CREATE POLICY account_waitlist_offer_read ON platform.accounts FOR SELECT TO cp_api
@@ -178,7 +190,7 @@ CREATE POLICY account_waitlist_offer_read ON platform.accounts FOR SELECT TO cp_
 -- Devolve quantas ofertas criou. Papel sem INSERT em reservas não oferece; o worker recebe só as colunas da retenção.
 CREATE FUNCTION cp.waitlist_offer(target_tenant uuid,target_amenity uuid) RETURNS integer
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE offered integer:=0; entry record; stale record; held uuid; deadline timestamptz; quota integer;
+DECLARE offered integer:=0; entry record; stale record; held uuid; deadline timestamptz;
 BEGIN
  IF target_tenant IS NULL OR target_amenity IS NULL OR target_tenant IS DISTINCT FROM platform.current_tenant_id() THEN
   RAISE EXCEPTION 'condomínio indisponível' USING ERRCODE='42501';
@@ -201,9 +213,15 @@ BEGIN
  END LOOP;
  UPDATE cp.reservation_waitlist SET state='CLOSED',version=version+1
   WHERE tenant_id=target_tenant AND amenity_id=target_amenity AND state='WAITING' AND starts_at<=clock_timestamp();
+ -- Autor sem vínculo elegível não segura o período: a entrada é encerrada.
+ UPDATE cp.reservation_waitlist w SET state='CLOSED',version=w.version+1
+  WHERE w.id IN (SELECT x.id FROM cp.reservation_waitlist x WHERE x.tenant_id=target_tenant AND x.amenity_id=target_amenity
+   AND x.state='WAITING' AND NOT cp.waitlist_author_eligible(x.tenant_id,x.unit_id,x.created_by) FOR UPDATE SKIP LOCKED);
+ -- Só entradas que podem receber agora entram no lote (unidade sem cota fica aguardando sem ocupar o lote).
  FOR entry IN SELECT w.* FROM cp.reservation_waitlist w
    WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity AND w.state='WAITING'
-    AND w.starts_at>clock_timestamp()
+    AND w.starts_at>clock_timestamp() AND cp.waitlist_author_eligible(w.tenant_id,w.unit_id,w.created_by)
+    AND cp.waitlist_quota_available(w.tenant_id,w.unit_id,w.rule_snapshot)
     AND EXISTS(SELECT 1 FROM cp.amenities a WHERE a.tenant_id=w.tenant_id AND a.id=w.amenity_id AND a.active)
     AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
      AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED')
@@ -219,14 +237,8 @@ BEGIN
   IF NOT pg_try_advisory_xact_lock(hashtextextended('cp.reservations:'||entry.tenant_id::text||':'||entry.unit_id::text,0)) THEN
    EXIT;
   END IF;
-  quota:=CASE WHEN entry.rule_snapshot->'policy'->>'maximumActivePerUnit' ~ '^[1-9][0-9]{0,2}$'
-   THEN (entry.rule_snapshot->'policy'->>'maximumActivePerUnit')::integer END;
-  -- Unidade no limite (ou regra aceita ilegível) não segura o período: a entrada continua aguardando e o próximo recebe.
-  IF quota IS NULL OR (SELECT count(*) FROM cp.reservations r WHERE r.tenant_id=entry.tenant_id AND r.unit_id=entry.unit_id
-    AND r.kind='BOOKING' AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND r.ends_at>clock_timestamp()
-    AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp()))>=quota THEN
-   CONTINUE;
-  END IF;
+  -- Reconferência sob a trava: unidade que chegou ao limite (ou regra aceita ilegível) continua aguardando.
+  IF NOT cp.waitlist_quota_available(entry.tenant_id,entry.unit_id,entry.rule_snapshot) THEN CONTINUE; END IF;
   held:=gen_random_uuid();
   deadline:=least(clock_timestamp()+interval '15 minutes',entry.starts_at);
   BEGIN
@@ -318,8 +330,9 @@ BEGIN
  SELECT EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity
    AND w.state='WAITING' AND w.starts_at>clock_timestamp()
    AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')
-   -- Só bloqueia quem aguarda um período inteiro livre (que a oferta consegue entregar): entrada de período ainda
-   -- ocupado em parte não impede o uso dos horários livres ao lado.
+   -- Só bloqueia quem a oferta consegue atender: autor elegível, unidade com cota e período aguardado inteiro livre;
+   -- entrada de período ainda ocupado em parte não impede o uso dos horários livres ao lado.
+   AND cp.waitlist_author_eligible(w.tenant_id,w.unit_id,w.created_by) AND cp.waitlist_quota_available(w.tenant_id,w.unit_id,w.rule_snapshot)
    AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
     AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
     AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)')))
