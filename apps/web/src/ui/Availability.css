@@ -11,3 +11,4 @@
 .availability-intervals strong{color:#52667a;font-weight:700}
 .availability-intervals span{overflow-wrap:anywhere}
 .availability-selection{font-size:.875rem;line-height:1.7;margin:0;color:var(--muted)}
+.waitlist-join{display:grid;gap:8px;margin:8px 0}

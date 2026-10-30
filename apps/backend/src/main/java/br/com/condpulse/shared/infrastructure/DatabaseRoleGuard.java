@@ -86,6 +86,13 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
         and c.attname not in ('applied','unit_id')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.import_rows') and c.attname in ('applied','unit_id')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.reservation_waitlist'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.reservation_waitlist') and c.attname in ('state','offer_reservation_id','offered_at',
+        'offer_expires_at','closed_at','created_at','updated_at','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.reservation_waitlist') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','offer_reservation_id','offered_at','offer_expires_at','closed_at','updated_at','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.visit_rules'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.visit_rules') and c.attname in ('state','created_at','revoked_by','revoked_at','revoke_reason','version')),false)

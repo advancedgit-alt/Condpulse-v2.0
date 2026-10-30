@@ -5,7 +5,7 @@ import { scopeKey } from './Operations';
 
 /** Partes da chave de consulta de cada assunto, dentro do escopo da unidade. */
 export const topicKeys: Record<Topic, string[]> = {
-  reservations: ['reservations', 'dashboard', 'availability'],
+  reservations: ['reservations', 'dashboard', 'availability', 'waitlist'],
   parcels: ['parcels'],
   arrivals: ['visits'],
   notifications: ['inbox'],

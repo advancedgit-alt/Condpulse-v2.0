@@ -1233,8 +1233,13 @@
       "id": "CP-040",
       "delivery": "Fila de espera. Ordem estável, oferta com prazo e reserva de slot durante oferta.",
       "acceptance": "Duas ofertas não capturam o mesmo slot; oferta vencida avança a fila sem dupla confirmação.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V023__reservation_waitlist.sql",
+        "tests/database/run.py#waitlist_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/WaitlistJdbcTest.java",
+        "apps/web/e2e/waitlist.spec.ts"
+      ]
     },
     {
       "id": "CP-041",

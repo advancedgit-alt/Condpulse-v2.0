@@ -21,8 +21,13 @@ public class ReservationService {
  private static final Instant MAXIMUM_QUERY_TIME=Instant.parse("9999-12-31T23:59:59.999999Z");
  private final TenantTransactionExecutor transactions;
  private final ReservationStore store;
+ private final WaitlistOffers offers;
  public ReservationService(TenantTransactionExecutor transactions,ReservationStore store) {
-  this.transactions=transactions; this.store=store;
+  this(transactions,store,WaitlistOffers.NONE);
+ }
+ @org.springframework.beans.factory.annotation.Autowired
+ public ReservationService(TenantTransactionExecutor transactions,ReservationStore store,WaitlistOffers offers) {
+  this.transactions=transactions; this.store=store; this.offers=offers;
  }
 
  public List<ReservationModels.Amenity> amenities(UUID actor,UUID tenant) {
@@ -45,6 +50,8 @@ public class ReservationService {
   // PostgreSQL representa microssegundos. Rejeitar precisao maior evita arredondar a janela silenciosamente.
   if(from.getNano()%1000!=0 || until.getNano()%1000!=0)
    throw new BusinessProblem("RESERVATION_RANGE_INVALID",400,"Use instantes com precisao maxima de microssegundos.");
+  // Ofertas vencidas e períodos liberados vão primeiro para a fila; só então a ocupação é consultada.
+  offers.offerForAmenity(actor,tenant,amenityId);
   return execute(actor,tenant,context->{
    context.requireBookableUnit(unit);
    var amenity=store.amenity(tenant,amenityId);
@@ -58,6 +65,16 @@ public class ReservationService {
   ReservationRequestHash.requireKey(key);
   String hash=ReservationRequestHash.create(request);
   String route="/v1/tenants/"+tenant+"/reservations";
+  // A fila tem prioridade sobre o período liberado: retenções vencidas expiram e a oferta acontece antes da criação.
+  offers.offerForAmenity(actor,tenant,request.amenityId());
+  try { return createNow(actor,tenant,key,request,hash,route); }
+  catch(BusinessProblem refused) {
+   // Recusa pela fila: o período liberado é oferecido a quem aguarda (cancelamento concorrente ainda sem oferta).
+   if("WAITLIST_PRIORITY".equals(refused.code())) offers.offerForAmenity(actor,tenant,request.amenityId());
+   throw refused;
+  }
+ }
+ private ReservationModels.Mutation createNow(UUID actor,UUID tenant,String key,ReservationModels.Create request,String hash,String route) {
   return execute(actor,tenant,context->{
    // Reautorizar antes de consultar qualquer resposta idempotente.
    context.requireBookableUnit(request.unitId());
@@ -74,6 +91,9 @@ public class ReservationService {
    store.expireStale(tenant,request.unitId(),request.amenityId(),window.occupiedFrom(),window.occupiedUntil());
    if(store.activeCount(tenant,request.unitId(),now)>=amenity.policy().maximumActivePerUnit())
     throw new BusinessProblem("UNIT_RESERVATION_QUOTA_REACHED",409,"A unidade atingiu o limite de reservas ativas para esta regra.");
+   // Período liberado com fila aguardando: a vaga vai primeiro para a fila (a oferta roda depois desta recusa).
+   if(store.waitlistBlocks(tenant,request.amenityId(),window.occupiedFrom(),window.occupiedUntil()))
+    throw new BusinessProblem("WAITLIST_PRIORITY",409,"Há fila de espera para este período. Entre na fila ou escolha outro horário.");
    var reservation=store.create(tenant,actor,request,amenity,window,context.timeZone().getId());
    store.record(tenant,actor,reservation,"PENDING_APPROVAL".equals(reservation.status())
     ?"RESERVATION_REQUESTED":"RESERVATION_CREATED",UUID.randomUUID());
@@ -85,7 +105,7 @@ public class ReservationService {
   ReservationRequestHash.requireKey(key);
   String hash=ReservationRequestHash.cancel(reservationId,request);
   String route="/v1/tenants/"+tenant+"/reservations/"+reservationId+"/cancel";
-  return execute(actor,tenant,context->{
+  var result=execute(actor,tenant,context->{
    context.requireCancellableUnit(request.unitId());
    var previous=store.begin(tenant,actor,route,key,hash);
    if(!previous.fresh()) return new ReservationModels.Mutation(previous.reservation(),true,previous.responseStatus());
@@ -122,6 +142,10 @@ public class ReservationService {
    store.finish(tenant,actor,route,key,cancelled,200);
    return new ReservationModels.Mutation(cancelled,false,200);
   });
+  // Período liberado: oferta ao próximo da fila em transação própria, depois do commit do cancelamento.
+  if(!result.replayed() && "CANCELLED".equals(result.reservation().status()))
+   offers.offerForAmenity(actor,tenant,result.reservation().amenityId());
+  return result;
  }
  private br.com.condpulse.reservations.domain.ReservationWindow book(ReservationStore.AmenityData amenity,
      ReservationModels.Create request,Instant now,TenantContext context) {

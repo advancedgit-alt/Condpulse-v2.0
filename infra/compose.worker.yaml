@@ -1,0 +1,45 @@
+# Worker contínuo (perfil worker): sem porta, sem HTTP e sem rede de proxy. Mesma imagem da API, aprovada por digest.
+# As passadas ficam desligadas até uma alteração revisada depois do ensaio (docs/WORKER_IMPLANTACAO.md).
+services:
+  worker:
+    image: ${CP_API_IMAGE:?Informe a imagem API aprovada por digest}
+    user: "10001:10001"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 128
+    stop_grace_period: 35s
+    environment:
+      SPRING_PROFILES_ACTIVE: worker
+      DATABASE_URL: ${CP_WORKER_DATABASE_URL:?Informe a URL JDBC do worker com TLS verify-full}
+      DATABASE_USER: ${CP_WORKER_DATABASE_USER:?Informe o login exclusivo do worker (membro somente de cp_worker)}
+      DATABASE_PASSWORD: ${CP_WORKER_DATABASE_PASSWORD:?Obtenha a senha do worker no cofre}
+      DB_POOL_SIZE: "4"
+      # Habilitacao exige uma alteracao revisada apos o ensaio do worker.
+      CP_WORKER_OUTBOX_ENABLED: "false"
+    # Sem servidor HTTP no perfil worker: a saude e o log da passada e a fila do outbox (docs/WORKER_IMPLANTACAO.md).
+    healthcheck:
+      disable: true
+    volumes:
+      - type: bind
+        source: ${CP_DB_CA_FILE:?Informe o caminho absoluto da CA PostgreSQL validada}
+        target: /run/secrets/db-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  # Rede exclusiva do worker, com saida somente para o PostgreSQL do Supabase.
+  backend:
+    driver: bridge

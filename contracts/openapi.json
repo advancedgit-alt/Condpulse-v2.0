@@ -9088,6 +9088,359 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/waitlist": {
+      "get": {
+        "operationId": "listUnitWaitlist",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Entradas da fila de espera da própria unidade (abertas primeiro). Antes de listar, ofertas vencidas avançam a fila e períodos liberados são oferecidos ao primeiro da fila, em transação própria.",
+        "responses": {
+          "200": {
+            "description": "Entradas da unidade",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "RESERVATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/waitlist": {
+      "post": {
+        "operationId": "joinWaitlist",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Entrar na fila de um período ocupado, com as regras vigentes aceitas (mesma validação da reserva). A oferta, quando o período for liberado, é uma retenção HELD de até 15 minutos em nome de quem entrou; a ordem é a de entrada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitlistJoin"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Entrada criada (repetição devolve o estado atual)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistEntry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "WAITLIST_REQUEST_INVALID, RESERVATION_WINDOW_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "WAITLIST_SLOT_AVAILABLE, WAITLIST_OWN_RESERVATION, WAITLIST_ALREADY_JOINED, WAITLIST_LIMIT_REACHED, AMENITY_POLICY_CHANGED ou chave de idempotência"
+          },
+          "503": {
+            "description": "AMENITY_POLICY_NOT_CONFIGURED ou RESERVATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/waitlist/{waitlistId}/leave": {
+      "post": {
+        "operationId": "leaveWaitlist",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "waitlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Sair da fila (entrada aguardando) ou recusar a oferta em vigor, pela versão lida. Só quem entrou na fila. A recusa libera o período, oferecido ao próximo depois do commit. Repetir devolve o estado LEFT.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitlistChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Entrada encerrada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistEntry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "WAITLIST_VERSION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "WAITLIST_AUTHOR_REQUIRED"
+          },
+          "404": {
+            "description": "WAITLIST_NOT_FOUND ou UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "WAITLIST_CHANGED, WAITLIST_OFFER_EXPIRED ou WAITLIST_CLOSED"
+          },
+          "503": {
+            "description": "RESERVATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/waitlist/{waitlistId}/accept": {
+      "post": {
+        "operationId": "acceptWaitlistOffer",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_RESERVATIONS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "waitlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Aceitar a própria oferta dentro do prazo: a retenção vira reserva confirmada, ou pedido PENDING_APPROVAL se as regras aceitas exigem aprovação. Cota da unidade conferida com as regras aceitas. Oferta vencida nunca é confirmada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitlistChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Oferta aceita (repetição devolve a mesma reserva)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistAcceptance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "WAITLIST_VERSION_REQUIRED ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "WAITLIST_AUTHOR_REQUIRED"
+          },
+          "404": {
+            "description": "WAITLIST_NOT_FOUND ou UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "WAITLIST_OFFER_EXPIRED, WAITLIST_CHANGED, WAITLIST_CLOSED, UNIT_RESERVATION_QUOTA_REACHED ou chave de idempotência"
+          },
+          "503": {
+            "description": "RESERVATION_RULE_SNAPSHOT_INVALID ou RESERVATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14368,6 +14721,221 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "WaitlistJoin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "amenityId",
+          "startsAt",
+          "endsAt",
+          "acceptedPolicyVersion"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedPolicyVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "WaitlistChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "expectedVersion"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "WaitlistEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "waitlistId",
+          "unitId",
+          "amenityId",
+          "state",
+          "startsAt",
+          "endsAt",
+          "occupiedFrom",
+          "occupiedUntil",
+          "acceptedPolicyVersion",
+          "approvalRequired",
+          "feeCents",
+          "offerReservationId",
+          "offeredAt",
+          "offerExpiresAt",
+          "closedAt",
+          "createdByMe",
+          "position",
+          "version",
+          "createdAt"
+        ],
+        "properties": {
+          "waitlistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "WAITING",
+              "OFFERED",
+              "ACCEPTED",
+              "LEFT",
+              "EXPIRED",
+              "CLOSED"
+            ],
+            "description": "OFFERED: retenção em vigor até offerExpiresAt; EXPIRED: oferta não aceita no prazo; CLOSED: o período começou sem vaga."
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occupiedUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedPolicyVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "approvalRequired": {
+            "type": "boolean"
+          },
+          "feeCents": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "offerReservationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "offeredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "offerExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdByMe": {
+            "type": "boolean"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Posição entre as entradas aguardando um período sobreposto; só em WAITING."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WaitlistPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entries",
+          "truncated"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/WaitlistEntry"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WaitlistAcceptance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entry",
+          "reservation"
+        ],
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/WaitlistEntry"
+          },
+          "reservation": {
+            "$ref": "#/components/schemas/Reservation"
           }
         }
       }
