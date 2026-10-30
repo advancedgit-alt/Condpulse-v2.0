@@ -236,6 +236,8 @@ function PermitForm({ api, scope, membership, newKey, now, store, storeKey, clos
   // Convite com resultado incerto: mesma chave e mesmo corpo até a confirmação; os campos ficam travados.
   const [pending, setPending] = useState<{ key: string; body: CreatePermit } | null>(() => store.get(storeKey) ?? null);
   const locked = pending !== null;
+  // Envio travado: a tela mostra exatamente o período que será repetido, no fuso do condomínio.
+  const shownWall = (instant: string) => wallTimeInZone(timeZone, new Date(instant)).replace('T', ' ');
   const visitor = name.trim().replace(/\s+/g, ' ');
   const documentValue = normalizeDocument(document);
   const purposeValue = purpose.trim().replace(/\s+/g, ' ') || null;
@@ -270,8 +272,8 @@ function PermitForm({ api, scope, membership, newKey, now, store, storeKey, clos
     <Field label="Final do documento (opcional, 2 a 4 caracteres)" value={locked ? pending.body.documentLast4 ?? '' : document} onChange={setDocument} disabled={locked || busy} />
     {documentValue === '' && !locked ? <Text style={styles.fieldError}>Informe só os 2 a 4 últimos caracteres do documento, ou deixe em branco.</Text> : null}
     <Field label="Motivo (opcional)" value={locked ? pending.body.purpose ?? '' : purpose} onChange={setPurpose} disabled={locked || busy} />
-    <Field label="Início (AAAA-MM-DD HH:MM)" value={from} onChange={setFrom} disabled={locked || busy} />
-    <Field label="Fim (AAAA-MM-DD HH:MM)" value={until} onChange={setUntil} disabled={locked || busy} />
+    <Field label="Início (AAAA-MM-DD HH:MM)" value={locked ? shownWall(pending.body.validFrom) : from} onChange={setFrom} disabled={locked || busy} />
+    <Field label="Fim (AAAA-MM-DD HH:MM)" value={locked ? shownWall(pending.body.validUntil) : until} onChange={setUntil} disabled={locked || busy} />
     <Text style={styles.body}>{`Horário do condomínio (${timeZone}). O convite vale por até 7 dias.`}</Text>
     {problem && !locked ? <Text style={styles.fieldError}>{problem}</Text> : null}
     {failure ? <Notice tone="error">{message(failure)}</Notice> : null}
