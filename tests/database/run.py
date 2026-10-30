@@ -1876,6 +1876,147 @@ def visit_rule_checks():
            "regra revogada nao volta")
     expect(error(f"DELETE FROM cp.visit_rules WHERE id='{R3}'", "42501", tenant=TA, role="cp_api"), "aplicacao nao apaga regra")
 
+def waitlist_checks():
+    """V023: fila de espera ordenada; oferta cria HELD com prazo; duas ofertas nunca capturam o mesmo periodo."""
+    W1, W2, W3, DEPW = ("10000000-0000-4000-8000-0000000000e1", "10000000-0000-4000-8000-0000000000e2",
+                        "10000000-0000-4000-8000-0000000000e3", "10000000-0000-4000-8000-0000000000e4")
+    UW1, UW2, UW3 = "20000000-0000-4000-8000-0000000000e1", "20000000-0000-4000-8000-0000000000e2", "20000000-0000-4000-8000-0000000000e3"
+    AW = "30000000-0000-4000-8000-0000000000e1"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{W1}','ACTIVE'),('{W2}','ACTIVE'),('{W3}','ACTIVE'),('{DEPW}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UW1}','{TA}','FILA 1'),('{UW2}','{TA}','FILA 2'),('{UW3}','{TA}','FILA 3');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions)
+          VALUES('{TA}','{W1}','{UW1}','FILA UM','RESIDENT','ACTIVE','{{}}'),('{TA}','{W2}','{UW2}','FILA DOIS','RESIDENT','ACTIVE','{{}}'),
+                ('{TA}','{W3}','{UW3}','FILA TRES','RESIDENT','ACTIVE','{{}}'),('{TA}','{DEPW}','{UW1}','FILA DEP','DEPENDENT','ACTIVE','{{}}');
+        INSERT INTO cp.amenities(id,tenant_id,name,capacity,approval_required) VALUES('{AW}','{TA}','AREA FILA',5,false);
+    """)
+    counter = [0]
+    def slot(hours):
+        return (f"date_trunc('hour',clock_timestamp())+interval '{hours} hours'", f"date_trunc('hour',clock_timestamp())+interval '{hours + 2} hours'")
+    def booking(hours, unit=UA, actor=AA):
+        counter[0] += 1
+        rid = f"78000000-0000-4000-8000-{counter[0]:012d}"
+        start, end = slot(hours)
+        query(f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+              f"VALUES('{rid}','{TA}','{AW}','{unit}','{actor}','BOOKING','CONFIRMED',{start},{end},{start},{end},'{{\"approvalRequired\":false}}'::jsonb)",
+              tenant=TA, actor=actor, role="cp_api")
+        return rid
+    def join(hours, unit, actor, approval="false", creator=None):
+        counter[0] += 1
+        wid = f"79000000-0000-4000-8000-{counter[0]:012d}"
+        start, end = slot(hours)
+        return wid, (f"INSERT INTO cp.reservation_waitlist(id,tenant_id,amenity_id,unit_id,created_by,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+                     f"VALUES('{wid}','{TA}','{AW}','{unit}','{creator or actor}',{start},{end},{start},{end},'{{\"approvalRequired\":{approval}}}'::jsonb)")
+    offer = f"SELECT cp.waitlist_offer('{TA}','{AW}')"
+    def entry(wid):
+        return value(f"select state||':'||version from cp.reservation_waitlist where id='{wid}'")
+    def cancel(rid, actor):
+        query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rid}'", tenant=TA, actor=actor, role="cp_api")
+
+    r0 = booking(48)
+    e1, sql = join(48, UW1, W1)
+    query(sql, tenant=TA, actor=W1, role="cp_api")
+    expect(entry(e1) == "WAITING:0", "unidade entra na fila de periodo ocupado")
+    e2, sql = join(48, UW2, W2)
+    query(sql, tenant=TA, actor=W2, role="cp_api")
+    _, sql = join(48, UW1, W1)
+    expect(error(sql, "23505", tenant=TA, actor=W1, role="cp_api"), "uma entrada aberta por unidade e periodo")
+    _, sql = join(72, UW2, W1)
+    expect(error(sql, "42501", tenant=TA, actor=W1, role="cp_api"), "nao entra na fila por outra unidade")
+    _, sql = join(72, UW1, W1, creator=W2)
+    expect(error(sql, "42501", tenant=TA, actor=W1, role="cp_api"), "nao entra na fila em nome de outra pessoa")
+    _, sql = join(72, UW1, DEPW)
+    expect(error(sql, "42501", tenant=TA, actor=DEPW, role="cp_api"), "dependente sem permissao de reservar nao entra na fila")
+    _, sql = join(-1, UW1, W1)
+    expect(error(sql, "23514", tenant=TA, actor=W1, role="cp_api"), "periodo ja iniciado nao entra na fila")
+    expect(value(f"select count(*) from cp.reservation_waitlist where id='{e1}'", tenant=TA, actor=W2, role="cp_api") == "0",
+           "outra unidade nao ve a entrada da fila")
+    expect(error(f"INSERT INTO cp.reservations(tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,expires_at,rule_snapshot) "
+                 f"VALUES('{TA}','{AW}','{UW1}','{W1}','BOOKING','HELD',{slot(96)[0]},{slot(96)[1]},{slot(96)[0]},{slot(96)[1]},{slot(96)[0]},'{{}}'::jsonb)",
+                 "42501", tenant=TA, actor=W1, role="cp_api"), "retencao HELD so nasce pela oferta da fila")
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "0", "periodo ocupado nao gera oferta")
+    expect(entry(e1) == "WAITING:0" and entry(e2) == "WAITING:0", "fila continua aguardando")
+
+    # Cancelamento libera o periodo: a oferta vai ao primeiro da fila, em nome dele, por ate 15 minutos.
+    cancel(r0, AA)
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1", "periodo liberado gera uma oferta")
+    expect(entry(e1) == "OFFERED:1" and entry(e2) == "WAITING:0", "oferta vai ao primeiro da fila")
+    held1 = value(f"select offer_reservation_id from cp.reservation_waitlist where id='{e1}'")
+    expect(value(f"select status||':'||created_by||':'||unit_id||':'||(expires_at<=clock_timestamp()+interval '15 minutes')::text from cp.reservations where id='{held1}'")
+           == f"HELD:{W1}:{UW1}:true", "retencao HELD em nome de quem entrou na fila, com prazo de ate 15 minutos")
+    expect(value(f"select count(*) from cp.outbox where event_type='WAITLIST_OFFERED' and aggregate_id='{e1}'") == "1", "evento da oferta no outbox")
+    expect(value(f"select count(*) from cp.reservation_waitlist where id='{e1}'", tenant=TA, actor=AA, role="cp_api") == "0",
+           "marca da oferta nao sobra depois")
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "0", "periodo retido nao gera segunda oferta")
+    expect(error(f"SELECT cp.waitlist_accept('{TA}','{e1}',1)", "42501", tenant=TA, actor=W2, role="cp_api"), "outra unidade nao aceita a oferta")
+    expect(error(f"UPDATE cp.reservations SET status='CONFIRMED',version=version+1,expires_at=NULL WHERE id='{held1}'", "42501", tenant=TA, actor=W1, role="cp_api"),
+           "confirmar a retencao sem o aceite da fila e recusado")
+
+    # Oferta vencida avanca a fila sem dupla confirmacao.
+    query(f"UPDATE cp.reservations SET expires_at=clock_timestamp()-interval '1 second' WHERE id='{held1}'")
+    expect(value(offer, tenant=TA, actor=W3, role="cp_api") == "1", "oferta vencida avanca a fila")
+    expect(entry(e1) == "EXPIRED:2" and value(f"select status from cp.reservations where id='{held1}'") == "EXPIRED", "oferta vencida encerra a entrada e a retencao")
+    expect(error(f"SELECT cp.waitlist_accept('{TA}','{e1}',2)", "23514", tenant=TA, actor=W1, role="cp_api"), "oferta vencida nao e aceita")
+    expect(entry(e2) == "OFFERED:1", "segundo da fila recebe a oferta")
+    held2 = value(f"select offer_reservation_id from cp.reservation_waitlist where id='{e2}'")
+    # Recusar (cancelar a retencao) encerra a entrada como LEFT e libera o periodo.
+    cancel(held2, W2)
+    expect(entry(e2) == "LEFT:2", "recusar a oferta encerra a entrada")
+    expect(value(offer, tenant=TA, actor=W2, role="cp_api") == "0", "fila vazia nao gera oferta")
+    expect(error(f"UPDATE cp.reservation_waitlist SET state='WAITING',version=version+1 WHERE id='{e2}'", "23514", tenant=TA, actor=W2, role="cp_api"),
+           "entrada encerrada nao volta para a fila")
+
+    # Aceitar: confirmada sem a capacidade de decidir; com aprovacao nas regras aceitas, vira pedido com prazo.
+    r1 = booking(120)
+    e3, sql = join(120, UW3, W3)
+    query(sql, tenant=TA, actor=W3, role="cp_api")
+    cancel(r1, AA)
+    query(offer, tenant=TA, actor=AA, role="cp_api")
+    expect(error(f"SELECT cp.waitlist_accept('{TA}','{e3}',0)", "23514", tenant=TA, actor=W3, role="cp_api"), "aceite com versao antiga e recusado")
+    expect(value(f"SELECT cp.waitlist_accept('{TA}','{e3}',1)", tenant=TA, actor=W3, role="cp_api") == "CONFIRMED", "aceite confirma a reserva")
+    held3 = value(f"select offer_reservation_id from cp.reservation_waitlist where id='{e3}'")
+    expect(entry(e3) == "ACCEPTED:2" and value(f"select status||':'||coalesce(expires_at::text,'-') from cp.reservations where id='{held3}'") == "CONFIRMED:-",
+           "entrada aceita e reserva confirmada")
+    expect(error(f"SELECT cp.waitlist_accept('{TA}','{e3}',2)", "23514", tenant=TA, actor=W3, role="cp_api"), "aceite repetido nao confirma de novo")
+    r2 = booking(144)
+    e4, sql = join(144, UW1, W1, approval="true")
+    query(sql, tenant=TA, actor=W1, role="cp_api")
+    cancel(r2, AA)
+    query(offer, tenant=TA, actor=AA, role="cp_api")
+    expect(value(f"SELECT cp.waitlist_accept('{TA}','{e4}',1)", tenant=TA, actor=W1, role="cp_api") == "PENDING_APPROVAL",
+           "regras aceitas com aprovacao viram pedido")
+    held4 = value(f"select offer_reservation_id from cp.reservation_waitlist where id='{e4}'")
+    expect(value(f"select (expires_at is not null and expires_at<=starts_at)::text from cp.reservations where id='{held4}'") == "true",
+           "pedido da fila com prazo de decisao")
+
+    # Entrada cujo periodo comecou sem vaga encerra; ofertas concorrentes nunca capturam o mesmo periodo.
+    r3 = booking(168)
+    e5, sql = join(168, UW2, W2)
+    query(sql, tenant=TA, actor=W2, role="cp_api")
+    query(f"ALTER TABLE cp.reservation_waitlist DISABLE TRIGGER reservation_waitlist_guard; "
+          f"UPDATE cp.reservation_waitlist SET starts_at=clock_timestamp()-interval '1 minute' WHERE id='{e5}'; "
+          f"ALTER TABLE cp.reservation_waitlist ENABLE TRIGGER reservation_waitlist_guard")
+    query(offer, tenant=TA, actor=AA, role="cp_api")
+    expect(entry(e5) == "CLOSED:1", "periodo iniciado sem vaga encerra a entrada")
+    r4 = booking(192)
+    waits = []
+    for unit, actor in ((UW1, W1), (UW2, W2), (UW3, W3)):
+        wid, sql = join(192, unit, actor)
+        query(sql, tenant=TA, actor=actor, role="cp_api")
+        waits.append(wid)
+    cancel(r4, AA)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda _: query(offer, tenant=TA, actor=AA, role="cp_api", check=False), range(6)))
+    expect(all(r.returncode == 0 for r in results), "ofertas concorrentes terminam sem erro")
+    expect(value(f"select string_agg(state,',' order by created_at,id) from cp.reservation_waitlist where id in ('{waits[0]}','{waits[1]}','{waits[2]}')")
+           == "OFFERED,WAITING,WAITING", "ofertas concorrentes: so o primeiro da fila recebe o periodo")
+    start, end = slot(192)
+    expect(value(f"select count(*) from cp.reservations where amenity_id='{AW}' and status in ('HELD','PENDING_APPROVAL','CONFIRMED') "
+                 f"and starts_at={start}") == "1", "um unico ocupante do periodo")
+    expect(value(f"select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname='reservation_waitlist' "
+                 f"and c.relrowsecurity and c.relforcerowsecurity") == "1", "fila com RLS completa")
+    expect(value("select has_table_privilege('cp_api','cp.reservation_waitlist','DELETE')::text") == "false", "aplicacao nao apaga entradas da fila")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1987,6 +2128,7 @@ def main():
     permit_link_checks()
     reservation_guest_checks()
     visit_rule_checks()
+    waitlist_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
