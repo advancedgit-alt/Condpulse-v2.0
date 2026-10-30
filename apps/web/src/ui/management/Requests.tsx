@@ -7,6 +7,7 @@ import { dateInZone, formatWhen } from '../dateTime';
 import { codeOf, repeatFailure, settleFailure, usePendingOperation } from '../operationIntent';
 import { categoryLabels, civilDate, stateLabels } from '../requestLabels';
 import { RequestAttachments } from '../RequestAttachments';
+import { RequestConversation } from '../RequestConversation';
 import { ActionFeedback, useAccessGuard, useAction, useManagement, managementKey, type ActionResult } from './shared';
 
 const accessCodes = ['MFA_REQUIRED', 'STAFF_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'];
@@ -70,13 +71,13 @@ function ManagedDetail({ requestId, close }: { requestId: string; close(): void 
     <span>Aberto por <bdi>{request.requesterName}</bdi> em {formatWhen(request.createdAt, scope.timeZone)}</span>
     {request.resolution ? <Notice tone="success">Resolução vigente: <bdi>{request.resolution}</bdi></Notice> : null}
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
-    {request.messagesTruncated ? <Notice tone="warning">A conversa mostra as 200 mensagens mais recentes.</Notice> : null}
-    {request.messages.length === 0 ? <p className="field-help">Nenhuma mensagem ainda.</p>
-      : <ol className="request-messages" aria-label="Conversa do pedido">{request.messages.map((message) =>
+    <RequestConversation messages={request.messages} truncated={request.messagesTruncated}
+      load={(before) => requests.staffOlderMessages(scope.tenantId, request.requestId, before)}
+      render={(message) =>
         <li key={message.messageId} className={message.visibility === 'INTERNAL' ? 'request-internal' : undefined}>
           <strong>{message.mine ? 'Você' : <bdi>{message.authorName}</bdi>}{message.authorRole === 'STAFF' ? ' (equipe)' : ' (unidade)'}</strong>
           <span>{formatWhen(message.createdAt, scope.timeZone)}{message.visibility === 'INTERNAL' ? ' · comentário interno, não aparece para a unidade' : ''}</span>
-          <p className="announcement-body"><bdi>{message.body}</bdi></p></li>)}</ol>}
+          <p className="announcement-body"><bdi>{message.body}</bdi></p></li>} />
     <RequestAttachments tenantId={scope.tenantId} requestId={request.requestId} queryKey={managementKey(scope)} canUpload={request.state !== 'CLOSED'} timeZone={scope.timeZone} />
     {request.state === 'CLOSED' ? <Notice tone="info">Pedido encerrado: a conversa fica guardada e não recebe novas mensagens.</Notice>
       : <><StaffMessageForm request={request} /><UpdateForm request={request} done={setOutcome} /></>}

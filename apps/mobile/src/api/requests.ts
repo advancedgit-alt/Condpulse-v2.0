@@ -21,6 +21,8 @@ export interface UnitRequest extends UnitRequestSummary {
   description: string; resolution: string | null; requesterName: string; openedByMe: boolean; resolvedAt: string | null; closedAt: string | null;
   messages: RequestMessage[]; messagesTruncated: boolean;
 }
+/** Mensagens anteriores a uma já exibida (até 200), em ordem de conversa; truncated: há outras mais antigas. */
+export interface RequestMessagePage { messages: RequestMessage[]; truncated: boolean }
 export interface OpenRequest { category: RequestCategory; title: string; description: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,6 +75,15 @@ export function unitRequest(value: unknown, unitId: string | null = null): UnitR
   return { ...summary, description: value.description as string, resolution: value.resolution as string | null, requesterName: value.requesterName as string,
     openedByMe: value.openedByMe as boolean, resolvedAt: value.resolvedAt as string | null, closedAt: value.closedAt as string | null,
     messages: (value.messages as unknown[]).map(requestMessage), messagesTruncated: value.messagesTruncated as boolean };
+}
+
+/** Página anterior: ordem de conversa e sem a mensagem de referência (a validação de cada mensagem recusa comentário interno). */
+export function messagePage(value: unknown, before: string): RequestMessagePage {
+  check(record(value) && typeof value.truncated === 'boolean' && Array.isArray(value.messages) && value.messages.length <= 200);
+  const messages = (value.messages as unknown[]).map(requestMessage);
+  messages.forEach((item, index) => check(item.messageId.toLowerCase() !== before.toLowerCase()
+    && (index === 0 || Date.parse(messages[index - 1]!.createdAt) <= Date.parse(item.createdAt))));
+  return { messages, truncated: value.truncated as boolean };
 }
 
 const LINE_BREAK = /\r\n|\r|\n|\u2028|\u2029/;

@@ -199,6 +199,28 @@ public class RequestStore {
   from cp.request_messages m
   """;
  private record Messages(List<RequestModels.Message> items,boolean truncated) {}
+ /** O pedido é visível pela unidade de quem consulta (mesma regra do detalhe da unidade). */
+ public boolean unitVisible(UUID tenant,UUID request) {
+  return Boolean.TRUE.equals(jdbc.queryForObject("""
+   select exists(select 1 from cp.service_requests r where r.tenant_id=? and r.id=? and cp.request_unit_member(r.tenant_id,r.unit_id))
+   """,Boolean.class,tenant,request));
+ }
+ /**
+  * Até 200 mensagens anteriores à mensagem de referência, na mesma ordem do detalhe (horário e identificador). A
+  * referência precisa ser visível a quem consulta no mesmo pedido; senão, null. A política do banco continua escondendo
+  * o comentário interno da unidade.
+  */
+ public RequestModels.MessagePage olderMessages(UUID tenant,UUID request,UUID before,boolean staffView) {
+  var cursor=jdbc.query("select created_at from cp.request_messages where tenant_id=? and request_id=? and id=?",
+   (r,n)->r.getTimestamp("created_at"),tenant,request,before);
+  if(cursor.isEmpty()) return null;
+  var rows=new ArrayList<>(jdbc.query(MESSAGE_SELECT+" where m.tenant_id=? and m.request_id=? and (m.created_at,m.id)<(?,?)"
+   +" order by m.created_at desc,m.id desc limit ?",(r,n)->message(r,staffView),tenant,request,cursor.getFirst(),before,MESSAGES+1));
+  boolean truncated=rows.size()>MESSAGES;
+  var page=new ArrayList<>(rows.subList(0,Math.min(rows.size(),MESSAGES)));
+  Collections.reverse(page);
+  return new RequestModels.MessagePage(page,truncated);
+ }
  /** As 200 mais recentes, em ordem de conversa; a política do banco esconde o comentário interno da unidade. */
  private Messages messages(UUID tenant,UUID request,boolean staffView) {
   var rows=new ArrayList<>(jdbc.query(MESSAGE_SELECT+" where m.tenant_id=? and m.request_id=? order by m.created_at desc,m.id desc limit ?",

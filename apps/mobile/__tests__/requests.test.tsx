@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClientProvider } from '@tanstack/react-query';
 import { newQueryClient } from '../src/App';
 import { ApiError, createApi, type CondPulseApi } from '../src/api/client';
-import { multiline, requestMessage, singleLine, unitRequest, unitRequestSummary, type OpenRequest, type UnitRequest } from '../src/api/requests';
+import { messagePage, multiline, requestMessage, singleLine, unitRequest, unitRequestSummary, type OpenRequest, type RequestMessage, type UnitRequest } from '../src/api/requests';
 import { ContractError } from '../src/api/reservations';
 import { Requests, type RequestPendingStore } from '../src/ui/Requests';
 
@@ -25,7 +25,8 @@ const summary = (value: UnitRequest) => ({ requestId: value.requestId, unitId: v
 function fakeApi(initial: UnitRequest[] = []) {
   const state = { requests: [...initial], opens: [] as { body: OpenRequest; key: string }[], messages: [] as { body: string; key: string }[],
     openError: null as ApiError | null, messageError: null as ApiError | null, listError: null as ApiError | null, detailError: null as ApiError | null,
-    openKeys: new Map<string, UnitRequest>(), messageKeys: new Set<string>() };
+    openKeys: new Map<string, UnitRequest>(), messageKeys: new Set<string>(), older: [] as RequestMessage[], olderError: null as ApiError | null,
+    olderCalls: [] as string[] };
   const api = {
     unitRequests: jest.fn(async () => { if (state.listError) throw state.listError; return { requests: state.requests.map(summary), truncated: false }; }),
     openRequest: jest.fn(async (_t: string, unitId: string, body: OpenRequest, key: string) => {
@@ -41,6 +42,13 @@ function fakeApi(initial: UnitRequest[] = []) {
     unitRequest: jest.fn(async (_t: string, _u: string, id: string) => {
       if (state.detailError) throw state.detailError;
       return state.requests.find((item) => item.requestId === id)!;
+    }),
+    olderRequestMessages: jest.fn(async (_t: string, _id: string, before: string) => {
+      state.olderCalls.push(before);
+      if (state.olderError) { const error = state.olderError; state.olderError = null; throw error; }
+      const index = state.older.findIndex((item) => item.messageId === before);
+      const end = index < 0 ? state.older.length : index;
+      return { messages: state.older.slice(Math.max(0, end - 2), end), truncated: end - 2 > 0 };
     }),
     requestMessage: jest.fn(async (_t: string, id: string, body: string, key: string) => {
       state.messages.push({ body, key });
@@ -239,5 +247,36 @@ describe('pedidos da unidade no celular', () => {
     expect(await screen.findByText('Pedido encerrado pela gestão.')).toBeTruthy();
     expect(await screen.findByText('Pedido encerrado. A conversa fica guardada; se precisar, abra um novo pedido.')).toBeTruthy();
     expect(screen.queryByLabelText('Mensagem para a gestão')).toBeNull();
+  }, 20000);
+
+  it('conversa longa: carrega mensagens anteriores em ordem e falha oferece nova tentativa', async () => {
+    const old = (n: number) => ({ messageId: `54000000-0000-4000-8000-0000000002${n}0`, authorRole: 'UNIT' as const, authorName: 'Morador Fictício',
+      mine: false, body: `Mensagem antiga ${n}`, createdAt: `2030-01-06T1${n}:00:00Z` });
+    const fake = fakeApi([detail({ messagesTruncated: true })]);
+    fake.state.older = [old(1), old(2), old(3)];
+    await mount(fake);
+    await press('Ver conversa: Vazamento na pia');
+    expect(await screen.findByText('A conversa mostra as mensagens mais recentes.')).toBeTruthy();
+    fake.state.olderError = new ApiError(503, 'SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE', 'Pedidos indisponíveis no momento.', false);
+    await press('Carregar mensagens anteriores');
+    expect(await screen.findByText('Pedidos indisponíveis no momento.')).toBeTruthy();
+    await press('Carregar mensagens anteriores');
+    expect(await screen.findByText('Mensagem antiga 2')).toBeTruthy();
+    expect(screen.queryByText('Mensagem antiga 1')).toBeNull();
+    await press('Carregar mensagens anteriores');
+    expect(await screen.findByText('Mensagem antiga 1')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Carregar mensagens anteriores' })).toBeNull());
+    expect(fake.state.olderCalls).toEqual([staffMessage.messageId, staffMessage.messageId, old(2).messageId]);
+    const texts = screen.getAllByText(/Mensagem antiga|Vamos verificar/).map((node) => node.props.children);
+    expect(texts).toEqual(['Mensagem antiga 1', 'Mensagem antiga 2', 'Mensagem antiga 3', 'Vamos verificar amanhã.']);
+    // Contrato: ordem de conversa, sem a referência, sem comentário interno; endereço com a referência.
+    expect(messagePage({ messages: [staffMessage], truncated: false }, R2).messages).toHaveLength(1);
+    expect(() => messagePage({ messages: [staffMessage], truncated: false }, staffMessage.messageId)).toThrow(ContractError);
+    expect(() => messagePage({ messages: [{ ...staffMessage, visibility: 'INTERNAL' }], truncated: false }, R2)).toThrow(ContractError);
+    expect(() => messagePage({ messages: [{ ...staffMessage, createdAt: '2030-01-08T00:00:00Z' }, staffMessage], truncated: false }, R2)).toThrow(ContractError);
+    const calls: string[] = [];
+    const api = createApi({ baseUrl: 'https://api.example.invalid', tokens, fetch: async (url) => { calls.push(String(url)); return json({ messages: [], truncated: false }); } });
+    expect((await api.olderRequestMessages(TENANT, R1, staffMessage.messageId)).truncated).toBe(false);
+    expect(calls).toEqual([`https://api.example.invalid/v1/tenants/${TENANT}/requests/${R1}/messages?before=${staffMessage.messageId}`]);
   }, 20000);
 });

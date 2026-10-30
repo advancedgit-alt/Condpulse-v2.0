@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { createRequestsApi, managedRequest, requestMessage, unitRequest, unitRequestSummary } from './requests';
+import { createRequestsApi, managedRequest, messagePage, requestMessage, unitRequest, unitRequestSummary } from './requests';
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -46,6 +46,25 @@ describe('contrato dos pedidos', () => {
     expect(() => unitRequestSummary({ ...summary, category: 'PLUMBING' })).toThrow();
     expect(managedRequest(managed).team).toHaveLength(1);
     expect(() => managedRequest({ ...managed, assigneeMembershipId: null })).toThrow();
+  });
+  it('mensagens anteriores: em ordem de conversa, sem a referência e sem comentário interno para a unidade', async () => {
+    const before = '97000000-0000-4000-8000-000000000009';
+    const older = [{ ...staffMessage, createdAt: '2030-01-01T11:00:00Z' },
+      { ...staffMessage, messageId: '97000000-0000-4000-8000-000000000002', createdAt: '2030-01-01T11:30:00Z' }];
+    expect(messagePage({ messages: older, truncated: true }, false, before).messages).toHaveLength(2);
+    expect(() => messagePage({ messages: [...older].reverse(), truncated: false }, false, before)).toThrow();
+    expect(() => messagePage({ messages: [{ ...older[0], messageId: before }], truncated: false }, false, before)).toThrow();
+    expect(() => messagePage({ messages: [{ ...older[0], visibility: 'INTERNAL' }], truncated: false }, false, before)).toThrow();
+    expect(() => messagePage({ messages: older, truncated: 'no' }, false, before)).toThrow();
+    expect(() => messagePage({ messages: Array.from({ length: 201 }, () => older[0]), truncated: true }, false, before)).toThrow();
+    const fetcher = vi.fn<typeof globalThis.fetch>();
+    fetcher.mockImplementation(async () => json({ messages: older, truncated: false }));
+    const client = createRequestsApi(new CondPulseApi({ fetch: fetcher }));
+    expect((await client.olderMessages(tenant, requestId, before)).truncated).toBe(false);
+    expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/requests/${requestId}/messages?before=${before}`);
+    fetcher.mockImplementation(async () => json({ messages: [{ ...older[0], authorName: 'GESTÃO FICTÍCIA', visibility: 'INTERNAL' }], truncated: false }));
+    expect((await client.staffOlderMessages(tenant, requestId, before)).messages[0]!.visibility).toBe('INTERNAL');
+    expect(String(fetcher.mock.calls.at(-1)![0])).toBe(`/v1/tenants/${tenant}/management/requests/${requestId}/messages?before=${before}`);
   });
   it('chave de operação na abertura e na mensagem; atualização pela versão lida', async () => {
     let reply: () => Response = () => json(opened, 201, { 'Idempotency-Replayed': 'false' });

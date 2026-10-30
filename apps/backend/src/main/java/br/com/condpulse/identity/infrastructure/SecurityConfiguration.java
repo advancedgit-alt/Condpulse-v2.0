@@ -109,7 +109,7 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/imports/*/discard").authenticated()
     // Pedidos da unidade: autenticação aqui; vínculo da unidade ou capacidade com AAL2 (gestão) no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*","/v1/tenants/*/management/requests",
-      "/v1/tenants/*/management/requests/*").authenticated()
+      "/v1/tenants/*/management/requests/*","/v1/tenants/*/requests/*/messages","/v1/tenants/*/management/requests/*/messages").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*/messages",
       "/v1/tenants/*/management/requests/*/messages","/v1/tenants/*/management/requests/*/state").authenticated()
     // Mudança e entrega de móveis (CP-042): vínculo adulto da unidade, gestão (AAL2) ou portaria (AAL2) no serviço e no banco.

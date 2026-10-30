@@ -90,6 +90,16 @@ public class RequestService {
    return found;
   });
  }
+ /** Mensagens anteriores para a unidade: pedido e mensagem de referência visíveis; senão, não encontrado. */
+ public RequestModels.MessagePage unitOlderMessages(UUID actor,UUID tenant,UUID requestId,UUID before) {
+  if(requestId==null || before==null) throw notFound();
+  return resident(actor,tenant,Map.of(),context->{
+   if(!store.unitVisible(tenant,requestId)) throw notFound();
+   var page=store.olderMessages(tenant,requestId,before,false);
+   if(page==null) throw notFound();
+   return page;
+  });
+ }
  public RequestModels.MessageResult unitMessage(UUID actor,UUID tenant,UUID requestId,String key,RequestModels.UnitMessage request) {
   if(requestId==null) throw notFound();
   requireKey(key);
@@ -121,6 +131,16 @@ public class RequestService {
    var found=store.managedRequest(tenant,requestId);
    if(found==null) throw notFound();
    return found;
+  });
+ }
+ /** Mensagens anteriores para a gestão (inclui comentários internos), pela mesma capacidade do detalhe. */
+ public RequestModels.MessagePage staffOlderMessages(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,UUID before) {
+  if(requestId==null || before==null) throw notFound();
+  return staff(actor,tenant,assurance,Map.of(),context->{
+   if(store.head(tenant,requestId)==null) throw notFound();
+   var page=store.olderMessages(tenant,requestId,before,true);
+   if(page==null) throw notFound();
+   return page;
   });
  }
  public RequestModels.MessageResult staffMessage(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,String key,

@@ -7129,6 +7129,78 @@
       }
     },
     "/v1/tenants/{tenantId}/requests/{requestId}/messages": {
+      "get": {
+        "operationId": "listUnitRequestOlderMessages",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": true,
+            "description": "Identificador da mensagem mais antiga já exibida.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Até 200 mensagens visíveis anteriores à mensagem de referência, em ordem de conversa; comentário interno nunca vem.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido fora do alcance ou mensagem de referência inexistente, de outro pedido ou invisível"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
       "post": {
         "operationId": "addUnitRequestMessage",
         "security": [
@@ -7377,6 +7449,81 @@
       }
     },
     "/v1/tenants/{tenantId}/management/requests/{requestId}/messages": {
+      "get": {
+        "operationId": "listManagedRequestOlderMessages",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": true,
+            "description": "Identificador da mensagem mais antiga já exibida.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Até 200 mensagens anteriores (inclusive comentários internos) para a gestão com requests.manage e AAL2.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido fora do alcance ou mensagem de referência inexistente, de outro pedido ou invisível"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
       "post": {
         "operationId": "addStaffRequestMessage",
         "security": [
@@ -18834,6 +18981,27 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "RequestMessagePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "truncated"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/RequestMessage"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Há mensagens ainda mais antigas."
           }
         }
       }

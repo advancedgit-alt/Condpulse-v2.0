@@ -41,6 +41,11 @@ public class RequestController {
      @PathVariable UUID requestId) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.unitRequest(account(jwt),tenantId,requestId));
  }
+ @GetMapping("/v1/tenants/{tenantId}/requests/{requestId}/messages")
+ public ResponseEntity<RequestModels.MessagePage> olderMessages(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID requestId,@RequestParam(name="before") UUID before) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.unitOlderMessages(account(jwt),tenantId,requestId,before));
+ }
  @PostMapping("/v1/tenants/{tenantId}/requests/{requestId}/messages")
  public ResponseEntity<RequestModels.Message> message(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID requestId,
      @RequestHeader("Idempotency-Key") String key,@RequestBody RequestModels.UnitMessage request) {
@@ -57,6 +62,12 @@ public class RequestController {
  public ResponseEntity<RequestModels.ManagedRequest> managedRequest(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
      @PathVariable UUID requestId) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.managedRequest(account(jwt),tenantId,assurance(jwt),requestId));
+ }
+ @GetMapping("/v1/tenants/{tenantId}/management/requests/{requestId}/messages")
+ public ResponseEntity<RequestModels.MessagePage> staffOlderMessages(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID requestId,@RequestParam(name="before") UUID before) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+   .body(service.staffOlderMessages(account(jwt),tenantId,assurance(jwt),requestId,before));
  }
  @PostMapping("/v1/tenants/{tenantId}/management/requests/{requestId}/messages")
  public ResponseEntity<RequestModels.Message> staffMessage(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
