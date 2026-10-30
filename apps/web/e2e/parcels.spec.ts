@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { scanAccessibility } from './a11y';
 import { ACCOUNT, TENANT_A, UNIT_A, installSyntheticApi, signIn, type ApiState } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
@@ -119,6 +120,7 @@ test('portaria registra recebimento uma única vez e entrega à pessoa escolhida
   await page.goto('/contextos');
   await page.getByRole('link', { name: 'Abrir portaria · Condomínio Sintético A' }).click();
   await expect(page.getByRole('heading', { name: 'Receber encomenda' })).toBeVisible();
+  await scanAccessibility(page, 'portaria/encomendas');
   const form = page.getByRole('form', { name: 'Receber encomenda' });
   await form.getByLabel('Unidade', { exact: true }).selectOption(UNIT_A);
   await form.getByLabel('Volumes').fill('2');
