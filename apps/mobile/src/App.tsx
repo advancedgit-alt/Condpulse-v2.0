@@ -42,7 +42,7 @@ export default function App() {
       <StatusBar style="dark" />
       {!config ? <Text style={styles.message}>Configuração do aplicativo incompleta. Procure o suporte do CondPulse.</Text>
         : failed ? <Text style={styles.message}>Não foi possível abrir o armazenamento seguro do aparelho.</Text>
-          : manager && api ? <Root manager={manager} api={api} newKey={newKey} events={events} /> : <Text style={styles.message}>Abrindo…</Text>}
+          : manager && api ? <Root manager={manager} api={api} newKey={newKey} events={events} webOrigin={config?.apiUrl ?? null} /> : <Text style={styles.message}>Abrindo…</Text>}
     </SafeAreaView>
   </QueryClientProvider>;
 }

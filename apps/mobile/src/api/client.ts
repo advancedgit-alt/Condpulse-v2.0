@@ -1,5 +1,6 @@
 import { credentialPage, eventPage } from './access';
 import { currentRules, move, type CreateMove } from './moves';
+import { arrival, arrivalPage, permit, permitLink, permitPage, type CreatePermit } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
 import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type WaitlistChange } from './waitlist';
@@ -181,6 +182,39 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/access-credentials`, (value) => credentialPage(value, unitId), signal ? { signal } : {}),
     unitDeviceEvents: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/device-events`, eventPage, signal ? { signal } : {}),
+    unitPermits: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/permits`, (value) => permitPage(value, unitId), signal ? { signal } : {}),
+    createPermit: (tenantId: string, unitId: string, body: CreatePermit, key: string) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/permits`, (value, response) => {
+        const created = permit(value, unitId);
+        const repeated = replayed(response);
+        // Convite novo nasce em aberto, com o nome e o período enviados; repetição devolve o estado atual.
+        if (!repeated && (!['SCHEDULED', 'ACTIVE'].includes(created.state) || created.visitorName !== body.visitorName
+          || Date.parse(created.validFrom) !== Date.parse(body.validFrom) || Date.parse(created.validUntil) !== Date.parse(body.validUntil))) throw invalid(true);
+        return { permit: created, replayed: repeated };
+      }, { method: 'POST', body, key: operationKey(key) }),
+    revokePermit: (tenantId: string, unitId: string, permitId: string, body: { reason: string; expectedVersion: number }) =>
+      request(`${tenant(tenantId)}/permits/${identifier(permitId)}/revoke`, (value) => {
+        const revoked = permit(value, unitId);
+        if (revoked.permitId !== permitId || revoked.state !== 'REVOKED') throw invalid(true);
+        return revoked;
+      }, { method: 'POST', body }),
+    shareLink: (tenantId: string, permitId: string) =>
+      request(`${tenant(tenantId)}/permits/${identifier(permitId)}/link`, permitLink, { method: 'POST' }),
+    revokeLink: (tenantId: string, unitId: string, permitId: string) =>
+      request(`${tenant(tenantId)}/permits/${identifier(permitId)}/link/revoke`, (value) => {
+        const updated = permit(value, unitId);
+        if (updated.permitId !== permitId || updated.shareLinkActive) throw invalid(true);
+        return updated;
+      }, { method: 'POST' }),
+    unitArrivals: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/arrivals`, (value) => arrivalPage(value, unitId), signal ? { signal } : {}),
+    decideArrival: (tenantId: string, unitId: string, arrivalId: string, decision: 'APPROVE' | 'DENY') =>
+      request(`${tenant(tenantId)}/arrivals/${identifier(arrivalId)}/decision`, (value) => {
+        const decided = arrival(value, unitId);
+        if (decided.arrivalId !== arrivalId) throw invalid(true);
+        return decided;
+      }, { method: 'POST', body: { decision } }),
     moveRules: (tenantId: string, signal?: AbortSignal) => request(`${tenant(tenantId)}/move-rules`, currentRules, signal ? { signal } : {}),
     unitMoves: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/moves`, (value) => {
