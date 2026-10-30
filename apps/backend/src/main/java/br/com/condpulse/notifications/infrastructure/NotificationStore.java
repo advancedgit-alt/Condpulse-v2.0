@@ -23,6 +23,8 @@ public class NotificationStore {
     when 'ARRIVAL_WAITING' then(select case when a.state='WAITING' and a.expires_at<=now() then 'EXPIRED' else a.state end
      from cp.arrival_requests a where a.tenant_id=n.tenant_id and a.id=n.resource_id)
     when 'PARCEL_RECEIVED' then(select p.status from cp.parcels p where p.tenant_id=n.tenant_id and p.id=n.resource_id)
+    when 'WAITLIST_OFFERED' then(select case when w.state='OFFERED' and w.offer_expires_at<=clock_timestamp() then 'EXPIRED' else w.state end
+     from cp.reservation_waitlist w where w.tenant_id=n.tenant_id and w.id=n.resource_id)
    end as resource_state
   """;
  private static final String SELECT=COLUMNS+" from cp.notifications n\n";

@@ -51,6 +51,8 @@ describe('caixa da unidade no celular', () => {
     expect(() => inboxNotification({ ...item(), resourceState: 'DELIVERED' })).toThrow(ContractError);
     expect(() => inboxPage({ items: [item()], unread: 0 }, UNIT)).toThrow(ContractError);
     expect(inboxPage({ items: [item()], unread: 3 }, UNIT).unread).toBe(3);
+    expect(inboxNotification(item({ kind: 'WAITLIST_OFFERED', resourceState: 'OFFERED' }), UNIT).kind).toBe('WAITLIST_OFFERED');
+    expect(() => inboxNotification(item({ kind: 'WAITLIST_OFFERED', resourceState: 'RECEIVED' }), UNIT)).toThrow(ContractError);
     const calls: { url: string; init: RequestInit }[] = [];
     let reply = new Response(JSON.stringify({ ...item(), state: 'READ_IN_APP', readAt: '2030-01-07T11:10:00Z' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     const api = createApi({ baseUrl: 'https://api.example.invalid', tokens: { accessToken: async () => 'synthetic', refresh: async () => null, expire: async () => {} } as never,
@@ -120,4 +122,17 @@ describe('caixa da unidade no celular', () => {
     expect(topicKeys.announcements).toEqual(['announcements']);
     expect(topicKeys.requests).toEqual(['requests', 'request']);
   });
+
+  it('oferta da fila de espera aponta as reservas e atualiza a fila', async () => {
+    const queries = newQueryClient(Infinity);
+    const waitlistKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'waitlist'];
+    queries.setQueryData(waitlistKey, { entries: [] });
+    const fake = await mount(fakeApi([item({ kind: 'WAITLIST_OFFERED', resourceState: 'OFFERED' })]), queries);
+    expect(await screen.findByText('Vaga da fila de espera · Não aberto')).toBeTruthy();
+    expect(screen.getByText('Situação atual: oferta aguardando o seu aceite, com prazo.')).toBeTruthy();
+    await press(/^Abrir: Vaga da fila de espera/);
+    expect(await screen.findByText('Aviso aberto. A oferta aparece em “Fila de espera”, nas reservas desta tela, para aceitar no prazo.')).toBeTruthy();
+    expect(fake.state.opens).toEqual([N1]);
+    expect(queries.getQueryState(waitlistKey)?.isInvalidated).toBe(true);
+  }, 20000);
 });

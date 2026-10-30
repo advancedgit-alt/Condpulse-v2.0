@@ -49,6 +49,7 @@ e-mail nem SMS neste recorte.
 | --- | --- | --- |
 | `ARRIVAL_REQUESTED` (chegada ainda aguardando) | `ARRIVAL_WAITING` | Morador e responsável da unidade; dependente só com `visits.decide` |
 | `PARCEL_RECEIVED` (encomenda ainda a retirar) | `PARCEL_RECEIVED` | Morador e responsável; dependente só com `parcels.view` |
+| `WAITLIST_OFFERED` (retenção da fila ainda no prazo, V030) | `WAITLIST_OFFERED` | Só quem entrou na fila (autor da retenção); dependente autor só com `reservations.create` |
 
 - Vínculo vigente, conta ativa e unidade ativa no momento do processamento; o banco recusa aviso para destinatário
   inapto, para outra unidade ou para unidade diferente da do registro (`notifications_worker_insert`).
@@ -58,7 +59,12 @@ e-mail nem SMS neste recorte.
   (`POST /v1/tenants/{t}/notifications/{id}/open`), que grava `READ_IN_APP` uma vez, com horário do banco. Listar ou
   atualizar não marca nada. Quem perde o vínculo (ou a permissão do tipo) deixa de ver e de abrir os avisos. A página e
   a contagem de não abertos saem da mesma instrução, sem divergência por abertura em outra aba.
-- Web: seção "Caixa da unidade" no início do morador; some sem erro técnico quando a API está desligada.
+- Web: seção "Caixa da unidade" no início do morador; some sem erro técnico quando a API está desligada. Celular: a mesma
+  seção, apontando Visitas, Encomendas ou a fila de espera nas reservas.
+- Oferta da fila (V030): o worker confere o autor pela retenção indicada no evento (não lê a fila fora da passada de
+  oferta); retenção vencida ou já decidida quando o worker chega vira `SKIPPED`, sem aviso. A caixa mostra a situação
+  atual da entrada (`OFFERED`, `ACCEPTED`, `LEFT`, `EXPIRED`, `CLOSED`); oferta com prazo vencido aparece como `EXPIRED`
+  mesmo antes da passada seguinte.
 
 | Operação | Rota |
 | --- | --- |
