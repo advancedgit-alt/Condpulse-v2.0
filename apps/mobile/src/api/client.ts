@@ -1,4 +1,5 @@
 import { credentialPage, eventPage } from './access';
+import { accessRecordPage } from './accessHistory';
 import { announcementPage, openedAnnouncement } from './announcements';
 import { currentRules, move, type CreateMove } from './moves';
 import { arrival, arrivalPage, permit, permitLink, permitPage, rulePage, visitRule, type CreatePermit, type CreateRule } from './visits';
@@ -307,6 +308,8 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
         if (cancelled.moveId !== moveId || cancelled.state !== 'CANCELLED') throw invalid(true);
         return cancelled;
       }, { method: 'POST', body: { note: null, expectedVersion } }),
+    unitAccessRecords: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/access-events`, (value) => accessRecordPage(value, unitId), signal ? { signal } : {}),
     cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
         (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),
