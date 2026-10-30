@@ -35,7 +35,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Retirada delegada com código — CP-041
 
 - V024: quem pode retirar autoriza um terceiro para uma encomenda; código de 8 dígitos exibido uma vez; o banco guarda só o HMAC-SHA256 calculado com segredo do servidor fora do banco (`CP_PARCEL_CODE_KEY`) e só compara o autenticador — sem a chave a delegação responde 503 `DELEGATION_UNAVAILABLE`; a portaria confere o código da própria encomenda com até 5 tentativas (gravadas mesmo na recusa) e registra a retirada com evidência `DELEGATION`; código usado não volta a valer. Atrás de `CP_PARCELS_ENABLED` (ligada); Merge `cd31505` (PR #72, CI 40999901120 verde). V024 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41000850664; repetição 41001042891 sem linha nova; 23 linhas no histórico; ENABLE/FORCE RLS em `cp.parcel_delegations`). Smoke público 41001237346 verde. Enquanto `CP_PARCEL_CODE_KEY` não for cadastrada, a delegação responde 503 (fail-closed). Não homologado com login real. Detalhes em [ENCOMENDAS.md](ENCOMENDAS.md).
-- Pendentes: delegação pelo celular, aviso ao morador (worker) e ensaio com Auth real.
+- Celular: encomendas da unidade e retirada por terceiro (autorizar, código exibido uma vez, nova autorização e cancelar com confirmação), testes Jest simulados; sem ensaio em aparelho.
+- Pendentes: aviso ao morador (worker), ensaio com Auth real e em aparelho.
 
 ## Adaptador simulado de acesso — CP-043
 

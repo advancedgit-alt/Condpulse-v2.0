@@ -28,6 +28,9 @@ diante). Sem distribuição: falta build de desenvolvimento próprio e teste em 
 - Minhas reservas (30 dias): situação, motivo, retirar pedido ou cancelar com confirmação e versão lida.
 - Fila de espera (CP-040): entrar na fila de um horário ocupado (ou depois de recusa `WAITLIST_PRIORITY`), posição, prazo
   da oferta, aceitar, recusar e sair com confirmação; entrar e aceitar repetem com a mesma chave quando o resultado é incerto.
+- Encomendas (CP-029/CP-041): a retirar e retiradas da unidade; autorizar retirada por terceiro (código de 8 dígitos
+  exibido uma vez), gerar nova autorização e cancelar com confirmação da autorização exibida; envio incerto repete com
+  a mesma chave.
 - Escrita pelo app usa `Authorization: Bearer` sem CSRF: o resource server do Spring não exige CSRF com token Bearer, e
   só o cookie de sessão do navegador continua exigindo (teste `nativeBearerWritesWithoutCsrfAndOnlyBearerSkipsIt`).
 
@@ -35,7 +38,8 @@ diante). Sem distribuição: falta build de desenvolvimento próprio e teste em 
 
 - Com um vínculo residencial escolhido, o aplicativo abre o canal da unidade (`/v1/tenants/{t}/units/{u}/events`) por
   `XMLHttpRequest` em fluxo, com o token Bearer só no cabeçalho, buscado de novo a cada conexão.
-- `changed` com `reservations` consulta de novo as reservas e a ocupação; outros assuntos não têm tela no celular.
+- `changed` com `reservations` consulta de novo as reservas e a ocupação, e com `parcels` as encomendas; outros assuntos
+  não têm tela no celular.
   Reconexão consulta tudo da unidade; `revoked` confere a identidade e não reconecta; `expired` reabre em 5 s.
 - Em segundo plano o canal fecha; ao voltar ao primeiro plano, tudo da unidade é consultado de novo e o canal reabre.
 - Recusa do servidor (função desligada, 401, 429, 503) não mostra erro: nova tentativa com espera de 30 s até 5 min.

@@ -1,4 +1,5 @@
 import { currentRules, move, type CreateMove } from './moves';
+import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
 import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type WaitlistChange } from './waitlist';
 /**
@@ -57,6 +58,19 @@ const messages: Record<string, string> = {
   RESERVATION_RANGE_INVALID: 'Período de consulta inválido.',
   AMENITY_AVAILABILITY_UNAVAILABLE: 'Não foi possível consultar a ocupação da área agora. Tente novamente.',
   RESERVATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Confira suas reservas antes de repetir.',
+  DELEGATION_NAME_INVALID: 'Informe o nome de quem vai retirar, com 2 a 160 caracteres.',
+  DELEGATION_DOCUMENT_INVALID: 'Informe só os 2 a 4 últimos caracteres do documento.',
+  DELEGATION_VALIDITY_INVALID: 'A autorização vale de 15 minutos a 7 dias.',
+  DELEGATION_NOT_ACTIVE: 'Não há autorização em vigor para esta encomenda.',
+  DELEGATION_CHANGED: 'A autorização foi alterada. Atualize a encomenda.',
+  DELEGATION_NOT_ALLOWED: 'Seu vínculo não permite autorizar retirada desta encomenda.',
+  DELEGATION_UNAVAILABLE: 'A retirada por código ainda não está disponível neste condomínio.',
+  DELEGATION_NOT_FOUND: 'Não há autorização de retirada em vigor para esta encomenda.',
+  PARCEL_NOT_FOUND: 'Encomenda não encontrada.',
+  PARCEL_ALREADY_DELIVERED: 'Esta encomenda já foi retirada.',
+  PARCEL_VOIDED: 'Este registro de encomenda foi anulado e não está mais para retirada.',
+  PARCEL_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Atualize e confira antes de repetir.',
+  UNIT_ACCESS_DENIED: 'Unidade não disponível para esta operação.',
   IDEMPOTENCY_KEY_REUSED: 'Este envio já foi usado para outro pedido. Comece de novo.',
   IDEMPOTENCY_KEY_EXPIRED: 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.',
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
@@ -71,7 +85,6 @@ const messages: Record<string, string> = {
   MOVE_CLOSED: 'Este pedido de mudança já foi decidido ou encerrado.',
   MOVE_CANCELLATION_CLOSED: 'O período já começou. Fale com a gestão para cancelar.',
   MOVE_NOT_FOUND: 'Pedido de mudança não encontrado.',
-  UNIT_ACCESS_DENIED: 'Unidade não disponível para esta operação.',
   MOVE_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Confira os pedidos antes de repetir.',
   TENANT_ACCESS_DENIED: 'Condomínio não disponível para este acesso.',
   WAITLIST_SLOT_AVAILABLE: 'O período está livre. Faça a reserva diretamente.',
@@ -190,6 +203,23 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
     cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
         (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),
+    unitParcels: (tenantId: string, unitId: string, status: 'RECEIVED' | 'DELIVERED', signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/parcels?status=${status}`, (value) => {
+        const page = parcelPage(value, unitId);
+        if (page.parcels.some((item) => item.status !== status)) throw invalid();
+        return page;
+      }, signal ? { signal } : {}),
+    parcelDelegation: (tenantId: string, parcelId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/parcels/${identifier(parcelId)}/delegation`, (value) => currentDelegation(value, parcelId), signal ? { signal } : {}),
+    delegate: (tenantId: string, parcelId: string, body: CreateDelegation, key: string) =>
+      request(`${tenant(tenantId)}/parcels/${identifier(parcelId)}/delegation`, (value, response) => issued(value, parcelId, replayed(response)),
+        { method: 'POST', body, key: operationKey(key) }),
+    revokeDelegation: (tenantId: string, parcelId: string, body: { delegationId: string; expectedVersion: number }) =>
+      request(`${tenant(tenantId)}/parcels/${identifier(parcelId)}/delegation/revoke`, (value) => {
+        const revoked = delegation(value);
+        if (revoked.delegationId !== body.delegationId || revoked.state !== 'REVOKED') throw invalid(true);
+        return revoked;
+      }, { method: 'POST', body }),
     unitWaitlist: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/waitlist`, waitlistPage, signal ? { signal } : {}),
     joinWaitlist: (tenantId: string, body: JoinWaitlist, key: string) =>
