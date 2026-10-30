@@ -143,6 +143,8 @@ describe('caixa da unidade no celular', () => {
     const requestsKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'requests'];
     const movesKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'moves'];
     queries.setQueryData(requestsKey, { requests: [] }); queries.setQueryData(movesKey, { moves: [] });
+    const detailKey = ['private', ACCOUNT, 'tenant', TENANT, 'unit', UNIT, 'request', item().resourceId];
+    queries.setQueryData(detailKey, { messages: [] });
     const fake = await mount(fakeApi([item({ kind: 'REQUEST_UPDATED', resourceState: 'WAITING_RESIDENT' }),
       item({ notificationId: N2, kind: 'MOVE_DECIDED', resourceState: 'REJECTED' })]), queries);
     expect(await screen.findByText('Atualização no pedido da unidade · Não aberto')).toBeTruthy();
@@ -151,6 +153,7 @@ describe('caixa da unidade no celular', () => {
     await press(/^Abrir: Atualização no pedido da unidade/);
     expect(await screen.findByText('Aviso aberto. O pedido está em “Pedidos”, nesta tela.')).toBeTruthy();
     expect(queries.getQueryState(requestsKey)?.isInvalidated).toBe(true);
+    expect(queries.getQueryState(detailKey)?.isInvalidated).toBe(true);
     await press(/^Abrir: Decisão sobre a mudança/);
     expect(await screen.findByText('Aviso aberto. A mudança está em “Mudança e entrega de móveis”, nesta tela.')).toBeTruthy();
     expect(queries.getQueryState(movesKey)?.isInvalidated).toBe(true);

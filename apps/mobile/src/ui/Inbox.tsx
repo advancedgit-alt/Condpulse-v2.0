@@ -79,6 +79,8 @@ export function Inbox({ api, accountId, tenantId, unitId, timeZone }: { api: Con
       await api.openNotification(tenantId, item.notificationId);
       // O detalhe fica na seção da própria unidade, consultado de novo com as permissões de quem abriu.
       void queries.invalidateQueries({ queryKey: [...scope, section[item.kind]] });
+      // A conversa aberta do pedido também: a resposta que motivou o aviso aparece sem fechar e abrir de novo.
+      if (item.kind === 'REQUEST_UPDATED') void queries.invalidateQueries({ queryKey: [...scope, 'request', item.resourceId] });
       setOutcome(opened[item.kind]);
     } catch (error) { setFailure(error); }
     finally { setOpening(null); void queries.invalidateQueries({ queryKey: key }); }

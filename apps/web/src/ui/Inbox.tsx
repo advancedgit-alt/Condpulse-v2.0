@@ -17,9 +17,15 @@ const destination: Record<InboxNotification['kind'], [string | null, string]> = 
   ARRIVAL_WAITING: ['acessos', 'Abrir e ver acessos'], PARCEL_RECEIVED: ['encomendas', 'Abrir e ver encomendas'],
   WAITLIST_OFFERED: ['reservas', 'Abrir e ver reservas'], REQUEST_UPDATED: [null, 'Abrir e ver pedidos'], MOVE_DECIDED: [null, 'Abrir e ver mudanças'],
 };
-const here: Partial<Record<InboxNotification['kind'], [string, string]>> = {
-  REQUEST_UPDATED: ['Aviso aberto. O pedido está na seção “Pedidos”, nesta página.', 'requests'],
-  MOVE_DECIDED: ['Aviso aberto. A mudança está na seção “Mudança e entrega de móveis”, nesta página.', 'moves'],
+/** Consultas da própria página a atualizar ao abrir o aviso (a conversa aberta do pedido também). */
+export function localRefresh(kind: InboxNotification['kind'], resourceId: string): string[][] {
+  if (kind === 'REQUEST_UPDATED') return [['requests'], ['request', resourceId]];
+  if (kind === 'MOVE_DECIDED') return [['moves']];
+  return [];
+}
+const here: Partial<Record<InboxNotification['kind'], string>> = {
+  REQUEST_UPDATED: 'Aviso aberto. O pedido está na seção “Pedidos”, nesta página.',
+  MOVE_DECIDED: 'Aviso aberto. A mudança está na seção “Mudança e entrega de móveis”, nesta página.',
 };
 const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> = {
   ARRIVAL_WAITING: {
@@ -77,8 +83,8 @@ export function UnitInbox({ scope, timeZone }: { scope: Scope; timeZone: string 
       if (!active.current.mounted || active.current.scope !== origin) return;
       const local = here[item.kind];
       if (local) {
-        void queries.invalidateQueries({ queryKey: [...scopeKey(scope), local[1]] });
-        setOutcome(local[0]);
+        for (const part of localRefresh(item.kind, item.resourceId)) void queries.invalidateQueries({ queryKey: [...scopeKey(scope), ...part] });
+        setOutcome(local);
         return;
       }
       navigate(`/morador/${scope.tenantId}/${scope.unitId}/${destination[item.kind][0]}`);
