@@ -103,10 +103,16 @@ public class ReservationStore {
   jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,
     "cp.reservations:"+tenant+":"+unit);
  }
+ /** Fila de espera aguardando período sobreposto (V023), sob a trava da fila da área: a fila vem antes da reserva direta. */
+ public boolean waitlistBlocks(UUID tenant,UUID amenity,Instant occupiedFrom,Instant occupiedUntil) {
+  return Boolean.TRUE.equals(jdbc.queryForObject("select cp.waitlist_blocks(?,?,?,?)",Boolean.class,tenant,amenity,
+   Timestamp.from(occupiedFrom),Timestamp.from(occupiedUntil)));
+ }
  public long activeCount(UUID tenant,UUID unit,Instant now) {
   Long count=jdbc.queryForObject("""
    select count(*) from cp.reservations where tenant_id=? and unit_id=? and kind='BOOKING'
     and status in ('HELD','PENDING_APPROVAL','CONFIRMED') and ends_at>?
+    and not (status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp())
    """,Long.class,tenant,unit,Timestamp.from(now));
   return count==null?0:count;
  }

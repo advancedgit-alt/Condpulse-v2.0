@@ -48,6 +48,8 @@ export interface ApiState {
   createConflictAttempts: number;
   blockedIntervals: { occupiedFrom: string; occupiedUntil: string }[];
   reservations: FixtureReservation[];
+  /** Fila de espera sintética da unidade (CP-040); vazia por padrão. */
+  waitlist: unknown[];
 }
 
 interface FixtureOptions {
@@ -115,7 +117,7 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
     loginRateAttempts: options.loginRateAttempts ?? 0, denyAmenitiesA: false, amenitiesARequests: 0,
     availabilityRequests: [], availabilityFailure: options.availabilityFailure ?? 0, denyAvailabilityA: false,
     createConflictAttempts: options.createConflictAttempts ?? 0, blockedIntervals: options.blockedIntervals ?? [],
-    reservations: options.reservations ?? [],
+    reservations: options.reservations ?? [], waitlist: [],
   };
   const csrf = () => `SYNTHETIC-TEST-CSRF-${state.csrfVersion}`;
 
@@ -209,6 +211,10 @@ export async function installSyntheticApi(page: Page, options: FixtureOptions = 
       } else {
         await json(route, 200, [amenity(tenant, tenant === TENANT_A && Boolean(options.approvalRequired))]);
       }
+      return;
+    }
+    if (request.method() === 'GET' && /\/units\/[^/]+\/waitlist$/.test(path)) {
+      await json(route, 200, { entries: state.waitlist, truncated: false });
       return;
     }
     if (request.method() === 'GET' && path.endsWith('/reservations')) {
