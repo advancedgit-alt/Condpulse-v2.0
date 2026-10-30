@@ -1025,6 +1025,19 @@
             "npm run test:e2e"
           ],
           "scope": "Registro manual de entrada e saída atrás de CP_VISITS_ENABLED=false (V014 não aplicada remotamente): entrada pela portaria (capacidade com AAL2) só com autorização vigente — chegada autorizada nas últimas 24 horas de unidade ativa ou convite em vigor de quem ainda pode convidar —, uma entrada válida por chegada, saída de entrada não corrigida (uma válida por vez, teste concorrente) e correção por evento adicional com motivo; tipo MANUAL_IN/MANUAL_OUT com origem CONCIERGE, nunca passagem de equipamento; unidade, pessoa, horários e origem pelo banco; revogação e entrada pelo convite em série sem impasse (teste da intercalação). Fila e visitas previstas mostram 'Registrar entrada' só para quem tem autorização vigente (CP-027). Ocorrências da portaria, tempo real, aviso efetivo, equipamentos, retenção, Auth real e aplicação remota pendentes; não constitui aceite."
+        },
+        {
+          "batch": "mobile-parity-20261030",
+          "commit": "550c278baf93d0da1ec5545bba9b3f828a393fa2",
+          "branch": "PR #98",
+          "environment": "GitHub Actions (job mobile: Jest, typecheck, export Android); sem aparelho nem login real",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41037802077",
+          "commands": [
+            "npm run typecheck",
+            "npm test"
+          ],
+          "result": "CI_PASSED_DEVICE_PENDING",
+          "scope": "Entradas e saídas da unidade no celular: registros manuais da portaria (7 dias), saída e correções; observação interna recusada pelo contrato."
         }
       ]
     },
@@ -1119,6 +1132,19 @@
           "environment": "Supabase rpnrqfrfwywglvyykgrg (homologação) pelo executor manual protegido; Vercel Production da homologação",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40866823651",
           "scope": "V016 aplicada na homologação (repetição 40867123268 sem linha nova) e CP_ANNOUNCEMENTS_ENABLED ligada depois da conferência; smoke público 40867960632 verde com a flag ativa. Sem condomínio cadastrado, Auth real ou aceite: não constitui aceite."
+        },
+        {
+          "batch": "mobile-parity-20261030",
+          "commit": "a3a6555ea4ddda08d23137acd554d30531d5fb2e",
+          "branch": "PR #94",
+          "environment": "GitHub Actions (job mobile: Jest, typecheck, export Android); sem aparelho nem login real",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41031344555",
+          "commands": [
+            "npm run typecheck",
+            "npm test"
+          ],
+          "result": "CI_PASSED_DEVICE_PENDING",
+          "scope": "Avisos do condomínio no celular: não abertos, abertura registrada uma vez, texto exibido como texto, arquivado explicado."
         }
       ]
     },
@@ -1147,6 +1173,19 @@
           "environment": "Supabase rpnrqfrfwywglvyykgrg (homologação) pelo executor manual protegido; Vercel Production da homologação",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40868152258",
           "scope": "V017 aplicada na homologação (repetição 40868416867 sem linha nova) e CP_REQUESTS_ENABLED ligada depois da conferência, valendo a partir do deployment seguinte. Sem condomínio cadastrado, Auth real ou aceite: não constitui aceite."
+        },
+        {
+          "batch": "mobile-parity-20261030",
+          "commit": "25b4d29eaa52ddcf2cd90564317e9afe2f8ed58a",
+          "branch": "PR #96",
+          "environment": "GitHub Actions (job mobile: Jest, typecheck, export Android); sem aparelho nem login real",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41036794408",
+          "commands": [
+            "npm run typecheck",
+            "npm test"
+          ],
+          "result": "CI_PASSED_DEVICE_PENDING",
+          "scope": "Pedidos no celular: lista, abertura e mensagem com chave mantida em resultado incerto, equipe sem nome, comentário interno recusado pelo contrato, conversa atualizada junto com a lista. Anexos só na web."
         }
       ]
     },
@@ -1193,6 +1232,19 @@
             "npm run test:e2e"
           ],
           "scope": "Outbox com worker atrás de CP_WORKER_OUTBOX_ENABLED=false e caixa interna da unidade atrás de CP_NOTIFICATIONS_ENABLED=false (V015 não aplicada remotamente): arrendamento por condomínio com SKIP LOCKED e prazo, trava da tarefa arrendada antes do efeito, efeito e conclusão na mesma transação, reprocessamento sem duplicar (AC-049), backoff do PRD com erro saneado, FAILED visível, sem nova tentativa cega de efeito não idempotente, SKIPPED para evento sem consumidor; aviso interno de chegada aguardando e encomenda recebida para destinatário apto, leitura só pela abertura autenticada. Push, consentimento, instalações, recibos, desativação de token, reprocessamento seletivo, alerta de fila antiga, worker implantado e aplicação remota pendentes; não constitui aceite."
+        },
+        {
+          "batch": "mobile-parity-20261030",
+          "commit": "eb2b8bf477058a8f42b0a9d367adeffbd85d3509",
+          "branch": "PR #97",
+          "environment": "GitHub Actions (job mobile: Jest, typecheck, export Android); sem aparelho nem login real",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41035148519",
+          "commands": [
+            "npm run typecheck",
+            "npm test"
+          ],
+          "result": "CI_PASSED_DEVICE_PENDING",
+          "scope": "Caixa da unidade no celular: não abertos, abertura autenticada que grava a leitura, aponta Visitas/Encomendas; canal da unidade atualiza caixa, visitas, avisos e pedidos. Sem worker contínuo a caixa fica vazia na homologação."
         }
       ]
     },
@@ -1215,7 +1267,21 @@
       "delivery": "Convidados de uma reserva. Autorizações derivadas da janela do evento e do responsável.",
       "acceptance": "Reserva cancelada deixa todos os convites dependentes revogados, inclusive após retry.",
       "status": "EM_IMPLEMENTACAO",
-      "evidence": []
+      "evidence": [
+        {
+          "batch": "mobile-parity-20261030",
+          "commit": "82332461ad1f826c1dc734bada214e08d0c601f1",
+          "branch": "PR #93",
+          "environment": "GitHub Actions (job mobile: Jest, typecheck, export Android); sem aparelho nem login real",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41033657252",
+          "commands": [
+            "npm run typecheck",
+            "npm test"
+          ],
+          "result": "CI_PASSED_DEVICE_PENDING",
+          "scope": "Convidados da reserva no celular: lista até 500, inclusão com chave mantida em resultado incerto (guardada fora da tela), chave vencida exige conferência, remoção com confirmação; convites da unidade atualizados juntos."
+        }
+      ]
     },
     {
       "id": "CP-039",
@@ -1240,6 +1306,19 @@
             "public-runtime-smoke 40985329016"
           ],
           "scope": "V022 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; smoke publico verde. Sem login real."
+        },
+        {
+          "batch": "mobile-parity-20261030",
+          "commit": "82332461ad1f826c1dc734bada214e08d0c601f1",
+          "branch": "PR #93",
+          "environment": "GitHub Actions (job mobile: Jest, typecheck, export Android); sem aparelho nem login real",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41033657252",
+          "commands": [
+            "npm run typecheck",
+            "npm test"
+          ],
+          "result": "CI_PASSED_DEVICE_PENDING",
+          "scope": "Prestadores recorrentes no celular: regras da unidade, cadastro com chave mantida em resultado incerto e revogação."
         }
       ]
     },
@@ -1267,6 +1346,21 @@
             "public-runtime-smoke 40993532095"
           ],
           "scope": "V023 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; RLS FORCE e 8 funcoes conferidas por SQL somente leitura; smoke publico verde. Worker nao implantado; sem login real."
+        },
+        {
+          "batch": "waitlist-management-20261030",
+          "commit": "ad36f087711a1dbfd97cbf18b187fb57bebcb144",
+          "branch": "PR #92",
+          "environment": "GitHub Actions/PostgreSQL descartável; Supabase rpnrqfrfwywglvyykgrg (homologação) pelo executor protegido",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41032308046",
+          "commands": [
+            "CI 41031106926",
+            "migrate 41032308046",
+            "repetição 41032667535 sem linha nova",
+            "smoke 41032881505"
+          ],
+          "result": "APPLIED_HML_LOGIN_PENDING",
+          "scope": "V029: fila de espera na visão da gestão (reservations.decide, AAL2), só leitura; rota GET /management/waitlist e tela da gestão. Leitura com login real de gestão pendente."
         }
       ]
     },
@@ -1471,7 +1565,9 @@
           "commit": "d0a2b64bc900d2ed4a32420650e42d3d4e0e0806",
           "environment": "GitHub Actions runner: API real, PostgreSQL 17.11 descartável e gerador na mesma máquina; JWKS sintético",
           "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41019237444",
-          "commands": ["node tests/load/api-load.mjs"],
+          "commands": [
+            "node tests/load/api-load.mjs"
+          ],
           "result": "RUNNER_ONLY_NO_CAPACITY_CLAIM",
           "scope": "100 rps por 60 s, 1.000 sessões, pool 2: 5.999 pedidos, 0 erros, p50/p95/p99 3,7/9,1/28,3 ms, 2 conexões, 0,38 núcleo. Carga representativa fora do runner e custo pendentes (BLOQUEADO no STATUS)."
         }
