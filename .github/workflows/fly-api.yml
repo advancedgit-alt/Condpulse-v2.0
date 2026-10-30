@@ -121,10 +121,12 @@ jobs:
       - name: Execute only the manually selected Fly operation (secret values never printed)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          # O deploy não recebe credencial de banco, Vercel nem chave publicável.
+          # O deploy não recebe credencial de banco, Vercel, chave publicável nem chave do Storage.
           DATABASE_PASSWORD: ${{ inputs.operation != 'deploy' && secrets.CP_DATABASE_OPERATIONS_PASSWORD || '' }}
           CP_VERCEL_TOKEN: ${{ inputs.operation != 'deploy' && secrets.CP_VERCEL_TOKEN || '' }}
           CP_SUPABASE_PUBLISHABLE_KEY: ${{ inputs.operation == 'apply' && secrets.CP_SUPABASE_PUBLISHABLE_KEY || '' }}
+          # Opcional: presente liga anexos na Fly (chave + CP_FILES_ENABLED=true); só no apply, nunca no deploy.
+          CP_STORAGE_SERVICE_KEY: ${{ inputs.operation == 'apply' && secrets.CP_STORAGE_SERVICE_KEY || '' }}
           CP_FLY_OPERATION: ${{ inputs.operation }}
           CP_FLY_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           CP_FLY_GENERATION: ${{ inputs.generation }}

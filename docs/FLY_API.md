@@ -59,6 +59,17 @@ lidos de volta e precisam bater exatamente.
   credenciais de acesso, recuperação, tempo real), `CP_FILES_ENABLED` (só `false`), `CP_BFF_SESSION_HOURS`,
   `CP_REALTIME_*`, `CP_STORAGE_BUCKET`. Variável `sensitive` nunca é lida.
 
+### Anexos (chave do Storage)
+
+- Opcional: secret do GitHub `CP_STORAGE_SERVICE_KEY` no Environment `condpulse-database-operations`, formato
+  `sb_secret_` + 24 ou mais caracteres `[A-Za-z0-9_-]` (fora disso: `FLY_STORAGE_KEY_INVALID`, sem eco do valor).
+- Só o `apply` recebe a chave (nunca `inspect` nem `deploy`). Presente: grava `CP_STORAGE_SERVICE_KEY` e
+  `CP_FILES_ENABLED=true`. Ausente: nada muda (`CP_FILES_ENABLED` segue ausente ou `false` vindo da Vercel).
+- Com o login já READY, o `apply` grava só esses dois segredos em stage, sem tocar no banco, e confere os nomes de
+  volta (exatamente os anteriores mais os dois). Valem no próximo `deploy`.
+- Depois de gravada, um `apply` sem a chave é recusado (`FLY_STORAGE_KEY_REQUIRED`): o import não remove segredo.
+  Desligar anexos exige `flyctl secrets unset` revisado; não há caminho automático.
+
 Efeito das chaves novas: quando o tráfego for trocado, as sessões web existentes deixam de abrir **uma vez** (cifra do
 BFF diferente) e todos entram de novo; códigos de retirada delegada emitidos pela Vercel deixam de valer na Fly.
 
@@ -74,7 +85,7 @@ Sempre na branch principal, com o SHA revisado. A geração é um UUID novo (por
    `maintenance_confirmed`: `flyctl deploy --remote-only --ha=false`, depois espera
    `https://condpulse-v2-0.fly.dev/actuator/health/readiness` responder 200/JSON/UP e confere uma máquina em `gru`.
 
-O deploy não recebe senha de banco, token da Vercel nem chave publicável.
+O deploy não recebe senha de banco, token da Vercel, chave publicável nem chave do Storage.
 
 ## O que o responsável precisa fazer
 

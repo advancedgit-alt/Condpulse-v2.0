@@ -9,6 +9,8 @@ import {pathToFileURL} from 'node:url';
  * - inspect: nomes dos segredos da Fly, valores NÃO sensíveis da Vercel, estado do login de banco; imprime os ACKs.
  * - apply: cria o login exclusivo da Fly (executor Java), gera chaves novas no runner e grava tudo como segredo
  *   da Fly sem eco; confere só os nomes de volta. Nenhum deploy.
+ *   Com CP_STORAGE_SERVICE_KEY (secret do GitHub) presente, grava também essa chave e CP_FILES_ENABLED=true; com o
+ *   login já READY, grava só esses dois (o login de banco não é tocado).
  * - deploy: flyctl deploy --remote-only com uma máquina em gru e espera a readiness pública.
  * Nenhum valor de segredo é lido de volta ou impresso: só nomes, códigos e fingerprints.
  */
@@ -40,11 +42,23 @@ export const COPIED=Object.freeze({
  CP_PLATFORM_BILLING_ENABLED:BOOL,CP_PARCELS_ENABLED:BOOL,CP_VISITS_ENABLED:BOOL,CP_NOTIFICATIONS_ENABLED:BOOL,
  CP_ANNOUNCEMENTS_ENABLED:BOOL,CP_REQUESTS_ENABLED:BOOL,CP_ACCESS_CREDENTIALS_ENABLED:BOOL,CP_BFF_RECOVERY_ENABLED:BOOL,
  CP_REALTIME_ENABLED:BOOL,
- // Anexos dependem de CP_STORAGE_SERVICE_KEY, que não é copiada: só "false" pode ir para a Fly.
+ // Anexos dependem de CP_STORAGE_SERVICE_KEY, que não é copiada da Vercel: daqui só "false" vai para a Fly.
+ // "true" só sai do apply com a chave vinda do secret do GitHub (STORAGE).
  CP_FILES_ENABLED:/^false$/,
  CP_BFF_SESSION_HOURS:/^[1-9][0-9]?$/,CP_REALTIME_LIFETIME_SECONDS:/^[1-9][0-9]{0,4}$/,CP_REALTIME_MAX_PER_ACCOUNT:/^[1-9][0-9]{0,2}$/,
  CP_REALTIME_MAX_STREAMS:/^[1-9][0-9]{0,3}$/,CP_REALTIME_TICK_SECONDS:/^[1-9][0-9]{0,2}$/,CP_STORAGE_BUCKET:/^[a-z0-9][a-z0-9-]{1,62}$/});
-const MANAGED=new Set([...REQUIRED,...Object.keys(COPIED)]);
+/** Anexos: chave de serviço do Storage (secret do GitHub, opcional) e a flag ligada junto com ela. */
+export const STORAGE=Object.freeze(['CP_FILES_ENABLED','CP_STORAGE_SERVICE_KEY']);
+const STORAGE_KEY=/^sb_secret_[A-Za-z0-9_-]{24,4096}$/;
+const MANAGED=new Set([...REQUIRED,...Object.keys(COPIED),...STORAGE]);
+
+/** Ausente (vazia) devolve null; presente fora do formato sb_secret_ aborta sem ecoar o valor. */
+export function storageValues(env){
+ const key=env.CP_STORAGE_SERVICE_KEY;
+ if(key===undefined||key==='')return null;
+ need(typeof key==='string'&&STORAGE_KEY.test(key),'FLY_STORAGE_KEY_INVALID');
+ return {CP_FILES_ENABLED:'true',CP_STORAGE_SERVICE_KEY:key};
+}
 const SHA=/^[a-f0-9]{40}$/, HEX64=/^[a-f0-9]{64}$/;
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const PROJECT_PATH=`/v9/projects/${VERCEL.project}?teamId=${VERCEL.team}`;
@@ -258,13 +272,24 @@ export async function execute(env,deps){
  need(req.ack===inspected.applyAck,'FLY_STATE_CHANGED');
  const {fly,vercel,database}=inspected.state;
  need(database.eligible&&database.code==='','FLY_RUNTIME_NOT_ELIGIBLE');
+ const storage=storageValues(env);
  const names=new Set(fly.secrets.map(s=>s.name));
  need(fly.secrets.every(s=>MANAGED.has(s.name)),'FLY_UNMANAGED_SECRET');
- // Flag que sumiu da Vercel não pode ficar com valor antigo na Fly (import não remove).
- need(Object.keys(COPIED).every(k=>!names.has(k)||Object.hasOwn(vercel,k)),'FLY_STALE_COPIED_SECRET');
+ // Chave já gravada na Fly não pode ficar órfã por um apply sem ela (import não remove; a flag ficaria ligada).
+ need(storage||!names.has('CP_STORAGE_SERVICE_KEY'),'FLY_STORAGE_KEY_REQUIRED');
+ // Flag que sumiu da Vercel não pode ficar com valor antigo na Fly (import não remove). CP_FILES_ENABLED é
+ // regravada como "true" quando a chave do Storage vem neste apply.
+ need(Object.keys(COPIED).every(k=>!names.has(k)||Object.hasOwn(vercel,k)||(storage&&Object.hasOwn(storage,k))),'FLY_STALE_COPIED_SECRET');
  if(database.state==='READY'){
   need(REQUIRED.every(k=>names.has(k)),'FLY_SECRETS_INCOMPLETE');
-  return {operation:'apply',alreadyApplied:true,changed:[],secretNames:[...names].sort()};
+  if(!storage)return {operation:'apply',alreadyApplied:true,changed:[],secretNames:[...names].sort()};
+  // Login READY: só os dois segredos de anexos, sem tocar no banco; leitura de nomes precisa bater exatamente.
+  deps.fly.importSecrets(secretLines(storage));
+  const expected=[...new Set([...names,...STORAGE])].sort();
+  const after=flyState(deps.fly);
+  need(JSON.stringify(after.secrets.map(s=>s.name))===JSON.stringify(expected),'FLY_SECRETS_READBACK_MISMATCH');
+  return {operation:'apply',alreadyApplied:true,changed:[...STORAGE],secretNames:expected,
+   note:'Segredos em stage na Fly: valem no próximo deploy (operação deploy).'};
  }
  // Login novo (ABSENT) com credencial de banco já gravada na Fly seria troca silenciosa de geração.
  need(database.state!=='ABSENT'||(!names.has('DATABASE_USER')&&!names.has('DATABASE_PASSWORD')),'FLY_EXISTING_RUNTIME_CONFLICT');
@@ -272,7 +297,7 @@ export async function execute(env,deps){
  need(typeof publishable==='string'&&/^sb_publishable_[A-Za-z0-9_-]{16,}$/.test(publishable),'FLY_PUBLISHABLE_KEY_INVALID');
  const generated=generateValues(deps.randomBytes);
  const values={...vercel,...FIXED_PUBLIC,CP_SUPABASE_PUBLISHABLE_KEY:publishable,CP_VERCEL_DB_CA_BASE64:deps.readCa(),
-  DATABASE_USER:`cp_runtime_${req.generation.replaceAll('-','')}.${PROJECT}`,...generated};
+  DATABASE_USER:`cp_runtime_${req.generation.replaceAll('-','')}.${PROJECT}`,...generated,...(storage??{})};
  const lines=secretLines(values);
  const expected=[...Object.keys(values)].sort();
  const result=await deps.login.apply(req,database.fingerprint,generated.DATABASE_PASSWORD,async()=>{

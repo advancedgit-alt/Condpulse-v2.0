@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {EventEmitter} from 'node:events';
 import {PassThrough} from 'node:stream';
 import {APP,ORG,VERCEL,READINESS_URL,REQUIRED,GENERATED,COPIED,FIXED_PUBLIC,validateRequest,createVercelRequester,readVercelConfig,
-  createFly,flyState,secretLines,createLogin,execute,waitReady,generateValues,fingerprint} from '../infra/scripts/fly-api/fly-api.mjs';
+  createFly,flyState,secretLines,createLogin,execute,waitReady,generateValues,fingerprint,STORAGE,storageValues} from '../infra/scripts/fly-api/fly-api.mjs';
 
 const SHA='a'.repeat(40),GEN='11000000-0000-4000-8000-000000000001';
 const base={GITHUB_SHA:SHA,GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'advancedgit-alt/Condpulse-v2.0',GITHUB_REF:'refs/heads/ccr-5e725112-3x8hyg',
@@ -214,8 +214,10 @@ test('workflow manual: gate sem segredos, Environment protegido, flyctl com chec
   assert.match(job,/flyctl_0\.4\.110_Linux_x86_64\.tar\.gz/);assert.match(job,/62b48471d4d560831ec27a3c316c402750d34a3f5f8b956459d7cc5f6125ec97 .*sha256sum --check --strict/);
   assert.match(job,/DATABASE_PASSWORD: \$\{\{ inputs\.operation != 'deploy' && secrets\.CP_DATABASE_OPERATIONS_PASSWORD \|\| '' \}\}/);
   assert.match(job,/CP_SUPABASE_PUBLISHABLE_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_SUPABASE_PUBLISHABLE_KEY \|\| '' \}\}/);
+  assert.match(job,/CP_STORAGE_SERVICE_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_STORAGE_SERVICE_KEY \|\| '' \}\}/);
+  assert.equal((workflow.match(/secrets\.CP_STORAGE_SERVICE_KEY/g)||[]).length,1,'chave do Storage só no passo do apply');
   assert.match(workflow,/group: condpulse-database-operations-rpnrqfrfwywglvyykgrg/);
-  assert.doesNotMatch(workflow,/set -x|echo "\$\{?(FLY_API_TOKEN|DATABASE_PASSWORD|CP_VERCEL_TOKEN)/);
+  assert.doesNotMatch(workflow,/set -x|echo "\$\{?(FLY_API_TOKEN|DATABASE_PASSWORD|CP_VERCEL_TOKEN|CP_STORAGE_SERVICE_KEY)/);
 });
 
 test('fly.toml: app e região fixas, imagem revisada, sempre ligada, readiness e VM pequena, sem segredo',()=>{
@@ -239,4 +241,63 @@ test('conjuntos de segredos: obrigatórios, gerados e copiados não se sobrepõe
   assert.equal(FIXED_PUBLIC.DB_POOL_SIZE,'2');
   const yaml=read('apps/backend/src/main/resources/application.yaml');
   for(const key of Object.keys(COPIED))assert.match(yaml,new RegExp(`\\$\\{${key}:`),key);
+});
+
+const STORAGE_SECRET='sb_secret_SYNTHETIC_STORAGE_KEY_NOT_REAL_0123456789';
+test('chave do Storage: formato sb_secret_ estrito; ausente não muda nada; nunca aparece no resultado',async()=>{
+  assert.equal(storageValues({}),null);assert.equal(storageValues({CP_STORAGE_SERVICE_KEY:''}),null);
+  assert.deepEqual(storageValues({CP_STORAGE_SERVICE_KEY:STORAGE_SECRET}),{CP_FILES_ENABLED:'true',CP_STORAGE_SERVICE_KEY:STORAGE_SECRET});
+  for(const bad of ['sb_secret_short','sb_publishable_SYNTHETICxxxxxxxxxxxxxxxxxxxxxx','eyJhbGciOiJIUzI1NiJ9.legacy.signature',`${STORAGE_SECRET}\n`,`${STORAGE_SECRET}#x`,` ${STORAGE_SECRET}`])
+    assert.throws(()=>storageValues({CP_STORAGE_SERVICE_KEY:bad}),e=>e.code==='FLY_STORAGE_KEY_INVALID'&&!e.message.includes(bad));
+  const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true'};
+  // Login novo com chave: tudo de uma vez, incluindo os dois nomes de anexos.
+  const fresh=flyFake(),freshLogin=loginFake();
+  const i1=await execute(base,deps(fresh,freshLogin));
+  const created=await execute({...apply,CP_FLY_ACK:i1.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(fresh,freshLogin));
+  assert.deepEqual(created.changed,[...REQUIRED,'CP_BFF_ENABLED','CP_PARCELS_ENABLED',...STORAGE].sort());
+  assert.match(fresh.imports[0],/^CP_FILES_ENABLED=true$/m);assert.ok(fresh.imports[0].includes(`CP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}`));
+  // Login READY sem chave: inalterado, nada escrito.
+  const ready=flyFake(REQUIRED),readyLogin=loginFake('READY');
+  const i2=await execute(base,deps(ready,readyLogin));
+  const unchanged=await execute({...apply,CP_FLY_ACK:i2.applyAck},deps(ready,readyLogin));
+  assert.deepEqual(unchanged.changed,[]);assert.equal(ready.imports.length+readyLogin.calls.length,0);
+  assert.ok(!unchanged.secretNames.includes('CP_FILES_ENABLED'));
+  // Login READY com chave: só os dois segredos de anexos, login de banco intocado, nomes conferidos.
+  const added=await execute({...apply,CP_FLY_ACK:i2.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(ready,readyLogin));
+  assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
+  assert.deepEqual(ready.imports,[`CP_FILES_ENABLED=true\nCP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}\n`]);
+  assert.deepEqual(added.changed,STORAGE);assert.deepEqual(added.secretNames,[...REQUIRED,...STORAGE].sort());
+  assert.equal(ready.deploys,0,'apply não faz deploy');
+  // Repetir com a chave regrava só os dois; repetir sem a chave depois de gravada é recusado sem escrita.
+  const i3=await execute(base,deps(ready,readyLogin));
+  await execute({...apply,CP_FLY_ACK:i3.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(ready,readyLogin));
+  assert.equal(ready.imports.length,2);
+  const i4=await execute(base,deps(ready,readyLogin));
+  await assert.rejects(execute({...apply,CP_FLY_ACK:i4.applyAck},deps(ready,readyLogin)),/FLY_STORAGE_KEY_REQUIRED/);
+  assert.equal(ready.imports.length,2);
+  // Deploy aceita os nomes de anexos como gerenciados (o deploy não recebe a chave).
+  const deploy={...base,CP_FLY_OPERATION:'deploy',CP_FLY_GENERATION:'',MAINTENANCE_CONFIRMED:'true',CP_VERCEL_TOKEN:'',CP_SUPABASE_PUBLISHABLE_KEY:''};
+  const deployed=await execute({...deploy,CP_FLY_ACK:i4.deployAck},deps(ready,null));
+  assert.equal(ready.deploys,1);assert.ok(STORAGE.every(k=>deployed.secretNames.includes(k)));
+  // Chave malformada: código próprio, nenhuma escrita.
+  const i5=await execute(base,deps(ready,readyLogin));
+  await assert.rejects(execute({...apply,CP_FLY_ACK:i5.applyAck,CP_STORAGE_SERVICE_KEY:'sb_secret_short'},deps(ready,readyLogin)),/FLY_STORAGE_KEY_INVALID/);
+  // Readback divergente depois do import: recusado.
+  const broken=flyFake(REQUIRED),brokenLogin=loginFake('READY');const i6=await execute(base,deps(broken,brokenLogin));
+  broken.importSecrets=()=>{};
+  await assert.rejects(execute({...apply,CP_FLY_ACK:i6.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(broken,brokenLogin)),/FLY_SECRETS_READBACK_MISMATCH/);
+  assert.equal(brokenLogin.calls.length,0);
+  const printed=JSON.stringify([created,unchanged,added,deployed,i1,i2,i3,i4,i5,i6]);
+  assert.equal(printed.includes(STORAGE_SECRET),false,'valor da chave nunca no resultado');
+  assert.equal(printed.includes('SYNTHETIC_STORAGE'),false);
+});
+
+test('CLI: apply com chave do Storage malformada falha sem ecoar o valor em stdout/stderr/notice',async()=>{
+  const {spawnSync}=await import('node:child_process');
+  const cli=new URL('../infra/scripts/fly-api/fly-api.mjs',import.meta.url).pathname;
+  const bad='sb_secret_x#SYNTHETIC_MUST_NOT_APPEAR';
+  const child=spawnSync(process.execPath,[cli],{env:{...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',
+    CP_FLY_ACK:`${APP}:fly-api:${GEN}:${SHA}:${'c'.repeat(64)}`,CP_STORAGE_SERVICE_KEY:bad,FLY_API_TOKEN:'SYNTHETIC_FLY_TOKEN_NOT_REAL_000000',PATH:process.env.PATH},encoding:'utf8'});
+  assert.notEqual(child.status,0);
+  assert.equal((child.stdout+child.stderr).includes('SYNTHETIC_MUST_NOT_APPEAR'),false);
 });
