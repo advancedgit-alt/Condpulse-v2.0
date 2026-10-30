@@ -30,7 +30,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 ## Eventos dos equipamentos — CP-047
 
-- V027: eventos buscados pelo worker em cada conector ativo, gravados no condomínio do conector, deduplicados por eventId; equipamento desconhecido em quarentena; unidade só pela credencial; direção e evidência ausentes continuam ausentes; confirmação de credencial por evento só para a versão desejada atual. Mesma flag do worker (`CP_WORKER_ACCESS_SYNC_ENABLED=false`); V027 aplicada na homologação só depois do merge. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
+- V027: eventos buscados pelo worker em cada conector ativo, gravados no condomínio do conector, deduplicados por eventId; equipamento desconhecido em quarentena; unidade só pela credencial; direção e evidência ausentes continuam ausentes; confirmação de credencial por evento só para a versão desejada atual. Mesma flag do worker (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Merge `4aecd42` (PR #82, CI 41015244529 verde). V027 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41016020661; repetição 41016239482 sem linha nova; 26 linhas no histórico; ENABLE/FORCE RLS nas duas tabelas novas, nenhuma tabela `cp` sem RLS completa, nenhum evento gravado). Smoke público 41016429982 verde. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
 - Pendentes: tela do histórico (CP-049), saúde dos equipamentos (CP-048) e webhook assinado do parceiro (CP-044, BLOQUEADO).
 
 ## Credenciais de acesso e revogação prioritária — CP-046
