@@ -1257,8 +1257,13 @@
       "id": "CP-042",
       "delivery": "Mudança e entrega de móveis. Formulário específico, período e aprovação, avisos à portaria.",
       "acceptance": "Aprovação não promete reserva de elevador inexistente; regras configuradas são exibidas.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V025__move_requests.sql",
+        "tests/database/run.py#move_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/MoveJdbcTest.java",
+        "apps/web/e2e/moves.spec.ts"
+      ]
     },
     {
       "id": "CP-043",

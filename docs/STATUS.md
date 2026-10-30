@@ -26,6 +26,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Mudança e entrega de móveis — CP-042
+
+- V025: a gestão publica as regras (texto, dias, horário local, antecedência e duração) e decide; a unidade (adulto) pede o período aceitando a versão vigente, o banco confere as regras no fuso do condomínio, e a unidade retira antes do início; a portaria vê só as aprovadas. A aprovação não reserva elevador nem área. Atrás de `CP_REQUESTS_ENABLED` (ligada); V025 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [MUDANCAS.md](MUDANCAS.md).
+- Pendentes: avisos (worker), pedido pelo celular e ensaio com Auth real.
+
 ## Retirada delegada com código — CP-041
 
 - V024: quem pode retirar autoriza um terceiro para uma encomenda; código de 8 dígitos exibido uma vez, guardado só como hash com sal; a portaria confere o código da própria encomenda com até 5 tentativas (gravadas mesmo na recusa) e registra a retirada com evidência `DELEGATION`; código usado não volta a valer. Atrás de `CP_PARCELS_ENABLED` (ligada); V024 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [ENCOMENDAS.md](ENCOMENDAS.md).

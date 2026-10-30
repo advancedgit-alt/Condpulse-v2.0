@@ -8,6 +8,7 @@ import { Empty, ErrorState, Icon, Loading, Notice } from '../primitives';
 import { dateInZone } from '../dateTime';
 import { AnnouncementSection } from './Announcements';
 import { RequestSection } from './Requests';
+import { MoveManagementSection } from '../Moves';
 import { ImportSection } from './Imports';
 import { AuditSection } from './Audit';
 import { MembershipList, PeopleSection } from './People';
@@ -25,6 +26,7 @@ export const managementSections = [
   { id: 'pessoas', label: 'Pessoas' },
   { id: 'avisos', label: 'Avisos' },
   { id: 'pedidos', label: 'Pedidos' },
+  { id: 'mudancas', label: 'Mudanças' },
   { id: 'auditoria', label: 'Auditoria' },
 ] as const;
 export type ManagementSection = typeof managementSections[number]['id'];
@@ -90,6 +92,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'pessoas' ? <PeopleSection /> : null}
     {section === 'avisos' ? <AnnouncementSection /> : null}
     {section === 'pedidos' ? <RequestSection /> : null}
+    {section === 'mudancas' ? <MoveManagementSection /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;
 }

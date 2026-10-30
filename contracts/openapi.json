@@ -9809,6 +9809,636 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/move-rules": {
+      "get": {
+        "operationId": "getMoveRules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Regras de mudança vigentes do condomínio (qualquer vínculo vigente). rules=null quando a gestão ainda não publicou.",
+        "responses": {
+          "200": {
+            "description": "Regras vigentes",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRulesCurrent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/move-rules": {
+      "put": {
+        "operationId": "updateMoveRules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (requests.manage, AAL2) publica ou altera as regras de mudança pela versão lida (expectedVersion=null na primeira publicação). Dias ISO (1 = segunda) e horário local no fuso do condomínio. Mudar as regras exige novo aceite nos pedidos seguintes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRulesUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Regras publicadas",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRules"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MOVE_RULES_TEXT_INVALID, MOVE_RULES_DAYS_INVALID, MOVE_RULES_TIME_INVALID, MOVE_RULES_NOTICE_INVALID ou MOVE_RULES_DURATION_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "MOVE_RULES_CHANGED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/moves": {
+      "get": {
+        "operationId": "listUnitMoves",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Pedidos de mudança da unidade (morador ou responsável; dependente não vê), do mais recente, até 100.",
+        "responses": {
+          "200": {
+            "description": "Pedidos da unidade",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMove",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Morador ou responsável pede mudança de entrada, de saída ou entrega de móveis aceitando a versão vigente das regras. O banco confere dias, horário local, antecedência e duração no fuso do condomínio. A aprovação não reserva elevador nem área. Repetição com a mesma chave devolve o pedido como está.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pedido enviado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Move"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MOVE_KIND_INVALID, MOVE_WINDOW_INVALID, MOVE_RULES_REQUIRED, MOVE_PROVIDER_INVALID, MOVE_PLATE_INVALID, MOVE_ITEMS_INVALID ou MOVE_WINDOW_OUTSIDE_RULES"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "MOVE_RULES_NOT_CONFIGURED, MOVE_RULES_CHANGED ou IDEMPOTENCY_KEY_REUSED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/moves/{moveId}/cancel": {
+      "post": {
+        "operationId": "cancelMove",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "moveId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "A unidade retira o pedido (aguardando ou aprovado) antes do início; a gestão (AAL2) cancela com motivo até o fim do período. Pela versão lida; repetir devolve o estado CANCELLED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveCancel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pedido cancelado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Move"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MOVE_VERSION_REQUIRED ou MOVE_NOTE_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "MOVE_NOT_FOUND"
+          },
+          "409": {
+            "description": "MOVE_CHANGED, MOVE_CLOSED ou MOVE_CANCELLATION_CLOSED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/moves": {
+      "get": {
+        "operationId": "listManagedMoves",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "REQUESTED",
+                "APPROVED",
+                "REJECTED",
+                "CANCELLED"
+              ]
+            }
+          }
+        ],
+        "description": "Gestão (requests.manage, AAL2): pedidos de mudança por situação (sem filtro: dos últimos 30 dias em diante), em ordem de início, até 100.",
+        "responses": {
+          "200": {
+            "description": "Pedidos",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MOVE_STATE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/moves/{moveId}/decision": {
+      "post": {
+        "operationId": "decideMove",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "moveId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) aprova (nota opcional) ou recusa (motivo obrigatório) o pedido aguardando, antes do início, pela versão lida. Repetir a mesma decisão devolve o estado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pedido decidido",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Move"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MOVE_DECISION_INVALID, MOVE_NOTE_REQUIRED, MOVE_NOTE_INVALID ou MOVE_VERSION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "MOVE_NOT_FOUND"
+          },
+          "409": {
+            "description": "MOVE_CHANGED, MOVE_CLOSED ou MOVE_DECISION_CLOSED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/moves": {
+      "get": {
+        "operationId": "listConciergeMoves",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "description": "Portaria (concierge.operate, AAL2): somente pedidos aprovados que se sobrepõem ao intervalo (até 14 dias; padrão: as próximas 24 horas).",
+        "responses": {
+          "200": {
+            "description": "Mudanças aprovadas",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MOVE_RANGE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "MOVE_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -15507,6 +16137,376 @@
           "expectedVersion": {
             "type": "integer",
             "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "MoveRules": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rulesText",
+          "weekDays",
+          "startTime",
+          "endTime",
+          "minNoticeHours",
+          "maxDurationMinutes",
+          "version",
+          "updatedAt"
+        ],
+        "properties": {
+          "rulesText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "weekDays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "minNoticeHours": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "maxDurationMinutes": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 720
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MoveRulesCurrent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rules"
+        ],
+        "properties": {
+          "rules": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoveRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "MoveRulesUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rulesText",
+          "weekDays",
+          "startTime",
+          "endTime",
+          "minNoticeHours",
+          "maxDurationMinutes",
+          "expectedVersion"
+        ],
+        "properties": {
+          "rulesText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "weekDays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "minNoticeHours": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "maxDurationMinutes": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 720
+          },
+          "expectedVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        }
+      },
+      "Move": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Aprovação libera o período combinado; não reserva elevador nem área.",
+        "required": [
+          "moveId",
+          "unitId",
+          "unitLabel",
+          "blockName",
+          "kind",
+          "startsAt",
+          "endsAt",
+          "providerName",
+          "vehiclePlate",
+          "items",
+          "rulesVersion",
+          "state",
+          "decisionNote",
+          "decidedAt",
+          "createdByMe",
+          "createdAt",
+          "version"
+        ],
+        "properties": {
+          "moveId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "MOVE_IN",
+              "MOVE_OUT",
+              "FURNITURE_DELIVERY"
+            ]
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "providerName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "vehiclePlate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9]{5,8}$"
+          },
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "rulesVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "APPROVED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "decisionNote": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdByMe": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MovePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "moves",
+          "truncated"
+        ],
+        "properties": {
+          "moves": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Move"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MoveCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "startsAt",
+          "endsAt",
+          "providerName",
+          "acceptedRulesVersion"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "MOVE_IN",
+              "MOVE_OUT",
+              "FURNITURE_DELIVERY"
+            ]
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "providerName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "vehiclePlate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "acceptedRulesVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "MoveCancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Obrigatório quando a gestão cancela pedido de outra unidade."
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MoveDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "expectedVersion"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Obrigatório na recusa."
+          },
+          "expectedVersion": {
+            "type": "integer",
             "minimum": 0
           }
         }

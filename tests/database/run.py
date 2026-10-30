@@ -2231,6 +2231,76 @@ def delegation_checks():
     expect(value("select has_column_privilege('cp_api','cp.parcel_delegations','code_hash','UPDATE')::text") == "false",
            "aplicacao nao troca o codigo de uma delegacao")
 
+def move_checks():
+    """V025: mudanca com regras configuradas pela gestao; decisao com nota; portaria ve so aprovadas."""
+    MG, RM, DM, CM, RO = ("10000000-0000-4000-8000-0000000002a1", "10000000-0000-4000-8000-0000000002a2", "10000000-0000-4000-8000-0000000002a3",
+                          "10000000-0000-4000-8000-0000000002a4", "10000000-0000-4000-8000-0000000002a5")
+    UM, UO = "20000000-0000-4000-8000-0000000002a1", "20000000-0000-4000-8000-0000000002a2"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{RM}','ACTIVE'),('{DM}','ACTIVE'),('{CM}','ACTIVE'),('{RO}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UM}','{TA}','MUDANCA 1'),('{UO}','{TA}','MUDANCA 2');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MG}',NULL,'GESTAO MUDANCA','MANAGER','ACTIVE'),('{TA}','{RM}','{UM}','MORADOR MUDANCA','RESIDENT','ACTIVE'),
+                ('{TA}','{DM}','{UM}','DEPENDENTE MUDANCA','DEPENDENT','ACTIVE'),('{TA}','{CM}',NULL,'PORTARIA MUDANCA','CONCIERGE','ACTIVE'),
+                ('{TA}','{RO}','{UO}','OUTRA MUDANCA','RESIDENT','ACTIVE');
+    """)
+    manager = "SET LOCAL app.capabilities='requests.manage'; "
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    rules = (f"INSERT INTO cp.move_rules(tenant_id,rules_text,week_days,starts_local,ends_local,min_notice_hours,max_duration_minutes,updated_by) "
+             f"VALUES('{TA}','Elevador de servico com protecao; portaria avisada.',ARRAY[1,2,3,4,5,6,7]::smallint[],'08:00','18:00',24,240,'{MG}')")
+    day = "(date_trunc('day',clock_timestamp() AT TIME ZONE 'America/Sao_Paulo')+interval '3 days')"
+    def at(hour, minutes=0):
+        return f"(({day}+interval '{hour} hours {minutes} minutes') AT TIME ZONE 'America/Sao_Paulo')"
+    counter = [0]
+    def request(unit=UM, start=None, end=None, version=1, actor=RM):
+        counter[0] += 1
+        mid = f"42000000-0000-4000-8000-{counter[0]:012d}"
+        return mid, (f"INSERT INTO cp.move_requests(id,tenant_id,unit_id,requester_id,kind,starts_at,ends_at,provider_name,vehicle_plate,items,rules_version) "
+                     f"VALUES('{mid}','{TA}','{unit}','{actor}','MOVE_IN',{start or at(9)},{end or at(12)},'TRANSPORTADORA FICTICIA','ABC1D23','Sofa e caixas',{version})")
+    _, sql = request()
+    expect(error(sql, "23514", tenant=TA, actor=RM, role="cp_api"), "sem regras configuradas nao ha pedido de mudanca")
+    expect(error(rules, "42501", tenant=TA, actor=RM, role="cp_api"), "morador nao configura regras")
+    query(manager + rules, tenant=TA, actor=MG, role="cp_api")
+    m1, sql = request()
+    query(sql, tenant=TA, actor=RM, role="cp_api")
+    expect(value(f"select state||':'||version from cp.move_requests where id='{m1}'") == "REQUESTED:0", "morador pede mudanca dentro das regras")
+    for label, start, end in (("antes do horario", at(7), at(9)), ("depois do horario", at(16), at(19)), ("mais longo que o limite", at(9), at(14)),
+                              ("sem antecedencia minima", "clock_timestamp()+interval '2 hours'", "clock_timestamp()+interval '3 hours'")):
+        _, sql = request(start=start, end=end)
+        expect(error(sql, "23514", tenant=TA, actor=RM, role="cp_api"), f"periodo {label} e recusado")
+    _, sql = request(version=2)
+    expect(error(sql, "23514", tenant=TA, actor=RM, role="cp_api"), "versao de regras diferente e recusada")
+    _, sql = request(actor=DM)
+    expect(error(sql, "42501", tenant=TA, actor=DM, role="cp_api"), "dependente nao pede mudanca")
+    _, sql = request(unit=UO)
+    expect(error(sql, "42501", tenant=TA, actor=RM, role="cp_api"), "morador nao pede para outra unidade")
+    expect(value(f"select count(*) from cp.move_requests where id='{m1}'", tenant=TA, actor=RO, role="cp_api") == "0", "outra unidade nao ve o pedido")
+    expect(value(concierge + f"select count(*) from cp.move_requests where id='{m1}'", tenant=TA, actor=CM, role="cp_api") == "0",
+           "portaria nao ve pedido nao aprovado")
+    expect(error(f"UPDATE cp.move_requests SET state='APPROVED',decided_by='{RM}',version=version+1 WHERE id='{m1}'", "42501", tenant=TA, actor=RM, role="cp_api"),
+           "morador nao aprova o proprio pedido")
+    query(manager + f"UPDATE cp.move_requests SET state='APPROVED',decided_by='{MG}',decision_note='Use a garagem',version=version+1 WHERE id='{m1}'",
+          tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select state||':'||(decided_at is not null)::text from cp.move_requests where id='{m1}'") == "APPROVED:true", "gestao aprova com nota")
+    expect(value(concierge + f"select count(*) from cp.move_requests where id='{m1}'", tenant=TA, actor=CM, role="cp_api") == "1",
+           "portaria ve a mudanca aprovada")
+    expect(error(manager + f"UPDATE cp.move_requests SET state='REJECTED',decided_by='{MG}',decision_note='x',version=version+1 WHERE id='{m1}'",
+                 "23514", tenant=TA, actor=MG, role="cp_api"), "aprovada nao volta a ser decidida")
+    expect(error(manager + f"UPDATE cp.move_requests SET starts_at=starts_at+interval '1 hour',version=version+1 WHERE id='{m1}'",
+                 "42501", tenant=TA, actor=MG, role="cp_api"), "periodo nao muda depois do pedido")
+    query(f"UPDATE cp.move_requests SET state='CANCELLED',cancelled_by='{RM}',version=version+1 WHERE id='{m1}'", tenant=TA, actor=RM, role="cp_api")
+    expect(value(f"select state from cp.move_requests where id='{m1}'") == "CANCELLED", "morador retira a mudanca antes do inicio")
+    m2, sql = request(start=at(13), end=at(15))
+    query(sql, tenant=TA, actor=RM, role="cp_api")
+    expect(error(manager + f"UPDATE cp.move_requests SET state='REJECTED',decided_by='{MG}',version=version+1 WHERE id='{m2}'", "23514", tenant=TA, actor=MG, role="cp_api"),
+           "rejeicao exige nota")
+    # Regras mudam de versao: pedidos ja feitos guardam a versao aceita; novos precisam da nova.
+    query(manager + f"UPDATE cp.move_rules SET rules_text='Novas regras',version=version+1,updated_by='{MG}' WHERE tenant_id='{TA}'", tenant=TA, actor=MG, role="cp_api")
+    _, sql = request(start=at(10), end=at(11))
+    expect(error(sql, "23514", tenant=TA, actor=RM, role="cp_api"), "pedido com a versao antiga das regras e recusado")
+    expect(value(f"select rules_version from cp.move_requests where id='{m2}'") == "1", "pedido guarda a versao aceita")
+    expect(value("select has_table_privilege('cp_api','cp.move_requests','DELETE')::text") == "false", "aplicacao nao apaga pedidos de mudanca")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2344,6 +2414,7 @@ def main():
     visit_rule_checks()
     waitlist_checks()
     delegation_checks()
+    move_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
