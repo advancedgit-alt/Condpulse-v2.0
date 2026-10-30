@@ -74,7 +74,8 @@ export function Visits({ api, accountId, membership, newKey, webOrigin, now = ()
       : arrivals.isPending ? <ActivityIndicator accessibilityLabel="Consultando chegadas" />
         : arrivals.isError && !arrivals.data ? <View style={styles.gap}><Notice tone="error">{message(arrivals.error)}</Notice>
           <Button label="Tentar consultar chegadas de novo" secondary onPress={() => void arrivals.refetch()} /></View>
-          : <ArrivalList api={api} scope={scope} tenantId={tenantId} unitId={unitId} timeZone={timeZone} arrivals={arrivals.data.arrivals} answered={setOutcome} />}
+          : <>{arrivals.isError && !arrivals.isFetching ? <Notice tone="info">Não foi possível atualizar as chegadas. A lista é da última consulta: novas chegadas podem não aparecer.</Notice> : null}
+            <ArrivalList api={api} scope={scope} tenantId={tenantId} unitId={unitId} timeZone={timeZone} arrivals={arrivals.data.arrivals} answered={setOutcome} /></>}
 
     <Text accessibilityRole="header" style={styles.subtitle}>Visitas previstas</Text>
     {hidden(permits.error) ? <Text style={styles.body}>Convidar não está disponível para o seu vínculo. Peça a um responsável pela unidade.</Text>
