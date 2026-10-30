@@ -1364,8 +1364,12 @@
       "id": "CP-047",
       "delivery": "Inbox autenticada e eventos. Assinatura do parceiro, timestamp, deduplicação e mapeamento de evidência/direção.",
       "acceptance": "Callback de conector A não escreve tenant B; repetição não duplica evento.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V027__device_events.sql",
+        "tests/database/run.py#device_event_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/DeviceEventWorkerJdbcTest.java"
+      ]
     },
     {
       "id": "CP-048",

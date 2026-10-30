@@ -27,6 +27,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável. Roteiro em ordem, sem execução: [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
 
+## Eventos dos equipamentos — CP-047
+
+- V027: eventos buscados pelo worker em cada conector ativo, gravados no condomínio do conector, deduplicados por eventId; equipamento desconhecido em quarentena; unidade só pela credencial; direção e evidência ausentes continuam ausentes; confirmação de credencial por evento só para a versão desejada atual. Mesma flag do worker (`CP_WORKER_ACCESS_SYNC_ENABLED=false`); V027 aplicada na homologação só depois do merge. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
+- Pendentes: tela do histórico (CP-049), saúde dos equipamentos (CP-048) e webhook assinado do parceiro (CP-044, BLOQUEADO).
+
 ## Credenciais de acesso e revogação prioritária — CP-046
 
 - V026: estado desejado versionado (ACTIVE na versão 1; revogação final na versão 2); confirmação por equipamento só vale para a versão e a ação desejadas no momento da gravação — confirmação atrasada da ativação nunca reativa credencial revogada (guarda no banco). Gestão (AAL2) cadastra cartão/QR para morador e revoga com motivo; encerrar o vínculo revoga as credenciais na mesma transação; portaria vê as revogações pendentes por equipamento; reconciliação no worker com revogação primeiro e consulta antes de reenviar (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Atrás de `CP_ACCESS_CREDENTIALS_ENABLED`; V026 aplicada na homologação só depois do merge, pelo executor protegido. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).

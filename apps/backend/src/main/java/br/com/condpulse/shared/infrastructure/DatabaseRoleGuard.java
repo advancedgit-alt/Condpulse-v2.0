@@ -25,7 +25,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // horários do banco; a linha só recebe a unidade aplicada. Anexos (V019): nunca apagados; só estado, motivo e hash
   // mudam, e o banco escolhe estado inicial, prazos e horários. Links de convite (V020): nunca apagados; só a revogação
   // muda, e o banco grava os horários. Regras de prestador (V022): nunca apagadas; só a revogação muda. Credenciais (V026): nunca apagadas; só a
-  // revogação muda; confirmação por equipamento vem do banco; conector e equipamento só pela operação da plataforma.
+  // revogação muda; confirmação por equipamento vem do banco; conector e equipamento só pela operação da plataforma. Eventos de
+  // equipamento (V027): nunca alterados nem apagados; unidade e horário de ingestão vêm do banco.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -95,6 +96,11 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.move_requests') and c.attnum>0 and not c.attisdropped
         and c.attname not in ('state','decided_by','decision_note','cancelled_by','version')),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.device_events'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.device_events'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.device_events') and c.attname in ('id','unit_id','ingested_at')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.device_event_cursors'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.access_credentials'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.access_credentials') and c.attname in ('desired_state','desired_version','revoke_reason','revoked_by',

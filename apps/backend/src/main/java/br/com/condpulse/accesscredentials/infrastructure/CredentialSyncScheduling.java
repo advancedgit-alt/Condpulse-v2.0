@@ -2,6 +2,7 @@ package br.com.condpulse.accesscredentials.infrastructure;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import br.com.condpulse.accesscredentials.application.CredentialReconciler;
+import br.com.condpulse.accesscredentials.application.DeviceEventIngestor;
 import br.com.condpulse.notifications.application.WorkerTransactions;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -14,7 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * Passada de reconciliação das credenciais no worker, desligada por padrão (CP_WORKER_ACCESS_SYNC_ENABLED=false). Nenhum
+ * Passada de eventos dos equipamentos (CP-047) e de reconciliação das credenciais (CP-046) no worker, desligada por padrão (CP_WORKER_ACCESS_SYNC_ENABLED=false). Nenhum
  * parceiro físico está contratado: sem adaptador para o provedor do conector, nada é enviado e a pendência continua
  * visível para a gestão e a portaria. O adaptador simulado (CP-043) só existe nos testes.
  */
@@ -24,9 +25,12 @@ public class CredentialSyncScheduling {
  private static final System.Logger LOG=System.getLogger(CredentialSyncScheduling.class.getName());
  private final AtomicBoolean ready=new AtomicBoolean(false);
  private CredentialReconciler reconciler;
+ private DeviceEventIngestor ingestor;
 
  @Bean CredentialReconciler credentialReconciler(WorkerTransactions transactions,JdbcTemplate jdbc) {
-  reconciler=new CredentialReconciler(transactions,new CredentialSyncStore(jdbc),CredentialReconciler.NONE);
+  var syncs=new CredentialSyncStore(jdbc);
+  reconciler=new CredentialReconciler(transactions,syncs,CredentialReconciler.NONE);
+  ingestor=new DeviceEventIngestor(transactions,syncs,new DeviceEventStore(jdbc),CredentialReconciler.NONE);
   return reconciler;
  }
  @EventListener(ApplicationReadyEvent.class)
@@ -35,6 +39,8 @@ public class CredentialSyncScheduling {
  public void poll() {
   if(!ready.get() || reconciler==null) return;
   try {
+   // Eventos primeiro (confirmações chegadas por evento evitam reenvio), depois a reconciliação.
+   if(ingestor!=null) ingestor.runOnce();
    var pass=reconciler.runOnce();
    if(pass.skippedConnectors()>0) LOG.log(System.Logger.Level.WARNING,"Conectores sem adaptador disponível: {0}",pass.skippedConnectors());
   } catch(RuntimeException error) {

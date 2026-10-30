@@ -2551,6 +2551,70 @@ def credential_checks():
     for table in ("access_credentials", "credential_syncs", "access_devices", "access_connectors"):
         expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text") == "false", f"aplicacao nao apaga cp.{table}")
 
+def device_event_checks():
+    """V027: eventos do parceiro por conector, sem duplicar, com unidade so pela credencial e sem dado inventado."""
+    MG, RS, OT, CN = ("10000000-0000-4000-8000-0000000002e1", "10000000-0000-4000-8000-0000000002e2", "10000000-0000-4000-8000-0000000002e3",
+                      "10000000-0000-4000-8000-0000000002e4")
+    U1, U2 = "20000000-0000-4000-8000-0000000002e1", "20000000-0000-4000-8000-0000000002e2"
+    MR, MO = "51000000-0000-4000-8000-0000000002e1", "51000000-0000-4000-8000-0000000002e2"
+    KA, KB, KX = "43000000-0000-4000-8000-0000000002e1", "43000000-0000-4000-8000-0000000002e2", "43000000-0000-4000-8000-0000000002e3"
+    DA, DB, DX = "44000000-0000-4000-8000-0000000002e1", "44000000-0000-4000-8000-0000000002e2", "44000000-0000-4000-8000-0000000002e3"
+    CA = "45000000-0000-4000-8000-0000000002e1"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{RS}','ACTIVE'),('{OT}','ACTIVE'),('{CN}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{U1}','{TA}','EVENTO 1'),('{U2}','{TA}','EVENTO 2');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES(gen_random_uuid(),'{TA}','{MG}',NULL,'GESTAO EVENTO','MANAGER','ACTIVE'),('{MR}','{TA}','{RS}','{U1}','MORADOR EVENTO','RESIDENT','ACTIVE'),
+                ('{MO}','{TA}','{OT}','{U2}','OUTRO EVENTO','RESIDENT','ACTIVE'),(gen_random_uuid(),'{TA}','{CN}',NULL,'PORTARIA EVENTO','CONCIERGE','ACTIVE');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{KA}','{TA}','SIMULATED','A'),('{KX}','{TA}','SIMULATED','X'),('{KB}','{TB}','SIMULATED','B');
+        INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label) VALUES('{DA}','{TA}','{KA}','leitor-1','Entrada'),
+          ('{DX}','{TA}','{KX}','leitor-1','Outro'),('{DB}','{TB}','{KB}','leitor-1','Condominio B');
+    """)
+    query("SET LOCAL app.capabilities='memberships.manage'; "
+          f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) VALUES('{CA}','{TA}','{KA}','{MR}','{U1}','CARD','Cartao','{MG}')",
+          tenant=TA, actor=MG, role="cp_api")
+    def event(eid, tenant=TA, connector=KA, device=DA, credential=CA, kind="PASSAGE_DETECTED", direction="ENTRY", state="ACCEPTED", reason="NULL", unit="DEFAULT"):
+        dev = f"'{device}'" if device else "NULL"
+        cred = f"'{credential}'" if credential else "NULL"
+        dirv = f"'{direction}'" if direction else "NULL"
+        rsn = f"'{reason}'" if reason != "NULL" else "NULL"
+        return (f"INSERT INTO cp.device_events(tenant_id,connector_id,external_event_id,device_id,credential_id,kind,direction,occurred_at,received_at,state,quarantine_reason) "
+                f"VALUES('{tenant}','{connector}','{eid}',{dev},{cred},'{kind}',{dirv},clock_timestamp(),clock_timestamp(),'{state}',{rsn}) "
+                f"ON CONFLICT(tenant_id,connector_id,external_event_id) DO NOTHING")
+    worker = lambda sql, tenant=TA: query(sql, tenant=tenant, actor=None, role="cp_worker")
+    worker(event("ev-1"))
+    worker(event("ev-1"))
+    expect(value("select count(*) from cp.device_events where external_event_id='ev-1'") == "1", "repeticao do mesmo evento nao duplica")
+    expect(value(f"select unit_id from cp.device_events where external_event_id='ev-1'") == U1, "unidade vem da credencial do mesmo conector")
+    worker(event("ev-2", direction=None, kind="AUTHORIZED"))
+    expect(value("select coalesce(direction,'-')||':'||coalesce(evidence,'-') from cp.device_events where external_event_id='ev-2'") == "-:-",
+           "direcao e evidencia ausentes continuam ausentes")
+    expect(error(event("ev-3", device=DX), "23514", tenant=TA, actor=None, role="cp_worker"), "equipamento de outro conector e recusado")
+    expect(error(event("ev-4", connector=KX, device=DX), "23514", tenant=TA, actor=None, role="cp_worker"), "credencial de outro conector e recusada")
+    expect(error(event("ev-5", tenant=TB, connector=KB, device=DB), "23514", tenant=TB, actor=None, role="cp_worker"),
+           "evento do conector B nao aponta credencial do condominio A")
+    expect(value("select count(*) from cp.device_events where external_event_id='ev-5'") == "0", "nada gravado no condominio B")
+    expect(query(event("ev-6", tenant=TB, connector=KB, device=DB, credential=None), tenant=TA, actor=None, role="cp_worker", check=False).returncode != 0
+           and value("select count(*) from cp.device_events where external_event_id='ev-6'") == "0", "worker no contexto do condominio A nao grava no B")
+    worker(event("ev-7", device=None, credential=None, state="QUARANTINED", reason="UNKNOWN_DEVICE"))
+    expect(value("select state||':'||coalesce(unit_id::text,'-') from cp.device_events where external_event_id='ev-7'") == "QUARANTINED:-",
+           "equipamento desconhecido fica em quarentena sem unidade")
+    expect(error(event("ev-8", device=None, credential=None), "23514", tenant=TA, actor=None, role="cp_worker"), "evento aceito exige equipamento conhecido")
+    expect(value("select count(*) from cp.device_events where external_event_id like 'ev-%'", tenant=TA, actor=RS, role="cp_api") == "2",
+           "morador ve os eventos da propria credencial")
+    expect(value("select count(*) from cp.device_events where external_event_id like 'ev-%'", tenant=TA, actor=OT, role="cp_api") == "0",
+           "outra unidade nao ve os eventos")
+    expect(value("SET LOCAL app.capabilities='concierge.operate'; select count(*) from cp.device_events where external_event_id like 'ev-%'",
+                 tenant=TA, actor=CN, role="cp_api") == "3", "portaria ve os eventos do condominio, inclusive a quarentena")
+    expect(error(f"INSERT INTO cp.device_events(tenant_id,connector_id,external_event_id,device_id,kind,occurred_at,received_at,state) "
+                 f"VALUES('{TA}','{KA}','ev-api','{DA}','DOOR_OPENED',clock_timestamp(),clock_timestamp(),'ACCEPTED')", "42501", tenant=TA, actor=MG, role="cp_api"),
+           "aplicacao nao grava evento de equipamento")
+    expect(error(f"UPDATE cp.device_events SET direction='EXIT' WHERE external_event_id='ev-1'", "42501", tenant=TA, actor=None, role="cp_worker"),
+           "evento recebido nao muda")
+    for table in ("device_events", "device_event_cursors"):
+        expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text||has_table_privilege('cp_worker','cp.{table}','DELETE')::text") == "falsefalse",
+               f"ninguem apaga cp.{table}")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2666,6 +2730,7 @@ def main():
     delegation_checks()
     move_checks()
     credential_checks()
+    device_event_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
