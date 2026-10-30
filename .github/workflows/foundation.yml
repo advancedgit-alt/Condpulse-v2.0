@@ -51,7 +51,7 @@ jobs:
           mkdir -p "$copy" && cp -R spec "$copy/"
           python3 -I "$copy/spec/qualidade/validar_estrutura.py"
       - name: BFF staging guards and protocol without managed credentials
-        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs tests/runtime-flags.test.mjs
+        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs tests/runtime-flags.test.mjs tests/fly-api.test.mjs
       - name: Manual onboarding boundary without managed credentials
         run: node --test --test-reporter=tap tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
       - name: Compile and unit tests
@@ -71,6 +71,11 @@ jobs:
         run: node --test --test-concurrency=1 --test-reporter=tap tests/database-operations.test.mjs tests/production-database-operations.test.mjs
       - name: Runtime credential executor guards and disposable provisioning
         run: node --test --test-reporter=tap tests/runtime-configuration-policy.test.mjs tests/runtime-configuration.test.mjs
+      - name: Fly runtime login executor and disposable provisioning
+        # Depois do harness da Vercel, nunca em paralelo: os dois exigem zero logins cp_runtime no cluster ao começar.
+        env:
+          CP_FLY_JAVA_TEST_REQUIRED: "true"
+        run: node --test --test-reporter=tap tests/fly-api-java.test.mjs
       - name: Migrate with Flyway and validate replay
         env:
           SPRING_PROFILES_ACTIVE: migrate

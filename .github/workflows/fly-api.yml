@@ -1,0 +1,148 @@
+name: CondPulse Fly API (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: inspect consulta; apply cria o login de banco da Fly e grava os segredos; deploy publica e espera a readiness
+        type: choice
+        options: [inspect, apply, deploy]
+        default: inspect
+        required: true
+      expected_commit:
+        description: SHA completo revisado da branch principal (40 hex)
+        type: string
+        required: true
+      generation:
+        description: inspect/apply; UUID canonico novo que nomeia o login cp_runtime da Fly. Vazio no deploy
+        type: string
+        required: false
+      fly_ack:
+        description: apply usa applyAck e deploy usa deployAck, ambos impressos pela inspecao
+        type: string
+        required: false
+      maintenance_confirmed:
+        description: Alteração aprovada pelo responsável
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  # Mesmo grupo do executor runtime: nunca dois provisionadores do banco de homologação ao mesmo tempo.
+  group: condpulse-database-operations-rpnrqfrfwywglvyykgrg
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Validate manual request before releasing environment secrets
+        env:
+          CP_FLY_OPERATION: ${{ inputs.operation }}
+          CP_FLY_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_FLY_GENERATION: ${{ inputs.generation }}
+          CP_FLY_ACK: ${{ inputs.fly_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: node infra/scripts/fly-api/fly-api.mjs --gate
+  fly-api:
+    needs: gate
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: condpulse-database-operations
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        if: inputs.operation != 'deploy'
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Verify helper without credentials
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          node --test tests/fly-api.test.mjs
+      - name: Install checksum-verified flyctl 0.4.110
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/condpulse-fly-api"
+          mkdir -p "$work"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --max-time 120 \
+            'https://github.com/superfly/flyctl/releases/download/v0.4.110/flyctl_0.4.110_Linux_x86_64.tar.gz' -o "$work/flyctl.tar.gz"
+          echo "62b48471d4d560831ec27a3c316c402750d34a3f5f8b956459d7cc5f6125ec97  $work/flyctl.tar.gz" | sha256sum --check --strict
+          tar -xzf "$work/flyctl.tar.gz" -C "$work" flyctl
+          rm -f "$work/flyctl.tar.gz"
+          "$work/flyctl" version
+      - name: Build reviewed backend and compile isolated login helper without credentials
+        if: inputs.operation != 'deploy'
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -f apps/backend/pom.xml -DskipTests package
+          sha256sum apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar infra/scripts/fly-api/*
+          classes="$RUNNER_TEMP/condpulse-fly-api/classes"
+          mkdir -p "$classes"
+          (cd "$classes" && jar -xf "$GITHUB_WORKSPACE/apps/backend/target/condpulse-backend-0.1.0-SNAPSHOT.jar")
+          javac -cp "$classes/BOOT-INF/classes:$classes/BOOT-INF/lib/*" -d "$classes" \
+            infra/scripts/runtime-configuration/RuntimeConfiguration.java infra/scripts/runtime-configuration/RuntimeVercelClient.java \
+            infra/scripts/fly-api/FlyRuntimeLogin.java
+      - name: Fetch and validate public Supabase CA using verified HTTPS
+        if: inputs.operation != 'deploy'
+        run: |
+          set -euo pipefail
+          umask 077
+          ca="$RUNNER_TEMP/condpulse-fly-api/db-ca.crt"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --connect-timeout 5 --max-time 20 --max-filesize 65536 \
+            'https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt' -o "$ca"
+          test "$(wc -c < "$ca")" -le 65536
+          test "$(grep -c '^-----BEGIN CERTIFICATE-----$' "$ca")" -eq 1
+          openssl x509 -in "$ca" -noout -checkend 86400
+          openssl x509 -in "$ca" -noout -ext basicConstraints | grep -Eq '^[[:space:]]*CA:TRUE([,[:space:]]|$)'
+          openssl verify -check_ss_sig -CAfile "$ca" "$ca"
+          openssl x509 -in "$ca" -noout -sha256 -fingerprint
+          sudo install -d -m 0755 /run/secrets
+          sudo install -m 0444 "$ca" /run/secrets/db-ca.crt
+      - name: Execute only the manually selected Fly operation (secret values never printed)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # O deploy não recebe credencial de banco, Vercel nem chave publicável.
+          DATABASE_PASSWORD: ${{ inputs.operation != 'deploy' && secrets.CP_DATABASE_OPERATIONS_PASSWORD || '' }}
+          CP_VERCEL_TOKEN: ${{ inputs.operation != 'deploy' && secrets.CP_VERCEL_TOKEN || '' }}
+          CP_SUPABASE_PUBLISHABLE_KEY: ${{ inputs.operation == 'apply' && secrets.CP_SUPABASE_PUBLISHABLE_KEY || '' }}
+          CP_FLY_OPERATION: ${{ inputs.operation }}
+          CP_FLY_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_FLY_GENERATION: ${{ inputs.generation }}
+          CP_FLY_ACK: ${{ inputs.fly_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: node infra/scripts/fly-api/fly-api.mjs
+      - name: Remove ephemeral CA, flyctl and build extraction
+        if: always()
+        run: |
+          set -euo pipefail
+          sudo rm -f -- /run/secrets/db-ca.crt
+          node --input-type=module <<'CLEANUP'
+          import {rmSync,existsSync,realpathSync,lstatSync} from 'node:fs';
+          import {resolve,dirname,basename} from 'node:path';
+          const target=resolve(process.env.RUNNER_TEMP,'condpulse-fly-api');
+          if(existsSync(target)) {
+            const actual=realpathSync(target), base=realpathSync(process.env.RUNNER_TEMP);
+            if(lstatSync(target).isSymbolicLink() || dirname(actual)!==base || basename(actual)!=='condpulse-fly-api') throw Error('CLEANUP_TARGET_DENIED');
+            rmSync(actual,{recursive:true,force:true});
+          }
+          CLEANUP
