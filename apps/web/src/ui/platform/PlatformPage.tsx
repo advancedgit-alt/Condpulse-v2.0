@@ -9,11 +9,13 @@ import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import '../management/Management.css';
+import { OutboxSection } from './Outbox';
 import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 
 export type { Outcome } from './shared';
-const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'financeiro', label: 'Financeiro' }, { id: 'auditoria', label: 'Auditoria' }] as const;
+const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'financeiro', label: 'Financeiro' }, { id: 'auditoria', label: 'Auditoria' },
+  { id: 'fila', label: 'Fila de tarefas' }] as const;
 type Section = typeof sections[number]['id'];
 /** Mensagem fiel ao que o servidor fez: repetição natural (applied=false) não aparece como sucesso desta ação. */
 export function tenantChangeOutcome(change: PlatformTenantChange, before: Pick<PlatformTenant, 'name' | 'active'>): Outcome {
@@ -72,7 +74,8 @@ function PlatformGate({ accountId, section }: { accountId: string; section: Sect
 function PlatformConsole({ section }: { section: Section }) {
   const scope = usePlatform();
   const billing = scope.session.capabilities.includes('billing.read');
-  const visible = sections.filter((item) => item.id !== 'financeiro' || billing);
+  const outbox = scope.session.capabilities.includes('outbox.operate');
+  const visible = sections.filter((item) => (item.id !== 'financeiro' || billing) && (item.id !== 'fila' || outbox));
   const current = visible.some((item) => item.id === section) ? section : 'condominios';
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
@@ -80,7 +83,7 @@ function PlatformConsole({ section }: { section: Section }) {
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
     <nav className="management-tabs" aria-label="Seções do painel master">{visible.map((item) =>
       <Link key={item.id} to={`/master/${item.id}`} aria-current={item.id === current ? 'page' : undefined}>{item.label}</Link>)}</nav>
-    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : <TenantSection />}
+    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'fila' ? <OutboxSection /> : <TenantSection />}
   </>;
 }
 
@@ -196,6 +199,7 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
 
 const actionLabels: Record<string, string> = {
   TENANT_RENAMED: 'Condomínio renomeado', TENANT_SUSPENDED: 'Condomínio suspenso', TENANT_REACTIVATED: 'Condomínio reativado',
+  OUTBOX_TASK_REPLAYED: 'Tarefa devolvida para a fila',
 };
 
 function AuditSection() {
@@ -226,6 +230,7 @@ function AuditSection() {
               <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · <bdi>{tenantName(event.tenantId)}</bdi> · ator {short(event.actorId)}</span>
               {event.action === 'TENANT_RENAMED' && event.details.previousName && event.details.name ? <span>De “<bdi>{event.details.previousName}</bdi>” para “<bdi>{event.details.name}</bdi>”</span> : null}
               {event.action.startsWith('BILLING_') ? billingAuditDetails(event.details) : null}
+              {event.action === 'OUTBOX_TASK_REPLAYED' && event.details.eventType ? <span>{event.details.eventType} · estava {event.details.previousState === 'FAILED' ? 'com falha' : 'ignorada'}</span> : null}
               {event.reason ? <span>Motivo: {event.reason}</span> : null}</div>
           </li>)}</ol>}
     {pages.isError && events.length > 0 ? <ErrorState error={pages.error} retry={() => void pages.fetchNextPage()} /> : null}

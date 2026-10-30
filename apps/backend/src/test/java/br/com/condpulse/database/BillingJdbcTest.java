@@ -145,7 +145,7 @@ class BillingJdbcTest {
  }
  @Test void sessionHidesBillingWhileTheAreaIsDisabled() throws Exception {
   var hidden=new PlatformService(executor,store,false).session(db.accountA,AAL2).capabilities();
-  assertEquals(List.of("platform.audit.read","tenants.manage","tenants.read"),hidden);
+  assertEquals(List.of("outbox.operate","platform.audit.read","tenants.manage","tenants.read"),hidden);
   assertTrue(new PlatformService(executor,store,true).session(db.accountA,AAL2).capabilities().containsAll(List.of("billing.read","billing.manage")));
   db.assertEmptyContext();
  }

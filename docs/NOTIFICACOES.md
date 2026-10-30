@@ -96,8 +96,10 @@ e-mail nem SMS neste recorte.
 
 ## Pendências
 
-- Reprocessamento seletivo pelo operador (tarefas `FAILED`/`SKIPPED`), painel operacional de falhas e alerta de fila
-  antiga (mais de 60 s, PRD).
+- Reprocessamento seletivo e alerta de fila antiga existem desde a V032 (aba "Fila de tarefas" do painel master, capacidade
+  `outbox.operate`): a devolução zera tentativa e erro, fica disponível já e grava `OUTBOX_TASK_REPLAYED` na auditoria
+  da plataforma; o alerta aparece quando a pronta mais antiga espera mais de 60 s ou um arrendamento venceu. Sem papel
+  de plataforma concedido (BLOQUEADO) ninguém usa a aba na homologação; alerta ativo (e-mail, pager) segue pendente.
 - Push (instalações, consentimento, preferências, recibos do provedor, token inválido desativado), e-mail e SMS:
   "provedor aceitou" nunca vira "morador visualizou".
 - Implantação de worker contínuo, credencial `cp_worker` por ambiente, aplicação remota da V015 e ensaio com Auth real.

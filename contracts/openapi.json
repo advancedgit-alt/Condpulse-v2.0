@@ -11124,6 +11124,209 @@
           }
         }
       }
+    },
+    "/v1/platform/outbox": {
+      "get": {
+        "operationId": "platformOutboxSummary",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Fila de tarefas por condomínio (outbox.operate e tenants.read): pendentes, prontas, idade da mais antiga pronta, arrendamentos vencidos, falhas e ignoradas. stale quando a pronta mais antiga espera mais de 60 s ou há arrendamento vencido. Sem conteúdo das tarefas.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem outbox.operate), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
+          }
+        }
+      }
+    },
+    "/v1/platform/outbox/tasks": {
+      "get": {
+        "operationId": "platformOutboxTasks",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FAILED",
+                "SKIPPED"
+              ]
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Tarefas com falha ou ignoradas (até 100 mais recentes), com erro saneado e horários; sem conteúdo.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxTaskPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OUTBOX_STATE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem outbox.operate), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false"
+          }
+        }
+      }
+    },
+    "/v1/platform/outbox/tasks/{taskId}/replay": {
+      "post": {
+        "operationId": "replayOutboxTask",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Devolve tarefa FAILED ou SKIPPED para a fila (tentativa e erro zerados, disponível já), com motivo na auditoria da plataforma. Os efeitos do worker são idempotentes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutboxReplay"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxTask"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem outbox.operate), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          },
+          "404": {
+            "description": "OUTBOX_TASK_NOT_FOUND"
+          },
+          "409": {
+            "description": "OUTBOX_TASK_NOT_REPLAYABLE: tarefa não está com falha nem ignorada"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18000,6 +18203,192 @@
           },
           "truncated": {
             "type": "boolean"
+          }
+        }
+      },
+      "OutboxTenantQueue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "tenantName",
+          "pending",
+          "ready",
+          "oldestReadySeconds",
+          "expiredLeases",
+          "failed",
+          "skipped",
+          "stale"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ready": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "oldestReadySeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "expiredLeases": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OutboxSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenants",
+          "staleAfterSeconds",
+          "generatedAt"
+        ],
+        "properties": {
+          "tenants": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/OutboxTenantQueue"
+            }
+          },
+          "staleAfterSeconds": {
+            "type": "integer",
+            "const": 60
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OutboxTask": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taskId",
+          "tenantId",
+          "eventType",
+          "aggregateId",
+          "state",
+          "attempts",
+          "lastError",
+          "createdAt",
+          "availableAt",
+          "processedAt"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "aggregateId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "LEASED",
+              "DELIVERED",
+              "SKIPPED",
+              "FAILED"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "availableAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "processedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "OutboxTaskPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tasks",
+          "truncated"
+        ],
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/OutboxTask"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OutboxReplay": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
           }
         }
       }
