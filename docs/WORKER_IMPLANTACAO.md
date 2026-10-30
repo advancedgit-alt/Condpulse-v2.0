@@ -1,7 +1,7 @@
 # Implantação do worker contínuo — preparação (não executada)
 
 O worker (perfil `worker`, mesma imagem da API) processa o outbox (caixa interna, CP-034/CP-035). Hoje **nenhum worker
-está implantado** em homologação ou produção; a passada fica desligada por padrão (`CP_WORKER_OUTBOX_ENABLED=false`).
+está implantado** em homologação ou produção; as passadas ficam desligadas por padrão (`CP_WORKER_OUTBOX_ENABLED=false` e `CP_WORKER_WAITLIST_ENABLED=false`).
 A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando aquele código estiver na base.
 
 ## O que já existe no repositório
@@ -29,7 +29,9 @@ A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando
    | node infra/validate-release.mjs --worker` precisa responder `RELEASE_VALID 0`.
 4. **Subir com as passadas desligadas** e conferir no log a inicialização sem erro da guarda de role.
 5. **Ligar a passada** (alteração revisada do manifesto) `CP_WORKER_OUTBOX_ENABLED`, observando a fila do outbox
-   (pendentes, falhas, arrendamentos vencidos) por consulta somente leitura.
+   (pendentes, falhas, arrendamentos vencidos) por consulta somente leitura. A passada da fila de espera
+   (`CP_WORKER_WAITLIST_ENABLED`, a cada `CP_WORKER_WAITLIST_MILLIS`, padrão 60 s) é ligada em alteração separada, depois
+   de conferir que ofertas vencidas avançam a fila (FILA_ESPERA.md).
 6. Registrar runs, horários e evidências em `docs/STATUS.md`.
 
 ## Bloqueios

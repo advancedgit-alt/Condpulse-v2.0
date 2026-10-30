@@ -23,6 +23,7 @@ services:
       DB_POOL_SIZE: "4"
       # Habilitacao exige uma alteracao revisada apos o ensaio do worker.
       CP_WORKER_OUTBOX_ENABLED: "false"
+      CP_WORKER_WAITLIST_ENABLED: "false"
     # Sem servidor HTTP no perfil worker: a saude e o log da passada e a fila do outbox (docs/WORKER_IMPLANTACAO.md).
     healthcheck:
       disable: true
