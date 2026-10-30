@@ -29,6 +29,17 @@ diante). Sem distribuição: falta build de desenvolvimento próprio e teste em 
 - Escrita pelo app usa `Authorization: Bearer` sem CSRF: o resource server do Spring não exige CSRF com token Bearer, e
   só o cookie de sessão do navegador continua exigindo (teste `nativeBearerWritesWithoutCsrfAndOnlyBearerSkipsIt`).
 
+## Atualização em tempo real (CP-036)
+
+- Com um vínculo residencial escolhido, o aplicativo abre o canal da unidade (`/v1/tenants/{t}/units/{u}/events`) por
+  `XMLHttpRequest` em fluxo, com o token Bearer só no cabeçalho, buscado de novo a cada conexão.
+- `changed` com `reservations` consulta de novo as reservas e a ocupação; outros assuntos não têm tela no celular.
+  Reconexão consulta tudo da unidade; `revoked` confere a identidade e não reconecta; `expired` reabre em 5 s.
+- Em segundo plano o canal fecha; ao voltar ao primeiro plano, tudo da unidade é consultado de novo e o canal reabre.
+- Recusa do servidor (função desligada, 401, 429, 503) não mostra erro: nova tentativa com espera de 30 s até 5 min.
+- Testes: `__tests__/events.test.tsx` (lógica, leitor SSE com pedaços cortados, CRLF, comentário, `retry`, recusa,
+  queda, sem sessão, fechamento e primeiro/segundo plano).
+
 ## Configuração
 
 Variáveis públicas embutidas no build (nunca segredo; sem `.env` no Git):

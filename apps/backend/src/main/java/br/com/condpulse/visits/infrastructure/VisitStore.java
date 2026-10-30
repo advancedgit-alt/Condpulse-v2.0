@@ -109,17 +109,20 @@ public class VisitStore {
    """,actor,reason,tenant,permit,expectedVersion)==1;
  }
 
+ private static final int GUEST_PAGE=500;
  /** Convidados de uma reserva visíveis a quem consulta (o banco limita o dependente aos que ele criou). */
  public VisitModels.PermitPage reservationGuests(UUID tenant,UUID reservation) {
-  var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.reservation_id=? order by p.created_at,p.id limit ?",PERMIT,tenant,reservation,PAGE+1);
-  return new VisitModels.PermitPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+  // Ativos primeiro e depois os mais recentes: substituições acumulam revogados sem esconder quem ainda vale.
+  var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.reservation_id=? order by (p.state<>'ACTIVE'),p.created_at desc,p.id limit ?",
+   PERMIT,tenant,reservation,GUEST_PAGE+1);
+  return new VisitModels.PermitPage(rows.stream().limit(GUEST_PAGE).toList(),rows.size()>GUEST_PAGE);
  }
  /** Reserva de uso para receber convidados: unidade, situação, horários, área e capacidade (null se não visível). */
  public record GuestTarget(UUID unitId,String kind,String status,Instant startsAt,Instant endsAt,String amenityName,int capacity,int activeGuests) {}
  public GuestTarget guestTarget(UUID tenant,UUID reservation) {
   var rows=jdbc.query("""
-   select r.unit_id,r.kind,r.status,r.starts_at,r.ends_at,a.name,a.capacity,
-    (select count(*) from cp.visit_permits p where p.tenant_id=r.tenant_id and p.reservation_id=r.id and p.state='ACTIVE')::int as active_guests
+   select r.unit_id,r.kind,r.status,r.starts_at,r.ends_at,a.name,coalesce(cp.reservation_guest_capacity(r.rule_snapshot),0) as capacity,
+    cp.reservation_active_guests(r.tenant_id,r.id) as active_guests
    from cp.reservations r join cp.amenities a on a.tenant_id=r.tenant_id and a.id=r.amenity_id
    where r.tenant_id=? and r.id=?
    """,(r,n)->new GuestTarget(r.getObject("unit_id",UUID.class),r.getString("kind"),r.getString("status"),instant(r,"starts_at"),
