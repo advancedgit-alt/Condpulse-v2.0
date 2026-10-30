@@ -1357,7 +1357,21 @@
         "tests/database/run.py#credential_checks",
         "apps/backend/src/test/java/br/com/condpulse/database/CredentialJdbcTest.java",
         "apps/backend/src/test/java/br/com/condpulse/database/CredentialWorkerJdbcTest.java",
-        "apps/web/e2e/access-credentials.spec.ts"
+        "apps/web/e2e/access-credentials.spec.ts",
+        {
+          "batch": "access-credentials-20261030",
+          "commit": "b85456e83e05a157f70151a67b0da2bbe260b8b3",
+          "branch": "feat/cp-046-credential-revocation (PR #79)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41010872734",
+          "commands": [
+            "CI foundation 41010219497",
+            "database-operations migrate 41010872734",
+            "repeticao 41011021111",
+            "public-runtime-smoke 41011276577"
+          ],
+          "scope": "V026 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; RLS FORCE conferido por SQL somente leitura; smoke publico verde. Flag ainda desligada na Vercel; testado so com o adaptador simulado; sem parceiro fisico."
+        }
       ]
     },
     {
