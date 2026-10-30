@@ -227,3 +227,21 @@ test('repetição incerta perto da validade mínima continua possível com o mes
   expect(state.creates[1]!.key).toBe(state.creates[0]!.key);
   expect(state.creates[1]!.body).toEqual(state.creates[0]!.body);
 });
+
+test('confirmação de cancelamento vale para a autorização que estava aberta, não para a substituta', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const state = await installApi(page, api, false);
+  state.delegation = delegationFixture({ delegationId: '41000000-0000-4000-8000-0000000000a1', delegateName: 'Primeira Pessoa' });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
+  await expect(row.getByText('Autorização em vigor: Primeira Pessoa', { exact: false })).toBeVisible();
+  await row.getByRole('button', { name: 'Cancelar autorização' }).click();
+  // Outra sessão substitui a autorização; a consulta é atualizada com a confirmação aberta.
+  state.delegation = delegationFixture({ delegationId: '41000000-0000-4000-8000-0000000000b2', delegateName: 'Segunda Pessoa' });
+  await page.evaluate(() => { window.dispatchEvent(new Event('visibilitychange')); });
+  await expect(row.getByText('Autorização em vigor: Segunda Pessoa', { exact: false })).toBeVisible();
+  await row.getByRole('button', { name: 'Confirmar cancelamento' }).click();
+  await expect.poll(() => state.revokes.length).toBe(1);
+  expect(state.revokes).toEqual([{ delegationId: '41000000-0000-4000-8000-0000000000a1', expectedVersion: 0 }]);
+});

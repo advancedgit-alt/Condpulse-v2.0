@@ -20,7 +20,8 @@ export function ParcelDelegation({ baseKey, tenantId, parcel, timeZone }: { base
   const key = [...baseKey, 'delegation', parcel.parcelId];
   const current = useQuery({ queryKey: key, queryFn: ({ signal }) => parcels.delegation(tenantId, parcel.parcelId, signal) });
   const [creating, setCreating] = useState(false);
-  const [revoking, setRevoking] = useState(false);
+  // Retrato da autorização exibida ao abrir a confirmação: o cancelamento vale só para ela, mesmo que a consulta mude.
+  const [revoking, setRevoking] = useState<{ delegationId: string; version: number; name: string } | null>(null);
   const [code, setCode] = useState<{ value: string; name: string } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'warning' | 'info' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,13 +29,14 @@ export function ParcelDelegation({ baseKey, tenantId, parcel, timeZone }: { base
   const delegation = current.data ?? null;
   const active = delegation?.state === 'ACTIVE';
   async function revoke() {
-    if (!delegation || busy) return;
+    const target = revoking;
+    if (!target || busy) return;
     setBusy(true); setNotice(null);
     try {
-      await parcels.revokeDelegation(tenantId, parcel.parcelId, { delegationId: delegation.delegationId, expectedVersion: delegation.version });
-      setCode(null); setNotice({ tone: 'success', text: `Autorização de ${delegation.delegateName} cancelada. O código deixou de valer.` });
+      await parcels.revokeDelegation(tenantId, parcel.parcelId, { delegationId: target.delegationId, expectedVersion: target.version });
+      setCode(null); setNotice({ tone: 'success', text: `Autorização de ${target.name} cancelada. O código deixou de valer.` });
     } catch (error) { setNotice({ tone: 'error', text: errorMessage(error) }); }
-    finally { setBusy(false); setRevoking(false); await refresh(); }
+    finally { setBusy(false); setRevoking(null); await refresh(); }
   }
   return <div className="share-link" aria-label={`Retirada por terceiro da encomenda recebida em ${formatWhen(parcel.receivedAt, timeZone)}`}>
     {current.isPending ? <Loading label="Consultando autorização…" />
@@ -47,13 +49,13 @@ export function ParcelDelegation({ baseKey, tenantId, parcel, timeZone }: { base
     {creating ? <DelegationForm tenantId={tenantId} parcel={parcel} timeZone={timeZone} replacing={active}
       close={(result) => { setCreating(false); if (result) { setCode(result.code ? { value: result.code, name: result.name } : null); setNotice(result.notice); } void refresh(); }} />
       : revoking ? <div className="cancel-confirmation" role="group" aria-label="Confirmação de cancelamento da autorização">
-        <p>Cancelar a autorização? O código deixa de valer imediatamente.</p>
+        <p>{`Cancelar a autorização de ${revoking.name}? O código deixa de valer imediatamente.`}</p>
         <div className="button-row"><button className="button button-danger button-compact" type="button" disabled={busy} onClick={() => void revoke()}>Confirmar cancelamento</button>
-          <button className="button button-secondary button-compact" type="button" disabled={busy} onClick={() => setRevoking(false)}>Manter</button></div></div>
+          <button className="button button-secondary button-compact" type="button" disabled={busy} onClick={() => setRevoking(null)}>Manter</button></div></div>
         : <div className="button-row">
           <button className="button button-secondary button-compact" type="button" disabled={current.isPending} onClick={() => { setNotice(null); setCreating(true); }}>
             {active ? 'Gerar nova autorização' : 'Autorizar retirada por terceiro'}</button>
-          {active ? <button className="button button-secondary button-compact" type="button" onClick={() => { setNotice(null); setRevoking(true); }}>Cancelar autorização</button> : null}
+          {active ? <button className="button button-secondary button-compact" type="button" onClick={() => { setNotice(null); setRevoking({ delegationId: delegation!.delegationId, version: delegation!.version, name: delegation!.delegateName }); }}>Cancelar autorização</button> : null}
         </div>}
   </div>;
 }
