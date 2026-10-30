@@ -63,8 +63,9 @@ export function arrival(value: unknown, unitId: string): Arrival {
     expiresAt: value.expiresAt as string, decidedAt: value.decidedAt as string | null, decisionSource: value.decisionSource as DecisionSource | null,
     decisionNote: value.decisionNote as string | null, decidedByMe: value.decidedByMe as boolean, version: value.version as number, createdAt: value.createdAt as string };
 }
-export function permitPage(value: unknown, unitId: string): { permits: Permit[]; truncated: boolean } {
-  check(record(value) && Array.isArray(value.permits) && value.permits.length <= 100 && typeof value.truncated === 'boolean');
+/** max: 100 nos convites da unidade; 500 nos convidados de uma reserva (limite do servidor para essa lista). */
+export function permitPage(value: unknown, unitId: string, max = 100): { permits: Permit[]; truncated: boolean } {
+  check(record(value) && Array.isArray(value.permits) && value.permits.length <= max && typeof value.truncated === 'boolean');
   return { permits: (value.permits as unknown[]).map((item) => permit(item, unitId)), truncated: value.truncated as boolean };
 }
 export function arrivalPage(value: unknown, unitId: string): { arrivals: Arrival[]; truncated: boolean } {
@@ -81,4 +82,37 @@ export function normalizeDocument(value: string): string | null {
   const normalized = value.replace(/\s+/g, '').toUpperCase();
   if (!normalized) return null;
   return /^[0-9A-Z]{2,4}$/.test(normalized) ? normalized : '';
+}
+
+/** Prestador recorrente (CP-039): a regra gera janelas (convites) só nos dias e horários escolhidos; sozinha não autoriza. */
+export interface VisitRule {
+  ruleId: string; unitId: string; visitorName: string; documentLast4: string | null; purpose: string | null; weekDays: number[];
+  startTime: string; endTime: string; validFrom: string; validUntil: string; state: 'ACTIVE' | 'REVOKED' | 'EXPIRED'; createdByMe: boolean;
+  revokedAt: string | null; revokeReason: string | null; version: number; nextWindowFrom: string | null; nextWindowUntil: string | null;
+}
+export interface CreateRule {
+  visitorName: string; documentLast4: string | null; purpose: string | null; weekDays: number[]; startTime: string; endTime: string; validFrom: string; validUntil: string;
+}
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+export function visitRule(value: unknown, unitId: string): VisitRule {
+  check(record(value) && uuid(value.ruleId) && uuid(value.unitId) && value.unitId.toLowerCase() === unitId.toLowerCase() && text(value.visitorName, 2, 160)
+    && document(value.documentLast4) && optional(value.purpose, 200) && Array.isArray(value.weekDays) && value.weekDays.length >= 1 && value.weekDays.length <= 7
+    && value.weekDays.every((day) => Number.isInteger(day) && day >= 1 && day <= 7) && new Set(value.weekDays).size === value.weekDays.length
+    && typeof value.startTime === 'string' && HHMM.test(value.startTime) && typeof value.endTime === 'string' && HHMM.test(value.endTime)
+    && value.startTime < value.endTime && typeof value.validFrom === 'string' && DAY.test(value.validFrom) && typeof value.validUntil === 'string'
+    && DAY.test(value.validUntil) && value.validUntil >= value.validFrom && ['ACTIVE', 'REVOKED', 'EXPIRED'].includes(value.state as string)
+    && typeof value.createdByMe === 'boolean' && optionalDate(value.revokedAt) && optional(value.revokeReason, 500) && int(value.version)
+    && optionalDate(value.nextWindowFrom) && optionalDate(value.nextWindowUntil) && (value.nextWindowFrom === null) === (value.nextWindowUntil === null));
+  const revoked = value.state === 'REVOKED';
+  check(revoked === (value.revokedAt !== null) && revoked === (value.revokeReason !== null) && !(revoked && value.nextWindowFrom !== null));
+  return { ruleId: value.ruleId as string, unitId: value.unitId as string, visitorName: value.visitorName as string, documentLast4: value.documentLast4 as string | null,
+    purpose: value.purpose as string | null, weekDays: [...(value.weekDays as number[])], startTime: value.startTime as string, endTime: value.endTime as string,
+    validFrom: value.validFrom as string, validUntil: value.validUntil as string, state: value.state as VisitRule['state'], createdByMe: value.createdByMe as boolean,
+    revokedAt: value.revokedAt as string | null, revokeReason: value.revokeReason as string | null, version: value.version as number,
+    nextWindowFrom: value.nextWindowFrom as string | null, nextWindowUntil: value.nextWindowUntil as string | null };
+}
+export function rulePage(value: unknown, unitId: string): { rules: VisitRule[]; truncated: boolean } {
+  check(record(value) && Array.isArray(value.rules) && value.rules.length <= 100 && typeof value.truncated === 'boolean');
+  return { rules: (value.rules as unknown[]).map((item) => visitRule(item, unitId)), truncated: value.truncated as boolean };
 }
