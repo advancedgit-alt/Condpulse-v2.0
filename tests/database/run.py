@@ -2096,6 +2096,16 @@ def waitlist_checks():
            "marca da prioridade nao expoe a entrada")
     query(offer, tenant=TA, actor=W2, role="cp_api")
     expect(entry(e7) == "OFFERED:1" and value(blocks, tenant=TA, actor=W2, role="cp_api") == "false", "oferta feita: periodo retido volta a ser conflito comum")
+    # Area desativada: a oferta nao acontece e a oferta ja feita nao e aceita.
+    query(f"UPDATE cp.amenities SET active=false WHERE id='{AW}'")
+    r7 = booking(240)
+    e8, sql = join(240, UW3, W3)
+    query(sql, tenant=TA, actor=W3, role="cp_api")
+    cancel(r7, AA)
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "0" and entry(e8) == "WAITING:0", "area inativa nao recebe oferta")
+    expect(error(f"SELECT cp.waitlist_accept('{TA}','{e7}',1)", "23514", tenant=TA, actor=W1, role="cp_api"), "oferta de area inativa nao e aceita")
+    query(f"UPDATE cp.amenities SET active=true WHERE id='{AW}'")
+    query(f"UPDATE cp.reservation_waitlist SET state='LEFT',version=version+1 WHERE id='{e8}'", tenant=TA, actor=W3, role="cp_api")
     # Periodo liberado a poucos minutos do inicio ainda vai para a fila (a oferta vence no inicio).
     soon = "date_trunc('minute',clock_timestamp())+interval '3 minutes'"
     counter[0] += 1

@@ -31,6 +31,8 @@ class WaitlistJdbcTest {
   """;
  private static JdbcDisposableDatabase db;
  private static ReservationService reservations;
+ /** Sem a oferta prévia: simula a criação que já passou da oferta quando o cancelamento concorrente confirma. */
+ private static ReservationService withoutOffer;
  private static WaitlistService waitlist;
  private static UUID accountD,unitD;
  private UUID amenity;
@@ -43,6 +45,7 @@ class WaitlistJdbcTest {
   var waitlistStore=new WaitlistStore(db.jdbc);
   var offers=new WaitlistOfferRunner(transactions,waitlistStore);
   reservations=new ReservationService(transactions,store,offers);
+  withoutOffer=new ReservationService(transactions,store);
   waitlist=new WaitlistService(transactions,store,waitlistStore,new AuditRecorder(db.jdbc),offers);
   accountD=UUID.randomUUID(); unitD=UUID.randomUUID(); db.extraAccounts.add(accountD);
   db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",accountD);
@@ -171,9 +174,12 @@ class WaitlistJdbcTest {
   var joined=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
   // Cancelamento concorrente confirmado antes da oferta (aqui, direto no banco, sem a oferta pós-commit).
   db.adminUpdate("update cp.reservations set status='CANCELLED',version=version+1 where id=?",booked.reservationId());
-  assertEquals("WAITLIST_PRIORITY",assertThrows(BusinessProblem.class,()->reservations.create(accountD,db.tenantA,key(),
+  assertEquals("WAITLIST_PRIORITY",assertThrows(BusinessProblem.class,()->withoutOffer.create(accountD,db.tenantA,key(),
+   new ReservationModels.Create(unitD,amenity,start,start.plusSeconds(7200),1))).code(),"Período livre com fila: a criação direta espera a fila");
+  // Com a oferta prévia (caminho normal), o período já está retido para quem aguardava: conflito comum.
+  assertEquals("RESERVATION_CONFLICT",assertThrows(BusinessProblem.class,()->reservations.create(accountD,db.tenantA,key(),
    new ReservationModels.Create(unitD,amenity,start,start.plusSeconds(7200),1))).code());
-  assertEquals("OFFERED",current(db.accountA,db.unitA,joined.waitlistId()).state(),"A recusa leva a oferta a quem aguardava");
+  assertEquals("OFFERED",current(db.accountA,db.unitA,joined.waitlistId()).state(),"A vaga foi oferecida a quem aguardava");
   assertEquals("0",db.adminString("select count(*) from cp.reservations where amenity_id=? and unit_id=?",amenity,unitD));
   db.assertEmptyContext();
  }
@@ -202,6 +208,18 @@ class WaitlistJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void offerOfADeactivatedAreaCannotBeAccepted() throws Exception {
+  var booked=bookAsC();
+  var joined=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
+  cancelAsC(booked);
+  var offered=current(db.accountA,db.unitA,joined.waitlistId());
+  assertEquals("OFFERED",offered.state());
+  db.adminUpdate("update cp.amenities set active=false where id=?",amenity);
+  assertEquals("AMENITY_INACTIVE",assertThrows(BusinessProblem.class,()->waitlist.accept(db.accountA,db.tenantA,offered.waitlistId(),key(),
+   new WaitlistModels.Change(db.unitA,offered.version()))).code());
+  assertEquals("HELD",db.adminString("select status from cp.reservations where id=?",offered.offerReservationId()));
+  db.assertEmptyContext();
+ }
  @Test void expiredOfferAdvancesTheLineAndCannotBeAccepted() throws Exception {
   var booked=bookAsC();
   var first=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();

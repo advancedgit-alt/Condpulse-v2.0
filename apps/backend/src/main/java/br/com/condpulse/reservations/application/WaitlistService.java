@@ -134,6 +134,8 @@ public class WaitlistService {
    if(!"OFFERED".equals(current.state())) throw "WAITING".equals(current.state())?changed():closed(current);
    if(current.version()!=request.expectedVersion()) throw changed();
    if(!store.heldOfferActive(tenant,current.offerReservationId())) throw offerExpired();
+   if(!store.amenityActive(tenant,current.amenityId()))
+    throw new BusinessProblem("AMENITY_INACTIVE",409,"A área foi desativada pela gestão. A oferta não pode ser aceita.");
    Integer quota=store.acceptedQuota(tenant,id);
    if(quota==null) throw new BusinessProblem("RESERVATION_RULE_SNAPSHOT_INVALID",503,"As regras aceitas desta entrada precisam ser revisadas.");
    // A retenção da própria oferta já conta como ativa: as demais reservas ativas precisam caber na cota aceita.
