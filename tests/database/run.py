@@ -1968,12 +1968,14 @@ def waitlist_checks():
               f"VALUES('{rid}','{TA}','{AW}','{unit}','{actor}','BOOKING','CONFIRMED',{start},{end},{start},{end},'{{\"approvalRequired\":false}}'::jsonb)",
               tenant=TA, actor=actor, role="cp_api")
         return rid
-    def join(hours, unit, actor, approval="false", creator=None):
+    def join(hours, unit, actor, approval="false", creator=None, quota=3, length=2):
         counter[0] += 1
         wid = f"79000000-0000-4000-8000-{counter[0]:012d}"
-        start, end = slot(hours)
+        start, _ = slot(hours)
+        end = f"date_trunc('hour',clock_timestamp())+interval '{hours + length} hours'"
         return wid, (f"INSERT INTO cp.reservation_waitlist(id,tenant_id,amenity_id,unit_id,created_by,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
-                     f"VALUES('{wid}','{TA}','{AW}','{unit}','{creator or actor}',{start},{end},{start},{end},'{{\"approvalRequired\":{approval}}}'::jsonb)")
+                     f"VALUES('{wid}','{TA}','{AW}','{unit}','{creator or actor}',{start},{end},{start},{end},"
+                     f"'{{\"approvalRequired\":{approval},\"policy\":{{\"maximumActivePerUnit\":{quota}}}}}'::jsonb)")
     offer = f"SELECT cp.waitlist_offer('{TA}','{AW}')"
     def entry(wid):
         return value(f"select state||':'||version from cp.reservation_waitlist where id='{wid}'")
@@ -2117,7 +2119,7 @@ def waitlist_checks():
     counter[0] += 1
     e6 = f"79000000-0000-4000-8000-{counter[0]:012d}"
     query(f"INSERT INTO cp.reservation_waitlist(id,tenant_id,amenity_id,unit_id,created_by,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
-          f"VALUES('{e6}','{TA}','{AW}','{UW3}','{W3}',{soon},{soon}+interval '1 hour',{soon},{soon}+interval '1 hour','{{\"approvalRequired\":false}}'::jsonb)",
+          f"VALUES('{e6}','{TA}','{AW}','{UW3}','{W3}',{soon},{soon}+interval '1 hour',{soon},{soon}+interval '1 hour','{{\"approvalRequired\":false,\"policy\":{{\"maximumActivePerUnit\":3}}}}'::jsonb)",
           tenant=TA, actor=W3, role="cp_api")
     cancel(r5, AA)
     expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(e6) == "OFFERED:1", "periodo liberado minutos antes do inicio vai para a fila")
@@ -2162,6 +2164,50 @@ def waitlist_checks():
         expect(entry(eb1) == "CLOSED:1" and entry(eb2) == "OFFERED:1", f"entrada do autor inelegivel encerrada e proximo ofertado ({role})")
         query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{eb2}')")
     expect(value("select count(*) from cp.memberships", tenant=TA, actor=W2, role="cp_api") == "1", "fora da oferta a API segue lendo so o proprio vinculo")
+    # Cota da unidade pelas regras aceitas: unidade no limite continua aguardando e o proximo recebe a oferta.
+    rq = booking(420)
+    own = booking(500, unit=UW1, actor=W1)
+    def active(unit):
+        return int(value(f"select count(*) from cp.reservations where unit_id='{unit}' and kind='BOOKING' and status in ('HELD','PENDING_APPROVAL','CONFIRMED') "
+                         f"and ends_at>clock_timestamp() and not (status in ('HELD','PENDING_APPROVAL') and expires_at<=clock_timestamp())"))
+    eq1, sql = join(420, UW1, W1, quota=active(UW1))
+    query(sql, tenant=TA, actor=W1, role="cp_api")
+    eq2, sql = join(420, UW2, W2, quota=active(UW2) + 1)
+    query(sql, tenant=TA, actor=W2, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rq}'")
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(eq1) == "WAITING:0" and entry(eq2) == "OFFERED:1",
+           "unidade no limite da cota nao recebe oferta; o proximo recebe")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id in ('{own}',(select offer_reservation_id from cp.reservation_waitlist where id='{eq2}'))")
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(eq1) == "OFFERED:1", "com a cota liberada a unidade recebe a oferta")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{eq1}')")
+    # Oferta sob a trava da unidade ocupada (reserva direta em andamento): a passada para, sem impasse nem pular a ordem.
+    rl = booking(460)
+    el1, sql = join(460, UW1, W1, quota=active(UW1) + 1)
+    query(sql, tenant=TA, actor=W1, role="cp_api")
+    el2, sql = join(460, UW2, W2, quota=active(UW2) + 1)
+    query(sql, tenant=TA, actor=W2, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rl}'")
+    holder = subprocess.Popen(["psql", "-X", "-q", "-c", f"BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('cp.reservations:{TA}:{UW1}',0)); "
+                               "SELECT pg_sleep(4); COMMIT;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.5)
+    started = time.monotonic()
+    blocked = value(offer, tenant=TA, actor=AA, role="cp_api")
+    expect(blocked == "0" and time.monotonic() - started < 2 and entry(el1) == "WAITING:0" and entry(el2) == "WAITING:0",
+           "trava da unidade ocupada encerra a passada sem esperar e sem pular a ordem da fila")
+    holder.wait(timeout=30)
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(el1) == "OFFERED:1" and entry(el2) == "WAITING:0",
+           "liberada a trava, o primeiro da fila recebe a oferta")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{el1}')")
+    # Bloqueio da reserva direta so por quem aguarda periodo inteiro livre.
+    rp = booking(600)  # 600-602 ocupado
+    ep, sql = join(599, UW3, W3, length=3)  # aguarda 599-602, ainda ocupado em parte
+    query(sql, tenant=TA, actor=W3, role="cp_api")
+    s0, s1 = f"date_trunc('hour',clock_timestamp())+interval '599 hours'", f"date_trunc('hour',clock_timestamp())+interval '600 hours'"
+    expect(value(f"SELECT cp.waitlist_blocks('{TA}','{AW}',{s0},{s1})::text", tenant=TA, actor=AA, role="cp_api") == "false",
+           "entrada de periodo ainda ocupado nao bloqueia o horario livre ao lado")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rp}'")
+    expect(value(f"SELECT cp.waitlist_blocks('{TA}','{AW}',{s0},{s1})::text", tenant=TA, actor=AA, role="cp_api") == "true",
+           "com o periodo aguardado livre, a fila bloqueia a reserva direta sobreposta")
 
 def main():
     guard()

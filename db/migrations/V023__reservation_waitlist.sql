@@ -178,7 +178,7 @@ CREATE POLICY account_waitlist_offer_read ON platform.accounts FOR SELECT TO cp_
 -- Devolve quantas ofertas criou. Papel sem INSERT em reservas não oferece; o worker recebe só as colunas da retenção.
 CREATE FUNCTION cp.waitlist_offer(target_tenant uuid,target_amenity uuid) RETURNS integer
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE offered integer:=0; entry record; stale record; held uuid; deadline timestamptz;
+DECLARE offered integer:=0; entry record; stale record; held uuid; deadline timestamptz; quota integer;
 BEGIN
  IF target_tenant IS NULL OR target_amenity IS NULL OR target_tenant IS DISTINCT FROM platform.current_tenant_id() THEN
   RAISE EXCEPTION 'condomínio indisponível' USING ERRCODE='42501';
@@ -211,6 +211,20 @@ BEGIN
    ORDER BY w.created_at,w.id LIMIT 50 FOR UPDATE OF w SKIP LOCKED LOOP
   IF NOT cp.waitlist_author_eligible(entry.tenant_id,entry.unit_id,entry.created_by) THEN
    UPDATE cp.reservation_waitlist SET state='CLOSED',version=version+1 WHERE id=entry.id;
+   CONTINUE;
+  END IF;
+  -- Cota da unidade pelas regras aceitas, sob a trava da unidade (a mesma da reserva direta e do aceite). A criação
+  -- toma a trava da unidade antes da trava da fila; aqui a ordem é a inversa, então só se tenta: trava ocupada encerra
+  -- esta passada (a próxima continua da mesma posição), sem impasse e sem pular a ordem da fila.
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('cp.reservations:'||entry.tenant_id::text||':'||entry.unit_id::text,0)) THEN
+   EXIT;
+  END IF;
+  quota:=CASE WHEN entry.rule_snapshot->'policy'->>'maximumActivePerUnit' ~ '^[1-9][0-9]{0,2}$'
+   THEN (entry.rule_snapshot->'policy'->>'maximumActivePerUnit')::integer END;
+  -- Unidade no limite (ou regra aceita ilegível) não segura o período: a entrada continua aguardando e o próximo recebe.
+  IF quota IS NULL OR (SELECT count(*) FROM cp.reservations r WHERE r.tenant_id=entry.tenant_id AND r.unit_id=entry.unit_id
+    AND r.kind='BOOKING' AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND r.ends_at>clock_timestamp()
+    AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp()))>=quota THEN
    CONTINUE;
   END IF;
   held:=gen_random_uuid();
@@ -303,8 +317,13 @@ BEGIN
  PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||target_amenity::text,true);
  SELECT EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity
    AND w.state='WAITING' AND w.starts_at>clock_timestamp()
-   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)'))
-  -- Período ainda ocupado: a exclusão recusa a criação como conflito comum; a prioridade vale para o período livre.
+   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')
+   -- Só bloqueia quem aguarda um período inteiro livre (que a oferta consegue entregar): entrada de período ainda
+   -- ocupado em parte não impede o uso dos horários livres ao lado.
+   AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
+    AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
+    AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)')))
+  -- Período pedido ainda ocupado: a exclusão recusa a criação como conflito comum; a prioridade vale para o período livre.
   AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.amenity_id=target_amenity
    AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
    AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')) INTO waiting;

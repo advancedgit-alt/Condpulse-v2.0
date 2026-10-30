@@ -21,6 +21,12 @@ Atrás de `CP_RESERVATIONS_ENABLED` (a mesma flag das reservas). Banco: V023 (`c
   pedido parados e oferece período liberado. O worker só lê/altera a fila e só cria retenção `HELD` e os eventos
   `WAITLIST_OFFERED`/`RESERVATION_EXPIRED` dentro da marca da oferta da área. Enquanto o worker não estiver implantado,
   a fila anda nas requisições da API.
+- **Quem recebe a oferta**: o primeiro da fila cujo autor ainda tem vínculo elegível (senão a entrada é encerrada) e
+  cuja unidade está abaixo da cota das regras aceitas (senão a entrada continua aguardando e o próximo recebe). A cota é
+  conferida sob a trava da unidade; se outra operação da unidade estiver em andamento, a passada para ali e a próxima
+  continua da mesma posição.
+- **Prioridade sobre a reserva direta**: só quem aguarda um período inteiramente livre (que a oferta consegue entregar)
+  bloqueia a reserva direta sobreposta; entrada de período ainda ocupado em parte não impede os horários livres ao lado.
 - **Aceitar**: só quem entrou na fila, dentro do prazo, com chave de operação. A retenção vira reserva confirmada, ou
   pedido `PENDING_APPROVAL` (prazo de decisão de até 24 h, nunca depois do início) se as regras aceitas exigem
   aprovação. A cota da unidade é conferida com as regras aceitas. Oferta vencida nunca é confirmada.
