@@ -176,7 +176,11 @@ function PermitCard({ api, scope, tenantId, unitId, timeZone, item, webOrigin, s
   const [failure, setFailure] = useState<unknown>(null);
   const [link, setLink] = useState<string | null>(null);
   const [shareFailed, setShareFailed] = useState(false);
-  const invalidate = () => void queries.invalidateQueries({ queryKey: [...scope, 'permits'] });
+  const invalidate = () => {
+    void queries.invalidateQueries({ queryKey: [...scope, 'permits'] });
+    // Convite de convidado de reserva: a lista de convidados (fora do escopo de visitas) também muda.
+    void queries.invalidateQueries({ queryKey: [...scope.slice(0, -1), 'guests'] });
+  };
   const trimmed = reason.trim().replace(/\s+/g, ' ');
   async function run(action: () => Promise<void>) {
     if (busy) return;
