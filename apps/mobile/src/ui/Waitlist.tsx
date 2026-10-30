@@ -145,6 +145,8 @@ export function JoinWaitlist({ api, scope, tenantId, body, disabled, newKey }: {
       setFailure(error);
       if (!uncertain(error)) setHeld(null);
       if (error instanceof ApiError && error.code === 'WAITLIST_SLOT_AVAILABLE') void queries.invalidateQueries({ queryKey: [...scope, 'availability'] });
+      // Regras mudaram: a área é consultada de novo e o aceite volta a ser exigido na nova versão.
+      if (error instanceof ApiError && error.code === 'AMENITY_POLICY_CHANGED') void queries.invalidateQueries({ queryKey: [...scope, 'amenities'] });
     } finally { setBusy(false); void queries.invalidateQueries({ queryKey: [...scope, 'waitlist'] }); }
   }
   if (joined) return <Notice tone="success">{`${joined.replayed ? 'Você já estava na fila deste período.' : 'Você entrou na fila de espera deste período.'}${joined.position !== null ? ` Posição: ${joined.position}.` : ''} Acompanhe em Fila de espera.`}</Notice>;

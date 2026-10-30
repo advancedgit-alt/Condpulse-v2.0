@@ -26,13 +26,13 @@ function fakeApi() {
   const state = { entries: [] as WaitlistEntry[], blocked: [] as { occupiedFrom: string; occupiedUntil: string }[],
     joins: [] as { body: unknown; key: string }[], accepts: [] as { body: unknown; key: string }[], leaves: [] as unknown[],
     creates: [] as { body: unknown; key: string }[], errors: { join: [] as ApiError[], accept: [] as ApiError[], leave: [] as ApiError[],
-      create: [] as ApiError[], list: [] as ApiError[] }, accepted: 'CONFIRMED' as Reservation['status'] };
+      create: [] as ApiError[], list: [] as ApiError[] }, accepted: 'CONFIRMED' as Reservation['status'], area: salao };
   const reservationOf = (status: Reservation['status']): Reservation => ({ reservationId: '78000000-0000-4000-8000-000000000001', unitId: UNIT,
     amenityId: SALAO, status, startsAt: base.startsAt, endsAt: base.endsAt, occupiedFrom: base.startsAt, occupiedUntil: base.endsAt,
     acceptedPolicyVersion: 3, feeCents: 15000, version: 1, decisionReason: null });
   const api = {
     me: jest.fn(),
-    amenities: jest.fn(async () => [salao]),
+    amenities: jest.fn(async () => [state.area]),
     availability: jest.fn(async (_t: string, _u: string, amenityId: string, range: { from: string; until: string }) =>
       ({ amenityId, from: range.from, until: range.until, observedAt: now().toISOString(), blockedIntervals: state.blocked })),
     reservations: jest.fn(async () => ({ reservations: [], truncated: false })),
@@ -148,6 +148,23 @@ describe('fila de espera no celular', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Entrar na fila de espera' }));
     await waitFor(() => expect(fake.state.joins).toHaveLength(2));
     expect(fake.state.joins[1]!.key).not.toBe(fake.state.joins[0]!.key);
+  });
+
+  it('regras mudadas ao entrar na fila: a área é consultada de novo e o novo aceite é exigido', async () => {
+    const fake = await mount((f) => { f.state.blocked = [{ occupiedFrom: '2030-01-07T13:00:00Z', occupiedUntil: '2030-01-07T14:00:00Z' }]; });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Ver horários de Salão fictício' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Entrar na fila de 10:00–11:00' }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras da área (versão 3)' }));
+    fake.state.area = { ...salao, policyVersion: 4 };
+    fake.state.errors.join.push(new ApiError(409, 'AMENITY_POLICY_CHANGED', 'As regras da área mudaram. Confira as condições atualizadas antes de reservar.'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Entrar na fila de espera' }));
+    expect(await screen.findByText('As regras da área mudaram. Confira as condições atualizadas antes de reservar.')).toBeTruthy();
+    const renewed = await screen.findByRole('checkbox', { name: 'Li e aceito as regras da área (versão 4)' });
+    expect(screen.getByRole('button', { name: 'Entrar na fila de espera' })).toBeDisabled();
+    await fireEvent.press(renewed);
+    await fireEvent.press(screen.getByRole('button', { name: 'Entrar na fila de espera' }));
+    expect(await screen.findByText(/entrou na fila de espera deste período/)).toBeTruthy();
+    expect((fake.state.joins[1]!.body as { acceptedPolicyVersion: number }).acceptedPolicyVersion).toBe(4);
   });
 
   it('na fila: mostra a posição e sair pede confirmação (voltar desiste)', async () => {
