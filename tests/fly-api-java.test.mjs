@@ -19,7 +19,7 @@ const disposable=process.env.CP_DB_TEST_OK==='DISPOSABLE'&&['localhost','127.0.0
   &&process.env.PGDATABASE==='condpulse_ci'&&process.env.PGUSER==='postgres'&&process.env.PGPASSWORD==='condpulse_ci_only';
 
 test('login da Fly mantém a política do login da Vercel e só muda teto e conferência de grants com motivo escrito',()=>{
-  assert.match(source,/CONNECTION LIMIT " \+ CONNECTION_LIMIT/);assert.match(source,/static final int CONNECTION_LIMIT = 8;/);
+  assert.match(source,/CONNECTION LIMIT " \+ CONNECTION_LIMIT/);assert.match(source,/static final int CONNECTION_LIMIT = 4;/);
   assert.match(source,/static final int MAX_CONNECTIONS = 60;/);assert.match(source,/static final int MARGIN = 20;/);
   assert.match(source,/NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS/);
   assert.match(source,/WITH ADMIN FALSE/);assert.match(source,/WITH INHERIT TRUE/);assert.match(source,/WITH SET FALSE/);
@@ -67,5 +67,5 @@ test('PostgreSQL descartável: SCRAM, STAGED→READY só com COMMIT, ABORT desab
     assert.equal(result.stderr.trim(),'');
     const outcome=JSON.parse(result.stdout.trim());
     assert.equal(result.status,0,`Fly login harness: ${result.stdout}`);
-    assert.deepEqual(outcome,{passed:true,logins:2,connectionLimit:8,abortDisables:true,readyReplay:true,vercelCoexists:true,budgetDenied:true,driftDenied:true});
+    assert.deepEqual(outcome,{passed:true,logins:2,connectionLimit:4,abortDisables:true,readyReplay:true,vercelCoexists:true,budgetDenied:true,driftDenied:true});
   }));

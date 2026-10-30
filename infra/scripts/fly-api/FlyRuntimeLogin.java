@@ -33,7 +33,7 @@ import org.postgresql.util.PasswordUtil;
  * Diferenças com motivo escrito: (1) o schema atual vai além da V005 do executor da Vercel, então a conferência de
  * grants compara o login com cp_api em todas as tabelas/colunas/funções em vez da lista fixa da V005; (2) o login da
  * Vercel continua existindo, então só ele (marker da Vercel) é tolerado e o teto de conexões dele entra na margem da
- * ADR-0006; (3) teto 8 em vez de 16, porque 16+16 não cabe na margem mínima de 20 com max_connections 60.
+ * ADR-0006; (3) teto 4 em vez de 16: com 18 backends não runtime medidos em 30/10, 18+16+8+20=62 não cabe em 60; 4 = Hikari 2 + sobreposição de deploy.
  *
  * A senha é gerada pelo processo Node do runner e chega só pela primeira linha do stdin; nunca é impressa.
  * Protocolo no stdout: {"phase":"STAGED"} quando o login foi provado, depois uma linha {"phase":"RESULT",...}.
@@ -42,7 +42,7 @@ import org.postgresql.util.PasswordUtil;
 public final class FlyRuntimeLogin {
     public static final String PROJECT = RuntimeConfiguration.PROJECT;
     public static final String APP = "condpulse-v2-0";
-    static final int CONNECTION_LIMIT = 8;
+    static final int CONNECTION_LIMIT = 4;
     static final int MAX_CONNECTIONS = 60;
     static final int MARGIN = 20;
     static final String CA_PATH = "/run/secrets/db-ca.crt";
