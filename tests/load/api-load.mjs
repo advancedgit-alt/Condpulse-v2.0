@@ -194,7 +194,9 @@ async function fire(port) {
   try {
     const result = await call(port, path, { ...options, token: token(resident) });
     stat.latencies.push(Number(process.hrtime.bigint() - started) / 1e6);
-    stat.codes[result.status] = (stat.codes[result.status] ?? 0) + 1;
+    // Só códigos de problema conhecidos no formato da API (nada de corpo livre).
+    const code = result.status >= 400 && typeof result.body?.code === 'string' && /^[A-Z0-9_]{1,60}$/.test(result.body.code) ? `${result.status}:${result.body.code}` : String(result.status);
+    stat.codes[code] = (stat.codes[code] ?? 0) + 1;
     if (result.status >= 200 && result.status < 300) {
       stat.ok++;
       if (name === 'create' && result.body?.reservationId && Math.random() < 0.5) cancellable.push({ id: result.body.reservationId, version: result.body.version, resident });
