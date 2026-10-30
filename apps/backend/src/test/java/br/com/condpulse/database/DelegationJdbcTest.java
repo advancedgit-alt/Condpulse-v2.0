@@ -226,4 +226,14 @@ class DelegationJdbcTest {
   assertEquals(first.delegation().delegationId(),again.delegation().delegationId());
   db.assertEmptyContext();
  }
+
+ @Test void expiredAuthorizationIsReportedAsExpiredNotChanged() throws Exception {
+  var parcel=receive(db.unitA);
+  var issued=delegate(parcel,key());
+  db.adminUpdateWithoutTriggers("update cp.parcel_delegations set valid_until=clock_timestamp()-interval '1 minute' where id=?",
+   issued.delegation().delegationId());
+  assertEquals("DELEGATION_EXPIRED",assertThrows(BusinessProblem.class,()->delegations.handoffByCode(concierge,db.tenantA,AAL2,parcel.parcelId(),key(),
+   new DelegationModels.CodeHandoff(issued.code(),true,parcel.version()))).code());
+  db.assertEmptyContext();
+ }
 }

@@ -2342,6 +2342,8 @@ def delegation_checks():
           f"UPDATE cp.parcel_delegations SET valid_until=clock_timestamp()-interval '1 minute' WHERE id='{d3}'; "
           f"ALTER TABLE cp.parcel_delegations ENABLE TRIGGER parcel_delegations_guard")
     expect(check(Q3, "12345678") == "EXPIRED" and state(d3) == "ACTIVE:0", "delegacao vencida nao e usada")
+    expect(check(Q3, "12345678", did="41000000-0000-4000-8000-ffffffffffff") == "EXPIRED" and state(d3) == "ACTIVE:0",
+           "vencida responde vencida mesmo sem a delegacao lida (nao como alterada)")
     query(f"UPDATE cp.parcel_delegations SET state='REVOKED',revoked_by='{RD}',version=version+1 WHERE id='{d3}'", tenant=TA, actor=RD, role="cp_api")
     expect(state(d3) == "REVOKED:0", "morador revoga a delegacao")
     expect(error(f"UPDATE cp.parcel_delegations SET state='ACTIVE',version=version+1 WHERE id='{d3}'", "23514", tenant=TA, actor=RD, role="cp_api"),

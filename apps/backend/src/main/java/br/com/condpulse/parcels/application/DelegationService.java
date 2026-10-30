@@ -153,7 +153,8 @@ public class DelegationService {
    if(current.version()!=request.expectedVersion()) throw new BusinessProblem("PARCEL_CHANGED",409,"A encomenda foi alterada. Atualize a lista.");
    // O autenticador é calculado aqui, com o segredo do servidor, para a delegação em vigor lida; o banco só compara.
    var active=store.latest(tenant,parcelId);
-   UUID delegationId=active!=null && "ACTIVE".equals(active.state())?active.delegationId():null;
+   // Estado efetivo: vencida ainda está gravada como em vigor; o banco responde EXPIRED para ela.
+   UUID delegationId=active!=null && ("ACTIVE".equals(active.state()) || "EXPIRED".equals(active.state()))?active.delegationId():null;
    String result=store.check(tenant,parcelId,delegationId,delegationId==null?null:codeKey.mac(delegationId,request.code().strip()));
    if(!"OK".equals(result)) {
     var latest=store.latest(tenant,parcelId);

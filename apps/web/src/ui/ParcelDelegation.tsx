@@ -66,6 +66,8 @@ function DelegationForm({ tenantId, parcel, timeZone, replacing, close }: { tena
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [locked, setLocked] = useState(false);
+  // Corpo do envio com resultado incerto: a repetição manda exatamente o mesmo, sem revalidar o prazo pelo relógio atual.
+  const [sent, setSent] = useState<{ delegateName: string; documentLast4: string | null; validUntil: string | null } | null>(null);
   const intent = useIntent();
   const person = displayText(name, 160);
   const documentValue = collapseText(document).toUpperCase();
@@ -80,8 +82,9 @@ function DelegationForm({ tenantId, parcel, timeZone, replacing, close }: { tena
   const valid = person !== null && [...person].length >= 2 && documentValid && periodError === null && validUntil !== null;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!valid || busy) return;
-    const body = { delegateName: person!, documentLast4: documentValue || null, validUntil };
+    if (busy || (!locked && !valid)) return;
+    const body = locked && sent ? sent : { delegateName: person!, documentLast4: documentValue || null, validUntil };
+    setSent(body);
     const key = intent.keyFor(JSON.stringify(body));
     setBusy(true); setFailure(null);
     try {
@@ -104,11 +107,11 @@ function DelegationForm({ tenantId, parcel, timeZone, replacing, close }: { tena
     <input id={`${id}-document`} maxLength={4} value={document} onChange={(event) => setDocument(event.target.value)} disabled={disabled} aria-invalid={!documentValid} />
     <label htmlFor={`${id}-until`}>Válida até</label>
     <input id={`${id}-until`} type="datetime-local" required value={until} onChange={(event) => setUntil(event.target.value)} disabled={disabled} />
-    {periodError ? <span className="field-help" role="status">{periodError}</span> : <span className="field-help">Horário em {timeZone}.</span>}
+    {periodError && !locked ? <span className="field-help" role="status">{periodError}</span> : <span className="field-help">Horário em {timeZone}.</span>}
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}</Notice> : null}
     {locked ? <Notice tone="warning">Não foi possível confirmar a autorização. A próxima tentativa usa o mesmo envio; se ela já tiver sido criada, gere outra para ver um código.</Notice> : null}
     <div className="button-row">
-      <button className="button button-compact" type="submit" disabled={!valid || busy}>{busy ? 'Gerando…' : locked ? 'Tentar confirmar a mesma autorização' : 'Gerar código'}</button>
+      <button className="button button-compact" type="submit" disabled={busy || (!locked && !valid)}>{busy ? 'Gerando…' : locked ? 'Tentar confirmar a mesma autorização' : 'Gerar código'}</button>
       <button className="button button-secondary button-compact" type="button" disabled={busy} onClick={() => close(null)}>Voltar</button>
     </div>
   </form>;

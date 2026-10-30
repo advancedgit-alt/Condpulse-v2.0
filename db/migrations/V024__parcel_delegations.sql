@@ -149,8 +149,8 @@ BEGIN
  IF NOT platform.has_capability('concierge.operate') THEN RAISE EXCEPTION 'somente a portaria confere' USING ERRCODE='42501'; END IF;
  SELECT * INTO d FROM cp.parcel_delegations WHERE tenant_id=target_tenant AND parcel_id=target_parcel AND state='ACTIVE' FOR UPDATE;
  IF NOT FOUND THEN RETURN 'NONE'; END IF;
- IF d.id IS DISTINCT FROM target_delegation THEN RETURN 'CHANGED'; END IF;
  IF d.valid_until<=clock_timestamp() THEN RETURN 'EXPIRED'; END IF;
+ IF d.id IS DISTINCT FROM target_delegation THEN RETURN 'CHANGED'; END IF;
  IF candidate IS NOT NULL AND candidate ~ '^[0-9a-f]{64}$' AND candidate=d.code_hmac THEN
   UPDATE cp.parcel_delegations SET state='USED',used_by=platform.current_actor_id(),version=version+1 WHERE id=d.id;
   RETURN 'OK';
