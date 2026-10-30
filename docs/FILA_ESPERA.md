@@ -42,7 +42,9 @@ Atrás de `CP_RESERVATIONS_ENABLED` (a mesma flag das reservas). Banco: V023 (`c
   capacidade de decidir só pelo aceite da própria oferta (`cp.waitlist_accept`). Retenção e entrada mudam juntas por
   gatilho em qualquer caminho.
 - Ordem de travas: a oferta toma primeiro a trava da fila da área e lê as linhas de reserva com `SKIP LOCKED`; os
-  comandos da unidade não tomam a trava da fila.
+  comandos da unidade não tomam a trava da fila. Aceite, recusa e saída travam a entrada antes da retenção; ao vencer
+  uma retenção, a passada só tenta travar a entrada da oferta (`SKIP LOCKED`) e, se ela estiver ocupada, deixa a
+  retenção para a próxima passada, sem impasse.
 
 ## API e web
 

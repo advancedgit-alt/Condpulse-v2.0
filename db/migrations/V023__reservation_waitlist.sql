@@ -202,6 +202,14 @@ BEGIN
    WHERE r.tenant_id=target_tenant AND r.amenity_id=target_amenity AND r.status IN ('HELD','PENDING_APPROVAL')
     AND r.expires_at<=clock_timestamp()
    ORDER BY r.id FOR UPDATE SKIP LOCKED LOOP
+  -- Aceite, recusa e saída travam a entrada antes da retenção; o gatilho de expiração trava a entrada depois. Para não
+  -- haver impasse, a entrada da oferta só é tentada: ocupada, a retenção fica para a próxima passada.
+  IF stale.status='HELD' AND EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant
+    AND w.offer_reservation_id=stale.id AND w.state='OFFERED') THEN
+   PERFORM 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.offer_reservation_id=stale.id
+    AND w.state='OFFERED' FOR UPDATE SKIP LOCKED;
+   IF NOT FOUND THEN CONTINUE; END IF;
+  END IF;
   UPDATE cp.reservations SET status='EXPIRED',updated_at=clock_timestamp(),version=version+1,
     decision_reason=CASE stale.status WHEN 'HELD' THEN 'Oferta da fila de espera não aceita no prazo.'
      ELSE 'Prazo de decisão encerrado sem confirmação.' END

@@ -2197,7 +2197,21 @@ def waitlist_checks():
     holder.wait(timeout=30)
     expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(el1) == "OFFERED:1" and entry(el2) == "WAITING:0",
            "liberada a trava, o primeiro da fila recebe a oferta")
-    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{el1}')")
+    # Aceite em curso trava a entrada antes da retencao; a expiracao trava a retencao antes da entrada (gatilho).
+    # A passada pula a retencao cuja entrada esta ocupada, sem esperar (sem impasse), e expira na passada seguinte.
+    query(f"UPDATE cp.reservations SET expires_at=clock_timestamp()-interval '1 second' WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{el1}')")
+    holder = subprocess.Popen(["psql", "-X", "-q", "-c", f"BEGIN; SELECT 1 FROM cp.reservation_waitlist WHERE id='{el1}' FOR UPDATE; "
+                               "SELECT pg_sleep(4); COMMIT;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.5)
+    started = time.monotonic()
+    skipped = value(offer, tenant=TA, actor=AA, role="cp_api")
+    held_status = value(f"SELECT r.status FROM cp.reservations r JOIN cp.reservation_waitlist w ON w.offer_reservation_id=r.id WHERE w.id='{el1}'")
+    expect(skipped == "0" and time.monotonic() - started < 2 and held_status == "HELD" and entry(el1) == "OFFERED:1",
+           "entrada travada por aceite em curso: a expiracao pula a retencao sem esperar")
+    holder.wait(timeout=30)
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(el1) == "EXPIRED:2" and entry(el2) == "OFFERED:1",
+           "liberada a entrada, a passada expira a retencao e oferece ao proximo")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{el2}')")
     # Entradas sem cota nao ocupam o lote da passada: alem das 50 primeiras, a elegivel ainda recebe a oferta.
     query(f"UPDATE cp.reservation_waitlist SET state='LEFT',version=version+1 WHERE amenity_id='{AW}' AND state='WAITING'")
     full = active(UW1)
