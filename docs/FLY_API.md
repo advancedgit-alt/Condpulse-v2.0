@@ -88,7 +88,11 @@ Não mexer na Vercel. Enquanto o tráfego não for trocado, a Vercel segue atend
 destruir a máquina no painel. Para retirar o login de banco da Fly: deixá-lo DISABLED (NOLOGIN) por SQL operacional
 revisado; não há DROP automático.
 
-## Troca de tráfego (PR separado, depois de verificar a Fly)
+## Troca de tráfego
+
+Feita em 30/10/2026 depois do deploy 41109257267 (readiness 200/UP). Rollback: reverter o PR da troca; a Vercel volta a usar o serviço `api` próprio.
+
+Passos originais:
 
 1. Smoke na URL da Fly: readiness UP, `/v1/me` 401 sem sessão.
 2. PR que troca em `vercel.json` os rewrites de `/auth/:path*`, `/v1/:path*` e `/actuator/health/readiness` para

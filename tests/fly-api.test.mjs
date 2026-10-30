@@ -224,10 +224,11 @@ test('fly.toml: app e região fixas, imagem revisada, sempre ligada, readiness e
     'auto_stop_machines = "off"','min_machines_running = 1','path = "/actuator/health/readiness"','size = "shared-cpu-1x"','memory = "1gb"'])
     assert.ok(toml.includes(line),line);
   assert.doesNotMatch(toml,/\[env\]|PASSWORD|KEY|TOKEN|sb_|jdbc:/i);
-  // Esta mudança não troca o tráfego: a Vercel continua servindo /auth, /v1 e a readiness.
+  // Tráfego trocado: /auth, /v1 e a readiness vão para a Fly; o resto continua no serviço web da Vercel.
   const vercel=JSON.parse(read('vercel.json'));
-  assert.ok(vercel.rewrites.every(r=>typeof r.destination==='object'&&['api','web'].includes(r.destination.service)));
-  assert.doesNotMatch(read('vercel.json'),/fly\.dev/);
+  const fly=vercel.rewrites.filter(r=>typeof r.destination==='string');
+  assert.deepEqual(fly.map(r=>r.destination),['https://condpulse-v2-0.fly.dev/auth/:path*','https://condpulse-v2-0.fly.dev/v1/:path*','https://condpulse-v2-0.fly.dev/actuator/health/readiness']);
+  assert.ok(vercel.rewrites.filter(r=>typeof r.destination!=='string').every(r=>r.destination.service==='web'));
 });
 
 test('conjuntos de segredos: obrigatórios, gerados e copiados não se sobrepõem e cobrem a imagem',()=>{

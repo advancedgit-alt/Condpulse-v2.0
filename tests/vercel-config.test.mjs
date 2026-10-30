@@ -14,11 +14,17 @@ test('Vercel Services preserva origem unica e caminhos do BFF/API antes do fallb
   assert.deepEqual(config.regions, ['gru1']);
   assert.deepEqual(Object.keys(config.services).sort(), ['api', 'web']);
   assert.deepEqual(config.rewrites, [
-    { source: '/auth/:path*', destination: { service: 'api' } },
-    { source: '/v1/:path*', destination: { service: 'api' } },
-    { source: '/actuator/health/readiness', destination: { service: 'api' } },
+    { source: '/auth/:path*', destination: 'https://condpulse-v2-0.fly.dev/auth/:path*' },
+    { source: '/v1/:path*', destination: 'https://condpulse-v2-0.fly.dev/v1/:path*' },
+    { source: '/actuator/health/readiness', destination: 'https://condpulse-v2-0.fly.dev/actuator/health/readiness' },
     { source: '/(.*)', destination: { service: 'web' } },
   ]);
+  // API servida pela Fly (docs/FLY_API.md); o serviço container da Vercel fica só como rollback.
+  for (const rewrite of config.rewrites.slice(0, 3)) {
+    const url = new URL(rewrite.destination);
+    assert.equal(url.origin, 'https://condpulse-v2-0.fly.dev');
+    assert.equal(url.pathname, rewrite.source);
+  }
   assert.equal(config.services.api.root, '.');
   assert.equal(config.services.api.runtime, 'container');
   assert.equal(config.services.api.entrypoint, 'Dockerfile.vercel');
@@ -36,14 +42,14 @@ test('Vercel Services preserva origem unica e caminhos do BFF/API antes do fallb
 
 test('somente o caminho exato de readiness deixa o fallback web para consultar a API', () => {
   const actuator = config.rewrites.filter(({ source }) => source.startsWith('/actuator'));
-  assert.deepEqual(actuator, [{ source: '/actuator/health/readiness', destination: { service: 'api' } }]);
+  assert.deepEqual(actuator, [{ source: '/actuator/health/readiness', destination: 'https://condpulse-v2-0.fly.dev/actuator/health/readiness' }]);
   const readiness = config.rewrites.indexOf(actuator[0]);
   const fallback = config.rewrites.findIndex(({ source }) => source === '/(.*)');
   assert.ok(readiness >= 0 && readiness < fallback);
   for (const path of ['/actuator', '/actuator/health', '/actuator/health/liveness',
     '/actuator/health/readiness/details', '/actuator/env', '/actuator/metrics']) {
     assert.equal(actuator.some(({ source }) => source === path), false);
-    assert.equal(config.rewrites.find(({ source }) => source === path)?.destination.service, undefined);
+    assert.equal(config.rewrites.find(({ source }) => source === path), undefined);
   }
   const backend = read('apps/backend/src/main/resources/application.yaml');
   assert.match(backend, /exposure:\s+include: health\s/);

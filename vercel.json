@@ -17,9 +17,9 @@
     }
   },
   "rewrites": [
-    { "source": "/auth/:path*", "destination": { "service": "api" } },
-    { "source": "/v1/:path*", "destination": { "service": "api" } },
-    { "source": "/actuator/health/readiness", "destination": { "service": "api" } },
+    { "source": "/auth/:path*", "destination": "https://condpulse-v2-0.fly.dev/auth/:path*" },
+    { "source": "/v1/:path*", "destination": "https://condpulse-v2-0.fly.dev/v1/:path*" },
+    { "source": "/actuator/health/readiness", "destination": "https://condpulse-v2-0.fly.dev/actuator/health/readiness" },
     { "source": "/(.*)", "destination": { "service": "web" } }
   ],
   "headers": [{
