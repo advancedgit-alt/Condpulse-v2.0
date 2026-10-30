@@ -140,6 +140,21 @@ class RealtimeSecurityIntegrationTest {
   assertTrue(context.getBeansOfType(RealtimeController.class).isEmpty());
   assertEquals(404,open(new Cookie(BffCookies.SESSION,session())).getStatus());
  }
+ /**
+  * No servidor real, a rota de um módulo desligado vira 404 e o contêiner faz o despacho ERROR para /error, sem o
+  * cookie autenticado: esse despacho não pode virar 401 (o navegador encerraria a sessão e voltaria ao login).
+  */
+ @Test void errorDispatchOfADisabledModuleIsNotTurnedIntoA401() throws Exception {
+  start(false);
+  var response=mvc.perform(get("/error").servletPath("/error").secure(true).with(request->{
+   request.setDispatcherType(jakarta.servlet.DispatcherType.ERROR);
+   request.setAttribute(jakarta.servlet.RequestDispatcher.ERROR_STATUS_CODE,404);
+   request.setAttribute(jakarta.servlet.RequestDispatcher.ERROR_REQUEST_URI,ROUTE);
+   return request;
+  })).andReturn().getResponse();
+  assertNotEquals(401,response.getStatus());
+  assertNotEquals(403,response.getStatus());
+ }
 
  @Configuration(proxyBeanMethods=false)
  @EnableWebMvc @EnableWebSecurity
