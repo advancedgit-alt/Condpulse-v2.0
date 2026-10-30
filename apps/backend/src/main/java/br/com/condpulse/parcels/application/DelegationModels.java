@@ -16,6 +16,7 @@ public final class DelegationModels {
  public record Issued(Delegation delegation,String code,boolean replayed,int status) {}
  /** Corpo da resposta da criação. */
  public record Created(Delegation delegation,String code) {}
- public record Revoke(Long expectedVersion) {}
+ /** Cancelamento da autorização exibida: identificador e versão lidos na tela. */
+ public record Revoke(UUID delegationId,Long expectedVersion) {}
  public record CodeHandoff(String code,Boolean identityChecked,Long expectedVersion) {}
 }

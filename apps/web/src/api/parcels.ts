@@ -131,7 +131,7 @@ export function createParcelsApi(client: CondPulseApi = api) {
       client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/delegation`, currentDelegation, signal ? { signal } : {}),
     delegate: async (tenantId: string, parcelId: string, key: string, body: { delegateName: string; documentLast4: string | null; validUntil: string | null }) =>
       client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/delegation`, issued, { method: 'POST', body, key }),
-    revokeDelegation: async (tenantId: string, parcelId: string, body: { expectedVersion: number }) =>
+    revokeDelegation: async (tenantId: string, parcelId: string, body: { delegationId: UUID; expectedVersion: number }) =>
       client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/delegation/revoke`, (value) => delegation(value, true), { method: 'POST', body }),
     handoffByCode: async (tenantId: string, parcelId: string, key: string, body: { code: string; identityChecked: true; expectedVersion: number }) =>
       client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/handoff-code`, mutation, { method: 'POST', body, key }),

@@ -15477,9 +15477,14 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "delegationId",
           "expectedVersion"
         ],
         "properties": {
+          "delegationId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "expectedVersion": {
             "type": "integer",
             "format": "int64",

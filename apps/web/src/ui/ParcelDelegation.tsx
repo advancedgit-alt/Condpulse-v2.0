@@ -31,7 +31,7 @@ export function ParcelDelegation({ baseKey, tenantId, parcel, timeZone }: { base
     if (!delegation || busy) return;
     setBusy(true); setNotice(null);
     try {
-      await parcels.revokeDelegation(tenantId, parcel.parcelId, { expectedVersion: delegation.version });
+      await parcels.revokeDelegation(tenantId, parcel.parcelId, { delegationId: delegation.delegationId, expectedVersion: delegation.version });
       setCode(null); setNotice({ tone: 'success', text: `Autorização de ${delegation.delegateName} cancelada. O código deixou de valer.` });
     } catch (error) { setNotice({ tone: 'error', text: errorMessage(error) }); }
     finally { setBusy(false); setRevoking(false); await refresh(); }

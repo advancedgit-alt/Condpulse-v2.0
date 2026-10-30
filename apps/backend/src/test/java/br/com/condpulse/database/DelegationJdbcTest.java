@@ -1,6 +1,11 @@
 package br.com.condpulse.database;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.parcels.application.DelegationModels;
 import br.com.condpulse.parcels.application.DelegationService;
@@ -28,7 +33,7 @@ class DelegationJdbcTest {
  private static UUID concierge;
 
  @BeforeAll static void setup() throws Exception {
-  db=new JdbcDisposableDatabase(1);
+  db=new JdbcDisposableDatabase(2);
   var transactions=new TenantTransactionExecutor(db.jdbc,db.manager);
   var parcelStore=new ParcelStore(db.jdbc);
   var audit=new AuditRecorder(db.jdbc);
@@ -44,7 +49,7 @@ class DelegationJdbcTest {
 
  private static String key() { return "delegation-jdbc-"+UUID.randomUUID(); }
  private ParcelModels.Parcel receive(UUID unit) {
-  return parcels.receive(concierge,db.tenantA,AAL2,key(),new ParcelModels.Receive(unit,1,"Caixa fictícia","Armário D",null)).parcel();
+  return parcels.receive(concierge,db.tenantA,AAL2,key(),new ParcelModels.Receive(unit,1,"Caixa fictícia","Armário D",true)).parcel();
  }
  private DelegationModels.Issued delegate(ParcelModels.Parcel parcel,String key) {
   return delegations.create(db.accountA,db.tenantA,parcel.parcelId(),key,new DelegationModels.Create("  Terceiro   Fictício ","9z",null));
@@ -126,12 +131,12 @@ class DelegationJdbcTest {
   assertEquals("DELEGATION_CODE_INVALID",assertThrows(BusinessProblem.class,()->delegations.handoffByCode(concierge,db.tenantA,AAL2,parcel.parcelId(),key(),
    new DelegationModels.CodeHandoff(first.code(),true,parcel.version()))).code());
   assertEquals("DELEGATION_CHANGED",assertThrows(BusinessProblem.class,()->delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),
-   new DelegationModels.Revoke(second.delegation().version()+3))).code());
+   new DelegationModels.Revoke(second.delegation().delegationId(),second.delegation().version()+3))).code());
   var current=delegations.current(db.accountA,db.tenantA,AssuranceLevel.AAL1,parcel.parcelId()).delegation();
-  var revoked=delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),new DelegationModels.Revoke(current.version()));
+  var revoked=delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),new DelegationModels.Revoke(current.delegationId(),current.version()));
   assertEquals("REVOKED",revoked.state());
   assertEquals("DELEGATION_NOT_ACTIVE",assertThrows(BusinessProblem.class,()->delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),
-   new DelegationModels.Revoke(revoked.version()))).code());
+   new DelegationModels.Revoke(revoked.delegationId(),revoked.version()))).code());
   assertEquals("DELEGATION_VALIDITY_INVALID",assertThrows(BusinessProblem.class,()->delegations.create(db.accountA,db.tenantA,parcel.parcelId(),key(),
    new DelegationModels.Create("Terceiro",null,java.time.Instant.now().plusSeconds(8L*86400)))).code());
   assertEquals("DELEGATION_DOCUMENT_INVALID",assertThrows(BusinessProblem.class,()->delegations.create(db.accountA,db.tenantA,parcel.parcelId(),key(),
@@ -140,6 +145,52 @@ class DelegationJdbcTest {
    new DelegationModels.Create("Terceiro",null,null))).code(),"Outra unidade não autoriza");
   assertEquals("PARCEL_IDENTITY_CHECK_REQUIRED",assertThrows(BusinessProblem.class,()->delegations.handoffByCode(concierge,db.tenantA,AAL2,parcel.parcelId(),key(),
    new DelegationModels.CodeHandoff("12345678",false,parcel.version()))).code());
+  db.assertEmptyContext();
+ }
+
+ @Test void staleConfirmationDoesNotRevokeTheReplacement() throws Exception {
+  var parcel=receive(db.unitA);
+  var shown=delegate(parcel,key()).delegation();
+  // Outra sessão gera nova autorização, também na versão 0.
+  var replacement=delegate(parcel,key()).delegation();
+  assertEquals(shown.version(),replacement.version());
+  assertEquals("DELEGATION_CHANGED",assertThrows(BusinessProblem.class,()->delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),
+   new DelegationModels.Revoke(shown.delegationId(),shown.version()))).code(),"Cancelar a autorização exibida não cancela a substituta");
+  assertEquals("ACTIVE",db.adminString("select state from cp.parcel_delegations where id=?",replacement.delegationId()));
+  assertEquals("DELEGATION_VERSION_REQUIRED",assertThrows(BusinessProblem.class,()->delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),
+   new DelegationModels.Revoke(null,replacement.version()))).code());
+  assertEquals("REVOKED",delegations.revoke(db.accountA,db.tenantA,parcel.parcelId(),
+   new DelegationModels.Revoke(replacement.delegationId(),replacement.version())).state());
+  db.assertEmptyContext();
+ }
+
+ @Test void simultaneousRepeatOfTheSameHandoffKeyReplaysTheDelivery() throws Exception {
+  var parcel=receive(db.unitA);
+  var issued=delegate(parcel,key());
+  String handoffKey=key();
+  var request=new DelegationModels.CodeHandoff(issued.code(),true,parcel.version());
+  var pool=Executors.newFixedThreadPool(2);
+  try(var holder=db.adminSession()) {
+   // A encomenda fica travada enquanto as duas repetições passam pela conferência da chave (ainda inexistente).
+   holder.setAutoCommit(false);
+   try(var lock=holder.prepareStatement("select id from cp.parcels where id=? for update")) { lock.setObject(1,parcel.parcelId()); lock.executeQuery(); }
+   var tasks=new ArrayList<Callable<String>>();
+   for(int attempt=0;attempt<2;attempt++)
+    tasks.add(()->{
+     try {
+      var result=delegations.handoffByCode(concierge,db.tenantA,AAL2,parcel.parcelId(),handoffKey,request);
+      return result.replayed()?"REPLAY":"OK";
+     } catch(BusinessProblem problem) { return problem.code(); }
+    });
+   var futures=tasks.stream().map(pool::submit).toList();
+   Thread.sleep(1500);
+   holder.commit();
+   var results=new ArrayList<String>();
+   for(var future:futures) results.add(future.get(20,TimeUnit.SECONDS));
+   results.sort(null);
+   assertEquals(List.of("OK","REPLAY"),results,"A mesma operação repetida devolve a retirada feita, não \"já retirada\"");
+  } finally { pool.shutdownNow(); }
+  assertEquals("1",db.adminString("select count(*) from cp.parcel_handoffs where parcel_id=?",parcel.parcelId()));
   db.assertEmptyContext();
  }
 }

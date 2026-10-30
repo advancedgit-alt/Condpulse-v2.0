@@ -66,6 +66,8 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   return value;
  }
  private Connection admin() throws SQLException { return DriverManager.getConnection(url,adminUser,adminPassword); }
+ /** Sessão administrativa própria, para segurar travas de linha em ensaios de concorrência. */
+ Connection adminSession() throws SQLException { return admin(); }
  private static void update(Connection connection,String sql,Object...args) throws SQLException {
   try(PreparedStatement statement=connection.prepareStatement(sql)) {
    for(int i=0;i<args.length;i++) statement.setObject(i+1,args[i]);

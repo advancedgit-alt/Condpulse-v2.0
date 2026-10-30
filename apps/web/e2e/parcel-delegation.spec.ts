@@ -123,7 +123,7 @@ test('morador autoriza terceiro: código aparece uma vez, repetição incerta n�
   await row.getByRole('button', { name: 'Cancelar autorização' }).click();
   await row.getByRole('button', { name: 'Confirmar cancelamento' }).click();
   await expect(row.getByText('Autorização de Outra Pessoa cancelada. O código deixou de valer.')).toBeVisible();
-  expect(state.revokes).toEqual([{ expectedVersion: 0 }]);
+  expect(state.revokes).toEqual([{ delegationId: state.delegation!.delegationId, expectedVersion: 0 }]);
   await expect(row.getByText(`Código para Outra Pessoa`)).toHaveCount(0);
   await expect(row.getByText('Autorização cancelada: Outra Pessoa', { exact: false })).toBeVisible();
 });
