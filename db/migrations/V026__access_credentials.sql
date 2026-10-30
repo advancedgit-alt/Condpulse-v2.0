@@ -43,6 +43,8 @@ CREATE TABLE cp.access_credentials (
  external_ref text NOT NULL DEFAULT 'cpc_'||replace(gen_random_uuid()::text,'-','') CHECK(external_ref ~ '^cpc_[0-9a-f]{32}$'),
  desired_state text NOT NULL DEFAULT 'ACTIVE' CHECK(desired_state IN ('ACTIVE','REVOKED')),
  desired_version bigint NOT NULL DEFAULT 1 CHECK(desired_version>=1),
+ -- Validade do vínculo no cadastro (definida pelo banco): o equipamento recebe o mesmo limite.
+ valid_until timestamptz,
  revoke_reason text CHECK(revoke_reason IS NULL OR length(btrim(revoke_reason)) BETWEEN 1 AND 300),
  revoked_by uuid REFERENCES platform.accounts(id),
  revoked_at timestamptz,
@@ -108,12 +110,16 @@ BEGIN
   IF NEW.desired_state<>'ACTIVE' OR NEW.desired_version<>1 OR NEW.version<>0 THEN
    RAISE EXCEPTION 'credencial nasce ativa na versão 1' USING ERRCODE='23514';
   END IF;
+  SELECT m.valid_until INTO NEW.valid_until FROM cp.memberships m WHERE m.tenant_id=NEW.tenant_id AND m.id=NEW.membership_id;
+  IF NEW.valid_until IS NOT NULL AND NEW.valid_until<=clock_timestamp() THEN
+   RAISE EXCEPTION 'vínculo vencido' USING ERRCODE='23514';
+  END IF;
   NEW.created_at:=clock_timestamp(); NEW.updated_at:=NEW.created_at;
   RETURN NEW;
  END IF;
  IF OLD.desired_state<>'ACTIVE' OR NEW.desired_state<>'REVOKED' OR NEW.desired_version<>OLD.desired_version+1 OR NEW.version<>OLD.version+1
-   OR (NEW.tenant_id,NEW.connector_id,NEW.membership_id,NEW.unit_id,NEW.kind,NEW.label,NEW.external_ref,NEW.created_by,NEW.created_at)
-    IS DISTINCT FROM (OLD.tenant_id,OLD.connector_id,OLD.membership_id,OLD.unit_id,OLD.kind,OLD.label,OLD.external_ref,OLD.created_by,OLD.created_at) THEN
+   OR (NEW.tenant_id,NEW.connector_id,NEW.membership_id,NEW.unit_id,NEW.kind,NEW.label,NEW.external_ref,NEW.valid_until,NEW.created_by,NEW.created_at)
+    IS DISTINCT FROM (OLD.tenant_id,OLD.connector_id,OLD.membership_id,OLD.unit_id,OLD.kind,OLD.label,OLD.external_ref,OLD.valid_until,OLD.created_by,OLD.created_at) THEN
   RAISE EXCEPTION 'credencial revogada não volta a valer' USING ERRCODE='23514';
  END IF;
  NEW.revoked_at:=clock_timestamp(); NEW.updated_at:=NEW.revoked_at;
@@ -218,7 +224,7 @@ CREATE POLICY audit_credential_actions ON cp.audit_log AS RESTRICTIVE FOR INSERT
 -- revoga credencial, não muda conector nem equipamento.
 GRANT SELECT(id,tenant_id,provider,status) ON cp.access_connectors TO cp_worker;
 GRANT SELECT(id,tenant_id,connector_id,external_id,status) ON cp.access_devices TO cp_worker;
-GRANT SELECT(id,tenant_id,connector_id,external_ref,desired_state,desired_version,revoked_at,created_at) ON cp.access_credentials TO cp_worker;
+GRANT SELECT(id,tenant_id,connector_id,external_ref,desired_state,desired_version,valid_until,revoked_at,created_at) ON cp.access_credentials TO cp_worker;
 GRANT SELECT,INSERT(tenant_id,credential_id,device_id,attempted_version,attempted_action,outcome,attempts,next_attempt_at,last_reason),
  UPDATE(attempted_version,attempted_action,outcome,attempts,next_attempt_at,last_reason) ON cp.credential_syncs TO cp_worker;
 

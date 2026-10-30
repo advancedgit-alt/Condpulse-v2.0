@@ -18,10 +18,11 @@ public final class CredentialModels {
  /**
   * status: ACTIVE (todos confirmaram), SYNCING (nenhum confirmou), PARTIAL (parte confirmou), FAILED (algum equipamento
   * recusou esta versão), REVOKING (revogação ainda não confirmada em todos), REVOKED (revogação confirmada em todos),
-  * NO_DEVICES (conector sem equipamento ativo).
+  * EXPIRED (vínculo com validade vencida: nenhuma ativação nova; o equipamento recebeu o mesmo limite), NO_DEVICES
+  * (conector sem equipamento ativo).
   */
  public record Credential(UUID credentialId,UUID connectorId,UUID membershipId,UUID unitId,String unitLabel,String holderName,String kind,
-     String label,String desiredState,long desiredVersion,String status,String revokeReason,Instant revokedAt,Instant createdAt,long version,
+     String label,String desiredState,long desiredVersion,Instant validUntil,String status,String revokeReason,Instant revokedAt,Instant createdAt,long version,
      List<DeviceSync> devices) {
   public Credential { devices=List.copyOf(devices); }
  }

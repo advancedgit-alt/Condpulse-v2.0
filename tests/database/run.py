@@ -2471,6 +2471,14 @@ def credential_checks():
     query(manager + sql, tenant=TA, actor=MG, role="cp_api")
     expect(value(f"select desired_state||':'||desired_version||':'||(external_ref ~ '^cpc_[0-9a-f]{{32}}$')::text from cp.access_credentials where id='{c1}'")
            == "ACTIVE:1:true", "gestao cadastra credencial ativa na versao 1 com referencia opaca")
+    expect(value(f"select (valid_until is null)::text from cp.access_credentials where id='{c1}'") == "true", "vinculo sem prazo gera credencial sem prazo")
+    query(f"UPDATE cp.memberships SET valid_until=clock_timestamp()+interval '30 days' WHERE id='{MO}'")
+    co, sql = create(membership=MO, unit=U2)
+    query(manager + sql, tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select (c.valid_until=m.valid_until)::text from cp.access_credentials c join cp.memberships m on m.id=c.membership_id where c.id='{co}'") == "true",
+           "credencial herda a validade do vinculo, definida pelo banco")
+    expect(error(manager + f"UPDATE cp.access_credentials SET valid_until=NULL WHERE id='{co}'", "42501", tenant=TA, actor=MG, role="cp_api"),
+           "validade da credencial nao muda pela aplicacao")
     _, sql = create(membership=MW, unit=U2)
     expect(error(manager + sql, "42501", tenant=TA, actor=MG, role="cp_api"), "proprietario nao residente nao recebe credencial")
     _, sql = create(membership=MR, unit=U2)
@@ -2534,7 +2542,7 @@ def credential_checks():
            "morador ve os equipamentos de destino da propria credencial")
     expect(value(f"select count(*) from cp.access_devices where connector_id='{K2}'", tenant=TA, actor=RS, role="cp_api") == "0",
            "morador nao ve equipamentos de outra integracao")
-    expect(value(f"select count(*) from cp.access_devices", tenant=TA, actor=OT, role="cp_api") == "0",
+    expect(value(f"select count(*) from cp.access_devices", tenant=TA, actor=OW, role="cp_api") == "0",
            "morador sem credencial nao ve equipamentos")
     expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','CREDENTIAL_REVOKED','{c1}',9,'{{}}')",
                  "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao grava evento de credencial")

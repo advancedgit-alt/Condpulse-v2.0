@@ -19,7 +19,7 @@ public class CredentialSyncStore {
  public record Connector(UUID id,String provider) {}
  /** Destino com o último comando registrado (null quando nunca enviado). */
  public record Target(UUID deviceId,String externalId,Long attemptedVersion,String attemptedAction,String outcome,int attempts) {}
- public record Work(UUID credentialId,String externalRef,String desiredState,long desiredVersion,List<Target> targets) {
+ public record Work(UUID credentialId,String externalRef,String desiredState,long desiredVersion,java.time.Instant validUntil,List<Target> targets) {
   public Work { targets=List.copyOf(targets); }
   public String action() { return "REVOKED".equals(desiredState)?"REVOKE":"APPLY"; }
  }
@@ -39,12 +39,14 @@ public class CredentialSyncStore {
   Map<UUID,Work> works=new LinkedHashMap<>();
   Map<UUID,List<Target>> targets=new LinkedHashMap<>();
   jdbc.query("""
-   select c.id,c.external_ref,c.desired_state,c.desired_version,d.id as device_id,d.external_id,s.attempted_version,s.attempted_action,s.outcome,
+   select c.id,c.external_ref,c.desired_state,c.desired_version,c.valid_until,d.id as device_id,d.external_id,s.attempted_version,s.attempted_action,s.outcome,
     coalesce(s.attempts,0) as attempts
    from cp.access_credentials c
    join cp.access_devices d on d.tenant_id=c.tenant_id and d.connector_id=c.connector_id and d.status='ACTIVE'
    left join cp.credential_syncs s on s.tenant_id=c.tenant_id and s.credential_id=c.id and s.device_id=d.id
    where c.tenant_id=? and c.connector_id=?
+    -- Vínculo vencido: nenhuma ativação nova (o equipamento já recebeu o mesmo limite de validade).
+    and not (c.desired_state='ACTIVE' and c.valid_until is not null and c.valid_until<=clock_timestamp())
     and not (s.observed_version is not distinct from c.desired_version and s.observed_action is not distinct from cp.credential_action(c.desired_state))
     and (s.credential_id is null or s.attempted_version<>c.desired_version or s.attempted_action<>cp.credential_action(c.desired_state)
      or (s.outcome<>'REJECTED' and s.next_attempt_at<=clock_timestamp()))
@@ -52,11 +54,14 @@ public class CredentialSyncStore {
    limit ?
    """,r->{
     UUID id=r.getObject("id",UUID.class);
-    works.putIfAbsent(id,new Work(id,r.getString("external_ref"),r.getString("desired_state"),r.getLong("desired_version"),List.of()));
+    var until=r.getTimestamp("valid_until");
+    works.putIfAbsent(id,new Work(id,r.getString("external_ref"),r.getString("desired_state"),r.getLong("desired_version"),
+     until==null?null:until.toInstant(),List.of()));
     targets.computeIfAbsent(id,k->new ArrayList<>()).add(new Target(r.getObject("device_id",UUID.class),r.getString("external_id"),
      r.getObject("attempted_version",Long.class),r.getString("attempted_action"),r.getString("outcome"),r.getInt("attempts")));
    },tenant,connector,BATCH);
-  return works.values().stream().map(w->new Work(w.credentialId(),w.externalRef(),w.desiredState(),w.desiredVersion(),targets.get(w.credentialId()))).toList();
+  return works.values().stream().map(w->new Work(w.credentialId(),w.externalRef(),w.desiredState(),w.desiredVersion(),w.validUntil(),
+   targets.get(w.credentialId()))).toList();
  }
  /** Grava o resultado de um comando ou consulta; {@code delaySeconds} até a próxima tentativa (relógio do banco). */
  public void record(UUID tenant,UUID credential,UUID device,long version,String action,String outcome,String reason,long delaySeconds) {

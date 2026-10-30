@@ -21,7 +21,7 @@ public class CredentialStore {
  public static final int PAGE=100;
  private static final String SELECT="""
   select c.id,c.connector_id,c.membership_id,c.unit_id,u.label as unit_label,m.display_name as holder_name,c.kind,c.label,c.desired_state,
-   c.desired_version,c.revoke_reason,c.revoked_at,c.created_at,c.version
+   c.desired_version,c.valid_until,c.valid_until is not null and c.valid_until<=clock_timestamp() as expired,c.revoke_reason,c.revoked_at,c.created_at,c.version
   from cp.access_credentials c
   join cp.units u on u.tenant_id=c.tenant_id and u.id=c.unit_id
   left join cp.memberships m on m.tenant_id=c.tenant_id and m.id=c.membership_id
@@ -30,11 +30,11 @@ public class CredentialStore {
  public CredentialStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
  private record Row(UUID id,UUID connector,UUID membership,UUID unit,String unitLabel,String holder,String kind,String label,String desiredState,
-   long desiredVersion,String reason,Instant revokedAt,Instant createdAt,long version) {}
+   long desiredVersion,Instant validUntil,boolean expired,String reason,Instant revokedAt,Instant createdAt,long version) {}
  private static Row row(ResultSet r) throws SQLException {
   return new Row(r.getObject("id",UUID.class),r.getObject("connector_id",UUID.class),r.getObject("membership_id",UUID.class),
    r.getObject("unit_id",UUID.class),r.getString("unit_label"),r.getString("holder_name"),r.getString("kind"),r.getString("label"),
-   r.getString("desired_state"),r.getLong("desired_version"),r.getString("revoke_reason"),instant(r.getTimestamp("revoked_at")),
+   r.getString("desired_state"),r.getLong("desired_version"),instant(r.getTimestamp("valid_until")),r.getBoolean("expired"),r.getString("revoke_reason"),instant(r.getTimestamp("revoked_at")),
    instant(r.getTimestamp("created_at")),r.getLong("version"));
  }
 
@@ -89,11 +89,12 @@ public class CredentialStore {
   String status;
   if(devices.isEmpty()) status="NO_DEVICES";
   else if("REVOKED".equals(c.desiredState())) status=done==devices.size()?"REVOKED":"REVOKING";
+  else if(c.expired()) status="EXPIRED";
   else if(failed) status="FAILED";
   else if(done==devices.size()) status="ACTIVE";
   else status=done==0?"SYNCING":"PARTIAL";
   return new CredentialModels.Credential(c.id(),c.connector(),c.membership(),c.unit(),c.unitLabel(),c.holder(),c.kind(),c.label(),c.desiredState(),
-   c.desiredVersion(),status,c.reason(),c.revokedAt(),c.createdAt(),c.version(),devices);
+   c.desiredVersion(),c.validUntil(),status,c.reason(),c.revokedAt(),c.createdAt(),c.version(),devices);
  }
 
  public CredentialModels.Connectors connectors(UUID tenant) {

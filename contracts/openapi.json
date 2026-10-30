@@ -17046,6 +17046,7 @@
           "label",
           "desiredState",
           "desiredVersion",
+          "validUntil",
           "status",
           "revokeReason",
           "revokedAt",
@@ -17102,6 +17103,14 @@
             "type": "integer",
             "minimum": 1
           },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Validade do vínculo no cadastro; o equipamento recebe o mesmo limite."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -17109,6 +17118,7 @@
               "SYNCING",
               "PARTIAL",
               "FAILED",
+              "EXPIRED",
               "REVOKING",
               "REVOKED",
               "NO_DEVICES"

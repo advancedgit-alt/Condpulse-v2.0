@@ -137,13 +137,34 @@ class CredentialWorkerJdbcTest {
    db.adminUpdate("insert into cp.access_devices(tenant_id,connector_id,external_id,label) values(?,?,?,?)",db.tenantA,connector,external,"Extra "+i);
   }
   var many=new SimulatedAccessAdapter(connector.toString(),Clock.systemUTC(),false,externals);
-  var batched=new CredentialReconciler(worker,syncs,(tenant,id,provider)->Optional.<AccessAdapter>of(many));
+  var batched=new CredentialReconciler(worker,syncs,(tenant,id,provider)->id.equals(connector)?Optional.<AccessAdapter>of(many):Optional.empty());
   var card=create("Cartão muitos destinos");
   assertEquals(60,batched.runOnce().sent());
   assertEquals("ACTIVE",current(card.credentialId()).status(),"Todos os 60 equipamentos confirmaram, em lotes de até 50");
   credentials.revoke(manager,db.tenantA,AAL2,card.credentialId(),new CredentialModels.Revoke("Perdido",current(card.credentialId()).version()));
   assertEquals(60,batched.runOnce().sent());
   assertEquals("REVOKED",current(card.credentialId()).status());
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
+ @Test void expiredMembershipValidityIsCarriedAndBlocksLateActivations() throws Exception {
+  UUID holder=UUID.fromString(db.adminString("select id from cp.memberships where account_id=? and unit_id=?",db.accountA,db.unitA));
+  db.adminUpdate("update cp.memberships set valid_until=clock_timestamp()+interval '30 days' where id=?",holder);
+  try {
+   var card=create("Cartão com prazo");
+   assertEquals(db.adminString("select valid_until::text from cp.memberships where id=?",holder),
+    db.adminString("select valid_until::text from cp.access_credentials where id=?",card.credentialId()),"Credencial herda a validade do vínculo");
+   assertNotNull(current(card.credentialId()).validUntil());
+   // O vínculo venceu antes da primeira ativação: nada é enviado e a situação mostra o vencimento.
+   db.adminUpdateWithoutTriggers("update cp.access_credentials set valid_until=clock_timestamp()-interval '1 minute' where id=?",card.credentialId());
+   assertEquals(0,reconciler.runOnce().sent());
+   assertEquals("0",db.adminString("select count(*) from cp.credential_syncs where credential_id=?",card.credentialId()));
+   assertEquals("EXPIRED",current(card.credentialId()).status());
+   // Revogar continua possível e tem prioridade.
+   credentials.revoke(manager,db.tenantA,AAL2,card.credentialId(),new CredentialModels.Revoke("Vínculo vencido",card.version()));
+   assertEquals(2,reconciler.runOnce().sent());
+   assertEquals("REVOKED",current(card.credentialId()).status());
+  } finally { db.adminUpdate("update cp.memberships set valid_until=null where id=?",holder); }
   db.assertEmptyContext(); workerDb.assertEmptyContext();
  }
 

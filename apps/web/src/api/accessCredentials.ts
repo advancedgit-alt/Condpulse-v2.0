@@ -6,7 +6,7 @@ import type { ISODateTime, UUID } from './types';
  * Credenciais de acesso com estado desejado versionado (CP-046). A situação por equipamento vem do servidor, derivada da
  * versão e da ação desejadas atuais; a tela nunca afirma "bloqueado" enquanto um equipamento não confirmar a revogação.
  */
-export const credentialStatuses = ['ACTIVE', 'SYNCING', 'PARTIAL', 'FAILED', 'REVOKING', 'REVOKED', 'NO_DEVICES'] as const;
+export const credentialStatuses = ['ACTIVE', 'SYNCING', 'PARTIAL', 'FAILED', 'EXPIRED', 'REVOKING', 'REVOKED', 'NO_DEVICES'] as const;
 export type CredentialStatus = typeof credentialStatuses[number];
 export type CredentialKind = 'CARD' | 'QR';
 const directions = ['ENTRY', 'EXIT', 'BOTH', 'UNKNOWN'] as const;
@@ -17,7 +17,7 @@ export interface DeviceSync {
 }
 export interface Credential {
   credentialId: UUID; connectorId: UUID; membershipId: UUID; unitId: UUID; unitLabel: string; holderName: string | null; kind: CredentialKind;
-  label: string; desiredState: 'ACTIVE' | 'REVOKED'; desiredVersion: number; status: CredentialStatus; revokeReason: string | null;
+  label: string; desiredState: 'ACTIVE' | 'REVOKED'; desiredVersion: number; validUntil: ISODateTime | null; status: CredentialStatus; revokeReason: string | null;
   revokedAt: ISODateTime | null; createdAt: ISODateTime; version: number; devices: DeviceSync[];
 }
 export interface CredentialPage { credentials: Credential[]; truncated: boolean }
@@ -46,7 +46,7 @@ export function credential(value: unknown, uncertain = false): Credential {
   if (!record(value) || !isUUID(value.credentialId) || !isUUID(value.connectorId) || !isUUID(value.membershipId) || !isUUID(value.unitId)
       || !text(value.unitLabel, 1, 160) || !(value.holderName === null || text(value.holderName, 1, 160)) || !oneOf(value.kind, ['CARD', 'QR'] as const)
       || !text(value.label, 1, 80) || !oneOf(value.desiredState, ['ACTIVE', 'REVOKED'] as const) || !isInteger(value.desiredVersion)
-      || value.desiredVersion < 1 || !oneOf(value.status, credentialStatuses) || !(value.revokeReason === null || text(value.revokeReason, 1, 300))
+      || value.desiredVersion < 1 || !optionalDate(value.validUntil) || !oneOf(value.status, credentialStatuses) || !(value.revokeReason === null || text(value.revokeReason, 1, 300))
       || !optionalDate(value.revokedAt) || !isDate(value.createdAt) || !isInteger(value.version) || !Array.isArray(value.devices))
     throw invalidResponse(uncertain);
   let devices: DeviceSync[];
@@ -57,11 +57,12 @@ export function credential(value: unknown, uncertain = false): Credential {
       || (!revoked && value.desiredVersion !== 1)
       || (value.status === 'REVOKING' || value.status === 'REVOKED') !== (revoked && devices.length > 0)
       || (value.status === 'NO_DEVICES') !== (devices.length === 0)
-      || (value.status === 'REVOKED' || value.status === 'ACTIVE') !== (devices.length > 0 && devices.every((item) => item.state === 'CONFIRMED')))
+      || (value.status === 'EXPIRED' && (revoked || value.validUntil === null))
+      || (value.status !== 'EXPIRED' && (value.status === 'REVOKED' || value.status === 'ACTIVE') !== (devices.length > 0 && devices.every((item) => item.state === 'CONFIRMED'))))
     throw invalidResponse(uncertain);
   return { credentialId: value.credentialId, connectorId: value.connectorId, membershipId: value.membershipId, unitId: value.unitId,
     unitLabel: value.unitLabel, holderName: value.holderName as string | null, kind: value.kind, label: value.label, desiredState: value.desiredState,
-    desiredVersion: value.desiredVersion, status: value.status, revokeReason: value.revokeReason as string | null,
+    desiredVersion: value.desiredVersion, validUntil: value.validUntil as string | null, status: value.status, revokeReason: value.revokeReason as string | null,
     revokedAt: value.revokedAt as string | null, createdAt: value.createdAt, version: value.version, devices };
 }
 export function credentialPage(value: unknown): CredentialPage {

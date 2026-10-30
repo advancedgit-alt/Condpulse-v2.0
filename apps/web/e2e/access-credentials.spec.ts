@@ -13,7 +13,7 @@ const CREDENTIAL = '45000000-0000-4000-8000-000000000001';
 
 interface Synthetic {
   credentialId: string; connectorId: string; membershipId: string; unitId: string; unitLabel: string; holderName: string | null; kind: string;
-  label: string; desiredState: string; desiredVersion: number; status: string; revokeReason: string | null; revokedAt: string | null;
+  label: string; desiredState: string; desiredVersion: number; validUntil: string | null; status: string; revokeReason: string | null; revokedAt: string | null;
   createdAt: string; version: number; devices: { deviceId: string; deviceLabel: string; direction: string; state: string; lastOutcome: string | null;
     confirmedAt: string | null; lastReason: string | null; lastAttemptAt: string | null }[];
 }
@@ -31,7 +31,7 @@ const devices = (state: string, confirmed = false) => [DEVICE_IN, DEVICE_OUT].ma
   deviceLabel: index === 0 ? 'Entrada social' : 'Garagem', direction: index === 0 ? 'ENTRY' : 'BOTH', state,
   lastOutcome: confirmed ? 'APPLIED' : null, confirmedAt: confirmed ? new Date().toISOString() : null, lastReason: null, lastAttemptAt: null }));
 const synthetic = (overrides: Partial<Synthetic> = {}): Synthetic => ({ credentialId: CREDENTIAL, connectorId: CONNECTOR, membershipId: HOLDER, unitId: UNIT_A,
-  unitLabel: '101 — Sintética A', holderName: 'Morador Sintético', kind: 'CARD', label: 'Cartão final 1234', desiredState: 'ACTIVE', desiredVersion: 1,
+  unitLabel: '101 — Sintética A', holderName: 'Morador Sintético', kind: 'CARD', label: 'Cartão final 1234', desiredState: 'ACTIVE', desiredVersion: 1, validUntil: null,
   status: 'SYNCING', revokeReason: null, revokedAt: null, createdAt: new Date().toISOString(), version: 0, devices: devices('PENDING'), ...overrides });
 const connector = { connectorId: CONNECTOR, provider: 'SIMULATED', label: 'Integração sintética', status: 'ACTIVE', devices: [
   { deviceId: DEVICE_IN, label: 'Entrada social', direction: 'ENTRY', status: 'ACTIVE' }, { deviceId: DEVICE_OUT, label: 'Garagem', direction: 'BOTH', status: 'ACTIVE' }] };

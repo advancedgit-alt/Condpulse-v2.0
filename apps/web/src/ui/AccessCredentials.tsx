@@ -18,6 +18,7 @@ import './management/Management.css';
 export const credentialStatusLabels: Record<CredentialStatus, [string, string]> = {
   ACTIVE: ['Ativa em todos os equipamentos', 'status-ready'], SYNCING: ['Enviando aos equipamentos', 'status-pending'],
   PARTIAL: ['Ativa em parte dos equipamentos', 'status-pending'], FAILED: ['Recusada por equipamento', 'status-overdue'],
+  EXPIRED: ['Vínculo vencido', 'status-neutral'],
   REVOKING: ['Revogação pendente nos equipamentos', 'status-overdue'], REVOKED: ['Revogada em todos os equipamentos', 'status-neutral'],
   NO_DEVICES: ['Sem equipamento na integração', 'status-neutral'],
 };
@@ -31,6 +32,7 @@ function CredentialDetails({ item, timeZone }: { item: Credential; timeZone: str
   const [label, tone] = credentialStatusLabels[item.status];
   return <div><strong>{kindLabels[item.kind]} · <bdi>{item.label}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span>
     <span>Unidade <bdi>{item.unitLabel}</bdi>{item.holderName ? <> · <bdi>{item.holderName}</bdi></> : ' · vínculo encerrado'}</span>
+    {item.validUntil && item.desiredState === 'ACTIVE' ? <span>Válida até {formatWhen(item.validUntil, timeZone)} (validade do vínculo)</span> : null}
     {item.revokedAt ? <span>Revogada em {formatWhen(item.revokedAt, timeZone)}: <bdi>{item.revokeReason}</bdi></span> : null}
     {item.devices.length ? <ul className="credential-devices" aria-label={`Equipamentos de ${item.label}`}>{item.devices.map((entry) =>
       <li key={entry.deviceId}><bdi>{entry.deviceLabel}</bdi>: {deviceStateText(item, entry.state)}

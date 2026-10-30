@@ -12,7 +12,7 @@ const holder = '51000000-0000-4000-8000-0000000000a1';
 const device = (state: string, confirmedAt: string | null = null) => ({ deviceId: '44000000-0000-4000-8000-000000000001', deviceLabel: 'Entrada',
   direction: 'ENTRY', state, lastOutcome: confirmedAt ? 'APPLIED' : null, confirmedAt, lastReason: null, lastAttemptAt: null });
 const active = { credentialId: id, connectorId: connector, membershipId: holder, unitId: '20000000-0000-4000-8000-000000000001', unitLabel: '101',
-  holderName: 'Morador Fictício', kind: 'CARD', label: 'Cartão final 1234', desiredState: 'ACTIVE', desiredVersion: 1, status: 'SYNCING',
+  holderName: 'Morador Fictício', kind: 'CARD', label: 'Cartão final 1234', desiredState: 'ACTIVE', desiredVersion: 1, validUntil: null, status: 'SYNCING',
   revokeReason: null, revokedAt: null, createdAt: '2030-01-01T12:00:00Z', version: 0, devices: [device('PENDING')] };
 const revoked = { ...active, desiredState: 'REVOKED', desiredVersion: 2, status: 'REVOKING', revokeReason: 'Perdido', revokedAt: '2030-01-02T12:00:00Z', version: 1 };
 
@@ -33,6 +33,10 @@ describe('contrato das credenciais de acesso', () => {
     expect(() => credential({ ...active, devices: [] })).toThrow();
     expect(credential({ ...active, status: 'NO_DEVICES', devices: [] }).status).toBe('NO_DEVICES');
     expect(() => credential({ ...active, kind: 'FACE' })).toThrow();
+    // Vínculo vencido: situação própria, só com validade e sem revogação.
+    expect(credential({ ...active, status: 'EXPIRED', validUntil: '2030-01-01T00:00:00Z', devices: [device('CONFIRMED', '2029-12-31T12:00:00Z')] }).status).toBe('EXPIRED');
+    expect(() => credential({ ...active, status: 'EXPIRED' })).toThrow();
+    expect(() => credential({ ...revoked, status: 'EXPIRED', validUntil: '2030-01-01T00:00:00Z' })).toThrow();
   });
   it('cadastro com chave; repetição devolve o estado atual; revogação confere a resposta', async () => {
     const fetcher = vi.fn<typeof globalThis.fetch>();

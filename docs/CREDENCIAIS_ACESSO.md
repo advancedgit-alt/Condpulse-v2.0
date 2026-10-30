@@ -14,10 +14,13 @@ está contratado: o único adaptador existente é o simulado do CP-043, usado s�
   ação que não sejam as desejadas **no momento da gravação**: confirmação atrasada da ativação antiga nunca reativa
   credencial revogada.
 - **Situação** derivada: `ACTIVE` (todos confirmaram), `SYNCING`, `PARTIAL`, `FAILED` (recusa definitiva desta versão),
-  `REVOKING` (revogação ainda não confirmada em todos), `REVOKED` (confirmada em todos), `NO_DEVICES`.
+  `EXPIRED` (vínculo vencido), `REVOKING` (revogação ainda não confirmada em todos), `REVOKED` (confirmada em todos),
+  `NO_DEVICES`.
 - Sem foto, template facial ou número de cartão: `kind` é `CARD` ou `QR` e o rótulo é livre ("Cartão final 1234").
   Credencial facial (CP-045/CP-050) depende de base legal e do parceiro.
 - `external_ref` é opaca (`cpc_` + 32 hex), sem nome, unidade ou documento.
+- **Validade**: a credencial herda, pelo banco, o `valid_until` do vínculo no cadastro e o envia ao equipamento. Vínculo
+  vencido não recebe ativação nova (situação `EXPIRED`); revogar continua possível e tem prioridade.
 
 ## Quem faz o quê
 

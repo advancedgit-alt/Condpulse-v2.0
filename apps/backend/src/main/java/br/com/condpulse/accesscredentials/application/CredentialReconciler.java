@@ -77,7 +77,7 @@ public class CredentialReconciler {
    results.addAll(call(()->action==AccessModels.Action.REVOKE
     ?adapter.revokeCredential(new AccessModels.RevokeCredential(connector.toString(),correlation,work.externalRef(),version,chunk,"CREDENTIAL_REVOKED"))
     :adapter.applyCredential(new AccessModels.ApplyCredential(connector.toString(),correlation,work.externalRef(),work.externalRef(),version,chunk,
-      null,null,null)),chunk));
+      null,work.validUntil(),null)),chunk));
    sent+=chunk.size();
   }
   int confirmed=0,stale=0;
