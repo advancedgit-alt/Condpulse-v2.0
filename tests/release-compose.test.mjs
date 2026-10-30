@@ -121,7 +121,6 @@ test('cinco manifestos Compose separam aplicacao, DDL e operacao sem daemon ou c
     assert.equal(worker.services.worker.image, app.services.api.image, 'worker usa a mesma imagem aprovada da API');
     assert.equal(worker.services.worker.environment.SPRING_PROFILES_ACTIVE, 'worker');
     assert.equal(worker.services.worker.environment.CP_WORKER_OUTBOX_ENABLED, 'false');
-    assert.equal(worker.services.worker.environment.CP_WORKER_WAITLIST_ENABLED, 'false');
     assert.equal(worker.services.worker.expose, undefined);
     for (const secret of ['ConfigTestRuntime_42!', 'DDL_SENTINEL_CONFIG_TEST_ONLY', env.CP_BFF_ENCRYPTION_KEY, env.CP_ONBOARDING_AUTH_SECRET_KEY]) {
       assert.equal(JSON.stringify(worker).includes(secret), false);

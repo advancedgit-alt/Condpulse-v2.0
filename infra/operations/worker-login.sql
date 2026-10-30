@@ -24,7 +24,8 @@ BEGIN
   IF login !~ '^cp_worker_[a-z0-9_]{4,40}$' THEN RAISE EXCEPTION 'WORKER_LOGIN_NAME_INVALID'; END IF;
   IF expected_project !~ '^[a-z0-9]{20}$' THEN RAISE EXCEPTION 'WORKER_LOGIN_PROJECT_INVALID'; END IF;
   IF to_regclass('platform.flyway_schema_history') IS NULL THEN RAISE EXCEPTION 'WORKER_LOGIN_SCHEMA_TOO_OLD'; END IF;
-  EXECUTE 'SELECT EXISTS(SELECT 1 FROM platform.flyway_schema_history WHERE success AND version=''15'')' INTO schema_ready;
+  -- O Flyway grava a versão como texto do nome do arquivo (V015 -> '015'): compara como número.
+  EXECUTE 'SELECT EXISTS(SELECT 1 FROM platform.flyway_schema_history WHERE success AND version ~ ''^[0-9]{1,9}$'' AND version::integer>=15)' INTO schema_ready;
   IF NOT schema_ready THEN RAISE EXCEPTION 'WORKER_LOGIN_SCHEMA_TOO_OLD'; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='cp_worker' AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls) THEN
     RAISE EXCEPTION 'WORKER_GROUP_UNSAFE';

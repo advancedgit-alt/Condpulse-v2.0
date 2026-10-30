@@ -1,14 +1,14 @@
 # Implantação do worker contínuo — preparação (não executada)
 
-O worker (perfil `worker`, mesma imagem da API) processa o outbox (caixa interna, CP-034/CP-035) e, com a V023, faz a
-fila de espera andar sem requisição da API. Hoje **nenhum worker está implantado** em homologação ou produção; as
-passadas ficam desligadas por padrão (`CP_WORKER_OUTBOX_ENABLED=false`, `CP_WORKER_WAITLIST_ENABLED=false`).
+O worker (perfil `worker`, mesma imagem da API) processa o outbox (caixa interna, CP-034/CP-035). Hoje **nenhum worker
+está implantado** em homologação ou produção; a passada fica desligada por padrão (`CP_WORKER_OUTBOX_ENABLED=false`).
+A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando aquele código estiver na base.
 
 ## O que já existe no repositório
 
 - `infra/compose.worker.yaml`: serviço único `worker`, sem porta nem HTTP (healthcheck desligado de forma explícita),
   usuário não root, sistema de arquivos somente leitura, 1 GiB/1 CPU, pool 4, CA PostgreSQL montada somente leitura e
-  TLS `verify-full`. As duas passadas ficam `false` no manifesto; ligar exige alteração revisada.
+  TLS `verify-full`. A passada fica `false` no manifesto; ligar exige alteração revisada.
 - `infra/worker.env.example`: placeholders inertes; o arquivo real fica fora do Git.
 - `infra/validate-release.mjs --worker`: valida o JSON normalizado do Compose (imagem por digest, login `cp_worker_*`
   separado do runtime da API e do grupo `cp_worker`, flags desligadas, sem porta). Teste: `tests/release-compose.test.mjs`.
@@ -28,9 +28,8 @@ passadas ficam desligadas por padrão (`CP_WORKER_OUTBOX_ENABLED=false`, `CP_WOR
    `verify-full`, login e senha do cofre, caminho da CA). `docker compose -f infra/compose.worker.yaml config --format json
    | node infra/validate-release.mjs --worker` precisa responder `RELEASE_VALID 0`.
 4. **Subir com as passadas desligadas** e conferir no log a inicialização sem erro da guarda de role.
-5. **Ligar uma passada por vez** (alteração revisada do manifesto): primeiro `CP_WORKER_OUTBOX_ENABLED`, observando a
-   fila do outbox (pendentes, falhas, arrendamentos vencidos) por consulta somente leitura; depois
-   `CP_WORKER_WAITLIST_ENABLED`.
+5. **Ligar a passada** (alteração revisada do manifesto) `CP_WORKER_OUTBOX_ENABLED`, observando a fila do outbox
+   (pendentes, falhas, arrendamentos vencidos) por consulta somente leitura.
 6. Registrar runs, horários e evidências em `docs/STATUS.md`.
 
 ## Bloqueios
