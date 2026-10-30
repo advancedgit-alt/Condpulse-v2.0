@@ -183,6 +183,14 @@ public final class FlyWorkerLoginHarness {
         String member = "cp_ci_fly_worker_member"; sql("CREATE ROLE " + member + " NOLOGIN IN ROLE cp_worker");
         try { require("FLY_WORKER_UNKNOWN_GROUP_MEMBER".equals(run(config(next, "inspect", ""), "", false).code())); }
         finally { sql("DROP ROLE " + member); }
+        // Associação de bootstrap do Supabase (postgres com ADMIN, sem INHERIT/SET) é tolerada; com INHERIT não.
+        stage = "bootstrap-member";
+        sql("GRANT cp_worker TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET FALSE");
+        try {
+            require(!"FLY_WORKER_UNKNOWN_GROUP_MEMBER".equals(run(config(next, "inspect", ""), "", false).code()));
+            sql("GRANT cp_worker TO postgres WITH INHERIT TRUE");
+            require("FLY_WORKER_UNKNOWN_GROUP_MEMBER".equals(run(config(next, "inspect", ""), "", false).code()));
+        } finally { sql("REVOKE cp_worker FROM postgres"); }
 
         stage = "budget";
         String vercelPassword = "synthetic_vercel_only";
