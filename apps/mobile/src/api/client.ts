@@ -2,6 +2,8 @@ import { credentialPage, eventPage } from './access';
 import { accessRecordPage } from './accessHistory';
 import { announcementPage, openedAnnouncement } from './announcements';
 import { currentRules, move, type CreateMove } from './moves';
+import { requestMessage, unitRequest, unitRequestPage, type OpenRequest } from './requests';
+import { inboxNotification, inboxPage } from './notifications';
 import { arrival, arrivalPage, permit, permitLink, permitPage, rulePage, visitRule, type CreatePermit, type CreateRule } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
@@ -132,7 +134,17 @@ const messages: Record<string, string> = {
   RESERVATION_GUEST_LIMIT: 'A reserva já tem o número máximo de convidados da área.',
   RESERVATION_GUEST_TOO_EARLY: 'Convidados podem ser incluídos a partir de 90 dias antes do evento.',
   RESERVATION_GUEST_UNAVAILABLE: 'Reserva não disponível para convidados.',
+  SERVICE_REQUEST_INPUT_INVALID: 'Informe a categoria, o título e a descrição do pedido.',
+  SERVICE_REQUEST_CATEGORY_INVALID: 'Escolha uma categoria válida.',
+  SERVICE_REQUEST_TITLE_INVALID: 'Informe o título do pedido, de 3 a 120 caracteres, sem caracteres invisíveis.',
+  SERVICE_REQUEST_DESCRIPTION_INVALID: 'Descreva o pedido com até 2.000 caracteres, sem caracteres invisíveis.',
+  SERVICE_REQUEST_MESSAGE_INVALID: 'Escreva a mensagem com até 2.000 caracteres, sem caracteres invisíveis.',
+  SERVICE_REQUEST_NOT_FOUND: 'Pedido não encontrado. Ele pode não ser desta unidade.',
+  SERVICE_REQUEST_CLOSED: 'O pedido foi encerrado; abra um novo pedido se precisar.',
+  SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
   CREDENTIAL_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
+  NOTIFICATION_NOT_FOUND: 'Aviso não encontrado. Ele pode não ser mais do seu vínculo.',
+  NOTIFICATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
   ANNOUNCEMENT_NOT_FOUND: 'Aviso não encontrado. Ele pode ter sido arquivado pela gestão.',
   ANNOUNCEMENT_ARCHIVED: 'Este aviso foi arquivado pela gestão.',
   ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
@@ -310,6 +322,39 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
       }, { method: 'POST', body: { note: null, expectedVersion } }),
     unitAccessRecords: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/access-events`, (value) => accessRecordPage(value, unitId), signal ? { signal } : {}),
+    unitRequests: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/requests`, (value) => unitRequestPage(value, unitId), signal ? { signal } : {}),
+    openRequest: (tenantId: string, unitId: string, body: OpenRequest, key: string) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/requests`, (value, response) => {
+        const opened = unitRequest(value, unitId);
+        const repeated = replayed(response);
+        // Repetição devolve o pedido como está agora; pedido novo nasce enviado, com o texto enviado e aberto por quem enviou.
+        if (!repeated && (opened.state !== 'OPEN' || opened.category !== body.category || opened.title !== body.title
+          || opened.description !== body.description || !opened.openedByMe)) throw invalid(true);
+        return { request: opened, replayed: repeated };
+      }, { method: 'POST', body, key: operationKey(key) }),
+    unitRequest: (tenantId: string, unitId: string, requestId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/requests/${identifier(requestId)}`, (value) => {
+        const found = unitRequest(value, unitId);
+        if (found.requestId.toLowerCase() !== requestId.toLowerCase()) throw invalid();
+        return found;
+      }, signal ? { signal } : {}),
+    requestMessage: (tenantId: string, requestId: string, body: string, key: string) =>
+      request(`${tenant(tenantId)}/requests/${identifier(requestId)}/messages`, (value, response) => {
+        const sent = requestMessage(value);
+        // Mensagem da própria unidade, com o texto enviado (a repetição devolve a mesma mensagem).
+        if (sent.authorRole !== 'UNIT' || !sent.mine || sent.body !== body) throw invalid(true);
+        return { message: sent, replayed: replayed(response) };
+      }, { method: 'POST', body: { body }, key: operationKey(key) }),
+    unitInbox: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/notifications`, (value) => inboxPage(value, unitId), signal ? { signal } : {}),
+    /** Abertura autenticada: única forma de marcar leitura; repetir devolve a leitura já gravada. */
+    openNotification: (tenantId: string, notificationId: string) =>
+      request(`${tenant(tenantId)}/notifications/${identifier(notificationId)}/open`, (value) => {
+        const opened = inboxNotification(value);
+        if (opened.notificationId.toLowerCase() !== notificationId.toLowerCase() || opened.state !== 'READ_IN_APP') throw invalid(true);
+        return opened;
+      }, { method: 'POST' }),
     cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
         (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),
