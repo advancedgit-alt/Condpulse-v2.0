@@ -62,9 +62,11 @@ public final class AccessModels {
    requireVersion(desiredVersion); destinations=requireDestinations(destinations); requireText(reason,"reason");
   }
  }
- public record ApplicationQuery(String connectorId,String credentialRef,long desiredVersion,List<String> destinations) {
+ /** Consulta do estado desejado completo: versão e ação; destino com a mesma versão e outra ação não confirma. */
+ public record ApplicationQuery(String connectorId,String credentialRef,long desiredVersion,Action action,List<String> destinations) {
   public ApplicationQuery {
    requireText(connectorId,"connectorId"); requireText(credentialRef,"credentialRef"); requireVersion(desiredVersion);
+   Objects.requireNonNull(action,"action");
    destinations=requireDestinations(destinations);
   }
  }

@@ -139,29 +139,31 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
  /** Estado real de cada equipamento para a versão pedida (a consulta não muda nada). */
  @Override public synchronized AccessModels.Application getApplication(AccessModels.ApplicationQuery query) {
   connector(query.connectorId());
-  Action action=null;
+  long version=query.desiredVersion();
+  Action action=query.action();
   List<Destination> result=new ArrayList<>();
   for(String deviceId:query.destinations()) {
    var device=device(deviceId);
    var applied=device.applied.get(query.credentialRef());
    var pending=device.pending.get(query.credentialRef());
    if(device.scenario==Scenario.OFFLINE) result.add(new Destination(deviceId,Outcome.UNAVAILABLE,null,null,null,"DEVICE_OFFLINE",null));
-   else if(applied!=null && applied.version()==query.desiredVersion()) {
-    action=applied.action();
+   else if(applied!=null && applied.version()==version && applied.action()==action)
     result.add(new Destination(deviceId,Outcome.APPLIED,applied.version(),applied.action(),applied.at(),null,null));
-   } else if(applied!=null && applied.version()>query.desiredVersion()) {
-    result.add(new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"STALE_VERSION",null));
-   } else if(pending!=null && pending.version()==query.desiredVersion()) {
-    action=pending.action();
+   else if(applied!=null && applied.version()>=version)
+    result.add(new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),
+     applied.version()>version?"STALE_VERSION":"VERSION_CONFLICT",null));
+   else if(pending!=null && pending.version()==version && pending.action()==action)
     result.add(new Destination(deviceId,Outcome.ACCEPTED,applied==null?null:applied.version(),applied==null?null:applied.action(),
      applied==null?null:applied.at(),null,null));
-   } else {
-    // Equipamento respondeu e a versão não está lá: o comando pode ser repetido (idempotente por versão).
+   else if(pending!=null && pending.version()>=version)
+    result.add(new Destination(deviceId,Outcome.REJECTED,applied==null?null:applied.version(),applied==null?null:applied.action(),
+     applied==null?null:applied.at(),pending.version()>version?"STALE_VERSION":"VERSION_CONFLICT",null));
+   else
+    // Equipamento respondeu e a versão não está lá: o comando pode ser repetido (idempotente por versão e ação).
     result.add(new Destination(deviceId,Outcome.UNKNOWN,applied==null?null:applied.version(),applied==null?null:applied.action(),
      applied==null?null:applied.at(),"VERSION_NOT_PRESENT",null));
-   }
   }
-  return new AccessModels.Application(jobRef(query.credentialRef(),query.desiredVersion(),action),query.credentialRef(),query.desiredVersion(),action,result);
+  return new AccessModels.Application(jobRef(query.credentialRef(),version,action),query.credentialRef(),version,action,result);
  }
 
  @Override public synchronized AccessModels.EventPage getEvents(AccessModels.EventQuery query) {

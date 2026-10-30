@@ -6,7 +6,7 @@ simulador não está ligado a nenhum perfil da aplicação.
 
 ## Contrato (`AccessAdapter`, `AccessModels`)
 
-Operações: `capabilities`, `upsertPerson`, `applyCredential`, `getApplication`, `revokeCredential`, `getEvents`
+Operações: `capabilities`, `upsertPerson`, `applyCredential`, `getApplication` (versão **e ação** desejadas; mesma versão com outra ação é `VERSION_CONFLICT`), `revokeCredential`, `getEvents`
 (cursor, janela de até 24 h, até 100 por página), `health` e `requestOpen` (desligada no lançamento). Resultado por
 destino: `ACCEPTED`, `APPLIED`, `REJECTED`, `RATE_LIMITED` (com `retryAfter`), `UNKNOWN`, `UNAVAILABLE`, cada um com a
 conduta da tabela do contrato; só `APPLIED` ativa algo para a pessoa. Envelope de evento normalizado `schemaVersion 1`;
@@ -31,7 +31,7 @@ Determinístico, em memória, com relógio injetado e um cenário por equipament
 
 ## Evidências
 
-`SimulatedAccessAdapterTest` (11 cenários). Rodado localmente com `javac` e um executor mínimo de teste (sem Maven
+`SimulatedAccessAdapterTest` (14 cenários). Rodado localmente com `javac` e um executor mínimo de teste (sem Maven
 local) e no CI `foundation` com JUnit.
 
 ## Pendentes

@@ -44,8 +44,9 @@ class SimulatedAccessAdapterTest {
  private AccessModels.Application revoke(long version,String... devices) {
   return adapter.revokeCredential(new AccessModels.RevokeCredential(CONNECTOR,"corr-r"+version,CREDENTIAL,version,List.of(devices),"Vínculo revogado"));
  }
- private AccessModels.Application query(long version,String... devices) {
-  return adapter.getApplication(new AccessModels.ApplicationQuery(CONNECTOR,CREDENTIAL,version,List.of(devices)));
+ private AccessModels.Application query(long version,String... devices) { return query(version,Action.APPLY,devices); }
+ private AccessModels.Application query(long version,Action action,String... devices) {
+  return adapter.getApplication(new AccessModels.ApplicationQuery(CONNECTOR,CREDENTIAL,version,action,List.of(devices)));
  }
 
  @Test void eachOutcomeCarriesItsConductAndOnlyApplicationActivates() {
@@ -135,7 +136,7 @@ class SimulatedAccessAdapterTest {
   assertEquals(Outcome.REJECTED,late.destination("leitor-1").outcome());
   assertEquals("STALE_VERSION",late.destination("leitor-1").reason());
   assertEquals(Long.valueOf(3),late.destination("leitor-1").appliedVersion());
-  assertEquals(Action.REVOKE,query(3,"leitor-1").destination("leitor-1").appliedAction());
+  assertEquals(Action.REVOKE,query(3,Action.REVOKE,"leitor-1").destination("leitor-1").appliedAction());
   assertEquals(Outcome.REJECTED,query(2,"leitor-1").destination("leitor-1").outcome());
   // Mesma versão com outra ação é conflito, não substituição.
   assertEquals("VERSION_CONFLICT",apply(3,"leitor-1").destination("leitor-1").reason());
@@ -166,6 +167,19 @@ class SimulatedAccessAdapterTest {
   assertEquals(0,adapter.health(CONNECTOR).pendingCommands());
   assertEquals(Outcome.REJECTED,apply(1,"leitor-1").destination("leitor-1").outcome(),"Repetir a v1 também mostra a recusa");
   assertEquals(1,adapter.applications("leitor-1"));
+ }
+
+ @Test void divergentActionsOnDestinationsAreNeverAFullApplication() {
+  apply(1,"leitor-1");
+  revoke(1,"leitor-2");
+  for(var order:List.of(List.of("leitor-1","leitor-2"),List.of("leitor-2","leitor-1"))) {
+   var state=adapter.getApplication(new AccessModels.ApplicationQuery(CONNECTOR,CREDENTIAL,1,Action.APPLY,order));
+   assertFalse(state.fullyApplied());
+   assertEquals(Action.APPLY,state.action(),"Ação vem da consulta, não da ordem dos destinos");
+   assertEquals(Outcome.APPLIED,state.destination("leitor-1").outcome());
+   assertEquals("VERSION_CONFLICT",state.destination("leitor-2").reason());
+  }
+  assertEquals(Outcome.APPLIED,query(1,Action.REVOKE,"leitor-2").destination("leitor-2").outcome());
  }
 
  @Test void rateLimitAndOfflineKeepThePendingWithoutApplying() {
