@@ -66,6 +66,10 @@ public class ReservationManagementStore {
      case when w.state='WAITING' and w.starts_at<=clock_timestamp() then 'CLOSED'
       when w.state='OFFERED' and r.expires_at<=clock_timestamp() then 'EXPIRED' else w.state end as effective_state,
      w.starts_at,w.ends_at,w.offer_expires_at,w.closed_at,w.created_at,
+     -- Encerramento efetivo: pelo tempo (período começou ou oferta venceu) mesmo sem a passada da fila ter gravado.
+     case when w.state='WAITING' and w.starts_at<=clock_timestamp() then w.starts_at
+      when w.state='OFFERED' and r.expires_at<=clock_timestamp() then r.expires_at
+      when w.state in ('WAITING','OFFERED') then null else coalesce(w.closed_at,w.updated_at) end as ended_at,
      case when w.state='WAITING' and w.starts_at>clock_timestamp() then cp.waitlist_position(w.tenant_id,w.id) end as position
     from cp.reservation_waitlist w
     join cp.units u on u.tenant_id=w.tenant_id and u.id=w.unit_id
@@ -73,7 +77,7 @@ public class ReservationManagementStore {
     left join cp.reservations r on r.tenant_id=w.tenant_id and r.id=w.offer_reservation_id
     where w.tenant_id=? and (w.state in ('WAITING','OFFERED') or (not ? and coalesce(w.closed_at,w.updated_at)>clock_timestamp()-interval '7 days'))
    ) x
-   where not ? or x.effective_state in ('WAITING','OFFERED')
+   where x.effective_state in ('WAITING','OFFERED') or (not ? and x.ended_at>clock_timestamp()-interval '7 days')
    order by (x.effective_state not in ('WAITING','OFFERED')),x.amenity_name,x.starts_at,x.created_at,x.id limit ?
    """,(r,n)->new ReservationManagementModels.ManagedWaitlistEntry(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("unit_label"),
      r.getObject("amenity_id",UUID.class),r.getString("amenity_name"),r.getString("effective_state"),instant(r,"starts_at"),instant(r,"ends_at"),

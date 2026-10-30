@@ -143,6 +143,13 @@ const waitlistLabels: Record<ManagedWaitlistEntry['state'], [string, string]> = 
  * Fila de espera do condomínio (CP-040), só leitura: quem aguarda cada período, em que posição, e as ofertas em aberto
  * com o prazo. A gestão não reordena nem oferece: a vaga liberada vai ao primeiro da fila pela passada automática.
  */
+/** Período completo: o fim só com horário no mesmo dia; com a data quando atravessa a meia-noite (fuso do condomínio). */
+function period(startsAt: string, endsAt: string, timeZone: string) {
+  const sameDay = dateInZone(timeZone, new Date(startsAt)) === dateInZone(timeZone, new Date(endsAt));
+  const time = new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(endsAt));
+  return `${formatWhen(startsAt, timeZone)} até ${sameDay ? time : formatWhen(endsAt, timeZone)}`;
+}
+
 function WaitlistOverview() {
   const scope = useManagement();
   const [open, setOpen] = useState(true);
@@ -167,7 +174,7 @@ function WaitlistOverview() {
           : <ol className="management-list" aria-label="Fila de espera">{query.data.entries.map((item) => {
             const [label, tone] = waitlistLabels[item.state];
             return <li key={item.waitlistId} className="management-row"><div>
-              <strong><bdi>{item.amenityName}</bdi> · {formatWhen(item.startsAt, scope.timeZone)}</strong> <span className={`status-pill ${tone}`}>{label}</span>
+              <strong><bdi>{item.amenityName}</bdi> · {period(item.startsAt, item.endsAt, scope.timeZone)}</strong> <span className={`status-pill ${tone}`}>{label}</span>
               <span>Unidade <bdi>{item.unitLabel}</bdi>{item.position !== null ? ` · ${item.position}º da fila` : ''} · entrou em {formatWhen(item.createdAt, scope.timeZone)}</span>
               {item.state === 'OFFERED' && item.offerExpiresAt ? <span>Oferta vale até {formatWhen(item.offerExpiresAt, scope.timeZone)}</span> : null}
             </div></li>;

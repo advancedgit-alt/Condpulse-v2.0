@@ -34,6 +34,20 @@ test('gestão vê a fila de espera em aberto, com posição e prazo da oferta, e
   expect(state.waitlistQueries).toEqual(['open', 'all']);
 });
 
+test('fim do período aparece com horário no mesmo dia e com data quando passa da meia-noite', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true, waitlist: [
+    entry({ startsAt: '2030-01-10T22:00:00Z', endsAt: '2030-01-11T00:00:00Z' }),
+    entry({ waitlistId: '79000000-0000-4000-8000-000000000002', unitId: UNIT_B, unitLabel: '202 — Sintética B', position: 2,
+      startsAt: '2030-01-10T22:00:00Z', endsAt: '2030-01-11T04:00:00Z' }),
+  ] });
+  await signIn(page);
+  await page.goto(`/gestao/${TENANT_A}/reservas`);
+  const list = page.getByRole('region', { name: 'Fila de espera' }).getByRole('list', { name: 'Fila de espera' });
+  await expect(list.getByText(/Área Sintética A · 10 de jan\.? de 2030,? 19:00 até 21:00$/)).toBeVisible();
+  await expect(list.getByText(/Área Sintética A · 10 de jan\.? de 2030,? 19:00 até 11 de jan\.? de 2030,? 01:00$/)).toBeVisible();
+});
+
 test('fila vazia, falha ao atualizar e primeira consulta com erro', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true, waitlist: [], waitlistFailures: 1 });
