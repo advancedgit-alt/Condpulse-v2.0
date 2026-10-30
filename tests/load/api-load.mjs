@@ -266,6 +266,11 @@ function publish(report) {
     `| **total** | ${report.overall.count} | | | ${report.overall.errors} | ${ms(report.overall.p50)} | ${ms(report.overall.p95)} | ${ms(report.overall.p99)} |`, '',
     report.capacityClaim];
   console.log(lines.join('\n'));
+  if (process.env.GITHUB_ACTIONS) {
+    console.log(`::notice title=Carga sintética (runner, sem afirmação de capacidade)::${report.achieved.rps} rps obtidos; p50 ${ms(report.overall.p50)} ms, p95 ${ms(report.overall.p95)} ms, p99 ${ms(report.overall.p99)} ms; erros ${report.overall.errors}/${report.overall.count}; descartados ${report.achieved.dropped}; conexões máx. ${report.saturation.maxDbConnections}; CPU ${report.saturation.apiCpuShare} núcleo; memória ${report.saturation.maxRssMb} MB`);
+    for (const [name, c] of Object.entries(report.classes))
+      console.log(`::notice title=Carga ${name}::${c.count} pedidos; 2xx ${c.ok}; 4xx de regra ${c.expected4xx}; erros ${c.errors} ${JSON.stringify(c.codes)}; p50 ${ms(c.p50)} p95 ${ms(c.p95)} p99 ${ms(c.p99)} ms`);
+  }
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
 }
 
@@ -298,7 +303,10 @@ try {
   ensure(report.classes.create.ok > 0 && report.reservationsCommitted > 0, 'NO_SUCCESSFUL_WRITES');
 } catch (error) {
   failed = true;
-  console.error(`Carga sintética falhou em ${stage}: ${/^[A-Z0-9_]+$/.test(error.message) ? error.message : 'UNEXPECTED_ERROR'}`);
+  const code = /^[A-Z0-9_]+$/.test(error.message) ? error.message : 'UNEXPECTED_ERROR';
+  console.error(`Carga sintética falhou em ${stage}: ${code}`);
+  // Anotação do Actions: o log completo do job pode não estar acessível a quem acompanha o PR.
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=Carga sintética::${stage}: ${code}`);
 } finally {
   try { await stop(); } catch { failed = true; console.error('Limpeza da carga sintética falhou.'); }
 }
