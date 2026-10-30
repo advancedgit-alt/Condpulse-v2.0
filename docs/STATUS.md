@@ -24,7 +24,13 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: aprovação da conta que recebe o primeiro papel de plataforma — responsável — por escrito, nomeando a conta.
 - BLOQUEADO: chave de serviço do Storage (`CP_STORAGE_SERVICE_KEY`) na Vercel `condpulse` para ligar `CP_FILES_ENABLED` — responsável — cofre/painel da Vercel (segredo; não pode ser lido nem copiado por mim).
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
+- BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
+
+## Retirada delegada com código — CP-041
+
+- V024: quem pode retirar autoriza um terceiro para uma encomenda; código de 8 dígitos exibido uma vez; o banco guarda só o HMAC-SHA256 calculado com segredo do servidor fora do banco (`CP_PARCEL_CODE_KEY`) e só compara o autenticador — sem a chave a delegação responde 503 `DELEGATION_UNAVAILABLE`; a portaria confere o código da própria encomenda com até 5 tentativas (gravadas mesmo na recusa) e registra a retirada com evidência `DELEGATION`; código usado não volta a valer. Atrás de `CP_PARCELS_ENABLED` (ligada); V024 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [ENCOMENDAS.md](ENCOMENDAS.md).
+- Pendentes: delegação pelo celular, aviso ao morador (worker) e ensaio com Auth real.
 
 ## Adaptador simulado de acesso — CP-043
 

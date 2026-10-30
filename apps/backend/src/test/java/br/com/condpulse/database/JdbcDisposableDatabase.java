@@ -66,6 +66,8 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   return value;
  }
  private Connection admin() throws SQLException { return DriverManager.getConnection(url,adminUser,adminPassword); }
+ /** Sessão administrativa própria, para segurar travas de linha em ensaios de concorrência. */
+ Connection adminSession() throws SQLException { return admin(); }
  private static void update(Connection connection,String sql,Object...args) throws SQLException {
   try(PreparedStatement statement=connection.prepareStatement(sql)) {
    for(int i=0;i<args.length;i++) statement.setObject(i+1,args[i]);
@@ -147,7 +149,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
    connection.setAutoCommit(false);
-   for(String table:new String[]{"import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","reservation_waitlist","reservations","amenities"})
+   for(String table:new String[]{"import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","reservation_waitlist","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    connection.commit();
   }
@@ -193,7 +195,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
     accountA,accountB,accountC,tenantA,tenantB);
    update(connection,"delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
-   for(String table:new String[]{"import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","reservation_waitlist","reservations","amenities"})
+   for(String table:new String[]{"import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","reservation_waitlist","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.
    update(connection,"with invitations as (delete from cp.membership_invitations where tenant_id in (?,?)) "

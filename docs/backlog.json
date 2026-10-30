@@ -1273,8 +1273,13 @@
       "id": "CP-041",
       "delivery": "Retirada delegada e código. Delegação por encomenda, validade, código com hash e limite de tentativas.",
       "acceptance": "Código gasto não é reutilizado; delegação de outra encomenda não é aceita.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V024__parcel_delegations.sql",
+        "tests/database/run.py#delegation_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/DelegationJdbcTest.java",
+        "apps/web/e2e/parcel-delegation.spec.ts"
+      ]
     },
     {
       "id": "CP-042",

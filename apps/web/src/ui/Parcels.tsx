@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -5,6 +6,7 @@ import { parcels, type Parcel } from '../api/parcels';
 import { useAuth } from './Auth';
 import { Empty, ErrorState, Icon, Loading, Notice } from './primitives';
 import { dateInZone, formatWhen } from './dateTime';
+import { ParcelDelegation } from './ParcelDelegation';
 import './management/Management.css';
 
 /**
@@ -35,7 +37,7 @@ function UnitParcels({ accountId, tenantId, unitId, tenantName, timeZone }: { ac
   const delivered = deliveredList.data?.parcels ?? [];
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ENCOMENDAS</span><h1>Encomendas da unidade</h1>
-      <p>Registradas pela portaria de {tenantName}. Na retirada, a portaria confere o documento de uma pessoa com vínculo com a unidade. Horários em {timeZone}.</p></div>
+      <p>Registradas pela portaria de {tenantName}. Na retirada, a portaria confere o documento de uma pessoa com vínculo com a unidade ou de quem você autorizar com código. Horários em {timeZone}.</p></div>
       <button className="button button-secondary button-compact" type="button" disabled={fetching} onClick={refresh}>Atualizar</button></div>
     {waitingList.isPending || deliveredList.isPending ? <div className="panel"><Loading label="Consultando encomendas…" /></div>
       : code === 'API_NOT_AVAILABLE' ? <div className="panel"><Empty title="Encomendas indisponíveis">As encomendas ainda não estão ativas neste ambiente.</Empty></div>
@@ -45,7 +47,8 @@ function UnitParcels({ accountId, tenantId, unitId, tenantName, timeZone }: { ac
               <section className="management-section" aria-labelledby="waiting-title">
                 <div className="section-heading"><div><span className="section-index">A RETIRAR</span><h2 id="waiting-title">Aguardando retirada</h2></div></div>
                 {waiting.length === 0 ? <div className="panel"><Empty title="Nada a retirar">Quando a portaria registrar uma encomenda para a unidade, ela aparecerá aqui.</Empty></div>
-                  : <ol className="management-list" aria-label="Encomendas a retirar">{waiting.map((item) => <ParcelRow key={item.parcelId} parcel={item} timeZone={timeZone} />)}</ol>}
+                  : <ol className="management-list" aria-label="Encomendas a retirar">{waiting.map((item) => <ParcelRow key={item.parcelId} parcel={item} timeZone={timeZone}>
+                    <ParcelDelegation baseKey={key} tenantId={tenantId} parcel={item} timeZone={timeZone} /></ParcelRow>)}</ol>}
                 {waitingList.data?.truncated ? <Notice tone="warning">A lista mostra as 100 encomendas mais antigas aguardando retirada.</Notice> : null}
               </section>
               <section className="management-section" aria-labelledby="delivered-title">
@@ -58,12 +61,13 @@ function UnitParcels({ accountId, tenantId, unitId, tenantName, timeZone }: { ac
   </>;
 }
 
-function ParcelRow({ parcel, timeZone }: { parcel: Parcel; timeZone: string }) {
+function ParcelRow({ parcel, timeZone, children }: { parcel: Parcel; timeZone: string; children?: ReactNode }) {
   return <li className="management-row">
     <div><strong><Icon name="box" /> {parcel.quantity} {parcel.quantity === 1 ? 'volume' : 'volumes'}</strong>
       <span className={`status-pill ${parcel.status === 'RECEIVED' ? 'status-pending' : 'status-ready'}`}>{parcel.status === 'RECEIVED' ? 'A retirar' : 'Retirada'}</span>
       <span>Recebida em {formatWhen(parcel.receivedAt, timeZone)} · guardada em <bdi>{parcel.storageLocation}</bdi></span>
       {parcel.description ? <span><bdi>{parcel.description}</bdi></span> : null}
-      {parcel.handoff ? <span>Retirada por <bdi>{parcel.handoff.recipientName}</bdi> em {formatWhen(parcel.handoff.deliveredAt, timeZone)}</span> : null}</div>
+      {parcel.handoff ? <span>Retirada por <bdi>{parcel.handoff.recipientName}</bdi>{parcel.handoff.evidenceKind === 'DELEGATION' ? ' (pessoa autorizada pela unidade, com código)' : ''} em {formatWhen(parcel.handoff.deliveredAt, timeZone)}</span> : null}</div>
+    {children}
   </li>;
 }

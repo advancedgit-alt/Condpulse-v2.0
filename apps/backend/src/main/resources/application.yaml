@@ -46,6 +46,8 @@ condpulse:
     billing-enabled: ${CP_PLATFORM_BILLING_ENABLED:false}
   parcels:
     enabled: ${CP_PARCELS_ENABLED:false}
+    # HMAC do código de retirada delegada (32 bytes Base64, do cofre); ausente = delegação indisponível.
+    code-key: ${CP_PARCEL_CODE_KEY:}
   visits:
     enabled: ${CP_VISITS_ENABLED:false}
   notifications:

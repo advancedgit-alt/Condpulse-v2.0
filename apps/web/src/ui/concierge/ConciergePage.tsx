@@ -170,7 +170,7 @@ function ParcelQueue() {
   const units = useQuery({ queryKey: conciergeKey(scope, 'units', null), queryFn: ({ signal }) => parcels.units(scope.tenantId, null, signal) });
   const list = useQuery({ queryKey: conciergeKey(scope, 'parcels', status, unitId || null, filter),
     queryFn: ({ signal }) => parcels.list(scope.tenantId, { status, unitId: unitId || null, location: filter }, signal) });
-  const [editing, setEditing] = useState<{ parcelId: string; action: 'deliver' | 'void' } | null>(null);
+  const [editing, setEditing] = useState<{ parcelId: string; action: 'deliver' | 'code' | 'void' } | null>(null);
   const [outcome, setOutcome] = useState<ActionResult | null>(null);
   if (useAccessGuard(list.error)) return null;
   const current = queueStatuses.find((item) => item.id === status)!;
@@ -199,12 +199,14 @@ function ParcelQueue() {
             <div><strong><bdi>{unitName(parcel)}</bdi></strong> <ParcelPill parcel={parcel} />
               <span>{volumes(parcel.quantity)} · <bdi>{parcel.storageLocation}</bdi> · recebida em {formatWhen(parcel.receivedAt, scope.timeZone)}</span>
               {parcel.description ? <span><bdi>{parcel.description}</bdi></span> : null}
-              {parcel.handoff ? <span>Retirada por <bdi>{parcel.handoff.recipientName}</bdi> em {formatWhen(parcel.handoff.deliveredAt, scope.timeZone)} · documento conferido</span> : null}
+              {parcel.handoff ? <span>Retirada por <bdi>{parcel.handoff.recipientName}</bdi>{parcel.handoff.evidenceKind === 'DELEGATION' ? ' (autorizada pela unidade, código conferido)' : ''} em {formatWhen(parcel.handoff.deliveredAt, scope.timeZone)} · documento conferido</span> : null}
               {parcel.voidReason && parcel.voidedAt ? <span>Anulada em {formatWhen(parcel.voidedAt, scope.timeZone)}: <bdi>{parcel.voidReason}</bdi></span> : null}</div>
             {parcel.status === 'RECEIVED' && editing?.parcelId !== parcel.parcelId ? <div className="button-row">
               <button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setEditing({ parcelId: parcel.parcelId, action: 'deliver' }); }}>Registrar retirada</button>
+              <button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setEditing({ parcelId: parcel.parcelId, action: 'code' }); }}>Retirada por código</button>
               <button className="button button-secondary button-compact" type="button" onClick={() => { setOutcome(null); setEditing({ parcelId: parcel.parcelId, action: 'void' }); }}>Anular registro</button></div> : null}
-            {editing?.parcelId === parcel.parcelId ? editing.action === 'deliver' ? <DeliverParcel parcel={parcel} close={close} /> : <VoidParcel parcel={parcel} close={close} /> : null}
+            {editing?.parcelId === parcel.parcelId ? editing.action === 'deliver' ? <DeliverParcel parcel={parcel} close={close} />
+              : editing.action === 'code' ? <DeliverByCode parcel={parcel} close={close} /> : <VoidParcel parcel={parcel} close={close} /> : null}
           </li>)}</ol>}
     {list.data?.truncated ? <Notice tone="warning">{status === 'RECEIVED'
       ? 'A lista mostra as 100 encomendas mais antigas aguardando retirada neste filtro. Registre as retiradas ou filtre por unidade para ver as demais.'
@@ -264,7 +266,7 @@ function DeliverParcel({ parcel, close }: { parcel: Parcel; close(result: Action
   const id = `deliver-${parcel.parcelId}`;
   const busy = action.state.pending || locked;
   return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Registrar retirada de ${unitName(parcel)}`}>
-    <Notice>Entregue somente a uma das pessoas abaixo, conferindo o documento com o nome escolhido. Saber o nome do morador não basta; retirada por outra pessoa depende de delegação, que ainda não está disponível.</Notice>
+    <Notice>Entregue somente a uma das pessoas abaixo, conferindo o documento com o nome escolhido. Saber o nome do morador não basta; para pessoa autorizada pela unidade, use Retirada por código.</Notice>
     {recipients.isPending ? <Loading label="Consultando quem pode retirar…" />
       : recipients.isError ? <ErrorState error={recipients.error} retry={() => void recipients.refetch()} />
         : recipients.data.length === 0 ? <Notice tone="warning">Nenhuma pessoa com vínculo vigente pode retirar encomendas desta unidade. A gestão precisa validar o vínculo antes da retirada.</Notice>
@@ -279,6 +281,74 @@ function DeliverParcel({ parcel, close }: { parcel: Parcel; close(result: Action
     {locked ? <Notice tone="warning">O resultado não foi confirmado e a escolha ficou travada. Atualize a lista: se a encomenda aparecer como retirada, não repita.</Notice> : null}
     <div className="button-row">
       <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Registrando…' : locked ? 'Tentar confirmar a mesma retirada' : 'Confirmar retirada'}</button>
+      <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
+    </div>
+  </form>;
+}
+
+/**
+ * Retirada por terceiro autorizado (CP-041): confere o código da própria encomenda e o documento da pessoa. Código errado
+ * conta tentativa (na quinta, a autorização é bloqueada) e a recusa nunca vira retirada.
+ */
+const codeRefusals = ['DELEGATION_CODE_INVALID', 'DELEGATION_LOCKED', 'DELEGATION_EXPIRED', 'DELEGATION_NOT_FOUND'];
+function DeliverByCode({ parcel, close }: { parcel: Parcel; close(result: ActionResult | null): void }) {
+  const scope = useManagement();
+  const queries = useQueryClient();
+  const action = useAction();
+  const intent = useIntent();
+  const [read] = useState(parcel.version);
+  const delegationKey = conciergeKey(scope, 'delegation', parcel.parcelId);
+  const current = useQuery({ queryKey: delegationKey, queryFn: ({ signal }) => parcels.delegation(scope.tenantId, parcel.parcelId, signal) });
+  const [code, setCode] = useState('');
+  const [checked, setChecked] = useState(false);
+  const [locked, setLocked] = useState(false);
+  if (useAccessGuard(current.error)) return null;
+  const delegation = current.data ?? null;
+  const active = delegation?.state === 'ACTIVE';
+  const digits = code.replace(/\s/g, '');
+  const valid = active && /^[0-9]{8}$/.test(digits) && checked;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!valid) return;
+    const body = { code: digits, identityChecked: true as const, expectedVersion: read };
+    const key = intent.keyFor(`${parcel.parcelId}:${read}`);
+    let result: ActionResult | null = null;
+    let failure: unknown = null;
+    const ok = await action.run(async () => {
+      try { return await parcels.handoffByCode(scope.tenantId, parcel.parcelId, key, body); }
+      catch (error) { failure = error; throw repeatFailure(error); }
+    }, (done: ParcelMutation): ActionResult => {
+      result = done.parcel.parcelId === parcel.parcelId && done.parcel.status === 'DELIVERED' && done.parcel.handoff?.evidenceKind === 'DELEGATION'
+        ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta retirada já estava registrada' : 'Retirada registrada'}: ${done.parcel.handoff.recipientName}, autorizada pela unidade, retirou a encomenda de ${unitName(done.parcel)}.` }
+        : { tone: 'warning', text: 'A resposta não confirmou a retirada. Atualize a lista e confira.' };
+      return result;
+    }, async () => { await queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') }); });
+    if (ok) { close(result); return; }
+    const code_ = codeOf(failure);
+    if (codeRefusals.includes(code_)) { setCode(''); intent.reset(); void current.refetch(); return; }
+    if (stateCodes.includes(code_)) {
+      close({ tone: 'warning', text: `${errorMessage(failure)} Nenhuma nova retirada foi registrada.` });
+      void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
+      return;
+    }
+    settleFailure(failure, locked, intent, setLocked);
+    void queries.invalidateQueries({ queryKey: conciergeKey(scope, 'parcels') });
+  }
+  const id = `code-${parcel.parcelId}`;
+  const busy = action.state.pending || locked;
+  return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Retirada por código de ${unitName(parcel)}`}>
+    {current.isPending ? <Loading label="Consultando autorização…" />
+      : current.isError ? <ErrorState error={current.error} retry={() => void current.refetch()} />
+        : !delegation || !active ? <Notice tone="warning">{delegation ? `Autorização ${delegation.state === 'LOCKED' ? 'bloqueada por tentativas erradas' : delegation.state === 'EXPIRED' ? 'vencida' : 'encerrada'}.` : 'A unidade não autorizou ninguém para esta encomenda.'} Peça à unidade uma nova autorização.</Notice>
+          : <Notice>Autorizado(a) pela unidade: <strong><bdi>{delegation.delegateName}</bdi></strong>{delegation.documentLast4 ? `, documento final ${delegation.documentLast4}` : ''}, até {formatWhen(delegation.validUntil, scope.timeZone)}. Restam {delegation.attemptsLeft} tentativas de código.</Notice>}
+    <label htmlFor={`${id}-code`}>Código informado pela pessoa</label>
+    <input id={`${id}-code`} inputMode="numeric" autoComplete="off" maxLength={9} value={code} onChange={(event) => setCode(event.target.value)} disabled={busy || !active} />
+    <label className="checkbox-label" htmlFor={`${id}-checked`}><input id={`${id}-checked`} type="checkbox" checked={checked}
+      onChange={(event) => setChecked(event.target.checked)} disabled={busy || !active} />Conferi o documento com o nome autorizado</label>
+    <ActionFeedback state={action.state} success={false} />
+    {locked ? <Notice tone="warning">O resultado não foi confirmado e o envio ficou travado. Atualize a lista: se a encomenda aparecer como retirada, não repita.</Notice> : null}
+    <div className="button-row">
+      <button className="button" type="submit" disabled={!valid || action.state.pending}>{action.state.pending ? 'Conferindo…' : locked ? 'Tentar confirmar a mesma retirada' : 'Conferir código e registrar retirada'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.state.pending}>Voltar</button>
     </div>
   </form>;

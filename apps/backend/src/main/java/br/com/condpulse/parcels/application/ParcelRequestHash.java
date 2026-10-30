@@ -19,7 +19,14 @@ final class ParcelRequestHash {
  static String voidParcel(UUID parcel,String reason,long expectedVersion) {
   return digest("VOID|"+parcel+"|"+reason.length()+":"+reason+"|"+expectedVersion);
  }
- private static String digest(String value) {
+ static String delegate(UUID parcel,String name,String document,java.time.Instant validUntil) {
+  return digest("DELEGATE|"+parcel+"|"+name.length()+":"+name+"|"+document+"|"+validUntil);
+ }
+ /** O código não entra no hash da intenção (8 dígitos seriam recuperáveis do hash guardado). */
+ static String codeHandoff(UUID parcel,long expectedVersion) {
+  return digest("CODE_HANDOFF|"+parcel+"|"+expectedVersion);
+ }
+ static String digest(String value) {
   try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
   catch(NoSuchAlgorithmException impossible) { throw new IllegalStateException("SHA-256 indisponível.",impossible); }
  }
