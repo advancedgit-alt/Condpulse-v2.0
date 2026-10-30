@@ -72,9 +72,11 @@ CREATE TRIGGER visit_permits_reservation_guard BEFORE INSERT ON cp.visit_permits
 -- (processo sem conta) a transação falha: nunca encerrar a reserva deixando convidados válidos.
 CREATE FUNCTION cp.reservation_guests_close() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE pending integer;
+DECLARE pending integer; guest record;
 BEGIN
- IF NEW.status NOT IN ('CANCELLED','REJECTED','EXPIRED') OR OLD.status IN ('CANCELLED','REJECTED','EXPIRED') THEN RETURN NEW; END IF;
+ -- Convidado só existe em reserva confirmada (a inclusão exige CONFIRMED): encerrar retenção ou pedido não confere
+ -- convidados nem toma a trava da unidade, o que mantém a expiração de pedidos de outras unidades livre de deadlock.
+ IF OLD.status<>'CONFIRMED' OR NEW.status NOT IN ('CANCELLED','REJECTED','EXPIRED') THEN RETURN NEW; END IF;
  -- Mesma trava da unidade que os comandos de reserva tomam antes de travar a linha (ReservationStore.lockUnit) e que a
  -- inclusão toma antes de tudo: um convidado sendo incluído termina antes e é revogado abaixo, ou espera e vê a reserva
  -- encerrada. Ordem única (unidade, depois linha) em todos os caminhos evita deadlock.
@@ -94,6 +96,12 @@ BEGIN
   RETURN NEW;
  END IF;
  PERFORM set_config('app.closing_reservation',NEW.id::text,true);
+ -- Travas de cada convite antes das linhas, em ordem estável: a mesma ordem da revogação individual e do link
+ -- (cp.lock_permit_access e depois a linha), sem inverter com quem já segura a trava de um convidado.
+ FOR guest IN SELECT p.id FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.reservation_id=NEW.id
+   AND p.state='ACTIVE' AND p.valid_until>clock_timestamp() ORDER BY p.id LOOP
+  PERFORM cp.lock_permit_access(NEW.tenant_id,guest.id);
+ END LOOP;
  -- Estado desejado final para integrações: um evento de revogação por convidado, na mesma transação.
  WITH revoked AS (
   UPDATE cp.visit_permits SET state='REVOKED',revoked_by=platform.current_actor_id(),

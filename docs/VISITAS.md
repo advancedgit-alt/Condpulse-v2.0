@@ -153,6 +153,6 @@ Atrás de `CP_VISITS_ENABLED`. Banco: V021 (`cp.visit_permits.reservation_id`).
   comum do convite.
 - **Web**: "Convidados" na reserva confirmada (lista, adicionar com chave de operação travada em resultado incerto,
   remover com confirmação); a confirmação de cancelamento avisa que os convidados perdem o convite.
-- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 33 verificações, incluindo inclusão e cancelamento simultâneos nas duas ordens e na ordem de travas da API), `ReservationGuestJdbcTest`,
+- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 36 verificações, incluindo inclusão e cancelamento simultâneos nas duas ordens e na ordem de travas da API, expiração de pedido de outra unidade e remoção de convidado concorrente), `ReservationGuestJdbcTest`,
   `VisitSecurityIntegrationTest`; web `e2e/reservation-guests.spec.ts`.
 - **Pendentes**: convidados pelo celular, aviso aos convidados quando a reserva é cancelada e ensaio com Auth real.
