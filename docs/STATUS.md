@@ -25,7 +25,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: chave de serviço do Storage (`CP_STORAGE_SERVICE_KEY`) na Vercel `condpulse` para ligar `CP_FILES_ENABLED` — responsável — cofre/painel da Vercel (segredo; não pode ser lido nem copiado por mim).
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
-- BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
+- BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável. Roteiro em ordem, sem execução: [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
 
 ## Credenciais de acesso e revogação prioritária — CP-046
 

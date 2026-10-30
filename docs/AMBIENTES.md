@@ -127,6 +127,8 @@ projeto Supabase, não um painel CondPulse utilizável.
    os artefatos aprovados. Conferir configuração/migrations compatíveis, smoke,
    retorno da aplicação e recuperação; criação do projeto não conclui esses gates.
 
+Roteiro ordenado da produção, com quem faz e onde: [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
+
 O [plano de seis fases](MVP_ENTREGA.md) e a
 [ADR-0007](adr/0007-tenancy-e-promocao-de-releases.md) continuam válidos.
 Provisionar o segundo projeto é progresso da fase1, não conclusão da separação,
