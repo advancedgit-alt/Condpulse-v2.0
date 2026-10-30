@@ -75,6 +75,9 @@ public class MembershipManagementService {
    }
    if(current.version()!=expected || !store.revoke(tenant,membershipId,expected)) throw changed();
    audit.record(tenant,actor,"MEMBERSHIP_REVOKED","MEMBERSHIP",membershipId,reason);
+   // Credenciais de acesso do vínculo deixam de valer na mesma transação (o equipamento é atualizado pelo worker).
+   for(UUID credential:store.revokeCredentials(tenant,membershipId,actor,"Vínculo encerrado: "+reason.substring(0,Math.min(reason.length(),270))))
+    audit.record(tenant,actor,"ACCESS_CREDENTIAL_REVOKED","ACCESS_CREDENTIAL",credential,"Vínculo encerrado");
    // Revogação de credenciais físicas e sessões derivadas é processada a partir deste evento.
    store.event(tenant,"MEMBERSHIP_REVOKED",membershipId,expected+1);
    return store.membership(tenant,membershipId);
