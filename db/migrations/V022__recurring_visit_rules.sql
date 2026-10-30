@@ -95,7 +95,14 @@ CREATE TRIGGER visit_rules_guard BEFORE INSERT OR UPDATE ON cp.visit_rules FOR E
 
 CREATE FUNCTION cp.visit_rule_closed() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE window_permit record;
 BEGIN
+ -- Trava de cada janela antes das linhas, em ordem estável (mesma ordem da revogação individual e da entrada pela
+ -- portaria: cp.lock_permit_access e depois a linha).
+ FOR window_permit IN SELECT p.id FROM cp.visit_permits p WHERE p.tenant_id=NEW.tenant_id AND p.rule_id=NEW.id
+   AND p.state='ACTIVE' AND p.valid_until>clock_timestamp() ORDER BY p.id LOOP
+  PERFORM cp.lock_permit_access(NEW.tenant_id,window_permit.id);
+ END LOOP;
  WITH revoked AS (
   UPDATE cp.visit_permits SET state='REVOKED',revoked_by=NEW.revoked_by,revoke_reason='Regra de prestador revogada',version=version+1
    WHERE tenant_id=NEW.tenant_id AND rule_id=NEW.id AND state='ACTIVE' AND valid_until>clock_timestamp()

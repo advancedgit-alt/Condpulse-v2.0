@@ -1,5 +1,6 @@
 """Testes de integridade CondPulse, exclusivamente em PostgreSQL descartável."""
 import concurrent.futures
+import time
 import os
 from pathlib import Path
 import re
@@ -1788,6 +1789,18 @@ def visit_rule_checks():
     expect(error(f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until) "
                  f"VALUES(gen_random_uuid(),'{TA}','{VR1}','{UA}','X','{AA}',clock_timestamp(),clock_timestamp()+interval '1 hour')", "23514", tenant=TA, role="cp_api"),
            "pessoa da regra nao vira convite comum")
+    # Revogacao individual de janela (trava do convite e depois a linha) concorrente com a revogacao da regra: sem deadlock.
+    w3 = value(f"select id from cp.visit_permits where rule_id='{R3}' and state='ACTIVE' order by id limit 1")
+    one = (f"SELECT cp.lock_permit_access('{TA}','{w3}'); SELECT pg_sleep(2); "
+           f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Hoje nao',version=version+1 WHERE id='{w3}' AND state='ACTIVE'")
+    whole = f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{AA}',revoke_reason='Encerrado',version=version+1 WHERE id='{R3}'"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        single = pool.submit(query, one, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        bulk = pool.submit(query, whole, tenant=TA, role="cp_api", check=False)
+        single, bulk = single.result(), bulk.result()
+    expect(single.returncode == 0 and bulk.returncode == 0, "revogacao de janela e da regra concorrentes sem deadlock")
+    expect(value(f"select count(*) from cp.visit_permits where rule_id='{R3}' and state='ACTIVE'") == "0", "nenhuma janela ativa depois das duas revogacoes")
     # Revogar a regra derruba as janelas validas na mesma transacao, com evento.
     def revoke(identifier, actor=AA):
         return (f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{actor}',revoke_reason='Contrato encerrado',version=version+1 WHERE id='{identifier}'")
