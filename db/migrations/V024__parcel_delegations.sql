@@ -1,6 +1,8 @@
 -- CP-041: retirada delegada com código. Quem pode retirar pela unidade autoriza um terceiro para uma encomenda ainda a
 -- retirar: nome, final do documento (opcional) e validade curta. O código (8 dígitos) aparece uma única vez para quem
--- autorizou; o banco guarda só SHA-256 com sal próprio da delegação. A portaria confere o código daquela encomenda (a
+-- autorizou; o banco guarda só o HMAC-SHA256 calculado pela aplicação com segredo do servidor, fora do banco
+-- (CP_PARCEL_CODE_KEY), sobre a delegação e o código: sem o segredo, a tabela não permite testar os códigos. A portaria
+-- confere o código daquela encomenda (a
 -- delegação de outra encomenda nunca vale), com até 5 tentativas: na quinta errada a delegação fica bloqueada. Código
 -- usado não volta a valer; retirada, anulação ou nova delegação encerram a anterior.
 
@@ -11,8 +13,7 @@ CREATE TABLE cp.parcel_delegations (
  unit_id uuid NOT NULL,
  delegate_name text NOT NULL CHECK(length(btrim(delegate_name)) BETWEEN 2 AND 160),
  document_last4 text CHECK(document_last4 IS NULL OR document_last4 ~ '^[0-9A-Z]{2,4}$'),
- code_hash text NOT NULL CHECK(code_hash ~ '^[0-9a-f]{64}$'),
- code_salt text NOT NULL CHECK(code_salt ~ '^[0-9a-f]{32}$'),
+ code_hmac text NOT NULL CHECK(code_hmac ~ '^[0-9a-f]{64}$'),
  valid_until timestamptz NOT NULL,
  -- ACTIVE: vale até valid_until; USED: retirada feita com o código; REVOKED: cancelada pela unidade; LOCKED: tentativas
  -- esgotadas; CLOSED: encomenda retirada por outro caminho, anulada ou substituída por nova delegação.
@@ -38,7 +39,7 @@ CREATE INDEX parcel_delegations_by_parcel ON cp.parcel_delegations(tenant_id,par
 
 REVOKE ALL ON cp.parcel_delegations FROM PUBLIC;
 GRANT SELECT ON cp.parcel_delegations TO cp_api;
-GRANT INSERT(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hash,code_salt,valid_until,created_by)
+GRANT INSERT(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hmac,valid_until,created_by)
  ON cp.parcel_delegations TO cp_api;
 GRANT UPDATE(state,attempts,used_by,revoked_by,version) ON cp.parcel_delegations TO cp_api;
 ALTER TABLE cp.parcel_delegations ENABLE ROW LEVEL SECURITY;
@@ -85,8 +86,8 @@ BEGIN
   RETURN NEW;
  END IF;
  IF NEW.version<>OLD.version+1 OR OLD.state<>'ACTIVE' OR (NEW.tenant_id,NEW.parcel_id,NEW.unit_id,NEW.delegate_name,NEW.document_last4,
-   NEW.code_hash,NEW.code_salt,NEW.valid_until,NEW.created_by) IS DISTINCT FROM (OLD.tenant_id,OLD.parcel_id,OLD.unit_id,
-   OLD.delegate_name,OLD.document_last4,OLD.code_hash,OLD.code_salt,OLD.valid_until,OLD.created_by) THEN
+   NEW.code_hmac,NEW.valid_until,NEW.created_by) IS DISTINCT FROM (OLD.tenant_id,OLD.parcel_id,OLD.unit_id,
+   OLD.delegate_name,OLD.document_last4,OLD.code_hmac,OLD.valid_until,OLD.created_by) THEN
   RAISE EXCEPTION 'alteração de delegação não permitida' USING ERRCODE='23514';
  END IF;
  IF NEW.state='ACTIVE' THEN
@@ -137,10 +138,11 @@ CREATE POLICY handoffs_register ON cp.parcel_handoffs AS RESTRICTIVE FOR INSERT 
    WHERE d.tenant_id=cp.parcel_handoffs.tenant_id AND d.parcel_id=cp.parcel_handoffs.parcel_id AND d.state='USED'
     AND d.used_by=platform.current_actor_id() AND d.delegate_name=cp.parcel_handoffs.recipient_name))));
 
--- Conferência do código pela portaria, sob a trava da linha da delegação: devolve OK (delegação passa a USED), WRONG
--- (tentativa contada), LOCKED (quinta errada: bloqueada), EXPIRED ou NONE (sem delegação em vigor para esta encomenda).
--- O código nunca é comparado fora do banco nem devolvido.
-CREATE FUNCTION cp.parcel_delegation_check(target_tenant uuid,target_parcel uuid,code text) RETURNS text
+-- Conferência do código pela portaria, sob a trava da linha da delegação. A aplicação calcula o autenticador do código
+-- informado com o segredo do servidor sobre a delegação em vigor que leu; o banco só compara. Devolve OK (delegação
+-- passa a USED), WRONG (tentativa contada), LOCKED (quinta errada: bloqueada), EXPIRED, NONE (sem delegação em vigor para
+-- esta encomenda) ou CHANGED (a delegação em vigor não é a lida: nada é contado). O código nunca chega ao banco.
+CREATE FUNCTION cp.parcel_delegation_check(target_tenant uuid,target_parcel uuid,target_delegation uuid,candidate text) RETURNS text
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE d record;
 BEGIN
@@ -148,8 +150,8 @@ BEGIN
  SELECT * INTO d FROM cp.parcel_delegations WHERE tenant_id=target_tenant AND parcel_id=target_parcel AND state='ACTIVE' FOR UPDATE;
  IF NOT FOUND THEN RETURN 'NONE'; END IF;
  IF d.valid_until<=clock_timestamp() THEN RETURN 'EXPIRED'; END IF;
- IF code IS NOT NULL AND code ~ '^[0-9]{8}$'
-   AND encode(sha256(convert_to(d.code_salt||':'||code,'UTF8')),'hex')=d.code_hash THEN
+ IF d.id IS DISTINCT FROM target_delegation THEN RETURN 'CHANGED'; END IF;
+ IF candidate IS NOT NULL AND candidate ~ '^[0-9a-f]{64}$' AND candidate=d.code_hmac THEN
   UPDATE cp.parcel_delegations SET state='USED',used_by=platform.current_actor_id(),version=version+1 WHERE id=d.id;
   RETURN 'OK';
  END IF;
@@ -160,8 +162,8 @@ BEGIN
  UPDATE cp.parcel_delegations SET attempts=attempts+1,version=version+1 WHERE id=d.id;
  RETURN 'WRONG';
 END $$;
-REVOKE ALL ON FUNCTION cp.parcel_delegation_check(uuid,uuid,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION cp.parcel_delegation_check(uuid,uuid,text) TO cp_api;
+REVOKE ALL ON FUNCTION cp.parcel_delegation_check(uuid,uuid,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.parcel_delegation_check(uuid,uuid,uuid,text) TO cp_api;
 
 -- Eventos de delegação (DELEGATION_*) só sobre delegação visível a quem grava; os eventos PARCEL_* continuam da portaria.
 CREATE POLICY outbox_delegation_events ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_api

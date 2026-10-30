@@ -9606,7 +9606,7 @@
             "description": "PARCEL_ALREADY_DELIVERED, DELEGATION_CHANGED ou chave de idempotência"
           },
           "503": {
-            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+            "description": "DELEGATION_UNAVAILABLE (chave do código não configurada) ou PARCEL_DEPENDENCY_UNAVAILABLE"
           }
         }
       }
@@ -9802,10 +9802,10 @@
             "description": "PARCEL_NOT_FOUND"
           },
           "409": {
-            "description": "DELEGATION_CODE_INVALID, DELEGATION_LOCKED, DELEGATION_EXPIRED, DELEGATION_NOT_FOUND, PARCEL_ALREADY_DELIVERED, PARCEL_VOIDED ou PARCEL_CHANGED"
+            "description": "DELEGATION_CODE_INVALID, DELEGATION_LOCKED, DELEGATION_EXPIRED, DELEGATION_NOT_FOUND, DELEGATION_CHANGED, PARCEL_ALREADY_DELIVERED, PARCEL_VOIDED ou PARCEL_CHANGED"
           },
           "503": {
-            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+            "description": "DELEGATION_UNAVAILABLE (chave do código não configurada) ou PARCEL_DEPENDENCY_UNAVAILABLE"
           }
         }
       }
@@ -16107,9 +16107,14 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "delegationId",
           "expectedVersion"
         ],
         "properties": {
+          "delegationId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "expectedVersion": {
             "type": "integer",
             "format": "int64",

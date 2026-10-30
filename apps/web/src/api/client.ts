@@ -66,6 +66,7 @@ const messages: Record<string, string> = {
   DELEGATION_CODE_INVALID: 'Código incorreto. Confira com a pessoa: na quinta tentativa errada a autorização é bloqueada.',
   DELEGATION_LOCKED: 'Código incorreto pela quinta vez: a autorização foi bloqueada. A unidade precisa gerar outra.',
   DELEGATION_EXPIRED: 'A autorização desta encomenda venceu. A unidade precisa gerar outra.',
+  DELEGATION_UNAVAILABLE: 'A retirada por código ainda não está disponível neste condomínio.',
   DELEGATION_NOT_FOUND: 'Não há autorização de retirada em vigor para esta encomenda.',
   MOVE_RULES_NOT_CONFIGURED: 'A gestão ainda não publicou as regras de mudança. Fale com a gestão.',
   MOVE_RULES_CHANGED: 'As regras de mudança foram alteradas. Leia a versão atual antes de continuar.',

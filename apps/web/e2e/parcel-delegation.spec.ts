@@ -20,10 +20,11 @@ const delegationFixture = (overrides: Partial<Delegation> = {}): Delegation => (
   parcelId: PARCEL, unitId: UNIT_A, delegateName: 'Terceiro Fictício', documentLast4: '9Z', validUntil: new Date(Date.now() + 48 * 3_600_000).toISOString(),
   state: 'ACTIVE', attempts: 0, attemptsLeft: 5, createdByMe: true, createdAt: new Date().toISOString(), usedAt: null, closedAt: null, version: 0, ...overrides });
 interface State { parcel: Parcel; delegation: Delegation | null; creates: { key: string; body: Record<string, unknown> }[]; revokes: unknown[];
-  handoffs: { key: string; body: Record<string, unknown> }[]; loseNextCreate: boolean; createFailure: string | null; code: string }
+  handoffs: { key: string; body: Record<string, unknown> }[]; loseNextCreate: boolean; createFailure: string | null; code: string;
+  createGate: Promise<void> | null }
 
 async function installApi(page: Page, api: ApiState, concierge: boolean): Promise<State> {
-  const state: State = { parcel: parcelFixture(), delegation: null, creates: [], revokes: [], handoffs: [], loseNextCreate: false, createFailure: null, code: '48213907' };
+  const state: State = { parcel: parcelFixture(), delegation: null, creates: [], revokes: [], handoffs: [], loseNextCreate: false, createFailure: null, code: '48213907', createGate: null };
   if (concierge) {
     await page.route('**/v1/me', async (route) => {
       if (!api.authenticated) { await route.fallback(); return; }
@@ -54,6 +55,7 @@ async function installApi(page: Page, api: ApiState, concierge: boolean): Promis
       const replay = state.creates.filter((item) => item.key === key).length > 1;
       if (!replay) state.delegation = delegationFixture({ delegationId: `41000000-0000-4000-8000-${String(state.creates.length).padStart(12, '0')}`,
         delegateName: body.delegateName, documentLast4: body.documentLast4, validUntil: body.validUntil });
+      if (state.createGate) { const gate = state.createGate; state.createGate = null; await gate; }
       if (state.loseNextCreate) { state.loseNextCreate = false; await route.abort('connectionreset'); return; }
       await json(route, 201, { delegation: state.delegation, code: replay ? null : state.code }, { 'Idempotency-Replayed': String(replay) }); return;
     }
@@ -123,7 +125,7 @@ test('morador autoriza terceiro: código aparece uma vez, repetição incerta n�
   await row.getByRole('button', { name: 'Cancelar autorização' }).click();
   await row.getByRole('button', { name: 'Confirmar cancelamento' }).click();
   await expect(row.getByText('Autorização de Outra Pessoa cancelada. O código deixou de valer.')).toBeVisible();
-  expect(state.revokes).toEqual([{ expectedVersion: 0 }]);
+  expect(state.revokes).toEqual([{ delegationId: state.delegation!.delegationId, expectedVersion: 0 }]);
   await expect(row.getByText(`Código para Outra Pessoa`)).toHaveCount(0);
   await expect(row.getByText('Autorização cancelada: Outra Pessoa', { exact: false })).toBeVisible();
 });
@@ -193,4 +195,53 @@ test('portaria: autorização bloqueada na quinta tentativa e encomenda sem auto
   state.delegation = null;
   await page.getByRole('list', { name: 'Encomendas' }).getByRole('button', { name: 'Retirada por código' }).click();
   await expect(page.getByText('A unidade não autorizou ninguém para esta encomenda. Peça à unidade uma nova autorização.')).toBeVisible();
+});
+
+test('repetição incerta perto da validade mínima continua possível com o mesmo envio', async ({ page }) => {
+  await page.clock.install();
+  const api = await installSyntheticApi(page);
+  const state = await installApi(page, api, false);
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
+  await row.getByRole('button', { name: 'Autorizar retirada por terceiro' }).click();
+  const form = row.getByRole('form', { name: 'Autorizar retirada por terceiro' });
+  await form.getByLabel('Nome de quem vai retirar').fill('Terceiro Fictício');
+  // Validade 16 a 17 minutos à frente, no fuso do condomínio.
+  const wall = await page.evaluate(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(Date.now() + 17 * 60_000)).replace(' ', 'T'));
+  await form.getByLabel('Válida até').fill(wall);
+  let release!: () => void;
+  state.createGate = new Promise((resolve) => { release = resolve; });
+  state.loseNextCreate = true;
+  await form.getByRole('button', { name: 'Gerar código' }).click();
+  await expect.poll(() => state.creates.length).toBe(1);
+  // A resposta se perde depois de passarem 3 minutos: restam menos de 15 minutos de validade.
+  await page.clock.runFor(3 * 60_000);
+  release();
+  const retry = form.getByRole('button', { name: 'Tentar confirmar a mesma autorização' });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(row.getByText('Esta autorização já estava criada, mas o código só aparece na primeira resposta.', { exact: false })).toBeVisible();
+  expect(state.creates).toHaveLength(2);
+  expect(state.creates[1]!.key).toBe(state.creates[0]!.key);
+  expect(state.creates[1]!.body).toEqual(state.creates[0]!.body);
+});
+
+test('confirmação de cancelamento vale para a autorização que estava aberta, não para a substituta', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const state = await installApi(page, api, false);
+  state.delegation = delegationFixture({ delegationId: '41000000-0000-4000-8000-0000000000a1', delegateName: 'Primeira Pessoa' });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
+  await expect(row.getByText('Autorização em vigor: Primeira Pessoa', { exact: false })).toBeVisible();
+  await row.getByRole('button', { name: 'Cancelar autorização' }).click();
+  // Outra sessão substitui a autorização; a consulta é atualizada com a confirmação aberta.
+  state.delegation = delegationFixture({ delegationId: '41000000-0000-4000-8000-0000000000b2', delegateName: 'Segunda Pessoa' });
+  await page.evaluate(() => { window.dispatchEvent(new Event('visibilitychange')); });
+  await expect(row.getByText('Autorização em vigor: Segunda Pessoa', { exact: false })).toBeVisible();
+  await row.getByRole('button', { name: 'Confirmar cancelamento' }).click();
+  await expect.poll(() => state.revokes.length).toBe(1);
+  expect(state.revokes).toEqual([{ delegationId: '41000000-0000-4000-8000-0000000000a1', expectedVersion: 0 }]);
 });

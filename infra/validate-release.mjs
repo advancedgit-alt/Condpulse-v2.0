@@ -8,6 +8,7 @@ const WEB_HEALTH = ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:80
 const SERVICE_KEYS = new Set(['image', 'user', 'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'mem_limit', 'cpus', 'pids_limit', 'logging', 'restart', 'stop_grace_period', 'environment', 'volumes', 'networks', 'expose', 'healthcheck', 'depends_on', 'init', 'command', 'entrypoint']);
 const API_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'PORT', 'CP_JWT_ISSUER', 'CP_JWT_JWK_SET_URI', 'CP_BFF_ORIGIN', 'CP_BFF_ENABLED', 'CP_RESERVATIONS_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const HOMOLOGATION_ENV = new Set([...API_ENV, 'CP_SUPABASE_PUBLISHABLE_KEY', 'CP_BFF_ENCRYPTION_KEY', 'CP_BFF_RATE_LIMIT_KEY', 'CP_BFF_SESSION_HOURS']);
+const WORKER_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'CP_WORKER_OUTBOX_ENABLED', 'CP_WORKER_WAITLIST_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const MIGRATE_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const BASELINE_PROJECT = 'rpnrqfrfwywglvyykgrg';
 const BASELINE_ENV = new Set(['DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'CP_BASELINE_PROJECT_REF', 'CP_BASELINE_ACK']);
@@ -91,7 +92,7 @@ export function validateRelease(config, mode) {
     const id = `${code}:${path}`;
     if (!seen.has(id)) { seen.add(id); errors.push({ code, path }); }
   };
-  if (!['app', 'homologation', 'migrate', 'baseline', 'onboarding'].includes(mode)) return [{ code: 'MODE_INVALID', path: '$' }];
+  if (!['app', 'homologation', 'migrate', 'baseline', 'onboarding', 'worker'].includes(mode)) return [{ code: 'MODE_INVALID', path: '$' }];
   const application = mode === 'app' || mode === 'homologation';
   const homologation = mode === 'homologation';
   if (!record(config)) return [{ code: 'CONFIG_OBJECT_REQUIRED', path: '$' }];
@@ -135,11 +136,12 @@ export function validateRelease(config, mode) {
     if (!equalArray(service.cap_drop, ['ALL'])) fail('DROP_ALL_CAPABILITIES', `${path}.cap_drop`);
     if (!Array.isArray(service.security_opt) || service.security_opt.length !== 1
         || !['no-new-privileges:true', 'no-new-privileges'].includes(service.security_opt[0])) fail('NO_NEW_PRIVILEGES_REQUIRED', `${path}.security_opt`);
-    const limit = name === 'web' ? 256 * 1024 ** 2 : 2 * 1024 ** 3;
+    const worker = name === 'worker';
+    const limit = name === 'web' ? 256 * 1024 ** 2 : worker ? 1024 ** 3 : 2 * 1024 ** 3;
     if (!(bytes(service.mem_limit) <= limit)) fail('MEMORY_LIMIT_REQUIRED', `${path}.mem_limit`);
-    if (!(Number(service.cpus) > 0 && Number(service.cpus) <= (name === 'web' ? 0.5 : 2))) fail('CPU_LIMIT_REQUIRED', `${path}.cpus`);
+    if (!(Number(service.cpus) > 0 && Number(service.cpus) <= (name === 'web' ? 0.5 : worker ? 1 : 2))) fail('CPU_LIMIT_REQUIRED', `${path}.cpus`);
     if (!(Number.isSafeInteger(Number(service.pids_limit)) && Number(service.pids_limit) > 0
-        && Number(service.pids_limit) <= (name === 'web' ? 128 : 256))) fail('PID_LIMIT_REQUIRED', `${path}.pids_limit`);
+        && Number(service.pids_limit) <= (name === 'web' || worker ? 128 : 256))) fail('PID_LIMIT_REQUIRED', `${path}.pids_limit`);
     const tmpfs = service.tmpfs;
     const tmp = Array.isArray(tmpfs) && tmpfs.length === 1 ? text(tmpfs[0]) : '';
     const opts = tmp.startsWith('/tmp:') ? tmp.slice(5).split(',') : [];
@@ -154,7 +156,11 @@ export function validateRelease(config, mode) {
         || !(Number.isSafeInteger(Number(logging.options['max-file'])) && Number(logging.options['max-file']) >= 1 && Number(logging.options['max-file']) <= 3)) fail('ROTATED_LOGS_REQUIRED', `${path}.logging`);
     const job = name === 'migrate' || name === 'baseline' || name === 'onboarding';
     if (service.restart !== (job ? 'no' : 'unless-stopped')) fail('RESTART_POLICY_REQUIRED', `${path}.restart`);
-    if (job) {
+    if (worker) {
+      // Perfil worker nao abre porta nem HTTP: sem expose e com healthcheck desligado de forma explicita.
+      if (!absentOrEmpty(service.expose) || !sameKeys(service.healthcheck, ['disable']) || service.healthcheck.disable !== true) fail('WORKER_NO_HTTP', path);
+      if (!absentOrEmpty(service.depends_on)) fail('WORKER_SEPARATE_SERVICE', `${path}.depends_on`);
+    } else if (job) {
       const jobCode = name === 'onboarding' ? 'ONBOARDING' : name === 'baseline' ? 'BASELINE' : 'MIGRATOR';
       if (!absentOrEmpty(service.expose) || !sameKeys(service.healthcheck, ['disable']) || service.healthcheck.disable !== true) fail(`${jobCode}_NO_HTTP`, path);
       if (!absentOrEmpty(service.depends_on)) fail(`${jobCode}_SEPARATE_JOB`, `${path}.depends_on`);
@@ -176,16 +182,17 @@ export function validateRelease(config, mode) {
       if (!absentOrEmpty(environment) || !absentOrEmpty(service.volumes)) fail('WEB_NO_CREDENTIALS_OR_MOUNTS', path);
       continue;
     }
-    if (!noKeysOutside(environment, name === 'api' ? (homologation ? HOMOLOGATION_ENV : API_ENV) : name === 'baseline' ? BASELINE_ENV : name === 'onboarding' ? ONBOARDING_ENV : MIGRATE_ENV)) fail('ENVIRONMENT_UNEXPECTED', `${path}.environment`);
+    if (!noKeysOutside(environment, name === 'api' ? (homologation ? HOMOLOGATION_ENV : API_ENV) : worker ? WORKER_ENV : name === 'baseline' ? BASELINE_ENV : name === 'onboarding' ? ONBOARDING_ENV : MIGRATE_ENV)) fail('ENVIRONMENT_UNEXPECTED', `${path}.environment`);
     const env = record(environment) ? environment : {};
     if (name !== 'baseline' && name !== 'onboarding') {
-      if (env.SPRING_PROFILES_ACTIVE !== (name === 'api' ? 'api' : 'migrate')) fail('PROFILE_EXACT', `${path}.environment.SPRING_PROFILES_ACTIVE`);
-      if (String(env.DB_POOL_SIZE) !== (name === 'api' ? '8' : '2')) fail('POOL_SIZE_EXACT', `${path}.environment.DB_POOL_SIZE`);
+      if (env.SPRING_PROFILES_ACTIVE !== (name === 'api' ? 'api' : worker ? 'worker' : 'migrate')) fail('PROFILE_EXACT', `${path}.environment.SPRING_PROFILES_ACTIVE`);
+      if (String(env.DB_POOL_SIZE) !== (name === 'api' ? '8' : worker ? '4' : '2')) fail('POOL_SIZE_EXACT', `${path}.environment.DB_POOL_SIZE`);
     }
     if (!databaseUrl(env.DATABASE_URL)) fail('DATABASE_TLS_CONFIGURATION', `${path}.environment.DATABASE_URL`);
     if (!secretConfigured(env.DATABASE_PASSWORD)) fail('DATABASE_PASSWORD_REQUIRED', `${path}.environment.DATABASE_PASSWORD`);
     const dbUser = text(env.DATABASE_USER);
     if (name === 'api' ? !/^cp_runtime_[a-z0-9_]+(?:\.[a-z0-9]+)?$/.test(dbUser)
+        : worker ? !/^cp_worker_[a-z0-9_]+(?:\.[a-z0-9]{20})?$/.test(dbUser)
         : name === 'onboarding' ? !new RegExp(`^cp_onboarding_[a-z0-9_]{1,40}(?:\\.${BASELINE_PROJECT})?$`).test(dbUser)
         : !(/^(?:postgres|cp_migrator_[a-z0-9_]+)(?:\.[a-z0-9]{20})?$/.test(dbUser))) fail('DATABASE_ROLE_SEPARATION', `${path}.environment.DATABASE_USER`);
     const dbProject = databaseProject(env.DATABASE_URL, dbUser);
@@ -221,6 +228,7 @@ export function validateRelease(config, mode) {
           || manifest.source === mount?.source || !sameKeys(manifest.bind, ['create_host_path'])
           || manifest.bind.create_host_path !== false) fail('ONBOARDING_MANIFEST_MOUNT_REQUIRED', `${path}.volumes`);
     }
+    if (worker && (String(env.CP_WORKER_OUTBOX_ENABLED) !== 'false' || String(env.CP_WORKER_WAITLIST_ENABLED) !== 'false')) fail('FEATURES_MUST_REMAIN_DISABLED', `${path}.environment`);
     if (name === 'api') {
       if (String(env.PORT) !== '8080') fail('PORT_EXACT', `${path}.environment.PORT`);
       if (homologation) {
@@ -241,7 +249,7 @@ export function validateRelease(config, mode) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length !== 1 || !['--app', '--homologation', '--migrate', '--baseline', '--onboarding'].includes(args[0])) {
+  if (args.length !== 1 || !['--app', '--homologation', '--migrate', '--baseline', '--onboarding', '--worker'].includes(args[0])) {
     process.stderr.write('RELEASE_INVALID 1\nMODE_INVALID $\n'); process.exitCode = 1; return;
   }
   let input = '';
