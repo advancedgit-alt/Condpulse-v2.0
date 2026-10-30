@@ -8,7 +8,8 @@ import type { ISODateTime, UUID } from './types';
  * incoerente vira resultado incerto.
  */
 export type ParcelStatus = 'RECEIVED' | 'DELIVERED' | 'VOIDED';
-export interface ParcelHandoff { recipientName: string; deliveredAt: ISODateTime; evidenceKind: 'ASSISTED' }
+/** ASSISTED: pessoa com vínculo escolhida pela portaria; DELEGATION: terceiro autorizado pela unidade, com código (CP-041). */
+export interface ParcelHandoff { recipientName: string; deliveredAt: ISODateTime; evidenceKind: 'ASSISTED' | 'DELEGATION' }
 export interface Parcel {
   parcelId: UUID; unitId: UUID; unitLabel: string; blockName: string | null; quantity: number; description: string;
   storageLocation: string; status: ParcelStatus; receivedAt: ISODateTime; version: number; handoff: ParcelHandoff | null;
@@ -25,8 +26,8 @@ export interface ReceiveBody { unitId: string; quantity: number; description: st
 function handoff(value: unknown): ParcelHandoff | null {
   if (value === null) return null;
   if (!record(value) || !isString(value.recipientName) || codePoints(value.recipientName) < 1 || codePoints(value.recipientName) > 160
-      || !isDate(value.deliveredAt) || value.evidenceKind !== 'ASSISTED') throw invalidResponse();
-  return { recipientName: value.recipientName, deliveredAt: value.deliveredAt, evidenceKind: 'ASSISTED' };
+      || !isDate(value.deliveredAt) || !oneOf(value.evidenceKind, ['ASSISTED', 'DELEGATION'])) throw invalidResponse();
+  return { recipientName: value.recipientName, deliveredAt: value.deliveredAt, evidenceKind: value.evidenceKind };
 }
 export function parcel(value: unknown, uncertain = false): Parcel {
   if (!record(value) || !isUUID(value.parcelId) || !isUUID(value.unitId) || !isString(value.unitLabel)
@@ -66,6 +67,40 @@ function recipients(value: unknown): ParcelRecipient[] {
     return { membershipId: item.membershipId, displayName: item.displayName, role: item.role };
   });
 }
+/** Autorização de retirada por terceiro (CP-041); o código só existe na resposta da criação. */
+export type DelegationState = 'ACTIVE' | 'USED' | 'REVOKED' | 'LOCKED' | 'CLOSED' | 'EXPIRED';
+export interface Delegation {
+  delegationId: UUID; parcelId: UUID; unitId: UUID; delegateName: string; documentLast4: string | null; validUntil: ISODateTime;
+  state: DelegationState; attempts: number; attemptsLeft: number; createdByMe: boolean; createdAt: ISODateTime; usedAt: ISODateTime | null;
+  closedAt: ISODateTime | null; version: number;
+}
+export function delegation(value: unknown, uncertain = false): Delegation {
+  if (!record(value) || !isUUID(value.delegationId) || !isUUID(value.parcelId) || !isUUID(value.unitId) || !isString(value.delegateName)
+      || codePoints(value.delegateName) < 2 || codePoints(value.delegateName) > 160
+      || !(value.documentLast4 === null || (isString(value.documentLast4) && /^[0-9A-Z]{2,4}$/.test(value.documentLast4)))
+      || !isDate(value.validUntil) || !oneOf(value.state, ['ACTIVE', 'USED', 'REVOKED', 'LOCKED', 'CLOSED', 'EXPIRED'])
+      || !isInteger(value.attempts) || value.attempts > 5 || !isInteger(value.attemptsLeft) || value.attemptsLeft > 5
+      || typeof value.createdByMe !== 'boolean' || !isDate(value.createdAt) || !(value.usedAt === null || isDate(value.usedAt))
+      || !(value.closedAt === null || isDate(value.closedAt)) || !isInteger(value.version)) throw invalidResponse(uncertain);
+  if ((value.state === 'USED') !== (value.usedAt !== null) || (value.state === 'ACTIVE' && value.attempts + value.attemptsLeft !== 5))
+    throw invalidResponse(uncertain);
+  return { delegationId: value.delegationId, parcelId: value.parcelId, unitId: value.unitId, delegateName: value.delegateName,
+    documentLast4: value.documentLast4 as string | null, validUntil: value.validUntil, state: value.state, attempts: value.attempts,
+    attemptsLeft: value.attemptsLeft, createdByMe: value.createdByMe, createdAt: value.createdAt, usedAt: value.usedAt as ISODateTime | null,
+    closedAt: value.closedAt as ISODateTime | null, version: value.version };
+}
+function currentDelegation(value: unknown): Delegation | null {
+  if (!record(value) || !('delegation' in value)) throw invalidResponse();
+  return value.delegation === null ? null : delegation(value.delegation);
+}
+export interface DelegationIssued { delegation: Delegation; code: string | null; replayed: boolean }
+function issued(value: unknown, response: Response): DelegationIssued {
+  if (!record(value) || !(value.code === null || (isString(value.code) && /^[0-9]{8}$/.test(value.code)))) throw invalidResponse(true);
+  const replayed = response.headers.get('Idempotency-Replayed') === 'true';
+  // Criação nova sempre traz o código; repetição nunca.
+  if (replayed === (value.code !== null)) throw invalidResponse(true);
+  return { delegation: delegation(value.delegation, true), code: value.code as string | null, replayed };
+}
 const mutation = (value: unknown, response: Response): ParcelMutation =>
   ({ parcel: parcel(value, true), replayed: response.headers.get('Idempotency-Replayed') === 'true' });
 
@@ -92,6 +127,14 @@ export function createParcelsApi(client: CondPulseApi = api) {
       client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/handoff`, mutation, { method: 'POST', body, key }),
     voidParcel: async (tenantId: string, parcelId: string, key: string, body: { reason: string; expectedVersion: number }) =>
       client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/void`, mutation, { method: 'POST', body, key }),
+    delegation: async (tenantId: string, parcelId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/delegation`, currentDelegation, signal ? { signal } : {}),
+    delegate: async (tenantId: string, parcelId: string, key: string, body: { delegateName: string; documentLast4: string | null; validUntil: string | null }) =>
+      client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/delegation`, issued, { method: 'POST', body, key }),
+    revokeDelegation: async (tenantId: string, parcelId: string, body: { expectedVersion: number }) =>
+      client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/delegation/revoke`, (value) => delegation(value, true), { method: 'POST', body }),
+    handoffByCode: async (tenantId: string, parcelId: string, key: string, body: { code: string; identityChecked: true; expectedVersion: number }) =>
+      client.call(`${base(tenantId)}/parcels/${identifier(parcelId)}/handoff-code`, mutation, { method: 'POST', body, key }),
   };
 }
 export const parcels = createParcelsApi();

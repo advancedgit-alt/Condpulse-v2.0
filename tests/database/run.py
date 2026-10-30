@@ -2087,6 +2087,111 @@ def waitlist_checks():
                  f"and c.relrowsecurity and c.relforcerowsecurity") == "1", "fila com RLS completa")
     expect(value("select has_table_privilege('cp_api','cp.reservation_waitlist','DELETE')::text") == "false", "aplicacao nao apaga entradas da fila")
 
+def delegation_checks():
+    """V024: retirada delegada com codigo de 8 digitos por encomenda; 5 tentativas; codigo usado nao volta a valer."""
+    RD, DD, CD, RO = ("10000000-0000-4000-8000-0000000001f1", "10000000-0000-4000-8000-0000000001f2",
+                      "10000000-0000-4000-8000-0000000001f3", "10000000-0000-4000-8000-0000000001f4")
+    UD, UO = "20000000-0000-4000-8000-0000000001f1", "20000000-0000-4000-8000-0000000001f2"
+    Q1, Q2, Q3, Q4 = ("40000000-0000-4000-8000-0000000001f1", "40000000-0000-4000-8000-0000000001f2",
+                      "40000000-0000-4000-8000-0000000001f3", "40000000-0000-4000-8000-0000000001f4")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{RD}','ACTIVE'),('{DD}','ACTIVE'),('{CD}','ACTIVE'),('{RO}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UD}','{TA}','DELEGACAO 1'),('{UO}','{TA}','DELEGACAO 2');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions)
+          VALUES('{TA}','{RD}','{UD}','MORADOR DELEGA','RESIDENT','ACTIVE','{{}}'),
+                ('{TA}','{DD}','{UD}','DEPENDENTE DELEGA','DEPENDENT','ACTIVE','{{"parcels":{{"view":true}}}}'),
+                ('{TA}','{CD}',NULL,'PORTARIA DELEGA','CONCIERGE','ACTIVE','{{}}'),
+                ('{TA}','{RO}','{UO}','OUTRA UNIDADE DELEGA','RESIDENT','ACTIVE','{{}}');
+        INSERT INTO cp.parcels(id,tenant_id,unit_id,quantity,description,storage_location,received_by)
+          VALUES('{Q1}','{TA}','{UD}',1,'CAIXA 1','A1','{CD}'),('{Q2}','{TA}','{UD}',1,'CAIXA 2','A2','{CD}'),
+                ('{Q3}','{TA}','{UD}',1,'CAIXA 3','A3','{CD}'),('{Q4}','{TA}','{UO}',1,'CAIXA 4','A4','{CD}');
+    """)
+    salt = "0123456789abcdef0123456789abcdef"
+    def code_hash(code):
+        return f"encode(sha256(convert_to('{salt}:{code}','UTF8')),'hex')"
+    counter = [0]
+    def delegate(parcel, unit=UD, code="12345678", until="clock_timestamp()+interval '2 days'", name="TERCEIRO FICTICIO"):
+        counter[0] += 1
+        did = f"41000000-0000-4000-8000-{counter[0]:012d}"
+        return did, (f"INSERT INTO cp.parcel_delegations(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hash,code_salt,valid_until,created_by) "
+                     f"VALUES('{did}','{TA}','{parcel}','{unit}','{name}','9Z',{code_hash(code)},'{salt}',{until},platform.current_actor_id())")
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    def check(parcel, code):
+        return value(concierge + f"SELECT cp.parcel_delegation_check('{TA}','{parcel}','{code}')", tenant=TA, actor=CD, role="cp_api")
+    def state(did):
+        return value(f"select state||':'||attempts from cp.parcel_delegations where id='{did}'")
+
+    d1, sql = delegate(Q1)
+    query(sql, tenant=TA, actor=RD, role="cp_api")
+    expect(state(d1) == "ACTIVE:0", "morador autoriza retirada por terceiro")
+    _, sql = delegate(Q1)
+    expect(error(sql, "23505", tenant=TA, actor=RD, role="cp_api"), "uma delegacao em vigor por encomenda")
+    _, sql = delegate(Q2)
+    expect(error(sql, "42501", tenant=TA, actor=DD, role="cp_api"), "dependente sem permissao de retirada nao delega")
+    _, sql = delegate(Q4, unit=UO)
+    expect(error(sql, "42501", tenant=TA, actor=RD, role="cp_api"), "nao delega encomenda de outra unidade")
+    _, sql = delegate(Q2, unit=UO)
+    expect(error(sql, "42501", tenant=TA, actor=RO, role="cp_api"), "unidade da delegacao precisa ser a da encomenda")
+    _, sql = delegate(Q2, until="clock_timestamp()+interval '8 days'")
+    expect(error(sql, "23514", tenant=TA, actor=RD, role="cp_api"), "validade de ate 7 dias")
+    expect(value(f"select count(*) from cp.parcel_delegations where id='{d1}'", tenant=TA, actor=RO, role="cp_api") == "0",
+           "outra unidade nao ve a delegacao")
+    expect(value(f"select count(*) from cp.parcel_delegations where id='{d1}'", tenant=TA, actor=DD, role="cp_api") == "1",
+           "quem ve as encomendas da unidade acompanha a delegacao")
+    expect(error(f"SELECT cp.parcel_delegation_check('{TA}','{Q1}','12345678')", "42501", tenant=TA, actor=RD, role="cp_api"),
+           "somente a portaria confere o codigo")
+    # Codigo da encomenda Q1 nao vale para outra encomenda (sem delegacao em Q2).
+    expect(check(Q2, "12345678") == "NONE", "delegacao de outra encomenda nao e aceita")
+    expect(check(Q1, "00000000") == "WRONG" and state(d1) == "ACTIVE:1", "codigo errado conta tentativa")
+    expect(check(Q1, "abc") == "WRONG" and state(d1) == "ACTIVE:2", "formato invalido tambem conta tentativa")
+    expect(check(Q1, "12345678") == "OK" and state(d1) == "USED:2", "codigo certo usa a delegacao")
+    expect(value(f"select used_by from cp.parcel_delegations where id='{d1}'") == CD, "uso em nome da portaria")
+    expect(check(Q1, "12345678") == "NONE", "codigo usado nao volta a valer")
+    # Retirada por delegacao: registro em nome da portaria com o nome da pessoa autorizada.
+    deliver = (concierge + f"UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{{p}}'; "
+               f"INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,evidence_kind) "
+               f"VALUES('{TA}','{{p}}','{CD}','{{name}}','DELEGATION')")
+    expect(error(deliver.format(p=Q1, name="OUTRO NOME"), "42501", tenant=TA, actor=CD, role="cp_api"),
+           "retirada por delegacao exige o nome autorizado")
+    query(deliver.format(p=Q1, name="TERCEIRO FICTICIO"), tenant=TA, actor=CD, role="cp_api")
+    expect(value(f"select evidence_kind||':'||recipient_name from cp.parcel_handoffs where parcel_id='{Q1}'") == "DELEGATION:TERCEIRO FICTICIO",
+           "retirada registrada por delegacao")
+    expect(error(deliver.format(p=Q2, name="TERCEIRO FICTICIO"), "42501", tenant=TA, actor=CD, role="cp_api"),
+           "sem delegacao usada nao ha retirada por delegacao")
+    # Cinco tentativas erradas bloqueiam; bloqueada nao aceita nem o codigo certo.
+    d2, sql = delegate(Q2, code="87654321")
+    query(sql, tenant=TA, actor=RD, role="cp_api")
+    for attempt in range(4):
+        expect(check(Q2, f"1111111{attempt}") == "WRONG", f"tentativa errada {attempt + 1}")
+    expect(check(Q2, "11111119") == "LOCKED" and state(d2) == "LOCKED:5", "quinta tentativa errada bloqueia")
+    expect(check(Q2, "87654321") == "NONE", "delegacao bloqueada nao aceita o codigo certo")
+    expect(error(f"UPDATE cp.parcel_delegations SET attempts=0,version=version+1 WHERE id='{d2}'", "23514", tenant=TA, actor=RD, role="cp_api"),
+           "morador nao zera tentativas")
+    # Vencida: nao usa; nova delegacao possivel depois de encerrar a anterior.
+    d3, sql = delegate(Q3)
+    query(sql, tenant=TA, actor=RD, role="cp_api")
+    query(f"ALTER TABLE cp.parcel_delegations DISABLE TRIGGER parcel_delegations_guard; "
+          f"UPDATE cp.parcel_delegations SET valid_until=clock_timestamp()-interval '1 minute' WHERE id='{d3}'; "
+          f"ALTER TABLE cp.parcel_delegations ENABLE TRIGGER parcel_delegations_guard")
+    expect(check(Q3, "12345678") == "EXPIRED" and state(d3) == "ACTIVE:0", "delegacao vencida nao e usada")
+    query(f"UPDATE cp.parcel_delegations SET state='REVOKED',revoked_by='{RD}',version=version+1 WHERE id='{d3}'", tenant=TA, actor=RD, role="cp_api")
+    expect(state(d3) == "REVOKED:0", "morador revoga a delegacao")
+    expect(error(f"UPDATE cp.parcel_delegations SET state='ACTIVE',version=version+1 WHERE id='{d3}'", "23514", tenant=TA, actor=RD, role="cp_api"),
+           "delegacao encerrada nao volta")
+    # Retirada assistida (outro caminho) encerra a delegacao em vigor na mesma transacao.
+    d4, sql = delegate(Q3)
+    query(sql, tenant=TA, actor=RD, role="cp_api")
+    member = value(f"select id from cp.memberships where account_id='{RD}'")
+    query(concierge + f"UPDATE cp.parcels SET status='DELIVERED',version=version+1 WHERE id='{Q3}'; "
+          f"INSERT INTO cp.parcel_handoffs(tenant_id,parcel_id,operator_id,recipient_name,recipient_membership_id,evidence_kind) "
+          f"VALUES('{TA}','{Q3}','{CD}','MORADOR DELEGA','{member}','ASSISTED')", tenant=TA, actor=CD, role="cp_api")
+    expect(state(d4) == "CLOSED:0", "retirada por outro caminho encerra a delegacao")
+    _, sql = delegate(Q3)
+    expect(error(sql, "42501", tenant=TA, actor=RD, role="cp_api"), "encomenda retirada nao recebe delegacao")
+    expect(value("select has_table_privilege('cp_api','cp.parcel_delegations','DELETE')::text") == "false", "aplicacao nao apaga delegacoes")
+    expect(value("select has_column_privilege('cp_api','cp.parcel_delegations','code_hash','UPDATE')::text") == "false",
+           "aplicacao nao troca o codigo de uma delegacao")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2199,6 +2304,7 @@ def main():
     reservation_guest_checks()
     visit_rule_checks()
     waitlist_checks()
+    delegation_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

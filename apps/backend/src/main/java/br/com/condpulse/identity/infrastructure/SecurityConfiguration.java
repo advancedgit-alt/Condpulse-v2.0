@@ -78,8 +78,9 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/units/*","/v1/tenants/*/management/amenities/*").authenticated()
     // Encomendas: autenticação aqui; capacidade da portaria (AAL2) ou vínculo residencial no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*","/v1/tenants/*/units/*/parcels",
-      "/v1/tenants/*/concierge/units","/v1/tenants/*/parcels/*/recipients").authenticated()
-    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*/handoff","/v1/tenants/*/parcels/*/void").authenticated()
+      "/v1/tenants/*/concierge/units","/v1/tenants/*/parcels/*/recipients","/v1/tenants/*/parcels/*/delegation").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/parcels","/v1/tenants/*/parcels/*/handoff","/v1/tenants/*/parcels/*/void",
+      "/v1/tenants/*/parcels/*/delegation","/v1/tenants/*/parcels/*/delegation/revoke","/v1/tenants/*/parcels/*/handoff-code").authenticated()
     // Visitas e chegadas: autenticação aqui; vínculo da unidade (com permissão do dependente) ou capacidade da
     // portaria (AAL2) no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/permits","/v1/tenants/*/units/*/arrivals","/v1/tenants/*/concierge/permits",
