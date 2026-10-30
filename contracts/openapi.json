@@ -10439,6 +10439,444 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/access-connectors": {
+      "get": {
+        "operationId": "listAccessConnectors",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Gestão ou portaria (AAL2): integrações de acesso do condomínio e seus equipamentos. Conector e equipamento são cadastrados só pela operação da plataforma; sem parceiro contratado a lista fica vazia.",
+        "responses": {
+          "200": {
+            "description": "Integrações",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessConnectors"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-credentials": {
+      "get": {
+        "operationId": "listAccessCredentials",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "description": "Gestão (memberships.manage, AAL2): credenciais com a situação por equipamento, derivada da versão e da ação desejadas atuais; revogações pendentes primeiro. pending=true lista só as que aguardam algum equipamento.",
+        "responses": {
+          "200": {
+            "description": "Credenciais",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCredentialPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAccessCredential",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{16,200}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) cadastra cartão ou QR para um vínculo residencial vigente numa integração ativa. Nasce ativa na versão 1; o equipamento recebe pelo worker. O rótulo não guarda o número completo do cartão.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessCredentialCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credencial cadastrada (ou repetição da mesma chave)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCredential"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "CREDENTIAL_CONNECTOR_REQUIRED, CREDENTIAL_HOLDER_REQUIRED, CREDENTIAL_KIND_INVALID, CREDENTIAL_LABEL_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "CREDENTIAL_NOT_FOUND"
+          },
+          "409": {
+            "description": "CREDENTIAL_CONNECTOR_UNAVAILABLE, CREDENTIAL_HOLDER_INVALID, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-credentials/{credentialId}/revoke": {
+      "post": {
+        "operationId": "revokeAccessCredential",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "credentialId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) revoga pela versão lida, com motivo: estado desejado REVOKED e versão+1; revogada é final. Revogação tem prioridade no worker e nenhuma confirmação antiga a reativa. Repetir a mesma revogação devolve o estado. Encerrar o vínculo revoga as credenciais dele na mesma transação.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessCredentialRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credencial revogada (equipamentos podem continuar pendentes)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCredential"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "CREDENTIAL_VERSION_REQUIRED ou CREDENTIAL_REASON_REQUIRED"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "CREDENTIAL_NOT_FOUND"
+          },
+          "409": {
+            "description": "CREDENTIAL_CHANGED ou CREDENTIAL_ALREADY_REVOKED"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/pending-revocations": {
+      "get": {
+        "operationId": "listPendingRevocations",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Portaria ou gestão (AAL2): revogações ainda não confirmadas em todos os equipamentos, das mais antigas. Não afirmar bloqueio enquanto houver equipamento pendente: seguir a contingência local.",
+        "responses": {
+          "200": {
+            "description": "Revogações pendentes",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCredentialPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/access-credentials": {
+      "get": {
+        "operationId": "listUnitAccessCredentials",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Credenciais do próprio vínculo na unidade, com a situação por equipamento.",
+        "responses": {
+          "200": {
+            "description": "Credenciais do próprio vínculo",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessCredentialPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -16513,6 +16951,361 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "AccessDeviceSync": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "CONFIRMED só quando o equipamento confirmou a versão e a ação desejadas atuais.",
+        "required": [
+          "deviceId",
+          "deviceLabel",
+          "direction",
+          "state",
+          "lastOutcome",
+          "confirmedAt",
+          "lastReason",
+          "lastAttemptAt"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceLabel": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "ENTRY",
+              "EXIT",
+              "BOTH",
+              "UNKNOWN"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "CONFIRMED",
+              "PENDING",
+              "FAILED"
+            ]
+          },
+          "lastOutcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "ACCEPTED",
+              "APPLIED",
+              "REJECTED",
+              "RATE_LIMITED",
+              "UNKNOWN",
+              "UNAVAILABLE",
+              null
+            ]
+          },
+          "confirmedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "lastAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AccessCredential": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Estado desejado versionado; status derivado das confirmações por equipamento.",
+        "required": [
+          "credentialId",
+          "connectorId",
+          "membershipId",
+          "unitId",
+          "unitLabel",
+          "holderName",
+          "kind",
+          "label",
+          "desiredState",
+          "desiredVersion",
+          "validUntil",
+          "status",
+          "revokeReason",
+          "revokedAt",
+          "createdAt",
+          "version",
+          "devices"
+        ],
+        "properties": {
+          "credentialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "holderName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "QR"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "desiredState": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ]
+          },
+          "desiredVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Validade do vínculo no cadastro; o equipamento recebe o mesmo limite."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SYNCING",
+              "PARTIAL",
+              "FAILED",
+              "EXPIRED",
+              "REVOKING",
+              "REVOKED",
+              "NO_DEVICES"
+            ]
+          },
+          "revokeReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessDeviceSync"
+            }
+          }
+        }
+      },
+      "AccessCredentialPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "credentials",
+          "truncated"
+        ],
+        "properties": {
+          "credentials": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/AccessCredential"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AccessCredentialCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "connectorId",
+          "membershipId",
+          "kind",
+          "label"
+        ],
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "QR"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      },
+      "AccessCredentialRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessConnectors": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "connectors"
+        ],
+        "properties": {
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "connectorId",
+                "provider",
+                "label",
+                "status",
+                "devices"
+              ],
+              "properties": {
+                "connectorId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "SIMULATED",
+                    "PARTNER"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ACTIVE",
+                    "DISABLED"
+                  ]
+                },
+                "devices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "deviceId",
+                      "label",
+                      "direction",
+                      "status"
+                    ],
+                    "properties": {
+                      "deviceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "ENTRY",
+                          "EXIT",
+                          "BOTH",
+                          "UNKNOWN"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "ACTIVE",
+                          "RETIRED"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

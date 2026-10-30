@@ -1,7 +1,7 @@
 # Implantação do worker contínuo — preparação (não executada)
 
 O worker (perfil `worker`, mesma imagem da API) processa o outbox (caixa interna, CP-034/CP-035). Hoje **nenhum worker
-está implantado** em homologação ou produção; as passadas ficam desligadas por padrão (`CP_WORKER_OUTBOX_ENABLED=false` e `CP_WORKER_WAITLIST_ENABLED=false`).
+está implantado** em homologação ou produção; as passadas ficam desligadas por padrão (`CP_WORKER_OUTBOX_ENABLED=false`, `CP_WORKER_WAITLIST_ENABLED=false` e `CP_WORKER_ACCESS_SYNC_ENABLED=false`).
 A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando aquele código estiver na base.
 
 ## O que já existe no repositório
@@ -31,7 +31,9 @@ A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando
 5. **Ligar a passada** (alteração revisada do manifesto) `CP_WORKER_OUTBOX_ENABLED`, observando a fila do outbox
    (pendentes, falhas, arrendamentos vencidos) por consulta somente leitura. A passada da fila de espera
    (`CP_WORKER_WAITLIST_ENABLED`, a cada `CP_WORKER_WAITLIST_MILLIS`, padrão 60 s) é ligada em alteração separada, depois
-   de conferir que ofertas vencidas avançam a fila (FILA_ESPERA.md).
+   de conferir que ofertas vencidas avançam a fila (FILA_ESPERA.md). A reconciliação de credenciais
+   (`CP_WORKER_ACCESS_SYNC_ENABLED`, a cada `CP_WORKER_ACCESS_SYNC_MILLIS`, padrão 15 s) só faz sentido com o
+   adaptador do parceiro físico (CP-044); sem ele, nada é enviado e a pendência continua visível (CREDENCIAIS_ACESSO.md).
 6. Registrar runs, horários e evidências em `docs/STATUS.md`.
 
 ## Bloqueios

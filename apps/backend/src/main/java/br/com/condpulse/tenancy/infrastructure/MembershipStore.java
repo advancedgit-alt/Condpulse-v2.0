@@ -51,6 +51,16 @@ public class MembershipStore {
    where tenant_id=? and id=? and version=? and status in ('PENDING','ACTIVE','SUSPENDED')
    """,tenant,membership,expectedVersion)==1;
  }
+ /**
+  * Credenciais de acesso do vínculo encerrado (CP-046): estado desejado REVOKED na mesma transação; o worker leva a
+  * revogação aos equipamentos com prioridade. Devolve as credenciais revogadas.
+  */
+ public java.util.List<UUID> revokeCredentials(UUID tenant,UUID membership,UUID actor,String reason) {
+  return jdbc.query("""
+   update cp.access_credentials set desired_state='REVOKED',desired_version=desired_version+1,revoke_reason=?,revoked_by=?,version=version+1
+   where tenant_id=? and membership_id=? and desired_state='ACTIVE' returning id
+   """,(r,n)->r.getObject("id",UUID.class),reason,actor,tenant,membership);
+ }
  /** Serializa revogações que afetam gestores do condomínio (evita revogação cruzada sem gestor). */
  public void lockManagers(UUID tenant) {
   jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"cp.memberships.managers:"+tenant);

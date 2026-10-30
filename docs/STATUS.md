@@ -27,6 +27,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Credenciais de acesso e revogação prioritária — CP-046
+
+- V026: estado desejado versionado (ACTIVE na versão 1; revogação final na versão 2); confirmação por equipamento só vale para a versão e a ação desejadas no momento da gravação — confirmação atrasada da ativação nunca reativa credencial revogada (guarda no banco). Gestão (AAL2) cadastra cartão/QR para morador e revoga com motivo; encerrar o vínculo revoga as credenciais na mesma transação; portaria vê as revogações pendentes por equipamento; reconciliação no worker com revogação primeiro e consulta antes de reenviar (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Atrás de `CP_ACCESS_CREDENTIALS_ENABLED`; V026 aplicada na homologação só depois do merge, pelo executor protegido. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
+- Pendentes: adaptador do parceiro (CP-044, BLOQUEADO), worker contínuo, tela do celular e alerta de pendência acima de 60 s.
+
 ## Mudança e entrega de móveis — CP-042
 
 - V025: a gestão publica as regras (texto, dias, horário local, antecedência e duração) e decide; a unidade (adulto) pede o período aceitando a versão vigente, o banco confere as regras no fuso do condomínio, e a unidade retira antes do início; a portaria vê só as aprovadas. A aprovação não reserva elevador nem área. Atrás de `CP_REQUESTS_ENABLED` (ligada); Merge `a1dcc2f` (PR #76, CI 41004617073 verde). V025 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41005335349; repetição 41005493459 sem linha nova; 24 linhas no histórico; ENABLE/FORCE RLS em `cp.move_rules` e `cp.move_requests`, nenhuma tabela `cp` sem RLS completa). Smoke público 41005617433 verde. Não homologado com login real. Detalhes em [MUDANCAS.md](MUDANCAS.md).

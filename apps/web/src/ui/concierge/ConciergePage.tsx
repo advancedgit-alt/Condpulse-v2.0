@@ -12,6 +12,7 @@ import { ActionFeedback, ManagementProvider, useAccessGuard, useAction, useManag
 import { codeOf, conciergeKey, repeatFailure, settleFailure, unitName, useIntent } from './shared';
 import { ArrivalDesk } from './Arrivals';
 import { ConciergeMoves } from '../Moves';
+import { ConciergePendingRevocations } from '../AccessCredentials';
 import '../management/Management.css';
 
 export type ConciergeSection = 'encomendas' | 'visitas';
@@ -63,7 +64,7 @@ function ConciergeGate({ scope, section }: { scope: ManagementScope; section: Co
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão da portaria</span></div></div></div>
     <nav className="management-tabs" aria-label="Seções da portaria">{conciergeSections.map((item) =>
       <Link key={item.id} to={`/portaria/${scope.tenantId}/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
-    {section === 'visitas' ? <><ArrivalDesk /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
+    {section === 'visitas' ? <><ArrivalDesk /><ConciergePendingRevocations /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
   </ManagementProvider>;
 }
 

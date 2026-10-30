@@ -56,6 +56,8 @@ condpulse:
     enabled: ${CP_ANNOUNCEMENTS_ENABLED:false}
   requests:
     enabled: ${CP_REQUESTS_ENABLED:false}
+  access-credentials:
+    enabled: ${CP_ACCESS_CREDENTIALS_ENABLED:false}
   realtime:
     enabled: ${CP_REALTIME_ENABLED:false}
     tick-seconds: ${CP_REALTIME_TICK_SECONDS:5}
@@ -71,6 +73,8 @@ condpulse:
     poll-millis: ${CP_WORKER_POLL_MILLIS:2000}
     waitlist-enabled: ${CP_WORKER_WAITLIST_ENABLED:false}
     waitlist-millis: ${CP_WORKER_WAITLIST_MILLIS:60000}
+    access-sync-enabled: ${CP_WORKER_ACCESS_SYNC_ENABLED:false}
+    access-sync-millis: ${CP_WORKER_ACCESS_SYNC_MILLIS:15000}
   bff:
     enabled: ${CP_BFF_ENABLED:false}
     origin: ${CP_BFF_ORIGIN:}

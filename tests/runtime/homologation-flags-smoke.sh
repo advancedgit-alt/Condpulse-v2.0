@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mesmo conjunto de flags da Vercel Production desde 29/10/2026 (recuperação por e-mail e worker
+# Mesmo conjunto de flags da Vercel Production desde 29/10/2026, mais credenciais de acesso (V026) (recuperação por e-mail e worker
 # continuam desligados). Somente o PostgreSQL descartável do CI; chaves BFF sintéticas geradas
 # nesta execução, nunca gravadas nem impressas. Prova que a API sobe com todos os módulos juntos,
 # que o BFF responde ao CSRF e que as rotas dos módulos continuam exigindo sessão.
@@ -9,7 +9,7 @@ test "${DATABASE_URL:-}" = jdbc:postgresql://localhost:5432/condpulse_ci
 test "${DATABASE_USER:-}" = cp_ci_login
 for flag in CP_BFF_ENABLED CP_RESERVATIONS_ENABLED CP_MANAGEMENT_ENABLED CP_PLATFORM_ENABLED \
   CP_PLATFORM_BILLING_ENABLED CP_PARCELS_ENABLED CP_VISITS_ENABLED CP_NOTIFICATIONS_ENABLED \
-  CP_ANNOUNCEMENTS_ENABLED CP_REQUESTS_ENABLED; do
+  CP_ANNOUNCEMENTS_ENABLED CP_REQUESTS_ENABLED CP_ACCESS_CREDENTIALS_ENABLED; do
   test "${!flag:-}" = true
 done
 test -z "${CP_BFF_RECOVERY_ENABLED:-}${CP_WORKER_OUTBOX_ENABLED:-}"
@@ -53,7 +53,8 @@ for route in /v1/me "/v1/tenants/$tenant/reservations" "/v1/tenants/$tenant/mana
   "/v1/tenants/$tenant/parcels" "/v1/tenants/$tenant/arrivals" "/v1/tenants/$tenant/access-events" \
   "/v1/tenants/$tenant/units/$unit/notifications" "/v1/tenants/$tenant/management/announcements" \
   "/v1/tenants/$tenant/units/$unit/announcements" "/v1/tenants/$tenant/management/requests" \
-  "/v1/tenants/$tenant/units/$unit/requests" "/v1/tenants/$tenant/management/imports" /v1/platform/tenants /v1/platform/billing/plans; do
+  "/v1/tenants/$tenant/units/$unit/requests" "/v1/tenants/$tenant/management/imports" \
+  "/v1/tenants/$tenant/management/access-credentials" "/v1/tenants/$tenant/concierge/pending-revocations" /v1/platform/tenants /v1/platform/billing/plans; do
   status=$(curl -sS -o "$body" -w '%{http_code}' "$base$route")
   if [ "$status" != 401 ]; then echo "Rota sem sessão respondeu $status: $route" >&2; exit 1; fi
   node -e "const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)" "$body"

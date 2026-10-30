@@ -1351,8 +1351,14 @@
       "id": "CP-046",
       "delivery": "Revogação prioritária. Estado desejado, prioridade, reconciliação e tratamento de callback antigo.",
       "acceptance": "Confirmação de versão antiga não reativa credencial revogada.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V026__access_credentials.sql",
+        "tests/database/run.py#credential_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/CredentialJdbcTest.java",
+        "apps/backend/src/test/java/br/com/condpulse/database/CredentialWorkerJdbcTest.java",
+        "apps/web/e2e/access-credentials.spec.ts"
+      ]
     },
     {
       "id": "CP-047",

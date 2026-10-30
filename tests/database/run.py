@@ -2437,6 +2437,119 @@ def move_checks():
     expect(error(sql, "23514", tenant=TA, actor=RM, role="cp_api"), "pedido com a versao antiga das regras e recusado")
     expect(value(f"select rules_version from cp.move_requests where id='{m2}'") == "1", "pedido guarda a versao aceita")
     expect(value("select has_table_privilege('cp_api','cp.move_requests','DELETE')::text") == "false", "aplicacao nao apaga pedidos de mudanca")
+def credential_checks():
+    """V026: estado desejado versionado; revogacao final; confirmacao de versao antiga nao reativa credencial revogada."""
+    MG, RS, OT, CN, OW = ("10000000-0000-4000-8000-0000000002c1", "10000000-0000-4000-8000-0000000002c2", "10000000-0000-4000-8000-0000000002c3",
+                          "10000000-0000-4000-8000-0000000002c4", "10000000-0000-4000-8000-0000000002c5")
+    U1, U2 = "20000000-0000-4000-8000-0000000002c1", "20000000-0000-4000-8000-0000000002c2"
+    MR, MO, MW = "51000000-0000-4000-8000-0000000002c1", "51000000-0000-4000-8000-0000000002c2", "51000000-0000-4000-8000-0000000002c3"
+    K1, K2, KD = "43000000-0000-4000-8000-0000000002c1", "43000000-0000-4000-8000-0000000002c2", "43000000-0000-4000-8000-0000000002c3"
+    D1, D2, DX = "44000000-0000-4000-8000-0000000002c1", "44000000-0000-4000-8000-0000000002c2", "44000000-0000-4000-8000-0000000002c3"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{RS}','ACTIVE'),('{OT}','ACTIVE'),('{CN}','ACTIVE'),('{OW}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{U1}','{TA}','CREDENCIAL 1'),('{U2}','{TA}','CREDENCIAL 2');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES(gen_random_uuid(),'{TA}','{MG}',NULL,'GESTAO CREDENCIAL','MANAGER','ACTIVE'),('{MR}','{TA}','{RS}','{U1}','MORADOR CREDENCIAL','RESIDENT','ACTIVE'),
+                ('{MO}','{TA}','{OT}','{U2}','OUTRO CREDENCIAL','RESIDENT','ACTIVE'),(gen_random_uuid(),'{TA}','{CN}',NULL,'PORTARIA CREDENCIAL','CONCIERGE','ACTIVE'),
+                ('{MW}','{TA}','{OW}','{U2}','PROPRIETARIO CREDENCIAL','OWNER','ACTIVE');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{K1}','{TA}','SIMULATED','Simulador'),('{K2}','{TA}','SIMULATED','Outro simulador');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label,status) VALUES('{KD}','{TA}','SIMULATED','Desligado','DISABLED');
+        INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label,direction)
+          VALUES('{D1}','{TA}','{K1}','leitor-1','Entrada social','ENTRY'),('{D2}','{TA}','{K1}','leitor-2','Garagem','BOTH'),('{DX}','{TA}','{K2}','leitor-x','Outro','ENTRY');
+    """)
+    manager = "SET LOCAL app.capabilities='memberships.manage'; "
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    counter = [0]
+    def create(membership=MR, unit=U1, connector=K1, kind="CARD", actor=MG):
+        counter[0] += 1
+        cid = f"45000000-0000-4000-8000-{counter[0]:012d}"
+        return cid, (f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+                     f"VALUES('{cid}','{TA}','{connector}','{membership}','{unit}','{kind}','Cartao final 1234','{actor}')")
+    c1, sql = create()
+    expect(error(sql, "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao cadastra a propria credencial")
+    expect(error(concierge + sql.replace(MG, CN), "42501", tenant=TA, actor=CN, role="cp_api"), "portaria nao cadastra credencial")
+    query(manager + sql, tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select desired_state||':'||desired_version||':'||(external_ref ~ '^cpc_[0-9a-f]{{32}}$')::text from cp.access_credentials where id='{c1}'")
+           == "ACTIVE:1:true", "gestao cadastra credencial ativa na versao 1 com referencia opaca")
+    expect(value(f"select (valid_until is null)::text from cp.access_credentials where id='{c1}'") == "true", "vinculo sem prazo gera credencial sem prazo")
+    query(f"UPDATE cp.memberships SET valid_until=clock_timestamp()+interval '30 days' WHERE id='{MO}'")
+    co, sql = create(membership=MO, unit=U2)
+    query(manager + sql, tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select (c.valid_until=m.valid_until)::text from cp.access_credentials c join cp.memberships m on m.id=c.membership_id where c.id='{co}'") == "true",
+           "credencial herda a validade do vinculo, definida pelo banco")
+    expect(error(manager + f"UPDATE cp.access_credentials SET valid_until=NULL WHERE id='{co}'", "42501", tenant=TA, actor=MG, role="cp_api"),
+           "validade da credencial nao muda pela aplicacao")
+    _, sql = create(membership=MW, unit=U2)
+    expect(error(manager + sql, "42501", tenant=TA, actor=MG, role="cp_api"), "proprietario nao residente nao recebe credencial")
+    _, sql = create(membership=MR, unit=U2)
+    expect(error(manager + sql, "42501", tenant=TA, actor=MG, role="cp_api"), "credencial na unidade de outro vinculo e recusada")
+    _, sql = create(connector=KD)
+    expect(error(manager + sql, "42501", tenant=TA, actor=MG, role="cp_api"), "conector desligado nao recebe credencial nova")
+    _, sql = create(kind="FACE")
+    expect(error(manager + sql, "23514", tenant=TA, actor=MG, role="cp_api"), "credencial facial fica fora deste recorte")
+    expect(error(manager + f"INSERT INTO cp.access_connectors(tenant_id,provider,label) VALUES('{TA}','PARTNER','x')", "42501", tenant=TA, actor=MG, role="cp_api"),
+           "aplicacao nao cadastra conector")
+    expect(value(f"select count(*) from cp.access_credentials where id='{c1}'", tenant=TA, actor=RS, role="cp_api") == "1", "morador ve a propria credencial")
+    expect(value(f"select count(*) from cp.access_credentials where id='{c1}'", tenant=TA, actor=OT, role="cp_api") == "0", "outra unidade nao ve a credencial")
+    expect(value(concierge + f"select count(*) from cp.access_credentials where id='{c1}'", tenant=TA, actor=CN, role="cp_api") == "1",
+           "portaria ve a credencial para orientar a contingencia")
+    expect(value(manager + f"select count(*) from cp.access_credentials where id='{c1}'", tenant=TB, actor=MG, role="cp_api") == "0",
+           "outro condominio nao ve a credencial")
+    worker = lambda sql, **kw: query(sql, tenant=TA, actor=None, role="cp_worker", **kw)
+    def sync(device, version, action, outcome):
+        return (f"INSERT INTO cp.credential_syncs(tenant_id,credential_id,device_id,attempted_version,attempted_action,outcome) "
+                f"VALUES('{TA}','{c1}','{device}',{version},'{action}','{outcome}') ON CONFLICT(tenant_id,credential_id,device_id) DO UPDATE SET "
+                f"attempted_version=EXCLUDED.attempted_version,attempted_action=EXCLUDED.attempted_action,outcome=EXCLUDED.outcome,attempts=credential_syncs.attempts+1")
+    worker(sync(D1, 1, "APPLY", "APPLIED"))
+    worker(sync(D2, 1, "APPLY", "UNKNOWN"))
+    expect(value(f"select observed_version||':'||observed_action||':'||(confirmed_at is not null)::text from cp.credential_syncs where device_id='{D1}' and credential_id='{c1}'")
+           == "1:APPLY:true", "equipamento confirma a versao aplicada")
+    expect(value(f"select coalesce(observed_version::text,'-') from cp.credential_syncs where device_id='{D2}' and credential_id='{c1}'") == "-",
+           "resultado incerto nao confirma nada")
+    expect(error(f"INSERT INTO cp.credential_syncs(tenant_id,credential_id,device_id,attempted_version,attempted_action,outcome) "
+                 f"VALUES('{TA}','{c1}','{DX}',1,'APPLY','APPLIED')", "23514", tenant=TA, actor=None, role="cp_worker"),
+           "equipamento de outro conector nao recebe resultado")
+    expect(error(manager + sync(D2, 1, "APPLY", "APPLIED"), "42501", tenant=TA, actor=MG, role="cp_api"), "aplicacao nao grava resultado de equipamento")
+    expect(error(f"UPDATE cp.access_credentials SET desired_state='REVOKED' WHERE id='{c1}'", "42501", tenant=TA, actor=None, role="cp_worker"),
+           "worker nao revoga credencial")
+    revoke = (f"UPDATE cp.access_credentials SET desired_state='REVOKED',desired_version=desired_version+1,revoke_reason='Vinculo encerrado',"
+              f"revoked_by='{MG}',version=version+1 WHERE id='{c1}'")
+    query(revoke.replace(MG, RS), tenant=TA, actor=RS, role="cp_api")
+    expect(value(f"select desired_state from cp.access_credentials where id='{c1}'") == "ACTIVE", "morador nao revoga credencial")
+    query(manager + revoke, tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select desired_state||':'||desired_version||':'||(revoked_at is not null)::text from cp.access_credentials where id='{c1}'")
+           == "REVOKED:2:true", "revogacao sobe a versao desejada")
+    # Confirmacao atrasada do comando antigo (APPLY v1) chega depois da revogacao: descartada, nada reativa.
+    expect(error(sync(D2, 1, "APPLY", "APPLIED"), "23514", tenant=TA, actor=None, role="cp_worker"),
+           "confirmacao de versao antiga nao reativa credencial revogada")
+    expect(error(sync(D1, 2, "APPLY", "APPLIED"), "23514", tenant=TA, actor=None, role="cp_worker"), "versao nova com acao errada nao confirma")
+    expect(value(f"select count(*) from cp.credential_syncs where credential_id='{c1}' and observed_action='APPLY' and observed_version=2") == "0",
+           "nenhum destino confirma ativacao da versao revogada")
+    worker(sync(D1, 2, "REVOKE", "APPLIED"))
+    worker(sync(D2, 2, "REVOKE", "UNAVAILABLE"))
+    expect(value(f"select string_agg(device_id::text||'='||coalesce(observed_version::text,'-')||coalesce(observed_action,''),',' order by device_id) "
+                 f"from cp.credential_syncs where credential_id='{c1}'") == f"{D1}=2REVOKE,{D2}=-",
+           "revogacao confirmada no destino; destino fora do ar fica pendente sem perder a confirmacao anterior")
+    expect(error(manager + f"UPDATE cp.access_credentials SET desired_state='ACTIVE',desired_version=desired_version+1,version=version+1,revoked_by='{MG}' WHERE id='{c1}'",
+                 "23514", tenant=TA, actor=MG, role="cp_api"), "credencial revogada nao volta a valer")
+    expect(error(manager + f"UPDATE cp.access_credentials SET label='Outro' WHERE id='{c1}'", "42501", tenant=TA, actor=MG, role="cp_api"),
+           "rotulo e referencia nao mudam depois do cadastro")
+    expect(value(f"select count(*) from cp.credential_syncs where credential_id='{c1}'", tenant=TA, actor=RS, role="cp_api") == "2",
+           "morador ve o resultado por equipamento da propria credencial")
+    expect(value(f"select count(*) from cp.credential_syncs where credential_id='{c1}'", tenant=TA, actor=OT, role="cp_api") == "0",
+           "outra unidade nao ve o resultado")
+    expect(value(f"select count(*) from cp.access_devices where connector_id='{K1}'", tenant=TA, actor=RS, role="cp_api") == "2",
+           "morador ve os equipamentos de destino da propria credencial")
+    expect(value(f"select count(*) from cp.access_devices where connector_id='{K2}'", tenant=TA, actor=RS, role="cp_api") == "0",
+           "morador nao ve equipamentos de outra integracao")
+    expect(value(f"select count(*) from cp.access_devices", tenant=TA, actor=OW, role="cp_api") == "0",
+           "morador sem credencial nao ve equipamentos")
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','CREDENTIAL_REVOKED','{c1}',9,'{{}}')",
+                 "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao grava evento de credencial")
+    expect(error(f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) VALUES('{TA}','{RS}','CREDENTIAL_REVOKED','ACCESS_CREDENTIAL','{c1}',gen_random_uuid())",
+                 "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao grava trilha de credencial")
+    for table in ("access_credentials", "credential_syncs", "access_devices", "access_connectors"):
+        expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text") == "false", f"aplicacao nao apaga cp.{table}")
 
 def main():
     guard()
@@ -2552,6 +2665,7 @@ def main():
     waitlist_checks()
     delegation_checks()
     move_checks()
+    credential_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

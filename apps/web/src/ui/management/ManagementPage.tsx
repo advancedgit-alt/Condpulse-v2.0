@@ -9,6 +9,7 @@ import { dateInZone } from '../dateTime';
 import { AnnouncementSection } from './Announcements';
 import { RequestSection } from './Requests';
 import { MoveManagementSection } from '../Moves';
+import { CredentialManagementSection } from '../AccessCredentials';
 import { ImportSection } from './Imports';
 import { AuditSection } from './Audit';
 import { MembershipList, PeopleSection } from './People';
@@ -27,6 +28,7 @@ export const managementSections = [
   { id: 'avisos', label: 'Avisos' },
   { id: 'pedidos', label: 'Pedidos' },
   { id: 'mudancas', label: 'Mudanças' },
+  { id: 'acesso', label: 'Acesso' },
   { id: 'auditoria', label: 'Auditoria' },
 ] as const;
 export type ManagementSection = typeof managementSections[number]['id'];
@@ -93,6 +95,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'avisos' ? <AnnouncementSection /> : null}
     {section === 'pedidos' ? <RequestSection /> : null}
     {section === 'mudancas' ? <MoveManagementSection /> : null}
+    {section === 'acesso' ? <CredentialManagementSection /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;
 }

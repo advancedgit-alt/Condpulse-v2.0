@@ -118,6 +118,11 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/move-rules").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/moves","/v1/tenants/*/moves/*/cancel",
       "/v1/tenants/*/management/moves/*/decision").authenticated()
+    // Credenciais de acesso (CP-046): gestão (AAL2), portaria (AAL2) ou o próprio vínculo no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-connectors","/v1/tenants/*/management/access-credentials",
+      "/v1/tenants/*/concierge/pending-revocations","/v1/tenants/*/units/*/access-credentials").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-credentials",
+      "/v1/tenants/*/management/access-credentials/*/revoke").authenticated()
     // Caixa interna da unidade: autenticação aqui; somente os próprios avisos, com vínculo vigente, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/notifications").authenticated()
     // Canal em tempo real da unidade (CP-036): autenticação aqui; vínculo residencial vigente no serviço e no banco, a cada passada.
