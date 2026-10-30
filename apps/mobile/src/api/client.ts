@@ -2,6 +2,7 @@ import { credentialPage, eventPage } from './access';
 import { announcementPage, openedAnnouncement } from './announcements';
 import { currentRules, move, type CreateMove } from './moves';
 import { requestMessage, unitRequest, unitRequestPage, type OpenRequest } from './requests';
+import { inboxNotification, inboxPage } from './notifications';
 import { arrival, arrivalPage, permit, permitLink, permitPage, rulePage, visitRule, type CreatePermit, type CreateRule } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
@@ -141,6 +142,8 @@ const messages: Record<string, string> = {
   SERVICE_REQUEST_CLOSED: 'O pedido foi encerrado; abra um novo pedido se precisar.',
   SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
   CREDENTIAL_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
+  NOTIFICATION_NOT_FOUND: 'Aviso não encontrado. Ele pode não ser mais do seu vínculo.',
+  NOTIFICATION_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
   ANNOUNCEMENT_NOT_FOUND: 'Aviso não encontrado. Ele pode ter sido arquivado pela gestão.',
   ANNOUNCEMENT_ARCHIVED: 'Este aviso foi arquivado pela gestão.',
   ANNOUNCEMENT_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Atualize e confira antes de repetir.',
@@ -340,6 +343,15 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
         if (sent.authorRole !== 'UNIT' || !sent.mine || sent.body !== body) throw invalid(true);
         return { message: sent, replayed: replayed(response) };
       }, { method: 'POST', body: { body }, key: operationKey(key) }),
+    unitInbox: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/notifications`, (value) => inboxPage(value, unitId), signal ? { signal } : {}),
+    /** Abertura autenticada: única forma de marcar leitura; repetir devolve a leitura já gravada. */
+    openNotification: (tenantId: string, notificationId: string) =>
+      request(`${tenant(tenantId)}/notifications/${identifier(notificationId)}/open`, (value) => {
+        const opened = inboxNotification(value);
+        if (opened.notificationId.toLowerCase() !== notificationId.toLowerCase() || opened.state !== 'READ_IN_APP') throw invalid(true);
+        return opened;
+      }, { method: 'POST' }),
     cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
         (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),
