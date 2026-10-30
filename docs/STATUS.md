@@ -31,7 +31,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 ## Histórico residencial dos equipamentos — CP-049
 
-- API e web: a unidade vê as próprias credenciais e os eventos das próprias credenciais (7 dias), com autorização, recusa, abertura e passagem distintas, direção ausente como ausente e "Sem registro de saída" sem inferir presença; a portaria vê as últimas 24 horas com quarentena. Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (desligada na Vercel). Sem migration nova. Pendentes: tela do celular e eventos reais (parceiro, CP-044).
+- API e web: a unidade vê as próprias credenciais e os eventos das próprias credenciais (7 dias), com autorização, recusa, abertura e passagem distintas, direção ausente como ausente e "Sem registro de saída" sem inferir presença; a portaria vê as últimas 24 horas com quarentena. Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (desligada na Vercel). Sem migration nova. Celular: seção "Meu acesso pelos equipamentos" com as próprias credenciais, situação por equipamento e eventos de 7 dias (Jest; sem ensaio em aparelho, ver bloqueio do CP-012). Pendentes: eventos reais (parceiro, CP-044).
 
 ## Eventos dos equipamentos — CP-047
 
