@@ -1,5 +1,6 @@
 """Testes de integridade CondPulse, exclusivamente em PostgreSQL descartável."""
 import concurrent.futures
+import time
 import os
 from pathlib import Path
 import re
@@ -1650,6 +1651,191 @@ def permit_link_checks():
            "link nao nasce revogado nem com horario escolhido")
     expect(error(link(L4, PL2, "ABC", actor=DEPL), "23514", tenant=TA, actor=DEPL, role="cp_api"), "hash so em hexadecimal de 64")
 
+def reservation_guest_checks():
+    """V021: convidados de reserva com janela do evento; encerrar a reserva revoga todos na mesma transacao."""
+    MGRG, RESG, UG = ("10000000-0000-4000-8000-0000000000d1", "10000000-0000-4000-8000-0000000000d2", "20000000-0000-4000-8000-0000000000d3")
+    RG1, RG2, RG3 = ("31000000-0000-4000-8000-0000000000d1", "31000000-0000-4000-8000-0000000000d2", "31000000-0000-4000-8000-0000000000d3")
+    AG = "30000000-0000-4000-8000-0000000000d4"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MGRG}','ACTIVE'),('{RESG}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UG}','{TA}','FICTICIA CONVIDADOS');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MGRG}',NULL,'GESTAO CONVIDADOS','MANAGER','ACTIVE'),('{TA}','{RESG}','{UG}','MORADOR CONVIDADOS','RESIDENT','ACTIVE');
+        INSERT INTO cp.amenities(id,tenant_id,name,capacity,approval_required) VALUES('{AG}','{TA}','AREA CONVIDADOS',2,false);
+    """)
+    def booking(identifier, offset_hours, status="CONFIRMED", unit=UA, actor=AA, kind="BOOKING", snapshot='{"capacity":2}'):
+        start = f"date_trunc('hour',clock_timestamp())+interval '{offset_hours} hours'"
+        expires = f"{start}-interval '1 hour'" if status == "PENDING_APPROVAL" else "NULL"
+        return (f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,expires_at) "
+                f"VALUES('{identifier}','{TA}','{AG}','{unit}','{actor}','{kind}','{status}',{start},{start}+interval '2 hours',{start},{start}+interval '2 hours','{snapshot}'::jsonb,{expires})")
+    query(booking(RG1, 26), tenant=TA, role="cp_api")
+    query(booking(RG2, 50, status="PENDING_APPROVAL"), tenant=TA, role="cp_api")
+    query(booking(RG3, 74, unit=UG, actor=RESG), tenant=TA, actor=RESG, role="cp_api")
+    counter = [0]
+    def guest(reservation, actor=AA, unit=UA, before="1 hour", end_shift="0 minutes"):
+        counter[0] += 1
+        visitor = f"74000000-0000-4000-8000-{counter[0]:012d}"
+        permit = f"75000000-0000-4000-8000-{counter[0]:012d}"
+        window = (f"(SELECT starts_at-interval '{before}' FROM cp.reservations WHERE id='{reservation}'),"
+                  f"(SELECT ends_at+interval '{end_shift}' FROM cp.reservations WHERE id='{reservation}')")
+        return permit, (f"INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{visitor}','{TA}','CONVIDADO {counter[0]}','{actor}'); "
+                        f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until,reservation_id) "
+                        f"VALUES('{permit}','{TA}','{visitor}','{unit}','CONVIDADO DE RESERVA','{actor}',{window},'{reservation}')")
+    g1, sql = guest(RG1)
+    query(sql, tenant=TA, role="cp_api")
+    expect(value(f"select state from cp.visit_permits where id='{g1}'") == "ACTIVE", "morador convida para a propria reserva confirmada")
+    _, sql = guest(RG1, before="2 hours")
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "convidado nao comeca mais de 1 hora antes do evento")
+    _, sql = guest(RG1, end_shift="1 hour")
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "convidado termina junto com o evento")
+    _, sql = guest(RG2)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "pedido aguardando aprovacao nao recebe convidados")
+    _, sql = guest(RG3)
+    expect(error(sql, "42501", tenant=TA, role="cp_api"), "reserva de outra unidade nao recebe convidados desta")
+    _, sql = guest(RG3, actor=RESG, unit=UA)
+    expect(error(sql, "42501", tenant=TA, actor=RESG, role="cp_api"), "outra unidade nao convida em nome desta")
+    g2, sql = guest(RG1)
+    query(sql, tenant=TA, role="cp_api")
+    _, sql = guest(RG1)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "convidados ativos ate a capacidade da area")
+    # Gestao cancela a reserva: todos os convidados revogados na mesma transacao, em nome de quem cancelou.
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
+           "gestao nao ve convidados no dia a dia")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api")
+    expect(value(f"select string_agg(state||':'||revoked_by||':'||revoke_reason,',' order by id) from cp.visit_permits where reservation_id='{RG1}'")
+           == f"REVOKED:{MGRG}:Reserva cancelada,REVOKED:{MGRG}:Reserva cancelada", "cancelar a reserva revoga todos os convidados")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_PERMIT_REVOKED' and payload->>'reservationId'='{RG1}'") == "2",
+           "um evento de revogacao por convidado, na mesma transacao")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
+           "a liberacao para quem encerra nao sobra depois")
+    expect(error(f"UPDATE cp.visit_permits SET state='ACTIVE',revoked_by=NULL,revoke_reason=NULL,version=version+1 WHERE id='{g1}'",
+                 "23514", tenant=TA, role="cp_api"), "convidado revogado nao volta")
+    _, sql = guest(RG1)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "reserva cancelada nao recebe convidados")
+    # Repeticao do cancelamento (mesmo estado) nao reativa nem falha.
+    expect(error(f"UPDATE cp.reservations SET status='CONFIRMED',version=version+1 WHERE id='{RG1}'", "23514", tenant=TA, role="cp_api"),
+           "reserva cancelada nao volta a confirmar")
+    query(f"UPDATE cp.reservations SET version=version WHERE id='{RG1}'", tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG1}' and state='ACTIVE'") == "0", "repeticao nao reativa convidados")
+    # Morador cancela a propria reserva com convidado: revogado em nome dele.
+    g3, sql = guest(RG3, actor=RESG, unit=UG)
+    query(sql, tenant=TA, actor=RESG, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG3}'", tenant=TA, actor=RESG, role="cp_api")
+    expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g3}'") == f"REVOKED:{RESG}", "cancelamento pelo morador revoga convidado")
+    # Sem conta (processo sem ator) nao encerra reserva com convidados.
+    RG4 = "31000000-0000-4000-8000-0000000000d4"
+    query(booking(RG4, 98), tenant=TA, role="cp_api")
+    g4, sql = guest(RG4)
+    query(sql, tenant=TA, role="cp_api")
+    expect(error(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{RG4}'", "42501", tenant=TA, actor="", role="cp_api"),
+           "encerramento sem conta nao deixa convidado valido")
+    expect(value(f"select state from cp.visit_permits where id='{g4}'") == "ACTIVE", "nada muda na recusa")
+    expect(value(f"select count(*) from cp.visit_permits where id='{g4}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
+           "marca de encerramento nao vaza")
+    # Dependente com permissao de convidar: a capacidade conta todos os convidados da reserva, sem expor os dos outros.
+    DEPG, RG5 = "10000000-0000-4000-8000-0000000000d5", "31000000-0000-4000-8000-0000000000d5"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{DEPG}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions)
+          VALUES('{TA}','{DEPG}','{UG}','DEPENDENTE CONVIDADOS','DEPENDENT','ACTIVE','{{"visits":{{"create":true}}}}');
+    """)
+    query(booking(RG5, 122, unit=UG, actor=RESG), tenant=TA, actor=RESG, role="cp_api")
+    for _ in range(2):
+        _, sql = guest(RG5, actor=RESG, unit=UG)
+        query(sql, tenant=TA, actor=RESG, role="cp_api")
+    _, sql = guest(RG5, actor=DEPG, unit=UG)
+    expect(error(sql, "23514", tenant=TA, actor=DEPG, role="cp_api"), "dependente nao passa da capacidade preenchida por outro morador")
+    expect(value(f"select cp.reservation_active_guests('{TA}','{RG5}')", tenant=TA, actor=DEPG, role="cp_api") == "2",
+           "dependente conta todos os convidados da reserva")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG5}'", tenant=TA, actor=DEPG, role="cp_api") == "0",
+           "dependente continua sem ver os convidados dos outros")
+    expect(value(f"select coalesce(cp.reservation_active_guests('{TA}','{RG5}')::text,'null')", tenant=TA, actor=AA, role="cp_api") == "null",
+           "outra unidade nao conta convidados de reserva que nao enxerga")
+    # Inclusao e cancelamento simultaneos se serializam: o convidado nunca sobra ativo numa reserva encerrada.
+    RG6, RG7 = "31000000-0000-4000-8000-0000000000d6", "31000000-0000-4000-8000-0000000000d7"
+    query(booking(RG6, 146), tenant=TA, role="cp_api")
+    query(booking(RG7, 170), tenant=TA, role="cp_api")
+    cancel = "UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{}'"
+    g6, sql = guest(RG6)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        adding = pool.submit(query, sql + "; SELECT pg_sleep(2)", tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        cancelling = pool.submit(query, cancel.format(RG6), tenant=TA, actor=MGRG, role="cp_api", check=False)
+        added, cancelled = adding.result(), cancelling.result()
+    expect(added.returncode == 0 and cancelled.returncode == 0, "inclusao e cancelamento simultaneos terminam")
+    expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g6}'") == f"REVOKED:{MGRG}",
+           "cancelamento espera a inclusao em curso e revoga o convidado")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_PERMIT_REVOKED' and aggregate_id='{g6}'") == "1",
+           "evento de revogacao do convidado incluido durante o cancelamento")
+    g7, sql = guest(RG7)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        cancelling = pool.submit(query, cancel.format(RG7) + "; SELECT pg_sleep(2)", tenant=TA, actor=MGRG, role="cp_api", check=False)
+        time.sleep(0.7)
+        adding = pool.submit(query, sql, tenant=TA, role="cp_api", check=False)
+        cancelled, added = cancelling.result(), adding.result()
+    expect(cancelled.returncode == 0 and added.returncode != 0 and "23514" in added.stderr,
+           "inclusao que espera o cancelamento ve a reserva encerrada e e recusada")
+    expect(value(f"select count(*) from cp.visit_permits where id='{g7}'") == "0", "nenhum convidado criado depois do cancelamento")
+    # Caminho da API: o cancelamento trava a unidade e depois a linha (FOR UPDATE) antes de mudar o status; a inclusao
+    # concorrente espera a mesma trava da unidade em vez de travar em ordem inversa (deadlock).
+    RG8 = "31000000-0000-4000-8000-0000000000d8"
+    query(booking(RG8, 194), tenant=TA, role="cp_api")
+    g8, sql = guest(RG8)
+    api_cancel = (f"SELECT pg_advisory_xact_lock(hashtextextended('cp.reservations:{TA}:{UA}',0)); "
+                  f"SELECT 1 FROM cp.reservations WHERE id='{RG8}' FOR UPDATE; SELECT pg_sleep(2); " + cancel.format(RG8))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        cancelling = pool.submit(query, api_cancel, tenant=TA, actor=MGRG, role="cp_api", check=False)
+        time.sleep(0.7)
+        adding = pool.submit(query, sql, tenant=TA, role="cp_api", check=False)
+        cancelled, added = cancelling.result(), adding.result()
+    expect(cancelled.returncode == 0 and "40P01" not in added.stderr and "23514" in added.stderr,
+           "cancelamento pela ordem da API e inclusao concorrente sem deadlock; inclusao recusada")
+    expect(value(f"select count(*) from cp.visit_permits where id='{g8}'") == "0", "nenhum convidado na reserva cancelada pela API")
+    # Capacidade aceita na reserva: mudar a area depois nao altera a reserva; snapshot sem capacidade falha fechado.
+    RG9, RG10 = "31000000-0000-4000-8000-0000000000d9", "31000000-0000-4000-8000-0000000000da"
+    query(booking(RG9, 218), tenant=TA, role="cp_api")
+    query(booking(RG10, 242, snapshot="{}"), tenant=TA, role="cp_api")
+    query(f"UPDATE cp.amenities SET capacity=1 WHERE id='{AG}'")
+    for _ in range(2):
+        _, sql = guest(RG9)
+        query(sql, tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG9}' and state='ACTIVE'") == "2",
+           "reducao posterior da area nao reduz a capacidade aceita")
+    query(f"UPDATE cp.amenities SET capacity=50 WHERE id='{AG}'")
+    _, sql = guest(RG9)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "aumento posterior da area nao amplia a capacidade aceita")
+    _, sql = guest(RG10)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "reserva sem capacidade nas regras aceitas nao recebe convidados")
+    # Expiracao de pedido vencido de outra unidade (caminho da criacao) nao toma a trava daquela unidade: sem deadlock.
+    RG11 = "31000000-0000-4000-8000-0000000000db"
+    start = "date_trunc('hour',clock_timestamp())+interval '266 hours'"
+    query(f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,expires_at) "
+          f"VALUES('{RG11}','{TA}','{AG}','{UG}','{RESG}','BOOKING','PENDING_APPROVAL',{start},{start}+interval '2 hours',{start},{start}+interval '2 hours','{{}}'::jsonb,clock_timestamp()-interval '1 minute')")
+    lock = "SELECT pg_advisory_xact_lock(hashtextextended('cp.reservations:{}:{}',0)); "
+    expire_other = (lock.format(TA, UA) + f"SELECT 1 FROM cp.reservations WHERE id='{RG11}' FOR UPDATE; SELECT pg_sleep(2); "
+                    f"UPDATE cp.reservations SET status='EXPIRED',version=version+1 WHERE id='{RG11}'")
+    expire_own = lock.format(TA, UG) + f"SELECT 1 FROM cp.reservations WHERE id='{RG11}' FOR UPDATE"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(query, expire_other, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        second = pool.submit(query, expire_own, tenant=TA, actor=RESG, role="cp_api", check=False)
+        first, second = first.result(), second.result()
+    expect(first.returncode == 0 and second.returncode == 0, "expiracao de pedido de outra unidade e comando da unidade sem deadlock")
+    # Revogacao individual de convidado (trava do convite e depois a linha) e cancelamento da reserva sem deadlock.
+    RG12 = "31000000-0000-4000-8000-0000000000dc"
+    query(booking(RG12, 290), tenant=TA, role="cp_api")
+    g12, sql = guest(RG12)
+    query(sql, tenant=TA, role="cp_api")
+    revoke_one = (f"SELECT cp.lock_permit_access('{TA}','{g12}'); SELECT pg_sleep(2); "
+                  f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Removido',version=version+1 WHERE id='{g12}' AND state='ACTIVE'")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        removing = pool.submit(query, revoke_one, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        cancelling = pool.submit(query, cancel.format(RG12), tenant=TA, actor=MGRG, role="cp_api", check=False)
+        removed, cancelled = removing.result(), cancelling.result()
+    expect(removed.returncode == 0 and cancelled.returncode == 0, "remocao de convidado e cancelamento da reserva sem deadlock")
+    expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g12}'") == f"REVOKED:{AA}", "convidado removido antes do cancelamento continua revogado")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1759,6 +1945,7 @@ def main():
     import_checks()
     attachment_checks()
     permit_link_checks()
+    reservation_guest_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

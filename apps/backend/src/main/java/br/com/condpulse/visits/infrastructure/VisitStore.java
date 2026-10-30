@@ -40,7 +40,7 @@ public class VisitStore {
     p.created_by=platform.current_actor_id() as created_by_me,p.revoked_at,p.revoke_reason,p.version,p.created_at,
     -- Link em vigor só conta com o convite ainda válido; a portaria não vê links (política) e recebe false.
     p.state='ACTIVE' and p.valid_until>clock_timestamp() and exists(select 1 from cp.permit_links l
-     where l.tenant_id=p.tenant_id and l.permit_id=p.id and l.revoked_at is null) as share_link
+     where l.tenant_id=p.tenant_id and l.permit_id=p.id and l.revoked_at is null) as share_link,p.reservation_id
   from cp.visit_permits p
   join cp.visitors v on v.tenant_id=p.tenant_id and v.id=p.visitor_id
   join cp.units u on u.tenant_id=p.tenant_id and u.id=p.unit_id
@@ -50,7 +50,7 @@ public class VisitStore {
   r.getObject("unit_id",UUID.class),r.getString("unit_label"),r.getString("block_name"),r.getString("full_name"),
   r.getString("document_last4"),r.getString("purpose"),instant(r,"valid_from"),instant(r,"valid_until"),r.getString("effective_state"),
   r.getBoolean("created_by_me"),instant(r,"revoked_at"),r.getString("revoke_reason"),r.getLong("version"),instant(r,"created_at"),
-  r.getBoolean("share_link"));
+  r.getBoolean("share_link"),r.getObject("reservation_id",UUID.class));
  private static Instant instant(ResultSet r,String column) throws SQLException {
   Timestamp value=r.getTimestamp(column);
   return value==null?null:value.toInstant();
@@ -107,6 +107,33 @@ public class VisitStore {
    update cp.visit_permits set state='REVOKED',revoked_by=?,revoke_reason=?,version=version+1
    where tenant_id=? and id=? and state='ACTIVE' and version=? and valid_until>clock_timestamp()
    """,actor,reason,tenant,permit,expectedVersion)==1;
+ }
+
+ private static final int GUEST_PAGE=500;
+ /** Convidados de uma reserva visíveis a quem consulta (o banco limita o dependente aos que ele criou). */
+ public VisitModels.PermitPage reservationGuests(UUID tenant,UUID reservation) {
+  // Ativos primeiro e depois os mais recentes: substituições acumulam revogados sem esconder quem ainda vale.
+  var rows=jdbc.query(PERMIT_SELECT+" where p.tenant_id=? and p.reservation_id=? order by (p.state<>'ACTIVE'),p.created_at desc,p.id limit ?",
+   PERMIT,tenant,reservation,GUEST_PAGE+1);
+  return new VisitModels.PermitPage(rows.stream().limit(GUEST_PAGE).toList(),rows.size()>GUEST_PAGE);
+ }
+ /** Reserva de uso para receber convidados: unidade, situação, horários, área e capacidade (null se não visível). */
+ public record GuestTarget(UUID unitId,String kind,String status,Instant startsAt,Instant endsAt,String amenityName,int capacity,int activeGuests) {}
+ public GuestTarget guestTarget(UUID tenant,UUID reservation) {
+  var rows=jdbc.query("""
+   select r.unit_id,r.kind,r.status,r.starts_at,r.ends_at,a.name,coalesce(cp.reservation_guest_capacity(r.rule_snapshot),0) as capacity,
+    cp.reservation_active_guests(r.tenant_id,r.id) as active_guests
+   from cp.reservations r join cp.amenities a on a.tenant_id=r.tenant_id and a.id=r.amenity_id
+   where r.tenant_id=? and r.id=?
+   """,(r,n)->new GuestTarget(r.getObject("unit_id",UUID.class),r.getString("kind"),r.getString("status"),instant(r,"starts_at"),
+    instant(r,"ends_at"),r.getString("name"),r.getInt("capacity"),r.getInt("active_guests")),tenant,reservation);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
+ public void insertGuestPermit(UUID id,UUID tenant,UUID visitor,UUID unit,String purpose,UUID actor,Instant from,Instant until,UUID reservation) {
+  jdbc.update("""
+   insert into cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until,reservation_id)
+   values(?,?,?,?,?,?,?,?,?)
+   """,id,tenant,visitor,unit,purpose,actor,java.sql.Timestamp.from(from),java.sql.Timestamp.from(until),reservation);
  }
 
  /** Revoga o link em vigor do convite (se houver), em nome de quem pede; o banco grava o horário. */

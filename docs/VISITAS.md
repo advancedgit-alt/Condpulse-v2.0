@@ -80,7 +80,7 @@ A rota de unidades existe com `CP_PARCELS_ENABLED` **ou** `CP_VISITS_ENABLED`.
 - **Privacidade**: as respostas não trazem contas de quem criou, revogou ou decidiu; a tela só sabe se foi a própria
   conta (`createdByMe`, `decidedByMe`). Quem fez cada ação fica na auditoria do condomínio. O evento do outbox não leva
   o nome do visitante.
-- **Fora deste recorte**: convidados de reserva (CP-038),
+- **Fora deste recorte**:
   prestadores recorrentes e janelas, registro de entrada/saída (CP-028), fila operacional completa com ocorrências
   (CP-027), envio do aviso (worker CP-034 e push CP-035) e tempo real (CP-036).
 
@@ -130,3 +130,29 @@ Atrás de `CP_VISITS_ENABLED`; a abertura sem conta exige também `CP_BFF_ENABLE
 - **Evidências**: `tests/database/run.py` (`permit_link_checks`, 30 verificações), `PermitLinkJdbcTest`,
   `PermitLinkSecurityIntegrationTest`, `PermitLinkTokensTest`, `DatabaseRoleGuardJdbcTest`; web `api/permitLink.test.ts`,
   `e2e/visit-link.spec.ts` e os testes de link em `e2e/visits.spec.ts`.
+
+## Convidados de reserva (CP-038)
+
+Atrás de `CP_VISITS_ENABLED`. Banco: V021 (`cp.visit_permits.reservation_id`).
+
+- **Quem**: quem pode convidar pela unidade da reserva (adulto, ou dependente com a permissão de convidar).
+- **O quê**: cada convidado é um convite da unidade com a janela do evento — de até 1 hora antes do início (ou de agora,
+  durante o evento) até o fim do uso —, finalidade "Convidado: <área>", até a capacidade aceita na reserva (snapshot das regras; mudar a área depois não altera
+  a reserva) em convidados ativos, contados por inteiro mesmo quando quem convida é dependente (que continua vendo só os
+  próprios).
+  Só reserva de uso confirmada e ainda não encerrada. A portaria vê os convidados nas visitas previstas como qualquer
+  convite; o link compartilhável (CP-037) também vale para eles.
+- **Encerramento**: cancelar, rejeitar ou vencer a reserva revoga todos os convidados na mesma transação, por gatilho no
+  banco (qualquer caminho: morador, gestão, expiração), em nome de quem encerrou, com motivo e um evento
+  `VISIT_PERMIT_REVOKED` por convidado no outbox. Repetir o cancelamento não reativa nada. Encerramento sem conta (ex.:
+  worker) com convidados falha fechado em vez de deixar convidado válido. A gestão não vê convidados no dia a dia; a
+  liberação para revogar vale só durante o encerramento.
+  Inclusão e encerramento usam a mesma trava da unidade dos comandos de reserva, sempre antes da linha: não há convidado
+  ativo em reserva encerrada nem deadlock entre os dois caminhos.
+- **API**: `GET` e `POST /v1/tenants/{t}/reservations/{r}/guests` (`Idempotency-Key` obrigatória); remoção pela revogação
+  comum do convite.
+- **Web**: "Convidados" na reserva confirmada (lista, adicionar com chave de operação travada em resultado incerto,
+  remover com confirmação); a confirmação de cancelamento avisa que os convidados perdem o convite.
+- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 36 verificações, incluindo inclusão e cancelamento simultâneos nas duas ordens e na ordem de travas da API, expiração de pedido de outra unidade e remoção de convidado concorrente), `ReservationGuestJdbcTest`,
+  `VisitSecurityIntegrationTest`; web `e2e/reservation-guests.spec.ts`.
+- **Pendentes**: convidados pelo celular, aviso aos convidados quando a reserva é cancelada e ensaio com Auth real.

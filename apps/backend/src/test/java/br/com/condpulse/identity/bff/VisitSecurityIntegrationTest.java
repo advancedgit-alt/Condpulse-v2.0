@@ -85,7 +85,7 @@ class VisitSecurityIntegrationTest {
   return new String[]{response.getCookie("__Host-cp_csrf").getValue(),matcher.group(1)};
  }
  private static VisitModels.Permit permit() {
-  return new VisitModels.Permit(PERMIT,UNIT,"101",null,"Pessoa Fictícia",null,null,NOW,NOW.plusSeconds(7200),"ACTIVE",true,null,null,0,NOW,false);
+  return new VisitModels.Permit(PERMIT,UNIT,"101",null,"Pessoa Fictícia",null,null,NOW,NOW.plusSeconds(7200),"ACTIVE",true,null,null,0,NOW,false,null);
  }
  private static VisitModels.Arrival arrival(String state) {
   return new VisitModels.Arrival(ARRIVAL,UNIT,"101",null,"Pessoa Fictícia",null,null,state,NOW.plusSeconds(300),null,null,null,false,0,NOW);
@@ -141,6 +141,31 @@ class VisitSecurityIntegrationTest {
    .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"DENY\",\"source\":\"INTERCOM\",\"note\":\"Interfone\"}"))
    .andReturn().getResponse().getStatus());
   verify(visits(),never()).assistedDecision(any(),any(),any(),any(),any());
+ }
+ @Test void reservationGuestsNeedSessionCsrfAndOperationKey() throws Exception {
+  start(true);
+  String raw=session("aal1");
+  UUID reservation=UUID.fromString("77777777-7777-4777-8777-777777777777");
+  String route="/v1/tenants/"+TENANT+"/reservations/"+reservation+"/guests";
+  assertEquals(401,mvc.perform(get(route).servletPath(route).secure(true)).andReturn().getResponse().getStatus());
+  when(visits().reservationGuests(ACCOUNT,TENANT,reservation)).thenReturn(new VisitModels.PermitPage(List.of(permit()),false));
+  var listed=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
+  assertEquals(200,listed.getStatus()); assertEquals("no-store",listed.getHeader("Cache-Control"));
+  String body="{\"visitorName\":\"Pessoa Fictícia\",\"documentLast4\":null}";
+  assertEquals(403,mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN).header("Idempotency-Key",KEY)
+   .cookie(new Cookie(BffCookies.SESSION,raw)).contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse().getStatus(),"Sem CSRF");
+  var csrf=csrf();
+  var noKey=mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+  assertTrue(noKey.getStatus()>=400 && noKey.getStatus()<500,"Sem chave: "+noKey.getStatus());
+  verify(visits(),never()).addGuest(any(),any(),any(),any(),any());
+  when(visits().addGuest(ACCOUNT,TENANT,reservation,KEY,new VisitModels.AddGuest("Pessoa Fictícia",null)))
+   .thenReturn(new VisitModels.PermitMutation(permit(),false,201));
+  var created=mvc.perform(post(route).servletPath(route).secure(true).header("Origin",ORIGIN).header("Idempotency-Key",KEY)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+  assertEquals(201,created.getStatus()); assertEquals("false",created.getHeader("Idempotency-Replayed"));
  }
  @Test void conciergeUnitsExistWithVisitsOnly() throws Exception {
   start(true);

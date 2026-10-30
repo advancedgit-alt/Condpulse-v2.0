@@ -109,6 +109,65 @@ public class VisitService {
    return revoked;
   });
  }
+ /** Convidados da reserva (CP-038), para quem pode convidar pela unidade da reserva. */
+ public VisitModels.PermitPage reservationGuests(UUID actor,UUID tenant,UUID reservation) {
+  if(reservation==null) throw reservationUnavailable();
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of(),context->{
+   var target=store.guestTarget(tenant,reservation);
+   if(target==null || !"BOOKING".equals(target.kind()) || !store.member(tenant,target.unitId(),"create")) throw reservationUnavailable();
+   return store.reservationGuests(tenant,reservation);
+  });
+ }
+ /**
+  * Convidado de reserva confirmada (CP-038): convite da unidade com a janela do evento — de até 1 hora antes do início
+  * (ou de agora, durante o evento) até o fim do uso —, até a capacidade da área. O banco confere tudo de novo e, ao
+  * encerrar a reserva, revoga os convidados na mesma transação.
+  */
+ public VisitModels.PermitMutation addGuest(UUID actor,UUID tenant,UUID reservation,String key,VisitModels.AddGuest request) {
+  requireKey(key);
+  if(reservation==null) throw reservationUnavailable();
+  if(request==null) throw invalid("VISIT_INPUT_INVALID","Informe os dados do convidado.");
+  String visitor=visitorName(request.visitorName());
+  String document=document(request.documentLast4());
+  String hash=VisitRequestHash.guest(reservation,visitor,document);
+  String route="/v1/tenants/"+tenant+"/reservations/"+reservation+"/guests";
+  return execute(actor,tenant,AssuranceLevel.AAL1,Map.of("23514",VisitService::guestUnavailable),context->{
+   var target=store.guestTarget(tenant,reservation);
+   if(target==null || !"BOOKING".equals(target.kind()) || !store.member(tenant,target.unitId(),"create")) throw reservationUnavailable();
+   var previous=store.begin(tenant,actor,route,key,hash);
+   if(!previous.fresh()) {
+    var replay=store.permit(tenant,previous.resource(),false);
+    if(replay==null) throw permitNotFound();
+    return new VisitModels.PermitMutation(replay,true,previous.responseStatus());
+   }
+   Instant now=store.now();
+   if(!"CONFIRMED".equals(target.status()) || !target.endsAt().isAfter(now)) throw guestUnavailable();
+   if(target.activeGuests()>=target.capacity())
+    throw new BusinessProblem("RESERVATION_GUEST_LIMIT",409,"A reserva já tem o número máximo de convidados da área.");
+   Instant earliest=target.startsAt().minus(Duration.ofHours(1));
+   // Segundos inteiros (o banco guarda microssegundos); nunca antes do horário do banco.
+   Instant from=(now.isAfter(earliest)?now:earliest).truncatedTo(ChronoUnit.SECONDS);
+   if(from.isAfter(now.plus(MAX_LEAD)))
+    throw new BusinessProblem("RESERVATION_GUEST_TOO_EARLY",409,"Convidados podem ser incluídos a partir de 90 dias antes do evento.");
+   UUID visitorId=UUID.randomUUID(), id=UUID.randomUUID();
+   store.insertVisitor(visitorId,tenant,visitor,document,actor);
+   store.insertGuestPermit(id,tenant,visitorId,target.unitId(),text("Convidado: "+target.amenityName(),200,"VISIT_PURPOSE_INVALID",
+    "Finalidade inválida."),actor,from,target.endsAt(),reservation);
+   var permit=store.permit(tenant,id,false);
+   if(permit==null) throw new IllegalStateException("Convidado criado não foi encontrado na mesma transação.");
+   audit.record(tenant,actor,"RESERVATION_GUEST_ADDED","VISIT_PERMIT",id,null);
+   store.event(tenant,"VISIT_PERMIT_CREATED",id,permit.version(),target.unitId(),permit.state());
+   store.finish(tenant,actor,route,key,id,201);
+   return new VisitModels.PermitMutation(permit,false,201);
+  });
+ }
+ private static BusinessProblem reservationUnavailable() {
+  return new BusinessProblem("RESERVATION_GUEST_UNAVAILABLE",404,"Reserva não disponível para convidados.");
+ }
+ private static BusinessProblem guestUnavailable() {
+  return new BusinessProblem("RESERVATION_NOT_CONFIRMED",409,"Só reservas confirmadas e ainda não encerradas recebem convidados.");
+ }
+
  /**
   * Link compartilhável do convite (CP-037). Cada pedido gera um token novo e revoga o anterior na mesma transação: o
   * token bruto só existe nesta resposta (o banco guarda o SHA-256). Sem chave de operação de propósito: guardar a

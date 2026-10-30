@@ -41,6 +41,18 @@ public class VisitController {
      @RequestBody VisitModels.RevokePermit request) {
   return ok(service.revokePermit(account(jwt),tenantId,permitId,request));
  }
+ /** Convidados da reserva (CP-038). */
+ @GetMapping("/v1/tenants/{tenantId}/reservations/{reservationId}/guests")
+ public ResponseEntity<VisitModels.PermitPage> guests(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID reservationId) {
+  return ok(service.reservationGuests(account(jwt),tenantId,reservationId));
+ }
+ @PostMapping("/v1/tenants/{tenantId}/reservations/{reservationId}/guests")
+ public ResponseEntity<VisitModels.Permit> addGuest(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID reservationId,
+     @RequestHeader("Idempotency-Key") String key,@RequestBody VisitModels.AddGuest request) {
+  var result=service.addGuest(account(jwt),tenantId,reservationId,key,request);
+  return ResponseEntity.status(result.status()).cacheControl(CacheControl.noStore())
+   .header("Idempotency-Replayed",Boolean.toString(result.replayed())).body(result.permit());
+ }
  /** Link compartilhável (CP-037): gera um novo (revogando o anterior) e devolve o token uma única vez. */
  @PostMapping("/v1/tenants/{tenantId}/permits/{permitId}/link")
  public ResponseEntity<VisitModels.PermitLink> shareLink(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID permitId) {

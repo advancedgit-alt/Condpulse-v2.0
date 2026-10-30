@@ -81,9 +81,10 @@ public class SecurityConfiguration {
     // Visitas e chegadas: autenticação aqui; vínculo da unidade (com permissão do dependente) ou capacidade da
     // portaria (AAL2) no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/permits","/v1/tenants/*/units/*/arrivals","/v1/tenants/*/concierge/permits",
+      "/v1/tenants/*/reservations/*/guests",
       "/v1/tenants/*/arrivals").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/permits","/v1/tenants/*/permits/*/revoke",
-      "/v1/tenants/*/permits/*/link","/v1/tenants/*/permits/*/link/revoke","/v1/tenants/*/arrivals",
+      "/v1/tenants/*/permits/*/link","/v1/tenants/*/permits/*/link/revoke","/v1/tenants/*/reservations/*/guests","/v1/tenants/*/arrivals",
       "/v1/tenants/*/arrivals/*/decision","/v1/tenants/*/arrivals/*/assisted-decision","/v1/tenants/*/arrivals/*/cancel").authenticated()
     // Registro manual de entrada e saída: capacidade da portaria (AAL2) ou vínculo da unidade no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-events","/v1/tenants/*/units/*/access-events").authenticated()

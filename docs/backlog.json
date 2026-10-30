@@ -1214,7 +1214,7 @@
       "id": "CP-038",
       "delivery": "Convidados de uma reserva. Autorizações derivadas da janela do evento e do responsável.",
       "acceptance": "Reserva cancelada deixa todos os convites dependentes revogados, inclusive após retry.",
-      "status": "PLANEJADO",
+      "status": "EM_IMPLEMENTACAO",
       "evidence": []
     },
     {

@@ -10,7 +10,7 @@ const unit = '20000000-0000-4000-8000-000000000001';
 const permit = {
   permitId: '70000000-0000-4000-8000-000000000001', unitId: unit, unitLabel: '101', blockName: null, visitorName: 'Visita Fictícia',
   documentLast4: '12AB', purpose: null, validFrom: '2030-01-01T12:00:00Z', validUntil: '2030-01-01T15:00:00Z', state: 'ACTIVE',
-  createdByMe: true, revokedAt: null, revokeReason: null, version: 0, createdAt: '2030-01-01T11:00:00Z', shareLinkActive: false,
+  createdByMe: true, revokedAt: null, revokeReason: null, version: 0, createdAt: '2030-01-01T11:00:00Z', shareLinkActive: false, reservationId: null,
 };
 const waiting = {
   arrivalId: '80000000-0000-4000-8000-000000000001', unitId: unit, unitLabel: '101', blockName: 'Bloco 1', visitorName: 'Pessoa Fictícia',

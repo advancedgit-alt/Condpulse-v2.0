@@ -16,11 +16,13 @@ public final class VisitModels {
   */
  public record Permit(UUID permitId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,String purpose,
    Instant validFrom,Instant validUntil,String state,boolean createdByMe,Instant revokedAt,String revokeReason,long version,Instant createdAt,
-   boolean shareLinkActive) {}
+   boolean shareLinkActive,UUID reservationId) {}
  public record PermitPage(List<Permit> permits,boolean truncated) {
   public PermitPage { permits=List.copyOf(permits); }
  }
  public record CreatePermit(String visitorName,String documentLast4,String purpose,Instant validFrom,Instant validUntil) {}
+ /** Convidado de reserva (CP-038): só a pessoa; a janela e a finalidade vêm do evento. */
+ public record AddGuest(String visitorName,String documentLast4) {}
  public record RevokePermit(String reason,Long expectedVersion) {}
  /**
   * Chegada sem convite. state efetivo: WAITING, APPROVED, DENIED, CANCELLED ou EXPIRED (prazo vencido sem decisão).

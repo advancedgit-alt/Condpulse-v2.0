@@ -15,6 +15,8 @@ export interface VisitPermit {
   revokedAt: ISODateTime | null; revokeReason: string | null; version: number; createdAt: ISODateTime;
   /** Link compartilhável em vigor (CP-037); a portaria sempre recebe false. */
   shareLinkActive: boolean;
+  /** Reserva do convidado (CP-038); null em convite comum. */
+  reservationId: UUID | null;
 }
 /** Token devolvido uma única vez; a web o leva no fragmento (/visita#token). */
 export interface PermitLink { token: string; validUntil: ISODateTime }
@@ -62,7 +64,7 @@ export function visitPermit(value: unknown, uncertain = false): VisitPermit {
       || !oneOf(value.state, ['SCHEDULED', 'ACTIVE', 'REVOKED', 'EXPIRED']) || typeof value.createdByMe !== 'boolean'
       || !(value.revokedAt === null || instant(value.revokedAt)) || !optional(value.revokeReason, 500) || !isInteger(value.version)
       || !instant(value.createdAt) || Date.parse(value.validUntil) <= Date.parse(value.validFrom)
-      || typeof value.shareLinkActive !== 'boolean') throw invalidResponse(uncertain);
+      || typeof value.shareLinkActive !== 'boolean' || !(value.reservationId === null || isUUID(value.reservationId))) throw invalidResponse(uncertain);
   // Revogado somente com motivo e horário, e com a versão já avançada.
   const revoked = value.state === 'REVOKED';
   if (revoked !== (value.revokedAt !== null) || revoked !== (value.revokeReason !== null) || (revoked && value.version < 1)) throw invalidResponse(uncertain);
@@ -70,7 +72,7 @@ export function visitPermit(value: unknown, uncertain = false): VisitPermit {
     visitorName: value.visitorName, documentLast4: value.documentLast4 as string | null, purpose: value.purpose as string | null,
     validFrom: value.validFrom, validUntil: value.validUntil, state: value.state, createdByMe: value.createdByMe,
     revokedAt: value.revokedAt as ISODateTime | null, revokeReason: value.revokeReason as string | null, version: value.version, createdAt: value.createdAt,
-    shareLinkActive: value.shareLinkActive };
+    shareLinkActive: value.shareLinkActive, reservationId: value.reservationId as string | null };
 }
 export function permitLink(value: unknown): PermitLink {
   if (!record(value) || !isString(value.token) || !/^[A-Za-z0-9_-]{43}$/.test(value.token) || !instant(value.validUntil)
@@ -156,6 +158,11 @@ export function createVisitsApi(client: CondPulseApi = api) {
       client.call(`${base(tenantId)}/permits/${identifier(permitId)}/link`, permitLink, { method: 'POST' }),
     revokeLink: async (tenantId: string, permitId: string) =>
       client.call(`${base(tenantId)}/permits/${identifier(permitId)}/link/revoke`, (value) => visitPermit(value, true), { method: 'POST' }),
+    reservationGuests: async (tenantId: string, reservationId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/guests`, permitPage, options(signal)),
+    addGuest: async (tenantId: string, reservationId: string, key: string, body: { visitorName: string; documentLast4: string | null }) =>
+      client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/guests`,
+        (value, response): PermitMutation => ({ permit: visitPermit(value, true), replayed: replayed(response) }), { method: 'POST', body, key }),
     unitArrivals: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/units/${identifier(unitId)}/arrivals`, arrivalPage, options(signal)),
     decide: async (tenantId: string, arrivalId: string, decision: 'APPROVE' | 'DENY') =>
