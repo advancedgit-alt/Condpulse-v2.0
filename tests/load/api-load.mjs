@@ -203,6 +203,8 @@ async function fire(port) {
     } else if (result.status >= 400 && result.status < 500 && ![401, 403, 404].includes(result.status)) stat.expected4xx++; // conflito, cota etc.
     else stat.errors++;
   } catch (error) {
+    // Tempo esgotado e falha de rede entram na distribuição: a cauda não pode esconder justamente os mais lentos.
+    stat.latencies.push(Number(process.hrtime.bigint() - started) / 1e6);
     stat.errors++; stat.codes[error.message] = (stat.codes[error.message] ?? 0) + 1;
   } finally { inFlight--; }
 }
