@@ -86,6 +86,14 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
         and c.attname not in ('applied','unit_id')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.import_rows') and c.attname in ('applied','unit_id')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.move_requests'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.move_rules'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.move_requests') and c.attname in ('state','decided_by','decided_at','decision_note','cancelled_by',
+        'created_at','updated_at','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.move_requests') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','decided_by','decision_note','cancelled_by','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.parcel_delegations'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.parcel_delegations') and c.attname in ('state','attempts','created_at','used_by','used_at',
