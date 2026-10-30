@@ -39,4 +39,4 @@ local) e no CI `foundation` com JUnit.
 
 Adaptador real (CP-044) depende de parceiro, contrato e sandbox — BLOQUEADO: escolha e contrato do parceiro físico —
 responsável — comercial/integrador. Estado desejado e revogação prioritária das credenciais estão no CP-046 ([CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md));
-cadastro facial (CP-045) e caixa de entrada autenticada (CP-047) ainda não existem.
+a busca e a deduplicação dos eventos estão no CP-047; cadastro facial (CP-045) e webhook assinado do parceiro ainda não existem.

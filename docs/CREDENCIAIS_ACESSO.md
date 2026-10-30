@@ -41,6 +41,24 @@ estado desejado **atual** (não reproduz fila antiga), **revogações primeiro**
 60 s dobrando até 1 h para fora do ar; recusa definitiva só volta com mudança. Nenhuma transação fica aberta durante a
 conversa com o parceiro; resultado que deixou de ser o desejado é descartado pelo banco.
 
+## Eventos dos equipamentos (CP-047)
+
+V027 (`cp.device_events`, `cp.device_event_cursors`). Na mesma passada do worker (antes da reconciliação), o
+`DeviceEventIngestor` busca os eventos de cada conector ativo pelo adaptador (`getEvents`) dentro do contexto do
+condomínio **dono do conector**: o condomínio nunca vem do conteúdo do evento.
+
+- Janela limitada (contrato v1: até 24 h) a partir do último recebimento gravado, com 5 minutos de sobreposição; a
+  chave única `(condomínio, conector, eventId)` absorve a repetição — evento repetido não duplica.
+- Equipamento e credencial procurados só entre os do conector; a unidade é a da credencial, definida pelo banco.
+  Equipamento desconhecido ou campo fora do formato vai para **quarentena** (sem credencial nem unidade).
+- Direção, evidência e versão ausentes continuam ausentes; nada de passagem ou presença inferida.
+- `CREDENTIAL_APPLIED`/`CREDENTIAL_REVOKED` com versão confirmam o destino **só** se forem a versão e a ação desejadas
+  atuais (guarda da V026); confirmação antiga fica no histórico e não confirma nada.
+- Leitura: portaria e gestão veem o condomínio (inclusive a quarentena); a pessoa vê os eventos das próprias
+  credenciais. Ninguém altera nem apaga evento. A tela do histórico é o CP-049.
+- Sem webhook: o contrato v1 permite a busca por cursor. Assinatura de webhook (HMAC/mTLS) depende do que o parceiro
+  oferecer (CP-044).
+
 ## Rotas
 
 `GET /v1/tenants/{t}/access-connectors`, `GET|POST /management/access-credentials` (`Idempotency-Key`),
@@ -51,7 +69,8 @@ conversa com o parceiro; resultado que deixou de ser o desejado é descartado pe
 
 `tests/database/run.py` (`credential_checks`), `CredentialJdbcTest`, `CredentialWorkerJdbcTest` (worker com o adaptador
 simulado: ativação só recebida substituída pela revogação, consulta antes de reenviar, fora do ar com espera,
-prioridade da revogação, conector sem adaptador), `DatabaseRoleGuardJdbcTest`; web `api/accessCredentials.test.ts` e
+prioridade da revogação, conector sem adaptador), `DeviceEventWorkerJdbcTest` (eventos: confirmação tardia por evento, repetição, passagem com e sem direção,
+quarentena, isolamento entre condomínios, ativação antiga depois da revogação), `DatabaseRoleGuardJdbcTest`; web `api/accessCredentials.test.ts` e
 `e2e/access-credentials.spec.ts`.
 
 ## Pendentes

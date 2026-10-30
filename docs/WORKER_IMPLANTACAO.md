@@ -34,6 +34,7 @@ A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando
    de conferir que ofertas vencidas avançam a fila (FILA_ESPERA.md). A reconciliação de credenciais
    (`CP_WORKER_ACCESS_SYNC_ENABLED`, a cada `CP_WORKER_ACCESS_SYNC_MILLIS`, padrão 15 s) só faz sentido com o
    adaptador do parceiro físico (CP-044); sem ele, nada é enviado e a pendência continua visível (CREDENCIAIS_ACESSO.md).
+   A mesma passada busca os eventos dos equipamentos (CP-047) antes de reconciliar.
 6. Registrar runs, horários e evidências em `docs/STATUS.md`.
 
 ## Bloqueios
