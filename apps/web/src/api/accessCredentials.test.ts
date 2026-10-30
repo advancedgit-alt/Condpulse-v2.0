@@ -60,7 +60,7 @@ describe('contrato das credenciais de acesso', () => {
     reply = () => json({ credentials: [active], truncated: false });
     await expect(client.pendingRevocations(tenant)).rejects.toThrow();
   });
-  it('evento do equipamento: quarentena sem equipamento, saída registrada só para passagem de entrada', () => {
+  it('evento do equipamento: quarentena de equipamento desconhecido sem equipamento, saída registrada só para passagem de entrada', () => {
     const passage = { eventId: '46000000-0000-4000-8000-000000000001', kind: 'PASSAGE_DETECTED', direction: 'ENTRY', evidence: 'TURNSTILE_SENSOR',
       occurredAt: '2030-01-01T12:00:00Z', deviceLabel: 'Entrada', credentialLabel: 'Cartão', unitLabel: '101', state: 'ACCEPTED', quarantineReason: null, exitRecorded: false };
     expect(deviceEvent(passage).exitRecorded).toBe(false);
@@ -70,6 +70,9 @@ describe('contrato das credenciais de acesso', () => {
     expect(() => deviceEvent({ ...passage, state: 'QUARANTINED' })).toThrow();
     expect(() => deviceEvent({ ...passage, state: 'QUARANTINED', quarantineReason: 'UNKNOWN_DEVICE' })).toThrow();
     expect(deviceEvent({ ...passage, state: 'QUARANTINED', quarantineReason: 'UNKNOWN_DEVICE', deviceLabel: null, exitRecorded: null }).state).toBe('QUARANTINED');
+    // Equipamento conhecido com dado fora do formato: quarentena com o equipamento.
+    expect(deviceEvent({ ...passage, state: 'QUARANTINED', quarantineReason: 'INVALID_EVIDENCE', evidence: null, credentialLabel: null, unitLabel: null,
+      exitRecorded: null }).deviceLabel).toBe('Entrada');
     expect(() => deviceEvent({ ...passage, evidence: 'sensor livre' })).toThrow();
     expect(() => deviceEvent({ ...passage, kind: 'PRESENCE' })).toThrow();
   });

@@ -333,15 +333,17 @@ test('portaria vê os eventos das últimas 24 horas, com quarentena', async ({ p
   const state = await installCredentialsApi(page, { deviceEvents: [
     event({ kind: 'DENIED', direction: null }),
     event({ kind: 'DEVICE_OFFLINE', direction: null, credentialLabel: null, unitLabel: null, deviceLabel: null, state: 'QUARANTINED', quarantineReason: 'UNKNOWN_DEVICE' }),
+    event({ kind: 'AUTHORIZED', direction: null, credentialLabel: null, unitLabel: null, state: 'QUARANTINED', quarantineReason: 'INVALID_EVIDENCE' }),
   ] });
   await signIn(page);
   await page.goto(`/portaria/${TENANT_A}/visitas`);
   const section = page.getByRole('region', { name: 'Eventos dos equipamentos' });
   const list = section.getByRole('list', { name: 'Eventos dos equipamentos' });
-  await expect(list.locator(':scope > li')).toHaveCount(2);
+  await expect(list.locator(':scope > li')).toHaveCount(3);
   await expect(list.getByText('Acesso negado pelo equipamento')).toBeVisible();
+  await expect(list.locator(':scope > li').filter({ hasText: 'Acesso autorizado pelo equipamento' }).getByText(/Em quarentena/)).toBeVisible();
   await expect(list.getByText(/unidade 101 — Sintética A/)).toBeVisible();
-  await expect(list.getByText(/Em quarentena/)).toBeVisible();
+  await expect(list.getByText(/Em quarentena/)).toHaveCount(2);
   state.eventFailures = 1;
   await section.getByRole('button', { name: 'Atualizar eventos' }).click();
   await expect(section.getByText(/Não foi possível atualizar os eventos/)).toBeVisible();
