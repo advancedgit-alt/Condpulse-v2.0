@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { newQueryClient } from '../src/App';
 import { ApiError, type CondPulseApi } from '../src/api/client';
@@ -65,6 +65,12 @@ async function mount(setup?: (fake: ReturnType<typeof fakeApi>) => void, pending
   </QueryClientProvider>);
   return fake;
 }
+// O botão aparece desabilitado enquanto a autorização atual carrega; tocar nele antes disso não faz nada.
+async function enabledButton(name: string) {
+  await screen.findByRole('button', { name });
+  await waitFor(() => expect(screen.getByRole('button', { name })).not.toBeDisabled());
+  return screen.getByRole('button', { name });
+}
 const uncertain = () => new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado. Tente de novo: o mesmo pedido não é gravado duas vezes.', true);
 
 describe('contrato de encomendas e autorização no celular', () => {
@@ -115,7 +121,7 @@ describe('encomendas no celular', () => {
 
   it('autoriza terceiro: valida campos, mostra o código uma vez e envia o corpo normalizado', async () => {
     const fake = await mount();
-    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar retirada por terceiro' }));
+    await fireEvent.press(await enabledButton('Autorizar retirada por terceiro'));
     const generate = screen.getByRole('button', { name: 'Gerar código' });
     expect(generate).toBeDisabled();
     await fireEvent.changeText(screen.getByLabelText('Nome de quem vai retirar'), '  Terceiro   Fictício ');
@@ -138,7 +144,7 @@ describe('encomendas no celular', () => {
 
   it('validade padrão de 48 horas; voltar fecha o formulário sem enviar', async () => {
     const fake = await mount();
-    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar retirada por terceiro' }));
+    await fireEvent.press(await enabledButton('Autorizar retirada por terceiro'));
     expect(screen.getByLabelText('Válida até: data (AAAA-MM-DD)').props.value).toBe('2030-01-09');
     expect(screen.getByLabelText('Válida até: hora (HH:MM)').props.value).toBe('08:10');
     await fireEvent.press(screen.getByRole('button', { name: 'Voltar' }));
@@ -148,7 +154,7 @@ describe('encomendas no celular', () => {
 
   it('resultado incerto trava o envio e repete a mesma chave e corpo; repetição avisa que o código não volta', async () => {
     const fake = await mount((f) => { f.state.errors.create.push(uncertain()); });
-    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar retirada por terceiro' }));
+    await fireEvent.press(await enabledButton('Autorizar retirada por terceiro'));
     await fireEvent.changeText(screen.getByLabelText('Nome de quem vai retirar'), 'Terceiro Fictício');
     await fireEvent.press(screen.getByRole('button', { name: 'Gerar código' }));
     const again = await screen.findByRole('button', { name: 'Tentar confirmar a mesma autorização' });
@@ -164,7 +170,7 @@ describe('encomendas no celular', () => {
   it('sem a chave do código o servidor recusa com certeza: mostra o motivo sem travar', async () => {
     const fake = await mount((f) => { f.state.errors.create.push(new ApiError(503, 'DELEGATION_UNAVAILABLE',
       'A retirada por código ainda não está disponível neste condomínio.', true)); });
-    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar retirada por terceiro' }));
+    await fireEvent.press(await enabledButton('Autorizar retirada por terceiro'));
     await fireEvent.changeText(screen.getByLabelText('Nome de quem vai retirar'), 'Terceiro Fictício');
     await fireEvent.press(screen.getByRole('button', { name: 'Gerar código' }));
     expect(await screen.findByText('A retirada por código ainda não está disponível neste condomínio.')).toBeTruthy();
@@ -211,7 +217,7 @@ describe('encomendas no celular', () => {
   it('autorização incerta continua travada depois de trocar de vínculo e voltar: repete a mesma chave', async () => {
     const pending: DelegationPendingStore = new Map();
     const fake = await mount((f) => { f.state.errors.create.push(uncertain()); }, pending);
-    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar retirada por terceiro' }));
+    await fireEvent.press(await enabledButton('Autorizar retirada por terceiro'));
     await fireEvent.changeText(screen.getByLabelText('Nome de quem vai retirar'), 'Terceiro Fictício');
     await fireEvent.press(screen.getByRole('button', { name: 'Gerar código' }));
     expect(await screen.findByRole('button', { name: 'Tentar confirmar a mesma autorização' })).toBeTruthy();
