@@ -1,0 +1,32 @@
+# CondPulse — worker contínuo de homologação na Fly.io (docs/FLY_WORKER.md).
+# Segredos (login, senha, CA) só pelo workflow manual fly-worker (apply). Aqui só configuração pública revisada por PR.
+# Sem serviço HTTP: o perfil worker não abre porta; a saúde é a máquina estável e a fila do outbox.
+app = "condpulse-v2-0-worker"
+primary_region = "gru"
+kill_signal = "SIGTERM"
+# O agendador espera até 15 s a passada em curso (application.yaml); arrendamento vencido cobre a queda abrupta.
+kill_timeout = "35s"
+
+[build]
+  dockerfile = "infra/fly-worker/Dockerfile"
+
+[env]
+  SPRING_PROFILES_ACTIVE = "worker"
+  DATABASE_URL = "jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/tmp/condpulse-db-ca.crt"
+  # Teto do login 2 (ADR-0006): pool 1 deixa uma conexão para a sobreposição de reinício.
+  DB_POOL_SIZE = "1"
+  # Passadas desligadas no primeiro deploy (WORKER_IMPLANTACAO.md, passo 4). Ligar = PR revisado trocando para "true".
+  CP_WORKER_OUTBOX_ENABLED = "false"
+  CP_WORKER_POLL_MILLIS = "2000"
+  CP_WORKER_WAITLIST_ENABLED = "false"
+  CP_WORKER_WAITLIST_MILLIS = "60000"
+  # Reconciliação de credenciais só com o adaptador do parceiro físico (CP-044); o launcher recusa "true".
+  CP_WORKER_ACCESS_SYNC_ENABLED = "false"
+
+[[restart]]
+  policy = "on-failure"
+  retries = 10
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
