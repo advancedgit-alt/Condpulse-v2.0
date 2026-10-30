@@ -36,7 +36,8 @@ def query(statement, *, tenant=None, actor=AA, role=None, check=True):
     prefix = suffix = ""
     if role:
         prefix = f"BEGIN; SET LOCAL ROLE {role}; "
-        prefix += f"SET LOCAL app.actor_id='{actor}'; "
+        if actor:
+            prefix += f"SET LOCAL app.actor_id='{actor}'; "
         if tenant:
             prefix += f"SET LOCAL app.tenant_id='{tenant}'; "
         suffix = "; COMMIT;"
@@ -2125,6 +2126,28 @@ def waitlist_checks():
     expect(value(f"select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname='reservation_waitlist' "
                  f"and c.relrowsecurity and c.relforcerowsecurity") == "1", "fila com RLS completa")
     expect(value("select has_table_privilege('cp_api','cp.reservation_waitlist','DELETE')::text") == "false", "aplicacao nao apaga entradas da fila")
+    # Worker (sem conta): a mesma passada anda a fila sem requisicao da API, so dentro da marca da oferta.
+    held6 = value(f"select offer_reservation_id from cp.reservation_waitlist where id='{e6}'")
+    r9 = booking(300)
+    e9, sql = join(300, UW2, W2)
+    query(sql, tenant=TA, actor=W2, role="cp_api")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{r9}'")
+    query(f"UPDATE cp.reservations SET expires_at=clock_timestamp()-interval '1 second' WHERE id='{held6}'")
+    expect(value(offer, tenant=TA, actor=None, role="cp_worker") == "1", "worker oferece periodo liberado sem requisicao")
+    expect(entry(e9) == "OFFERED:1" and value(f"select status||':'||created_by from cp.reservations where id=(select offer_reservation_id from cp.reservation_waitlist where id='{e9}')")
+           == f"HELD:{W2}", "retencao do worker em nome de quem entrou na fila")
+    expect(entry(e6) == "EXPIRED:2" and value(f"select status from cp.reservations where id='{held6}'") == "EXPIRED", "worker vence oferta nao aceita")
+    expect(value(f"select count(*) from cp.outbox where event_type in ('WAITLIST_OFFERED','RESERVATION_EXPIRED') and aggregate_id in ('{e9}','{held6}')") == "2",
+           "eventos da passada do worker no outbox")
+    expect(value("select count(*) from cp.reservation_waitlist", tenant=TA, actor=None, role="cp_worker") == "0", "worker nao le a fila fora da oferta")
+    expect(error(f"UPDATE cp.reservation_waitlist SET state='CLOSED',version=version+1 WHERE id='{e9}'", "42501", tenant=TA, actor=None, role="cp_worker")
+           or value(f"select state from cp.reservation_waitlist where id='{e9}'") == "OFFERED", "worker nao altera a fila fora da oferta")
+    expect(error(f"INSERT INTO cp.reservations(tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+                 f"VALUES('{TA}','{AW}','{UA}','{AA}','BOOKING','CONFIRMED',now()+interval '400 hours',now()+interval '401 hours',now()+interval '400 hours',"
+                 f"now()+interval '401 hours','{{}}'::jsonb)", "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao cria reserva fora da oferta")
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','WAITLIST_OFFERED','{e9}',9,'{{}}')",
+                 "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao grava evento fora da oferta")
+    expect(error(f"SELECT cp.waitlist_offer('{TB}','{AW}')", "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao oferece em outro condominio")
 
 def main():
     guard()

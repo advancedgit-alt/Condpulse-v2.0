@@ -28,7 +28,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 ## Fila de espera de reservas — CP-040
 
-- V023: entrada num período ocupado com as regras vigentes; período liberado vira retenção `HELD` de até 15 minutos ao primeiro da fila (exclusão GiST impede duas ofertas no mesmo período); aceitar confirma ou vira pedido; recusar ou vencer passa a vez. Atrás de `CP_RESERVATIONS_ENABLED` (ligada); V023 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [FILA_ESPERA.md](FILA_ESPERA.md).
+- V023: entrada num período ocupado com as regras vigentes; período liberado vira retenção `HELD` de até 15 minutos ao primeiro da fila (exclusão GiST impede duas ofertas no mesmo período); aceitar confirma ou vira pedido; recusar ou vencer passa a vez; passada periódica no worker atrás de `CP_WORKER_WAITLIST_ENABLED=false` (worker não implantado). Atrás de `CP_RESERVATIONS_ENABLED` (ligada); V023 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [FILA_ESPERA.md](FILA_ESPERA.md).
 - Pendentes: aviso da oferta (worker), fila pelo celular, visão da gestão e ensaio com Auth real.
 
 ## Prestador recorrente — CP-039

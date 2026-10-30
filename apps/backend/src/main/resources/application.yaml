@@ -67,6 +67,8 @@ condpulse:
   worker:
     outbox-enabled: ${CP_WORKER_OUTBOX_ENABLED:false}
     poll-millis: ${CP_WORKER_POLL_MILLIS:2000}
+    waitlist-enabled: ${CP_WORKER_WAITLIST_ENABLED:false}
+    waitlist-millis: ${CP_WORKER_WAITLIST_MILLIS:60000}
   bff:
     enabled: ${CP_BFF_ENABLED:false}
     origin: ${CP_BFF_ORIGIN:}

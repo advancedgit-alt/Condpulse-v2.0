@@ -16,6 +16,11 @@ Atrás de `CP_RESERVATIONS_ENABLED` (a mesma flag das reservas). Banco: V023 (`c
   direta do período retido conflita. A oferta acontece depois do commit do cancelamento (residencial e da gestão), da
   rejeição e da expiração, e antes da criação, da consulta de ocupação e da lista da fila (a fila tem prioridade sobre
   quem chega depois). Falha da oferta nunca desfaz o comando que liberou o período: a próxima passada oferece.
+- **Sem requisição**: o worker (perfil `worker`, flag `CP_WORKER_WAITLIST_ENABLED`, padrão `false`, passada a cada
+  `CP_WORKER_WAITLIST_MILLIS`, padrão 60 s) roda a mesma oferta por área, como `cp_worker` sem conta: vence oferta e
+  pedido parados e oferece período liberado. O worker só lê/altera a fila e só cria retenção `HELD` e os eventos
+  `WAITLIST_OFFERED`/`RESERVATION_EXPIRED` dentro da marca da oferta da área. Enquanto o worker não estiver implantado,
+  a fila anda nas requisições da API.
 - **Aceitar**: só quem entrou na fila, dentro do prazo, com chave de operação. A retenção vira reserva confirmada, ou
   pedido `PENDING_APPROVAL` (prazo de decisão de até 24 h, nunca depois do início) se as regras aceitas exigem
   aprovação. A cota da unidade é conferida com as regras aceitas. Oferta vencida nunca é confirmada.
@@ -43,11 +48,12 @@ Atrás de `CP_RESERVATIONS_ENABLED` (a mesma flag das reservas). Banco: V023 (`c
 
 ## Evidências
 
-`tests/database/run.py` (`waitlist_checks`), `WaitlistJdbcTest`, `DatabaseRoleGuardJdbcTest`; web
+`tests/database/run.py` (`waitlist_checks`, incluindo a passada como `cp_worker`), `WaitlistJdbcTest`, `WaitlistWorkerJdbcTest`,
+`WaitlistSchedulingTest`, `DatabaseRoleGuardJdbcTest`; web
 `api/waitlist.test.ts` e `e2e/waitlist.spec.ts`.
 
 ## Pendentes
 
-Aviso da oferta na caixa interna/push (o evento `WAITLIST_OFFERED` vai ao outbox; o worker não está implantado), fila
+Aviso da oferta na caixa interna/push (o evento `WAITLIST_OFFERED` vai ao outbox; o worker não está implantado — BLOQUEADO na implantação do worker), fila
 pelo celular, visão da fila para a gestão, conferência de vínculo do autor no momento da oferta (hoje conferido no
 aceite) e ensaio com Auth real.

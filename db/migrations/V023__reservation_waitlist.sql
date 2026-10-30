@@ -154,8 +154,7 @@ CREATE TRIGGER reservations_waitlist_offer_closed AFTER UPDATE OF status ON cp.r
 -- Oferta: em transação própria, sob a trava da fila da área. Expira retenções e pedidos vencidos da área (linhas
 -- travadas por outro comando ficam para a próxima passada), encerra entradas cujo período começou e oferece cada período
 -- livre ao primeiro da fila, em ordem de entrada, até o início do período (a fila vem antes da reserva direta).
--- Devolve quantas ofertas criou. Papel sem INSERT em reservas (worker)
--- não oferece.
+-- Devolve quantas ofertas criou. Papel sem INSERT em reservas não oferece; o worker recebe só as colunas da retenção.
 CREATE FUNCTION cp.waitlist_offer(target_tenant uuid,target_amenity uuid) RETURNS integer
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE offered integer:=0; entry record; stale record; held uuid; deadline timestamptz;
@@ -163,7 +162,7 @@ BEGIN
  IF target_tenant IS NULL OR target_amenity IS NULL OR target_tenant IS DISTINCT FROM platform.current_tenant_id() THEN
   RAISE EXCEPTION 'condomínio indisponível' USING ERRCODE='42501';
  END IF;
- IF NOT has_table_privilege(current_user,'cp.reservations','INSERT') THEN RETURN 0; END IF;
+ IF NOT has_column_privilege(current_user,'cp.reservations','id','INSERT') THEN RETURN 0; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('cp.waitlist:'||target_tenant::text||':'||target_amenity::text,0));
  PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||target_amenity::text,true);
  FOR stale IN SELECT r.id,r.status FROM cp.reservations r
@@ -289,3 +288,24 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) TO cp_api;
+
+-- Worker (cp_worker, sem conta): a mesma oferta em passadas periódicas, para a fila andar sem requisição da API
+-- (oferta vencida, pedido vencido). Tudo restrito à marca da oferta da área: o worker não lê nem altera entradas fora
+-- dela, só cria retenção HELD e só grava os eventos da própria oferta.
+GRANT EXECUTE ON FUNCTION cp.waitlist_offer(uuid,uuid),cp.waitlist_offering(uuid,uuid) TO cp_worker;
+GRANT SELECT(id,tenant_id,active) ON cp.amenities TO cp_worker;
+GRANT SELECT ON cp.reservation_waitlist TO cp_worker;
+GRANT UPDATE(state,offer_reservation_id,offered_at,offer_expires_at,closed_at,updated_at,version) ON cp.reservation_waitlist TO cp_worker;
+CREATE POLICY tenant_boundary_worker ON cp.reservation_waitlist TO cp_worker
+ USING(tenant_id=platform.current_tenant_id()) WITH CHECK(tenant_id=platform.current_tenant_id());
+CREATE POLICY reservation_waitlist_worker ON cp.reservation_waitlist AS RESTRICTIVE TO cp_worker
+ USING(cp.waitlist_offering(tenant_id,amenity_id)) WITH CHECK(cp.waitlist_offering(tenant_id,amenity_id));
+GRANT INSERT(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,expires_at,rule_snapshot,fee_cents)
+ ON cp.reservations TO cp_worker;
+CREATE POLICY reservations_worker_insert ON cp.reservations AS RESTRICTIVE FOR INSERT TO cp_worker
+ WITH CHECK(kind='BOOKING' AND status='HELD' AND cp.waitlist_offering(tenant_id,amenity_id));
+GRANT INSERT(tenant_id,event_type,aggregate_id,aggregate_version,payload) ON cp.outbox TO cp_worker;
+CREATE POLICY outbox_worker_insert ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_worker
+ WITH CHECK(event_type IN ('WAITLIST_OFFERED','RESERVATION_EXPIRED') AND state='PENDING' AND attempts=0 AND lease_until IS NULL
+  AND processed_at IS NULL AND last_error IS NULL AND jsonb_typeof(payload->'amenityId')='string'
+  AND cp.waitlist_offering(tenant_id,(payload->>'amenityId')::uuid));
