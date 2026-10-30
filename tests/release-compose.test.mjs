@@ -121,6 +121,7 @@ test('cinco manifestos Compose separam aplicacao, DDL e operacao sem daemon ou c
     assert.equal(worker.services.worker.image, app.services.api.image, 'worker usa a mesma imagem aprovada da API');
     assert.equal(worker.services.worker.environment.SPRING_PROFILES_ACTIVE, 'worker');
     assert.equal(worker.services.worker.environment.CP_WORKER_OUTBOX_ENABLED, 'false');
+    assert.equal(worker.services.worker.environment.CP_WORKER_WAITLIST_ENABLED, 'false', 'passada da fila de espera desligada');
     assert.equal(worker.services.worker.expose, undefined);
     for (const secret of ['ConfigTestRuntime_42!', 'DDL_SENTINEL_CONFIG_TEST_ONLY', env.CP_BFF_ENCRYPTION_KEY, env.CP_ONBOARDING_AUTH_SECRET_KEY]) {
       assert.equal(JSON.stringify(worker).includes(secret), false);
@@ -129,6 +130,10 @@ test('cinco manifestos Compose separam aplicacao, DDL e operacao sem daemon ou c
     assert.ok(validateRelease(worker, 'app').some(error => error.code === 'SERVICES_EXACT'));
     const enabled = structuredClone(worker); enabled.services.worker.environment.CP_WORKER_OUTBOX_ENABLED = 'true';
     assert.ok(validateRelease(enabled, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
+    const waitlist = structuredClone(worker); waitlist.services.worker.environment.CP_WORKER_WAITLIST_ENABLED = 'true';
+    assert.ok(validateRelease(waitlist, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
+    const missing = structuredClone(worker); delete missing.services.worker.environment.CP_WORKER_WAITLIST_ENABLED;
+    assert.ok(validateRelease(missing, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'), 'flag ausente nao vale como desligada');
     const apiLogin = structuredClone(worker); apiLogin.services.worker.environment.DATABASE_USER = 'cp_runtime_ci';
     assert.ok(validateRelease(apiLogin, 'worker').some(error => error.code === 'DATABASE_ROLE_SEPARATION'));
     const groupLogin = structuredClone(worker); groupLogin.services.worker.environment.DATABASE_USER = 'cp_worker';
