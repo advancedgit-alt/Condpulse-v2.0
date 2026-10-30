@@ -9,7 +9,7 @@ import { dateInZone } from '../dateTime';
 import { AnnouncementSection } from './Announcements';
 import { RequestSection } from './Requests';
 import { MoveManagementSection } from '../Moves';
-import { CredentialManagementSection } from '../AccessCredentials';
+import { AccessHealthSection, CredentialManagementSection } from '../AccessCredentials';
 import { ImportSection } from './Imports';
 import { AuditSection } from './Audit';
 import { MembershipList, PeopleSection } from './People';
@@ -95,7 +95,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'avisos' ? <AnnouncementSection /> : null}
     {section === 'pedidos' ? <RequestSection /> : null}
     {section === 'mudancas' ? <MoveManagementSection /> : null}
-    {section === 'acesso' ? <CredentialManagementSection /> : null}
+    {section === 'acesso' ? <><AccessHealthSection /><CredentialManagementSection /></> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;
 }

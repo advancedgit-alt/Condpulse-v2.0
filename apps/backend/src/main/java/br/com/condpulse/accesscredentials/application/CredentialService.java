@@ -70,6 +70,14 @@ public class CredentialService {
   return execute(actor,tenant,assurance,context->{ requireStaff(context); return store.recentEvents(tenant); });
  }
 
+ /** Sem observação nos últimos 10 minutos (o worker consulta a cada passada): informação antiga, não "no ar". */
+ public static final java.time.Duration HEALTH_STALE=java.time.Duration.ofMinutes(10),HEARTBEAT_STALE=java.time.Duration.ofMinutes(5),
+  CLOCK_DRIFT=java.time.Duration.ofSeconds(60);
+ /** Saúde dos equipamentos (CP-048) para a gestão e a portaria; morador não vê. */
+ public CredentialModels.Health health(UUID actor,UUID tenant,AssuranceLevel assurance) {
+  return execute(actor,tenant,assurance,context->{ requireStaff(context); return store.health(tenant,HEALTH_STALE,HEARTBEAT_STALE,CLOCK_DRIFT); });
+ }
+
  public CredentialModels.Mutation create(UUID actor,UUID tenant,AssuranceLevel assurance,String key,CredentialModels.Create request) {
   requireKey(key);
   if(request==null || request.connectorId()==null) throw invalid("CREDENTIAL_CONNECTOR_REQUIRED","Escolha a integração de acesso.");

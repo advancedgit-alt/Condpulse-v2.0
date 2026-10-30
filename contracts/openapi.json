@@ -10996,6 +10996,61 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/access-health": {
+      "get": {
+        "operationId": "getAccessHealth",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_ACCESS_CREDENTIALS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Portaria ou gestão (AAL2): saúde dos conectores e equipamentos pela última observação do worker (CP-048). Observação com mais de 10 minutos ou conector sem resposta aparece como UNKNOWN, nunca como ONLINE; equipamento que informou estar fora do ar, ou com sinal mais antigo que 5 minutos, aparece como OFFLINE. Pendências comparam o estado desejado atual com o confirmado em cada equipamento. Morador não vê.",
+        "responses": {
+          "200": {
+            "description": "Saúde",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHealth"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "503": {
+            "description": "CREDENTIAL_DEPENDENCY_UNAVAILABLE"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17545,6 +17600,226 @@
           },
           "truncated": {
             "type": "boolean"
+          }
+        }
+      },
+      "AccessDeviceHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "label",
+          "direction",
+          "status",
+          "reason",
+          "observedAt",
+          "stateSince",
+          "lastHeartbeat",
+          "clockSkewSeconds",
+          "clockDrift",
+          "pendingApply",
+          "pendingRevoke",
+          "rejected",
+          "oldestPendingRevocation"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "ENTRY",
+              "EXIT",
+              "BOTH",
+              "UNKNOWN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ONLINE",
+              "OFFLINE",
+              "UNKNOWN",
+              "RETIRED"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "HEARTBEAT_STALE",
+              "NOT_REPORTED",
+              "STALE",
+              "NEVER_CHECKED",
+              "CONNECTOR_UNREACHABLE",
+              "CONNECTOR_DISABLED"
+            ]
+          },
+          "observedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "stateSince": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastHeartbeat": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "clockSkewSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Diferença informada pelo equipamento, sem correção."
+          },
+          "clockDrift": {
+            "type": "boolean",
+            "description": "Diferença de relógio acima de 60 segundos."
+          },
+          "pendingApply": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingRevoke": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rejected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "oldestPendingRevocation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AccessConnectorHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "connectorId",
+          "provider",
+          "label",
+          "status",
+          "reason",
+          "checkedAt",
+          "lastReachableAt",
+          "pendingCommands",
+          "observedDelaySeconds",
+          "devices"
+        ],
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "SIMULATED",
+              "PARTNER"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OK",
+              "UNREACHABLE",
+              "UNKNOWN",
+              "DISABLED"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9_]{1,60}$"
+          },
+          "checkedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastReachableAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "pendingCommands": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "observedDelaySeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessDeviceHealth"
+            }
+          }
+        }
+      },
+      "AccessHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "generatedAt",
+          "staleAfterSeconds",
+          "connectors"
+        ],
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "staleAfterSeconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessConnectorHealth"
+            }
           }
         }
       }

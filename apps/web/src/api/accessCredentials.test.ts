@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { createAccessCredentialsApi, credential, deviceEvent } from './accessCredentials';
+import { accessHealth, createAccessCredentialsApi, credential, deviceEvent } from './accessCredentials';
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -81,5 +81,21 @@ describe('contrato das credenciais de acesso', () => {
     const client = createAccessCredentialsApi(new CondPulseApi({ fetch: fetcher }));
     await expect(client.unitEvents(tenant, '20000000-0000-4000-8000-000000000001')).rejects.toThrow();
     expect((await client.recentEvents(tenant)).events).toHaveLength(1);
+  });
+  it('saúde: no ar só com integração respondendo; sem informação tem motivo; revogação pendente tem data', () => {
+    const at = '2026-10-30T12:00:00Z';
+    const dev = (o: Record<string, unknown> = {}) => ({ deviceId: '44000000-0000-4000-8000-000000000001', label: 'Entrada', direction: 'ENTRY', status: 'ONLINE',
+      reason: null, observedAt: at, stateSince: at, lastHeartbeat: at, clockSkewSeconds: 0, clockDrift: false, pendingApply: 0, pendingRevoke: 0, rejected: 0,
+      oldestPendingRevocation: null, ...o });
+    const body = (c: Record<string, unknown>, devices: unknown[]) => ({ generatedAt: at, staleAfterSeconds: 600, connectors: [{ connectorId: '43000000-0000-4000-8000-000000000001',
+      provider: 'SIMULATED', label: 'Integração', status: 'OK', reason: null, checkedAt: at, lastReachableAt: at, pendingCommands: 0, observedDelaySeconds: 0, devices, ...c }] });
+    expect(accessHealth(body({}, [dev()])).connectors[0]!.devices[0]!.status).toBe('ONLINE');
+    expect(() => accessHealth(body({ status: 'UNREACHABLE', reason: 'ADAPTER_ERROR' }, [dev()]))).toThrow();
+    expect(() => accessHealth(body({ status: 'UNREACHABLE', reason: null }, []))).toThrow();
+    expect(() => accessHealth(body({}, [dev({ status: 'UNKNOWN' })]))).toThrow();
+    expect(() => accessHealth(body({}, [dev({ pendingRevoke: 1 })]))).toThrow();
+    expect(() => accessHealth(body({}, [dev({ pendingApply: -1 })]))).toThrow();
+    expect(accessHealth(body({ status: 'UNREACHABLE', reason: 'ADAPTER_ERROR' }, [dev({ status: 'UNKNOWN', reason: 'CONNECTOR_UNREACHABLE', pendingRevoke: 1,
+      oldestPendingRevocation: at })])).connectors[0]!.devices[0]!.pendingRevoke).toBe(1);
   });
 });

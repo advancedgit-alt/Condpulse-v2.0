@@ -74,6 +74,7 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
  private final Map<String,AccessModels.OpenResult> opens=new HashMap<>();
  private final List<AccessModels.Event> events=new ArrayList<>();
  private int sequence;
+ private boolean unreachable;
 
  public SimulatedAccessAdapter(String connectorId,Clock clock,boolean openEnabled,List<String> deviceIds) {
   if(connectorId==null || connectorId.isBlank()) throw new IllegalArgumentException("Conector obrigatório.");
@@ -88,6 +89,8 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
   if(scenario==Scenario.OFFLINE && !wasOffline) emit(deviceId,null,AccessModels.EventKind.DEVICE_OFFLINE,null,null,null);
   if(scenario!=Scenario.OFFLINE && wasOffline) { device.lastHeartbeat=clock.instant(); emit(deviceId,null,AccessModels.EventKind.DEVICE_ONLINE,null,null,null); }
  }
+ /** Conector inteiro sem resposta: a consulta de saúde falha como falharia a rede do parceiro. */
+ public synchronized void unreachable(boolean value) { unreachable=value; }
  public synchronized void clockSkew(String deviceId,Duration skew) { device(deviceId).clockSkew=Objects.requireNonNull(skew); }
  /** Quantas vezes o equipamento efetivamente aplicou um comando (prova de que repetição não aplica de novo). */
  public synchronized int applications(String deviceId) { return device(deviceId).applications; }
@@ -185,6 +188,7 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
 
  @Override public synchronized AccessModels.Health health(String connector) {
   connector(connector);
+  if(unreachable) throw new IllegalStateException("Conector simulado sem resposta.");
   List<AccessModels.DeviceHealth> list=new ArrayList<>();
   int pending=0;
   for(var entry:devices.entrySet()) {

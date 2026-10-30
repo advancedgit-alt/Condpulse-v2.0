@@ -46,6 +46,22 @@ public final class CredentialModels {
  public record EventPage(List<DeviceEvent> events,boolean truncated) {
   public EventPage { events=List.copyOf(events); }
  }
+ /**
+  * Saúde de um equipamento (CP-048). status: ONLINE (informou estar no ar, com sinal recente), OFFLINE (informou estar
+  * fora do ar, ou sinal antigo: reason HEARTBEAT_STALE), UNKNOWN (sem informação recente: reason NOT_REPORTED, STALE ou
+  * o motivo do conector) ou RETIRED. pending*: credenciais cujo estado desejado atual ainda não foi confirmado neste
+  * equipamento; rejected: recusa definitiva da versão atual.
+  */
+ public record DeviceHealth(UUID deviceId,String label,String direction,String status,String reason,Instant observedAt,Instant stateSince,
+     Instant lastHeartbeat,Long clockSkewSeconds,boolean clockDrift,int pendingApply,int pendingRevoke,int rejected,Instant oldestPendingRevocation) {}
+ /** status: OK, UNREACHABLE (última verificação falhou; reason), UNKNOWN (NEVER_CHECKED ou STALE) ou DISABLED. */
+ public record ConnectorHealth(UUID connectorId,String provider,String label,String status,String reason,Instant checkedAt,Instant lastReachableAt,
+     Integer pendingCommands,Long observedDelaySeconds,List<DeviceHealth> devices) {
+  public ConnectorHealth { devices=List.copyOf(devices); }
+ }
+ public record Health(Instant generatedAt,long staleAfterSeconds,List<ConnectorHealth> connectors) {
+  public Health { connectors=List.copyOf(connectors); }
+ }
  public record Create(UUID connectorId,UUID membershipId,String kind,String label) {}
  public record Revoke(String reason,Long expectedVersion) {}
  public record Mutation(Credential credential,boolean replayed,int status) {}

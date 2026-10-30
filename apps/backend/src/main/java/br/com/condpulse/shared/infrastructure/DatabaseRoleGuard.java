@@ -26,7 +26,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // mudam, e o banco escolhe estado inicial, prazos e horários. Links de convite (V020): nunca apagados; só a revogação
   // muda, e o banco grava os horários. Regras de prestador (V022): nunca apagadas; só a revogação muda. Credenciais (V026): nunca apagadas; só a
   // revogação muda; confirmação por equipamento vem do banco; conector e equipamento só pela operação da plataforma. Eventos de
-  // equipamento (V027): nunca alterados nem apagados; unidade e horário de ingestão vêm do banco.
+  // equipamento (V027): nunca alterados nem apagados; unidade e horário de ingestão vêm do banco. Saúde (V028): nunca apagada;
+  // horários de verificação, observação e mudança de estado vêm do banco.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -101,6 +102,11 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.device_events') and c.attname in ('id','unit_id','ingested_at')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.device_event_cursors'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_connector_health'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_device_health'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT') or has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE'))
+       from pg_attribute c where (c.attrelid=to_regclass('cp.access_connector_health') and c.attname in ('checked_at','last_reachable_at'))
+        or (c.attrelid=to_regclass('cp.access_device_health') and c.attname in ('observed_at','state_since'))),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.access_credentials'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.access_credentials') and c.attname in ('desired_state','desired_version','revoke_reason','revoked_by',

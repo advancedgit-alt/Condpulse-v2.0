@@ -116,6 +116,9 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT UPDATE(direction) ON cp.device_events TO cp_worker","REVOKE UPDATE(direction) ON cp.device_events FROM cp_worker",true);
   assertRefusedWith("GRANT INSERT(unit_id) ON cp.device_events TO cp_worker","REVOKE INSERT(unit_id) ON cp.device_events FROM cp_worker",true);
   assertRefusedWith("GRANT DELETE ON cp.device_events TO cp_api","REVOKE DELETE ON cp.device_events FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(observed_at) ON cp.access_device_health TO cp_worker","REVOKE UPDATE(observed_at) ON cp.access_device_health FROM cp_worker",true);
+  assertRefusedWith("GRANT INSERT(checked_at) ON cp.access_connector_health TO cp_worker","REVOKE INSERT(checked_at) ON cp.access_connector_health FROM cp_worker",true);
+  assertRefusedWith("GRANT DELETE ON cp.access_device_health TO cp_api","REVOKE DELETE ON cp.access_device_health FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.access_credentials TO cp_api","REVOKE DELETE ON cp.access_credentials FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.outbox TO cp_worker","REVOKE DELETE ON cp.outbox FROM cp_worker",true);
   assertRefusedWith("GRANT UPDATE(account_id) ON cp.notifications TO cp_worker","REVOKE UPDATE(account_id) ON cp.notifications FROM cp_worker",true);

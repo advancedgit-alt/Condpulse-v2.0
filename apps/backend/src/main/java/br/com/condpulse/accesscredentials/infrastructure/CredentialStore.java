@@ -129,6 +129,84 @@ public class CredentialStore {
   return new CredentialModels.EventPage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
  }
 
+ /**
+  * Saúde dos conectores e equipamentos (CP-048) pelo relógio do banco. Observação mais antiga que {@code stale} vira
+  * UNKNOWN; equipamento só aparece ONLINE com conector respondendo, observação recente e sinal recente. A pendência por
+  * equipamento compara o estado desejado ATUAL com o confirmado (mesma regra da reconciliação).
+  */
+ public CredentialModels.Health health(UUID tenant,java.time.Duration stale,java.time.Duration heartbeat,java.time.Duration drift) {
+  record Pending(int apply,int revoke,int rejected,Instant oldestRevocation) {}
+  Map<UUID,Pending> pending=new LinkedHashMap<>();
+  jdbc.query("""
+   select d.id,
+    count(*) filter (where c.desired_state='ACTIVE' and coalesce(s.outcome,'')<>'REJECTED') as apply,
+    count(*) filter (where c.desired_state='REVOKED' and coalesce(s.outcome,'')<>'REJECTED') as revoke,
+    count(*) filter (where s.outcome='REJECTED') as rejected,
+    min(c.revoked_at) filter (where c.desired_state='REVOKED') as oldest
+   from cp.access_devices d
+   join cp.access_credentials c on c.tenant_id=d.tenant_id and c.connector_id=d.connector_id
+   left join cp.credential_syncs s on s.tenant_id=c.tenant_id and s.credential_id=c.id and s.device_id=d.id
+    and s.attempted_version=c.desired_version and s.attempted_action=cp.credential_action(c.desired_state)
+   where d.tenant_id=? and d.status='ACTIVE'
+    and not (c.desired_state='ACTIVE' and c.valid_until is not null and c.valid_until<=clock_timestamp())
+    and not (s.observed_version is not distinct from c.desired_version and s.observed_action is not distinct from cp.credential_action(c.desired_state))
+   group by d.id
+   """,r->{ pending.put(r.getObject("id",UUID.class),new Pending(r.getInt("apply"),r.getInt("revoke"),r.getInt("rejected"),instant(r.getTimestamp("oldest")))); },tenant);
+  long staleSeconds=stale.toSeconds(),heartbeatSeconds=heartbeat.toSeconds(),driftMillis=drift.toMillis();
+  Map<UUID,List<CredentialModels.DeviceHealth>> devices=new LinkedHashMap<>();
+  jdbc.query("""
+   select d.id,d.connector_id,d.label,d.direction,d.status as device_status,h.online,h.observed_at,h.state_since,h.last_heartbeat,h.clock_skew_ms,
+    k.status as connector_status,ch.reachable,ch.checked_at,ch.failure_reason,
+    h.observed_at is not null and h.observed_at>clock_timestamp()-make_interval(secs=>?) as fresh,
+    ch.checked_at is not null and ch.checked_at>clock_timestamp()-make_interval(secs=>?) as connector_fresh,
+    h.last_heartbeat is not null and h.last_heartbeat<h.observed_at-make_interval(secs=>?) as heartbeat_old
+   from cp.access_devices d
+   join cp.access_connectors k on k.tenant_id=d.tenant_id and k.id=d.connector_id
+   left join cp.access_device_health h on h.tenant_id=d.tenant_id and h.device_id=d.id
+   left join cp.access_connector_health ch on ch.tenant_id=d.tenant_id and ch.connector_id=d.connector_id
+   where d.tenant_id=? order by d.label,d.id
+   """,r->{
+    UUID id=r.getObject("id",UUID.class);
+    String status,reason=null;
+    Boolean reachable=(Boolean)r.getObject("reachable");
+    if("RETIRED".equals(r.getString("device_status"))) status="RETIRED";
+    else if(!"ACTIVE".equals(r.getString("connector_status"))) { status="UNKNOWN"; reason="CONNECTOR_DISABLED"; }
+    else if(reachable==null) { status="UNKNOWN"; reason="NEVER_CHECKED"; }
+    else if(!reachable) { status="UNKNOWN"; reason="CONNECTOR_UNREACHABLE"; }
+    else if(!r.getBoolean("connector_fresh")) { status="UNKNOWN"; reason="STALE"; }
+    else if(r.getObject("online")==null) { status="UNKNOWN"; reason="NOT_REPORTED"; }
+    else if(!r.getBoolean("fresh")) { status="UNKNOWN"; reason="STALE"; }
+    else if(!r.getBoolean("online")) status="OFFLINE";
+    else if(r.getBoolean("heartbeat_old")) { status="OFFLINE"; reason="HEARTBEAT_STALE"; }
+    else status="ONLINE";
+    Long skew=r.getObject("clock_skew_ms",Long.class);
+    var p=pending.getOrDefault(id,new Pending(0,0,0,null));
+    devices.computeIfAbsent(r.getObject("connector_id",UUID.class),k->new ArrayList<>()).add(new CredentialModels.DeviceHealth(id,r.getString("label"),
+     r.getString("direction"),status,reason,instant(r.getTimestamp("observed_at")),instant(r.getTimestamp("state_since")),instant(r.getTimestamp("last_heartbeat")),
+     skew==null?null:skew/1000,skew!=null && Math.abs(skew)>driftMillis,p.apply(),p.revoke(),p.rejected(),p.oldestRevocation()));
+   },staleSeconds,staleSeconds,heartbeatSeconds,tenant);
+  var connectors=jdbc.query("""
+   select k.id,k.provider,k.label,k.status,ch.reachable,ch.failure_reason,ch.checked_at,ch.last_reachable_at,ch.pending_commands,ch.observed_delay_ms,
+    ch.checked_at is not null and ch.checked_at>clock_timestamp()-make_interval(secs=>?) as fresh
+   from cp.access_connectors k left join cp.access_connector_health ch on ch.tenant_id=k.tenant_id and ch.connector_id=k.id
+   where k.tenant_id=? order by k.label,k.id
+   """,(r,n)->{
+    Boolean reachable=(Boolean)r.getObject("reachable");
+    String status,reason=null;
+    if(!"ACTIVE".equals(r.getString("status"))) status="DISABLED";
+    else if(reachable==null) { status="UNKNOWN"; reason="NEVER_CHECKED"; }
+    else if(!reachable) { status="UNREACHABLE"; reason=r.getString("failure_reason"); }
+    else if(!r.getBoolean("fresh")) { status="UNKNOWN"; reason="STALE"; }
+    else status="OK";
+    Long delay=r.getObject("observed_delay_ms",Long.class);
+    UUID id=r.getObject("id",UUID.class);
+    return new CredentialModels.ConnectorHealth(id,r.getString("provider"),r.getString("label"),status,reason,instant(r.getTimestamp("checked_at")),
+     instant(r.getTimestamp("last_reachable_at")),r.getObject("pending_commands",Integer.class),delay==null?null:delay/1000,devices.getOrDefault(id,List.of()));
+   },staleSeconds,tenant);
+  Instant now=jdbc.queryForObject("select clock_timestamp()",(r,n)->instant(r.getTimestamp(1)));
+  return new CredentialModels.Health(now,staleSeconds,connectors);
+ }
+
  public CredentialModels.Connectors connectors(UUID tenant) {
   Map<UUID,List<CredentialModels.Device>> devices=new LinkedHashMap<>();
   jdbc.query("select id,connector_id,label,direction,status from cp.access_devices where tenant_id=? order by label,id",r->{
