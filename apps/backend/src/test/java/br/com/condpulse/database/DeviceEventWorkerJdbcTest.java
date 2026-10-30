@@ -166,4 +166,20 @@ class DeviceEventWorkerJdbcTest {
   assertEquals("1",db.adminString("select count(*) from cp.device_events where device_id=? and kind='PASSAGE_DETECTED'",entrance));
   db.assertEmptyContext(); workerDb.assertEmptyContext();
  }
+ @Test void aConfirmationThatFailsToSaveIsRetriedWithItsEvent() throws Exception {
+  simulator.scenario("leitor-garagem",Scenario.ACK_ONLY);
+  var card=create("Cartão confirmação");
+  reconciler.runOnce();
+  assertEquals(1,simulator.deliverPending("leitor-garagem"));
+  db.adminUpdate("revoke update on cp.credential_syncs from cp_worker");
+  try { ingestor.runOnce(); }
+  finally { db.adminUpdate("grant update(attempted_version,attempted_action,outcome,attempts,next_attempt_at,last_reason) on cp.credential_syncs to cp_worker"); }
+  assertEquals("0",db.adminString("select count(*) from cp.device_events where device_id=? and kind='CREDENTIAL_APPLIED'",garage),
+   "Evento e confirmação são desfeitos juntos");
+  assertEquals("PARTIAL",status(card.credentialId()));
+  ingestor.runOnce();
+  assertEquals("1",db.adminString("select count(*) from cp.device_events where device_id=? and kind='CREDENTIAL_APPLIED'",garage));
+  assertEquals("ACTIVE",status(card.credentialId()),"A repetição grava o evento e a confirmação");
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
 }
