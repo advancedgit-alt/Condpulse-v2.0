@@ -1,0 +1,27 @@
+# CondPulse — API de homologação na Fly.io (docs/FLY_API.md).
+# Sem segredos aqui: tudo vem de `fly secrets`, gravado só pelo workflow manual fly-api (apply).
+# Mesma imagem revisada da Vercel (Dockerfile.vercel): perfil api, sem migração, preflight antes do Spring.
+app = "condpulse-v2-0"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile.vercel"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Sempre ligada: o motivo da mudança é evitar o início a frio de 16-17 s medido na Vercel.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/actuator/health/readiness"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "60s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
