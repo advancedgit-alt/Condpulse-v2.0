@@ -221,6 +221,53 @@ test('regras novas trazidas por atualização desfazem o aceite da versão anter
   expect(state.creates.map((item) => item.body.acceptedRulesVersion)).toEqual([2]);
 });
 
+test('edição de regras guarda a versão aberta: publicação de outra pessoa no meio não é sobrescrita em silêncio', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const state = await installMovesApi(page, { rules: rules() });
+  await signIn(page);
+  await page.goto(`/gestao/${TENANT_A}/mudancas`);
+  await page.getByRole('button', { name: 'Editar regras' }).click();
+  const rulesForm = page.getByRole('form', { name: 'Editar regras de mudança' });
+  await rulesForm.getByLabel('Regras exibidas às unidades').fill('Texto editado a partir da versão 1.');
+  // Outra pessoa publica a versão 2 e a consulta é atualizada ao voltar à janela.
+  state.rules = { ...rules(2), rulesText: 'Publicada por outra pessoa.' };
+  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.getByText('Regras de mudança (versão 2)')).toBeVisible();
+  await rulesForm.getByRole('button', { name: 'Salvar regras' }).click();
+  await expect.poll(() => state.ruleUpdates.length).toBe(1);
+  expect((state.ruleUpdates[0] as { expectedVersion: number }).expectedVersion).toBe(1);
+});
+
+test('envio incerto continua confirmável mesmo se as regras novas recusariam o período', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installMovesApi(page, { rules: rules() });
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  const section = page.getByRole('region', { name: 'Mudança e entrega de móveis' });
+  await section.getByRole('button', { name: 'Pedir mudança' }).click();
+  const form = page.getByRole('form', { name: 'Pedir mudança' });
+  await form.getByLabel('Data').fill(localDate(3));
+  await form.getByLabel('Início').fill('09:00');
+  await form.getByLabel('Fim').fill('12:00');
+  await form.getByLabel('Responsável ou transportadora').fill('Pessoa Fictícia');
+  await form.getByLabel('Li e aceito as regras de mudança (versão 1)').check();
+  state.loseNextCreate = true;
+  await form.getByRole('button', { name: 'Enviar pedido de mudança' }).click();
+  const again = form.getByRole('button', { name: 'Tentar confirmar o mesmo pedido' });
+  await expect(again).toBeVisible();
+  // A gestão reduz a duração máxima para 2 h: o período de 3 h já enviado não é revalidado na repetição.
+  state.rules = { ...rules(2), maxDurationMinutes: 120 };
+  await section.getByRole('button', { name: 'Atualizar mudanças' }).click();
+  await expect(section.getByText('Regras de mudança (versão 2)', { exact: true })).toBeVisible();
+  await expect(again).toBeEnabled();
+  await again.click();
+  await expect(section.getByText('Este pedido já estava enviado', { exact: false })).toBeVisible();
+  expect(state.creates).toHaveLength(2);
+  expect(state.creates[1]!.key).toBe(state.creates[0]!.key);
+  expect(state.creates[1]!.body).toEqual(state.creates[0]!.body);
+});
+
 test('gestão publica as regras, aprova, recusa com motivo e cancela aprovada com motivo', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });

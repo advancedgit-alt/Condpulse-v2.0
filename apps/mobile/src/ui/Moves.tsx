@@ -17,6 +17,8 @@ const stateLabels: Record<MoveState, string> = { REQUESTED: 'Aguardando a gestã
 const dayNames = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain;
+/** Chave vencida ou usada com outro corpo: a repetição não confirma nem grava; só a lista mostra se o pedido existe. */
+const staleKey = (error: unknown) => error instanceof ApiError && ['IDEMPOTENCY_KEY_EXPIRED', 'IDEMPOTENCY_KEY_REUSED'].includes(error.code);
 /** Recurso desligado, dependente ou vínculo que mudou: a seção some sem erro técnico. */
 /** Envio de pedido com resultado incerto, por conta/condomínio/unidade, fora do formulário: sobrevive à troca de vínculo. */
 export type MovePendingStore = Map<string, { key: string; body: CreateMove }>;
@@ -163,7 +165,8 @@ function MoveForm({ api, scope, membership, rules, newKey, now, close, store, st
         : `Pedido de ${kindLabels[result.move.kind].toLowerCase()} enviado para ${formatWhen(result.move.startsAt, timeZone)}. A gestão decide por aqui.`);
     } catch (error) {
       setFailure(error);
-      if (uncertain(error)) setPending(attempt);
+      // Repetição de envio incerto com chave vencida: continua pendente (sem chave nova automática) até a pessoa conferir.
+      if (uncertain(error) || (pending !== null && staleKey(error))) setPending(attempt);
       else {
         setPending(null); store.delete(storeKey);
         if (error instanceof ApiError && error.code === 'MOVE_RULES_CHANGED') {
@@ -195,6 +198,10 @@ function MoveForm({ api, scope, membership, rules, newKey, now, close, store, st
       <Text style={styles.label}>{`Li e aceito as regras de mudança (versão ${pending?.body.acceptedRulesVersion ?? rules.version})`}</Text>
     </Pressable>
     {failure ? <Notice tone="error">{message(failure)}</Notice> : null}
+    {locked && staleKey(failure) ? <View style={styles.gap}>
+      <Notice tone="info">O prazo para confirmar este envio terminou. Confira a lista de pedidos abaixo: se o pedido aparecer, ele já foi gravado. Só descarte este envio se ele não estiver lá.</Notice>
+      <Button label="Conferi a lista: descartar este envio" secondary disabled={busy} onPress={() => { store.delete(storeKey); setPending(null); close(null); }} />
+    </View> : null}
     {locked ? <Notice tone="info">O resultado não foi confirmado e o pedido ficou travado. Use “Tentar confirmar o mesmo pedido”: se ele já foi enviado, nada novo é gravado.</Notice> : null}
     <Button label={busy ? 'Enviando…' : locked ? 'Tentar confirmar o mesmo pedido' : 'Enviar pedido de mudança'} disabled={!valid || busy} onPress={() => void submit()} />
     {!locked ? <Button label="Voltar" secondary disabled={busy} onPress={() => close(null)} /> : null}

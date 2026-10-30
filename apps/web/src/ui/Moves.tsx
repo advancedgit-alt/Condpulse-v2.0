@@ -121,7 +121,8 @@ function MoveForm({ scope, rules, timeZone, close }: { scope: Scope; rules: Move
     const startsAt = toInstant(`${draft.date}T${draft.start}`, timeZone);
     const endsAt = toInstant(`${draft.date}T${draft.end}`, timeZone);
     if (Date.parse(endsAt) <= Date.parse(startsAt)) windowProblem = 'O fim precisa ser depois do início.';
-    else if ((Date.parse(endsAt) - Date.parse(startsAt)) / 60_000 > rules.maxDurationMinutes) windowProblem = `As regras permitem até ${rules.maxDurationMinutes} minutos por pedido.`;
+    // Envio travado repete o corpo original: as regras atuais não o revalidam (o servidor confere a chave antes das regras).
+    else if (!intent.locked && (Date.parse(endsAt) - Date.parse(startsAt)) / 60_000 > rules.maxDurationMinutes) windowProblem = `As regras permitem até ${rules.maxDurationMinutes} minutos por pedido.`;
     else window = { startsAt, endsAt };
   } catch (error) { windowProblem = error instanceof Error ? error.message : 'Confira a data e o horário.'; }
   const valid = window !== null && provider !== null && [...provider].length >= 2 && plate !== '' && (draft.items.trim() === '' || items !== null)
@@ -301,6 +302,8 @@ function MoveRulesEditor() {
 function RulesForm({ current, close }: { current: MoveRules | null; close(saved: boolean): void }) {
   const scope = useManagement();
   const action = useAction();
+  // Versão aberta para edição: fica fixa até reabrir o formulário; publicação de outra pessoa no meio vira conflito.
+  const [expectedVersion] = useState(current?.version ?? null);
   const [text, setText] = useState(current?.rulesText ?? '');
   const [days, setDays] = useState<number[]>(current?.weekDays ?? [1, 2, 3, 4, 5, 6]);
   const [start, setStart] = useState(current?.startTime ?? '08:00');
@@ -316,7 +319,7 @@ function RulesForm({ current, close }: { current: MoveRules | null; close(saved:
     event.preventDefault();
     if (!valid || action.state.pending) return;
     const ok = await action.run(() => moves.updateRules(scope.tenantId, { rulesText: normalized!, weekDays: [...days].sort(), startTime: start, endTime: end,
-      minNoticeHours: noticeHours, maxDurationMinutes: durationMinutes, expectedVersion: current?.version ?? null }), 'Regras publicadas.');
+      minNoticeHours: noticeHours, maxDurationMinutes: durationMinutes, expectedVersion }), 'Regras publicadas.');
     if (ok) close(true);
   }
   const toggle = (day: number, on: boolean) => setDays((value) => on ? [...new Set([...value, day])] : value.filter((item) => item !== day));

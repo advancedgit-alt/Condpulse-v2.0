@@ -198,3 +198,28 @@ test('regras novas trazidas por atualização desfazem o aceite da versão anter
   expect(await screen.findByText(/Pedido de entrega de móveis enviado|Pedido de mudança de entrada enviado/)).toBeTruthy();
   expect(fake.state.creates.map((item) => item.body.acceptedRulesVersion)).toEqual([2]);
 });
+
+test('confirmação vencida não libera chave nova: o envio continua pendente até a pessoa conferir e descartar', async () => {
+  const pending: MovePendingStore = new Map();
+  const fake = fakeApi();
+  await mount(fake, pending);
+  await fillForm();
+  await fireEvent.press(screen.getByRole('checkbox', { name: 'Li e aceito as regras de mudança (versão 1)' }));
+  fake.state.createError = new ApiError(0, 'COMMAND_OUTCOME_UNKNOWN', 'Não foi possível confirmar o resultado.', true);
+  await press('Enviar pedido de mudança');
+  const create = fake.api.createMove as jest.Mock;
+  const expired = () => new ApiError(409, 'IDEMPOTENCY_KEY_EXPIRED', 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.');
+  create.mockRejectedValueOnce(expired()).mockRejectedValueOnce(expired());
+  await press('Tentar confirmar o mesmo pedido');
+  expect(await screen.findByText(/Confira a lista de pedidos/)).toBeTruthy();
+  // Continua travado: tocar de novo repete a mesma chave em vez de gravar outro pedido.
+  await press('Tentar confirmar o mesmo pedido');
+  expect(await screen.findByText(/Confira a lista de pedidos/)).toBeTruthy();
+  expect(new Set(fake.state.creates.map((item) => item.key)).size).toBe(1);
+  expect(create.mock.calls.map((call) => call[3])).toEqual([create.mock.calls[0][3], create.mock.calls[0][3], create.mock.calls[0][3]]);
+  expect(pending.size).toBe(1);
+  await press('Conferi a lista: descartar este envio');
+  expect(pending.size).toBe(0);
+  expect(screen.queryByRole('button', { name: 'Tentar confirmar o mesmo pedido' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Pedir mudança' })).toBeTruthy();
+});
