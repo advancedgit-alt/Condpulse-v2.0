@@ -81,7 +81,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Convidados de reserva — CP-038
 
 - V021: convidado é convite da unidade com a janela do evento, até a capacidade aceita na reserva; encerrar a reserva revoga todos na mesma transação por gatilho, com evento por convidado. Atrás de `CP_VISITS_ENABLED` (ligada). Merge `a169190` (PR #66, CI 40981074169 verde). V021 aplicada na homologação em 29/10/2026 pelo executor protegido (migrate 40981767427; repetição 40982062417 sem linha nova; 20 linhas no histórico; coluna `reservation_id`, 5 funções, nenhuma tabela `cp` sem RLS completa, zero convidados). Smoke público 40982322424 verde no deployment do merge. Não homologado com login real. Detalhes em [VISITAS.md](VISITAS.md).
-- Pendentes: convidados pelo celular, aviso aos convidados e ensaio com Auth real.
+- Celular (30/10/2026): convidados da reserva confirmada, sob demanda, com chave mantida depois de resultado incerto, limite da área e remoção com confirmação (Jest).
+- Pendentes: aviso aos convidados e ensaio com Auth real e em aparelho.
 
 ## Link compartilhável do convite — CP-037
 

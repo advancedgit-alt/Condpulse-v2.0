@@ -223,6 +223,19 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
         if (revoked.ruleId !== ruleId || revoked.state !== 'REVOKED') throw invalid(true);
         return revoked;
       }, { method: 'POST', body }),
+    reservationGuests: (tenantId: string, unitId: string, reservationId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/guests`, (value) => {
+        const page = permitPage(value, unitId);
+        if (page.permits.some((item) => item.reservationId !== reservationId)) throw invalid();
+        return page;
+      }, signal ? { signal } : {}),
+    addGuest: (tenantId: string, unitId: string, reservationId: string, body: { visitorName: string; documentLast4: string | null }, key: string) =>
+      request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/guests`, (value, response) => {
+        const created = permit(value, unitId);
+        const repeated = replayed(response);
+        if (created.reservationId !== reservationId || (!repeated && created.visitorName !== body.visitorName)) throw invalid(true);
+        return { permit: created, replayed: repeated };
+      }, { method: 'POST', body, key: operationKey(key) }),
     unitArrivals: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/arrivals`, (value) => arrivalPage(value, unitId), signal ? { signal } : {}),
     decideArrival: (tenantId: string, unitId: string, arrivalId: string, decision: 'APPROVE' | 'DENY') =>

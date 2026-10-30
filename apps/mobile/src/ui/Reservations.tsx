@@ -6,6 +6,7 @@ import type { Amenity, CreateReservation as ReservationBody, Reservation, Reserv
 import { bookableDates, daySlots, durations, type Slot } from '../reservations/slots';
 import { addDays, dateInZone, formatDay, formatTime, formatWhen, money, toInstant } from '../time';
 import { colors, touch } from './theme';
+import { ReservationGuests } from './ReservationGuests';
 import { JoinWaitlist, WaitlistSection } from './Waitlist';
 
 /**
@@ -93,6 +94,7 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
   const orphan = !area ? pending.get(pendingScope) ?? null : null;
   const blocked = pending.has(pendingScope);
   const names = new Map((amenities.data ?? []).map((item) => [item.amenityId, item.name]));
+  const capacities = new Map((amenities.data ?? []).map((item) => [item.amenityId, item.capacity]));
 
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={styles.heading}>Reservas</Text>
@@ -138,7 +140,7 @@ export function Reservations({ api, accountId, membership, newKey, now = () => n
         : mine.data.reservations.length === 0 ? <Text style={styles.body}>Nenhuma reserva da unidade neste período.</Text>
           : <View accessibilityRole="list" accessibilityLabel="Reservas da unidade">{mine.data.reservations.map((item) =>
             <ReservationCard key={item.reservationId} api={api} scope={scope} membership={membership} reservation={item}
-              areaName={names.get(item.amenityId) ?? 'Área'} newKey={newKey} now={now} />)}</View>}
+              areaName={names.get(item.amenityId) ?? 'Área'} capacity={capacities.get(item.amenityId) ?? null} newKey={newKey} now={now} />)}</View>}
     {mine.data?.truncated ? (() => {
       const last = mine.data.reservations.at(-1)?.startsAt ?? null;
       // Sem avanço possível (a última mostrada começa no início da consulta ou antes): não oferecer botão que repete a mesma página.
@@ -339,8 +341,8 @@ function Booking({ api, scope, membership, area, newKey, now, close, pending, pe
   </View>;
 }
 
-function ReservationCard({ api, scope, membership, reservation, areaName, newKey, now }: {
-  api: CondPulseApi; scope: readonly unknown[]; membership: Membership & { unitId: string }; reservation: Reservation; areaName: string;
+function ReservationCard({ api, scope, membership, reservation, areaName, capacity, newKey, now }: {
+  api: CondPulseApi; scope: readonly unknown[]; membership: Membership & { unitId: string }; reservation: Reservation; areaName: string; capacity: number | null;
   newKey: KeyFactory; now: () => Date;
 }) {
   const queries = useQueryClient();
@@ -375,6 +377,8 @@ function ReservationCard({ api, scope, membership, reservation, areaName, newKey
     <Text style={styles.body}>{`${formatWhen(reservation.startsAt, timeZone)} até ${formatTime(reservation.endsAt, timeZone)} · regras v${reservation.acceptedPolicyVersion}`}</Text>
     {pending ? <Text style={styles.body}>Aguardando decisão da gestão. O horário fica separado para a unidade, mas ainda não é uma reserva confirmada.</Text> : null}
     {reason ? <Text style={styles.body}>{`Motivo: ${reason}`}</Text> : null}
+    {reservation.status === 'CONFIRMED' && new Date(reservation.endsAt).getTime() > now().getTime()
+      ? <ReservationGuests api={api} scope={scope} tenantId={tenantId} unitId={unitId} reservation={reservation} capacity={capacity} timeZone={timeZone} newKey={newKey} /> : null}
     {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{message(failure)}</Notice> : null}
     {canAsk ? confirming
       ? <View><Text style={styles.body}>{pending ? 'Retirar este pedido? O horário será liberado para outras unidades.' : 'Cancelar esta reserva? Só o autor pode cancelar, dentro do prazo das regras.'}</Text>
