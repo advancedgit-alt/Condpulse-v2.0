@@ -22,6 +22,7 @@ function fakeApi() {
     creates: [] as { body: unknown; key: string }[], cancels: [] as { body: unknown; key: string }[], createError: null as ApiError | null, limit: 100 };
   const api = {
     me: jest.fn(),
+    unitWaitlist: jest.fn(async () => ({ entries: [], truncated: false })),
     amenities: jest.fn(async () => [salao, quadra]),
     availability: jest.fn(async (_tenant: string, _unit: string, amenityId: string, range: { from: string; until: string }) => {
       state.availabilityCalls += 1;
