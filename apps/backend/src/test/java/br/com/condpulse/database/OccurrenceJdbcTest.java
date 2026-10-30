@@ -59,6 +59,12 @@ class OccurrenceJdbcTest {
   assertNotNull(occurrence.unitLabel());
   assertTrue(occurrences.create(concierge,db.tenantA,AAL2,create(id,"Portão da garagem")).replayed(),"Repetição devolve o mesmo registro");
   assertEquals("OCCURRENCE_ID_CONFLICT",assertThrows(BusinessProblem.class,()->occurrences.create(concierge,db.tenantA,AAL2,create(id,"Outro título"))).code());
+  // Mesmo texto com outra unidade (ou área comum) também é outro conteúdo: conflito, nunca repetição confirmada.
+  var original=create(id,"Portão da garagem");
+  assertEquals("OCCURRENCE_ID_CONFLICT",assertThrows(BusinessProblem.class,()->occurrences.create(concierge,db.tenantA,AAL2,
+   new OccurrenceModels.Create(id,original.category(),original.title(),original.description(),db.otherUnitA))).code());
+  assertEquals("OCCURRENCE_ID_CONFLICT",assertThrows(BusinessProblem.class,()->occurrences.create(concierge,db.tenantA,AAL2,
+   new OccurrenceModels.Create(id,original.category(),original.title(),original.description(),null))).code());
   assertEquals("1",db.adminString("select count(*) from cp.concierge_occurrences where tenant_id=?",db.tenantA));
   var page=occurrences.page(manager,db.tenantA,AAL2,false);
   assertEquals(1,page.open()); assertFalse(page.occurrences().getFirst().createdByMe());

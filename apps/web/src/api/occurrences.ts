@@ -48,7 +48,8 @@ export function createOccurrencesApi(client: CondPulseApi = api) {
     create: async (tenantId: string, body: CreateOccurrence) =>
       client.call(base(tenantId), (value, response) => {
         const created = occurrence(value, true);
-        if (created.occurrenceId !== body.occurrenceId || created.title !== body.title || created.category !== body.category) throw invalidResponse(true);
+        if (created.occurrenceId !== body.occurrenceId || created.title !== body.title || created.category !== body.category
+          || created.unitId !== body.unitId) throw invalidResponse(true);
         return { occurrence: created, replayed: response.headers.get('Idempotency-Replayed') === 'true' };
       }, { method: 'POST', body }),
     resolve: async (tenantId: string, occurrenceId: string, resolution: string, expectedVersion: number) =>

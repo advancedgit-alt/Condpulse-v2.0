@@ -44,9 +44,9 @@ public class OccurrenceService {
    if(request.unitId()!=null && !store.unitExists(tenant,request.unitId())) throw invalid("OCCURRENCE_UNIT_INVALID","Escolha uma unidade deste condomínio.");
    boolean fresh=store.insert(tenant,request,title,description);
    var found=store.find(tenant,request.occurrenceId());
-   // Repetição: mesmo identificador, mesma autoria e mesmo conteúdo. Outro conteúdo com o mesmo identificador é conflito.
+   // Repetição: mesmo identificador, mesma autoria e mesmo conteúdo (inclusive a unidade). Outro conteúdo com o mesmo identificador é conflito.
    if(found==null || (!fresh && (!found.createdByMe() || !found.title().equals(title) || !found.description().equals(description)
-      || !found.category().equals(request.category()))))
+      || !found.category().equals(request.category()) || !java.util.Objects.equals(found.unitId(),request.unitId()))))
     throw new BusinessProblem("OCCURRENCE_ID_CONFLICT",409,"Este registro já existe com outro conteúdo. Recarregue a lista.");
    if(fresh) audit.record(tenant,actor,"OCCURRENCE_OPENED","CONCIERGE_OCCURRENCE",found.occurrenceId(),null);
    return new OccurrenceModels.Created(found,!fresh);
