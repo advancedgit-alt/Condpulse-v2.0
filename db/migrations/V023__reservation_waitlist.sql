@@ -151,6 +151,27 @@ REVOKE ALL ON FUNCTION cp.reservation_waitlist_offer_closed() FROM PUBLIC;
 CREATE TRIGGER reservations_waitlist_offer_closed AFTER UPDATE OF status ON cp.reservations FOR EACH ROW
  WHEN(OLD.status='HELD' AND NEW.status<>'HELD') EXECUTE FUNCTION cp.reservation_waitlist_offer_closed();
 
+-- Autor ainda elegível no momento da oferta (mesma regra de quem entra: adulto da unidade, ou dependente com
+-- reservations.create; conta e unidade ativas). Autor sem vínculo não segura o período: a entrada é encerrada e a
+-- oferta passa ao próximo. Durante a oferta (marca local da transação), a API lê os vínculos do condomínio; o worker já
+-- lê os vínculos residenciais ativos (V015).
+CREATE FUNCTION cp.waitlist_author_eligible(target_tenant uuid,target_unit uuid,target_account uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT EXISTS(SELECT 1 FROM cp.memberships m
+  JOIN cp.units u ON u.tenant_id=m.tenant_id AND u.id=m.unit_id AND u.status='ACTIVE'
+  JOIN platform.accounts a ON a.id=m.account_id AND a.status='ACTIVE'
+  WHERE m.tenant_id=target_tenant AND m.unit_id=target_unit AND m.account_id=target_account AND m.status='ACTIVE'
+   AND m.valid_from<=now() AND (m.valid_until IS NULL OR m.valid_until>now())
+   AND (m.role IN ('RESIDENT','RESPONSIBLE') OR (m.role='DEPENDENT'
+    AND coalesce(m.permissions#>ARRAY['reservations','create']='true'::jsonb,false)))) $$;
+REVOKE ALL ON FUNCTION cp.waitlist_author_eligible(uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_author_eligible(uuid,uuid,uuid) TO cp_api,cp_worker;
+CREATE POLICY membership_waitlist_offer_read ON cp.memberships FOR SELECT TO cp_api
+ USING(tenant_id=platform.current_tenant_id() AND coalesce(current_setting('app.waitlist_offer',true),'') LIKE tenant_id::text||':%');
+CREATE POLICY account_waitlist_offer_read ON platform.accounts FOR SELECT TO cp_api
+ USING(coalesce(current_setting('app.waitlist_offer',true),'') LIKE platform.current_tenant_id()::text||':%'
+  AND EXISTS(SELECT 1 FROM cp.memberships m WHERE m.account_id=platform.accounts.id AND m.tenant_id=platform.current_tenant_id()));
+
 -- Oferta: em transação própria, sob a trava da fila da área. Expira retenções e pedidos vencidos da área (linhas
 -- travadas por outro comando ficam para a próxima passada), encerra entradas cujo período começou e oferece cada período
 -- livre ao primeiro da fila, em ordem de entrada, até o início do período (a fila vem antes da reserva direta).
@@ -188,6 +209,10 @@ BEGIN
      AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED')
      AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)'))
    ORDER BY w.created_at,w.id LIMIT 50 FOR UPDATE OF w SKIP LOCKED LOOP
+  IF NOT cp.waitlist_author_eligible(entry.tenant_id,entry.unit_id,entry.created_by) THEN
+   UPDATE cp.reservation_waitlist SET state='CLOSED',version=version+1 WHERE id=entry.id;
+   CONTINUE;
+  END IF;
   held:=gen_random_uuid();
   deadline:=least(clock_timestamp()+interval '15 minutes',entry.starts_at);
   BEGIN

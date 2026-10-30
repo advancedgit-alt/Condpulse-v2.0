@@ -2148,6 +2148,20 @@ def waitlist_checks():
     expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','WAITLIST_OFFERED','{e9}',9,'{{}}')",
                  "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao grava evento fora da oferta")
     expect(error(f"SELECT cp.waitlist_offer('{TB}','{AW}')", "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao oferece em outro condominio")
+    # Autor sem vinculo elegivel nao segura o periodo: a entrada e encerrada e a oferta vai ao proximo (API e worker).
+    for role, actor, hours in (("cp_api", AA, 340), ("cp_worker", None, 380)):
+        rb = booking(hours)
+        eb1, sql = join(hours, UW1, DEPW, creator=DEPW)
+        query(f"UPDATE cp.memberships SET permissions='{{\"reservations\":{{\"create\":true}}}}'::jsonb WHERE account_id='{DEPW}'")
+        query(sql, tenant=TA, actor=DEPW, role="cp_api")
+        eb2, sql = join(hours, UW3, W3)
+        query(sql, tenant=TA, actor=W3, role="cp_api")
+        query(f"UPDATE cp.memberships SET permissions='{{}}'::jsonb WHERE account_id='{DEPW}'")
+        query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{rb}'")
+        expect(value(offer, tenant=TA, actor=actor, role=role) == "1", f"oferta pula autor sem vinculo elegivel ({role})")
+        expect(entry(eb1) == "CLOSED:1" and entry(eb2) == "OFFERED:1", f"entrada do autor inelegivel encerrada e proximo ofertado ({role})")
+        query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id=(select offer_reservation_id from cp.reservation_waitlist where id='{eb2}')")
+    expect(value("select count(*) from cp.memberships", tenant=TA, actor=W2, role="cp_api") == "1", "fora da oferta a API segue lendo so o proprio vinculo")
 
 def main():
     guard()
