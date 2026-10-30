@@ -58,5 +58,8 @@ Dependente e proprietário ficam fora deste recorte (nenhum fluxo concede permis
 ## Pendências
 
 - Ensaio com Auth real, gestão e portaria nomeadas; aplicação na produção pelo executor próprio.
-- Anexos (CP-017), aviso à unidade pela caixa interna e push (CP-034/CP-035), tempo real (CP-036).
+- Anexos (CP-017) e push. Desde a V031, andamento (`REQUEST_UPDATED`) e resposta visível da equipe (`REQUEST_MESSAGE_ADDED` de
+  autor STAFF) viram aviso `REQUEST_UPDATED` na caixa interna de morador e responsável; mensagem da própria unidade não
+  avisa. Concluir com resolução gera dois avisos (andamento e a resolução que entra na conversa). Entrega depende do worker
+  contínuo (BLOQUEADO).
 - Paginação além dos 100 pedidos e das 200 mensagens mais recentes, retenção e acesso do proprietário e do dependente.

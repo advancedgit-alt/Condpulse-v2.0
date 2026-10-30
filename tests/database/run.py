@@ -1420,7 +1420,8 @@ def request_checks():
     query(f"UPDATE cp.memberships SET status='REVOKED' WHERE account_id='{RES5}'")
     expect(visible(Q2, RES5) == "0", "vinculo encerrado deixa de ver o pedido")
     query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE account_id='{RES5}'")
-    expect(error("select count(*) from cp.service_requests", "42501", tenant=TA, role="cp_worker"), "worker nao le pedidos")
+    expect(error("select title,description,requester_name from cp.service_requests", "42501", tenant=TA, role="cp_worker"),
+           "worker nao le o conteudo dos pedidos (V031: so identificador, unidade e situacao)")
     query(f"DELETE FROM cp.outbox WHERE event_type LIKE 'REQUEST%'; DELETE FROM cp.audit_log WHERE action LIKE 'REQUEST%'; "
           f"DELETE FROM cp.request_messages WHERE tenant_id='{TA}'; DELETE FROM cp.service_requests WHERE tenant_id='{TA}'; "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MGR}','{RES5}','{R6}','{DEP6}','{CONC}'); DELETE FROM cp.units WHERE id='{UA6}'; "
@@ -2755,6 +2756,64 @@ def waitlist_offer_notice_checks():
           f"SET session_replication_role=replica; DELETE FROM cp.reservation_waitlist WHERE id='{W1}'; DELETE FROM cp.reservations WHERE id='{H1}'; "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MO}','{DO}'); DELETE FROM platform.accounts WHERE id in ('{MO}','{DO}')")
 
+def unit_notice_checks():
+    """V031: resposta ou mudanca de andamento do pedido pela equipe e decisao da mudanca viram aviso para morador e
+    responsavel da unidade; mensagem da propria unidade e pedido de outra unidade nao geram aviso."""
+    RX, DX, RO = "10000000-0000-4000-8000-0000000005a1", "10000000-0000-4000-8000-0000000005a2", "10000000-0000-4000-8000-0000000005a3"
+    UO = "20000000-0000-4000-8000-0000000005a1"
+    Q, MS, MU, MV = ("84000000-0000-4000-8000-000000000001", "85000000-0000-4000-8000-000000000001",
+                     "85000000-0000-4000-8000-000000000002", "86000000-0000-4000-8000-000000000001")
+    E = ["87000000-0000-4000-8000-00000000000" + str(i) for i in range(1, 6)]
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{RX}','ACTIVE'),('{DX}','ACTIVE'),('{RO}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UO}','{TA}','OUTRA AVISO');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{RX}','{UA}','RESPONSAVEL AVISO','RESPONSIBLE','ACTIVE'),('{TA}','{DX}','{UA}','DEPENDENTE AVISO','DEPENDENT','ACTIVE'),
+                ('{TA}','{RO}','{UO}','OUTRA UNIDADE AVISO','RESIDENT','ACTIVE');
+        SET session_replication_role=replica;
+        INSERT INTO cp.service_requests(id,tenant_id,unit_id,requester_id,requester_name,category,title,description)
+          VALUES('{Q}','{TA}','{UA}','{AA}','PESSOA FICTICIA A','MAINTENANCE','Aviso ficticio','Descricao ficticia');
+        INSERT INTO cp.request_messages(id,tenant_id,request_id,author_id,author_name,author_role,body,visibility)
+          VALUES('{MS}','{TA}','{Q}','{AA}','EQUIPE','STAFF','Resposta da equipe','RESIDENT'),('{MU}','{TA}','{Q}','{AA}','PESSOA FICTICIA A','UNIT','Mensagem da unidade','RESIDENT');
+        INSERT INTO cp.move_requests(id,tenant_id,unit_id,requester_id,kind,starts_at,ends_at,provider_name,rules_version,state,decided_by,decided_at)
+          VALUES('{MV}','{TA}','{UA}','{AA}','MOVE_IN',now()+interval '5 days',now()+interval '5 days 2 hours','TRANSPORTADORA FICTICIA',1,'APPROVED','{AA}',now());
+        INSERT INTO cp.outbox(id,tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES
+          ('{E[0]}','{TA}','REQUEST_UPDATED','{Q}',1,jsonb_build_object('id','{Q}','unitId','{UA}','version',1)),
+          ('{E[1]}','{TA}','REQUEST_MESSAGE_ADDED','{Q}',1,jsonb_build_object('id','{Q}','unitId','{UA}','version',1,'messageId','{MS}')),
+          ('{E[2]}','{TA}','REQUEST_MESSAGE_ADDED','{Q}',2,jsonb_build_object('id','{Q}','unitId','{UA}','version',1,'messageId','{MU}')),
+          ('{E[3]}','{TA}','MOVE_APPROVED','{MV}',1,jsonb_build_object('moveId','{MV}','unitId','{UA}','state','APPROVED','version',1)),
+          ('{E[4]}','{TA}','REQUEST_UPDATED','{Q}',2,jsonb_build_object('id','{Q}','unitId','{UO}','version',2));
+    """)
+    for event in E:
+        query(f"UPDATE cp.outbox SET state='LEASED',attempts=1,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{event}'", tenant=TA, role="cp_worker")
+    def notify(event, account, kind, resource, unit=UA):
+        return (f"INSERT INTO cp.notifications(tenant_id,account_id,unit_id,outbox_id,kind,resource_id) "
+                f"VALUES('{TA}','{account}','{unit}','{event}','{kind}','{resource}')")
+    query(notify(E[0], AA, "REQUEST_UPDATED", Q), tenant=TA, role="cp_worker")
+    query(notify(E[0], RX, "REQUEST_UPDATED", Q), tenant=TA, role="cp_worker")
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E[0]}'") == "2", "andamento do pedido avisa morador e responsavel")
+    expect(error(notify(E[0], DX, "REQUEST_UPDATED", Q), "42501", tenant=TA, role="cp_worker"), "dependente nao recebe aviso de pedido")
+    expect(error(notify(E[0], RO, "REQUEST_UPDATED", Q, unit=UO), "42501", tenant=TA, role="cp_worker"), "outra unidade nao recebe aviso do pedido")
+    expect(error(notify(E[4], RO, "REQUEST_UPDATED", Q, unit=UO), "42501", tenant=TA, role="cp_worker"),
+           "evento com unidade diferente da do pedido nao gera aviso")
+    query(notify(E[1], AA, "REQUEST_UPDATED", Q), tenant=TA, role="cp_worker")
+    expect(error(notify(E[2], AA, "REQUEST_UPDATED", Q), "42501", tenant=TA, role="cp_worker"), "mensagem da propria unidade nao gera aviso")
+    expect(error(notify(E[3], AA, "REQUEST_UPDATED", MV), "42501", tenant=TA, role="cp_worker"), "tipo do aviso corresponde ao evento")
+    query(notify(E[3], AA, "MOVE_DECIDED", MV), tenant=TA, role="cp_worker")
+    expect(error(notify(E[3], DX, "MOVE_DECIDED", MV), "42501", tenant=TA, role="cp_worker"), "dependente nao recebe aviso de mudanca")
+    expect(value(f"select count(*) from cp.notifications where outbox_id in ('{E[1]}','{E[3]}')", tenant=TA, role="cp_api") == "2",
+           "morador ve resposta do pedido e decisao da mudanca")
+    expect(value(f"select count(*) from cp.notifications where outbox_id in ('{E[0]}','{E[1]}','{E[3]}')", tenant=TA, actor=RO, role="cp_api") == "0",
+           "outra unidade nao ve os avisos")
+    expect(error("select title from cp.service_requests", "42501", tenant=TA, role="cp_worker"), "worker nao le o titulo do pedido")
+    expect(error("select body from cp.request_messages", "42501", tenant=TA, role="cp_worker"), "worker nao le o texto da conversa")
+    expect(error("select provider_name from cp.move_requests", "42501", tenant=TA, role="cp_worker"), "worker nao le o prestador da mudanca")
+    expect(value(f"select count(*) from cp.service_requests where id='{Q}'", tenant=TB, role="cp_worker") == "0", "worker de outro condominio nao ve o pedido")
+    query(f"DELETE FROM cp.notifications WHERE outbox_id in ({','.join(repr(e) for e in E)}); DELETE FROM cp.outbox WHERE id in ({','.join(repr(e) for e in E)}); "
+          f"SET session_replication_role=replica; DELETE FROM cp.request_messages WHERE request_id='{Q}'; DELETE FROM cp.service_requests WHERE id='{Q}'; "
+          f"DELETE FROM cp.move_requests WHERE id='{MV}'; DELETE FROM cp.memberships WHERE account_id in ('{RX}','{DX}','{RO}'); "
+          f"DELETE FROM cp.units WHERE id='{UO}'; DELETE FROM platform.accounts WHERE id in ('{RX}','{DX}','{RO}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2869,6 +2928,7 @@ def main():
     waitlist_checks()
     waitlist_management_checks()
     waitlist_offer_notice_checks()
+    unit_notice_checks()
     delegation_checks()
     move_checks()
     credential_checks()

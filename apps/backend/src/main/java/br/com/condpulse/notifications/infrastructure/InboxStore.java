@@ -30,6 +30,25 @@ public class InboxStore {
    (r,n)->new Resource(r.getObject("unit_id",UUID.class),r.getBoolean("open")),tenant,parcel);
   return rows.isEmpty()?null:rows.getFirst();
  }
+ /** Pedido da unidade: só unidade e situação (o worker não lê título nem conversa). Qualquer andamento é notícia. */
+ public Resource request(UUID tenant,UUID request) {
+  var rows=jdbc.query("select unit_id from cp.service_requests where tenant_id=? and id=?",
+   (r,n)->new Resource(r.getObject("unit_id",UUID.class),true),tenant,request);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
+ /** Mensagem indicada no evento: só a resposta visível da equipe vira aviso, nunca a da própria unidade. */
+ public boolean staffReply(UUID tenant,UUID outbox) {
+  return Boolean.TRUE.equals(jdbc.queryForObject("""
+   select exists(select 1 from cp.outbox o join cp.request_messages q on q.tenant_id=o.tenant_id and q.request_id=o.aggregate_id
+    and q.id::text=o.payload->>'messageId' where o.tenant_id=? and o.id=? and q.author_role='STAFF' and q.visibility='RESIDENT')
+   """,Boolean.class,tenant,outbox));
+ }
+ /** Mudança decidida: avisa enquanto a decisão vale (retirada depois não gera aviso). */
+ public Resource move(UUID tenant,UUID move) {
+  var rows=jdbc.query("select unit_id,state in('APPROVED','REJECTED') as open from cp.move_requests where tenant_id=? and id=?",
+   (r,n)->new Resource(r.getObject("unit_id",UUID.class),r.getBoolean("open")),tenant,move);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
  /** A retenção vem do próprio evento (o worker não lê a fila fora da passada de oferta); vale enquanto HELD no prazo. */
  public Offer offer(UUID tenant,UUID outbox) {
   var rows=jdbc.query("""

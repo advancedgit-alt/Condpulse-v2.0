@@ -14,7 +14,7 @@ import { colors, touch } from './theme';
  */
 const kindText: Record<InboxNotification['kind'], string> = {
   ARRIVAL_WAITING: 'Chegada aguardando resposta da unidade', PARCEL_RECEIVED: 'Encomenda recebida na portaria',
-  WAITLIST_OFFERED: 'Vaga da fila de espera',
+  WAITLIST_OFFERED: 'Vaga da fila de espera', REQUEST_UPDATED: 'Atualização no pedido da unidade', MOVE_DECIDED: 'Decisão sobre a mudança',
 };
 const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> = {
   ARRIVAL_WAITING: {
@@ -28,13 +28,24 @@ const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> =
     LEFT: 'Situação atual: você saiu da fila ou recusou a oferta.', EXPIRED: 'Situação atual: prazo da oferta encerrado; a vaga seguiu na fila.',
     CLOSED: 'Situação atual: o período começou e a entrada foi encerrada.',
   },
+  REQUEST_UPDATED: {
+    OPEN: 'Situação atual: enviado.', TRIAGED: 'Situação atual: em análise.', IN_PROGRESS: 'Situação atual: em execução.',
+    WAITING_RESIDENT: 'Situação atual: aguardando a resposta da unidade.', RESOLVED: 'Situação atual: concluído.', CLOSED: 'Situação atual: encerrado.',
+  },
+  MOVE_DECIDED: {
+    REQUESTED: 'Situação atual: aguardando a gestão.', APPROVED: 'Situação atual: mudança aprovada.', REJECTED: 'Situação atual: mudança recusada.',
+    CANCELLED: 'Situação atual: pedido de mudança cancelado.',
+  },
 };
 const opened: Record<InboxNotification['kind'], string> = {
   ARRIVAL_WAITING: 'Aviso aberto. A chegada aparece em “Visitas”, nesta tela, para responder.',
   PARCEL_RECEIVED: 'Aviso aberto. A encomenda aparece em “Encomendas”, nesta tela.',
   WAITLIST_OFFERED: 'Aviso aberto. A oferta aparece em “Fila de espera”, nas reservas desta tela, para aceitar no prazo.',
+  REQUEST_UPDATED: 'Aviso aberto. O pedido está em “Pedidos”, nesta tela.',
+  MOVE_DECIDED: 'Aviso aberto. A mudança está em “Mudança e entrega de móveis”, nesta tela.',
 };
-const section: Record<InboxNotification['kind'], string> = { ARRIVAL_WAITING: 'visits', PARCEL_RECEIVED: 'parcels', WAITLIST_OFFERED: 'waitlist' };
+const section: Record<InboxNotification['kind'], string> = { ARRIVAL_WAITING: 'visits', PARCEL_RECEIVED: 'parcels', WAITLIST_OFFERED: 'waitlist',
+  REQUEST_UPDATED: 'requests', MOVE_DECIDED: 'moves' };
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain;
 /** Recurso desligado ou vínculo que mudou: a caixa some sem erro técnico. */
@@ -75,14 +86,14 @@ export function Inbox({ api, accountId, tenantId, unitId, timeZone }: { api: Con
   const unread = inbox.data?.unread ?? 0;
   return <View accessibilityLabel="Caixa da unidade" style={styles.section}>
     <Text accessibilityRole="header" style={styles.title}>{`Caixa da unidade${unread > 0 ? ` · ${unread} ${unread === 1 ? 'novo' : 'novos'}` : ''}`}</Text>
-    <Text style={styles.body}>Avisos da portaria para quem pode agir nesta unidade. Aparecer aqui não quer dizer que alguém leu: só abrir o aviso registra a leitura. Ainda não há notificação no aparelho.</Text>
+    <Text style={styles.body}>Avisos da portaria e da gestão para quem pode agir nesta unidade. Aparecer aqui não quer dizer que alguém leu: só abrir o aviso registra a leitura. Ainda não há notificação no aparelho.</Text>
     <Button label="Atualizar caixa" secondary disabled={inbox.isFetching} onPress={() => void inbox.refetch()} />
     {outcome ? <Notice tone="success">{outcome}</Notice> : null}
     {failure ? <Notice tone="error">{`${message(failure)}${uncertain(failure) ? ' Atualize e confira antes de repetir.' : ''}`}</Notice> : null}
     {inbox.isPending ? <ActivityIndicator accessibilityLabel="Consultando os avisos da unidade" />
       : inbox.isError && !inbox.data ? <View style={styles.gap}><Notice tone="error">{message(inbox.error)}</Notice>
         <Button label="Tentar consultar a caixa de novo" secondary onPress={() => void inbox.refetch()} /></View>
-        : !inbox.data || inbox.data.items.length === 0 ? <Text style={styles.body}>Nenhum aviso. Chegadas que pedem a sua resposta e encomendas recebidas pela portaria aparecem aqui.</Text>
+        : !inbox.data || inbox.data.items.length === 0 ? <Text style={styles.body}>Nenhum aviso. Chegadas que pedem a sua resposta, encomendas, vagas da fila de espera, respostas da gestão nos pedidos e decisões de mudança aparecem aqui.</Text>
           : <View accessibilityRole="list" accessibilityLabel="Avisos da caixa" style={styles.gap}>{inbox.data.items.map((item) =>
             <View key={item.notificationId} style={styles.card} accessibilityLabel={`${kindText[item.kind]}, ${item.state === 'AVAILABLE' ? 'não aberto' : 'aberto'}`}>
               <Text style={styles.cardTitle}>{`${kindText[item.kind]} · ${item.state === 'AVAILABLE' ? 'Não aberto' : 'Aberto'}`}</Text>
