@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { scanAccessibility } from './a11y';
 import { TENANT_A, UNIT_A, installSyntheticApi, signIn } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
@@ -112,6 +113,7 @@ test('gestão cria rascunho com chave pendente, publica com confirmação e vê 
   await signIn(page);
   await page.goto(`/gestao/${TENANT_A}/avisos`);
   await expect(page.getByRole('heading', { name: 'Avisos do condomínio' })).toBeVisible();
+  await scanAccessibility(page, 'gestão/avisos');
   await page.getByRole('button', { name: 'Novo aviso' }).click();
   const form = page.getByRole('form', { name: 'Novo aviso' });
   await form.getByLabel('Título').fill('  Assembleia   fictícia ');
@@ -162,6 +164,7 @@ test('unidade vê só avisos publicados, sem o texto na lista; abrir mostra o te
   const item = list.getByRole('listitem').filter({ hasText: 'Manutenção da caixa d’água' });
   await expect(item.getByText('Não aberto')).toBeVisible();
   await expect(item.getByText('Linha dois')).toHaveCount(0);
+  await scanAccessibility(page, 'unidade/início com avisos');
   expect(state.opens).toEqual([]);
   await item.getByRole('button', { name: 'Abrir aviso' }).click();
   await expect(item.locator('.announcement-body')).toHaveText('Linha <b>um</b>\n\nLinha dois', { useInnerText: false });

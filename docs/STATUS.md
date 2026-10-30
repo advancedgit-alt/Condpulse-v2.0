@@ -26,7 +26,12 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
 - BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
 - BLOQUEADO: ligar `CP_ACCESS_CREDENTIALS_ENABLED=true` (Production) no projeto Vercel `condpulse` — responsável — painel da Vercel, ou reconectar o conector da Vercel desta sessão com acesso ao projeto `condpulse` (em 30/10/2026 o conector só enxerga `app-advanced`, que não pode ser alterado). Sem a flag a API responde 404 e a web mostra "Credenciais indisponíveis"; nada mais muda.
+- BLOQUEADO: carga representativa do CP-052 (100 rps/1.000 sessões fora do runner) — responsável — ambiente dedicado ou janela na homologação com OK de custo e de uso do limite de 16 conexões da role, mais contas de teste sintéticas no Auth. O ensaio no runner ([CARGA.md](CARGA.md)) não declara capacidade.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável. Roteiro em ordem, sem execução: [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
+
+## Acessibilidade automática — CP-007/CP-053
+
+- Varredura axe (WCAG 2.1 A/AA) no Playwright em desktop e 390 px: entrada, contextos, início/reservas/encomendas/acessos da unidade, cinco seções da gestão, portaria (visitas e encomendas), recuperação de acesso e link de visita. Achado corrigido: o botão da área anunciava nome diferente do texto visível (WCAG 2.5.3); agora o nome começa pelo texto visível ("Reservar esta área: <área>"). APIs sintéticas; ensaio com leitor de tela, fonte ampliada e aparelhos reais segue pendente (CP-053, bloqueio do CP-012).
 
 ## Saúde dos equipamentos e reconciliação — CP-048
 
@@ -34,7 +39,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 ## Histórico residencial dos equipamentos — CP-049
 
-- API e web: a unidade vê as próprias credenciais e os eventos das próprias credenciais (7 dias), com autorização, recusa, abertura e passagem distintas, direção ausente como ausente e "Sem registro de saída" sem inferir presença; a portaria vê as últimas 24 horas com quarentena. Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (desligada na Vercel). Sem migration nova. Pendentes: tela do celular e eventos reais (parceiro, CP-044).
+- API e web: a unidade vê as próprias credenciais e os eventos das próprias credenciais (7 dias), com autorização, recusa, abertura e passagem distintas, direção ausente como ausente e "Sem registro de saída" sem inferir presença; a portaria vê as últimas 24 horas com quarentena. Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (desligada na Vercel). Sem migration nova. Celular: seção "Meu acesso pelos equipamentos" com as próprias credenciais, situação por equipamento e eventos de 7 dias (Jest; sem ensaio em aparelho, ver bloqueio do CP-012). Pendentes: eventos reais (parceiro, CP-044).
 
 ## Eventos dos equipamentos — CP-047
 

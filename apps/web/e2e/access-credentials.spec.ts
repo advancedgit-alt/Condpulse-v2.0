@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { scanAccessibility } from './a11y';
 import { ACCOUNT, TENANT_A, UNIT_A, installSyntheticApi, signIn, type ApiState } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
@@ -194,6 +195,7 @@ test('revogar exige motivo e confirmação; vale para a versão exibida; equipam
   const row = section.getByRole('listitem').filter({ hasText: 'Cartão final 1234' }).first();
   await expect(row.getByText('Ativa em todos os equipamentos')).toBeVisible();
   await expect(row.getByText(/Entrada social: ativa em/)).toBeVisible();
+  await scanAccessibility(page, 'gestão/acesso');
   await row.getByRole('button', { name: 'Revogar' }).click();
   await row.getByRole('button', { name: 'Voltar' }).click();
   expect(state.revokes).toEqual([]);
