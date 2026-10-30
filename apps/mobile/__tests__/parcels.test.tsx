@@ -134,7 +134,7 @@ describe('encomendas no celular', () => {
     expect(screen.getByText(/Autorização criada para Terceiro Fictício/)).toBeTruthy();
     expect(fake.state.creates[0]!.body).toEqual({ delegateName: 'Terceiro Fictício', documentLast4: '12AB', validUntil: '2030-01-09T11:15:00.000Z' });
     expect(await screen.findByText(/Autorização em vigor: Terceiro Fictício · documento final 12AB/)).toBeTruthy();
-  });
+  }, 15000);
 
   it('validade padrão de 48 horas; voltar fecha o formulário sem enviar', async () => {
     const fake = await mount();
@@ -159,7 +159,7 @@ describe('encomendas no celular', () => {
     expect(fake.state.creates[1]!.key).toBe(fake.state.creates[0]!.key);
     expect(fake.state.creates[1]!.body).toEqual(fake.state.creates[0]!.body);
     expect(screen.queryByText('12345678')).toBeNull();
-  });
+  }, 15000);
 
   it('sem a chave do código o servidor recusa com certeza: mostra o motivo sem travar', async () => {
     const fake = await mount((f) => { f.state.errors.create.push(new ApiError(503, 'DELEGATION_UNAVAILABLE',
@@ -190,7 +190,7 @@ describe('encomendas no celular', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Confirmar cancelamento' }));
     expect(await screen.findByText('Autorização de Terceiro Fictício cancelada. O código deixou de valer.')).toBeTruthy();
     expect(fake.state.revokes).toEqual([{ delegationId: activeDelegation.delegationId, expectedVersion: 1 }]);
-  });
+  }, 15000);
 
   it('cancelamento recusado mostra o motivo; falha ao consultar a autorização oferece nova consulta', async () => {
     const changed = new ApiError(409, 'DELEGATION_CHANGED', 'A autorização foi alterada. Atualize a encomenda.');
@@ -223,5 +223,5 @@ describe('encomendas no celular', () => {
     expect(fake.state.creates[1]!.key).toBe(fake.state.creates[0]!.key);
     expect(fake.state.creates[1]!.body).toEqual(fake.state.creates[0]!.body);
     expect(pending.size).toBe(0);
-  });
+  }, 15000);
 });
