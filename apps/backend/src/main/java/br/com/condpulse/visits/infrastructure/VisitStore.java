@@ -119,7 +119,7 @@ public class VisitStore {
  public GuestTarget guestTarget(UUID tenant,UUID reservation) {
   var rows=jdbc.query("""
    select r.unit_id,r.kind,r.status,r.starts_at,r.ends_at,a.name,a.capacity,
-    (select count(*) from cp.visit_permits p where p.tenant_id=r.tenant_id and p.reservation_id=r.id and p.state='ACTIVE')::int as active_guests
+    cp.reservation_active_guests(r.tenant_id,r.id) as active_guests
    from cp.reservations r join cp.amenities a on a.tenant_id=r.tenant_id and a.id=r.amenity_id
    where r.tenant_id=? and r.id=?
    """,(r,n)->new GuestTarget(r.getObject("unit_id",UUID.class),r.getString("kind"),r.getString("status"),instant(r,"starts_at"),

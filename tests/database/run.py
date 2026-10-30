@@ -1,5 +1,6 @@
 """Testes de integridade CondPulse, exclusivamente em PostgreSQL descartável."""
 import concurrent.futures
+import time
 import os
 from pathlib import Path
 import re
@@ -1731,6 +1732,50 @@ def reservation_guest_checks():
     expect(value(f"select state from cp.visit_permits where id='{g4}'") == "ACTIVE", "nada muda na recusa")
     expect(value(f"select count(*) from cp.visit_permits where id='{g4}'", tenant=TA, actor=MGRG, role="cp_api") == "0",
            "marca de encerramento nao vaza")
+    # Dependente com permissao de convidar: a capacidade conta todos os convidados da reserva, sem expor os dos outros.
+    DEPG, RG5 = "10000000-0000-4000-8000-0000000000d5", "31000000-0000-4000-8000-0000000000d5"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{DEPG}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions)
+          VALUES('{TA}','{DEPG}','{UG}','DEPENDENTE CONVIDADOS','DEPENDENT','ACTIVE','{{"visits":{{"create":true}}}}');
+    """)
+    query(booking(RG5, 122, unit=UG, actor=RESG), tenant=TA, actor=RESG, role="cp_api")
+    for _ in range(2):
+        _, sql = guest(RG5, actor=RESG, unit=UG)
+        query(sql, tenant=TA, actor=RESG, role="cp_api")
+    _, sql = guest(RG5, actor=DEPG, unit=UG)
+    expect(error(sql, "23514", tenant=TA, actor=DEPG, role="cp_api"), "dependente nao passa da capacidade preenchida por outro morador")
+    expect(value(f"select cp.reservation_active_guests('{TA}','{RG5}')", tenant=TA, actor=DEPG, role="cp_api") == "2",
+           "dependente conta todos os convidados da reserva")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG5}'", tenant=TA, actor=DEPG, role="cp_api") == "0",
+           "dependente continua sem ver os convidados dos outros")
+    expect(value(f"select coalesce(cp.reservation_active_guests('{TA}','{RG5}')::text,'null')", tenant=TA, actor=AA, role="cp_api") == "null",
+           "outra unidade nao conta convidados de reserva que nao enxerga")
+    # Inclusao e cancelamento simultaneos se serializam: o convidado nunca sobra ativo numa reserva encerrada.
+    RG6, RG7 = "31000000-0000-4000-8000-0000000000d6", "31000000-0000-4000-8000-0000000000d7"
+    query(booking(RG6, 146), tenant=TA, role="cp_api")
+    query(booking(RG7, 170), tenant=TA, role="cp_api")
+    cancel = "UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{}'"
+    g6, sql = guest(RG6)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        adding = pool.submit(query, sql + "; SELECT pg_sleep(2)", tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        cancelling = pool.submit(query, cancel.format(RG6), tenant=TA, actor=MGRG, role="cp_api", check=False)
+        added, cancelled = adding.result(), cancelling.result()
+    expect(added.returncode == 0 and cancelled.returncode == 0, "inclusao e cancelamento simultaneos terminam")
+    expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g6}'") == f"REVOKED:{MGRG}",
+           "cancelamento espera a inclusao em curso e revoga o convidado")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_PERMIT_REVOKED' and aggregate_id='{g6}'") == "1",
+           "evento de revogacao do convidado incluido durante o cancelamento")
+    g7, sql = guest(RG7)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        cancelling = pool.submit(query, cancel.format(RG7) + "; SELECT pg_sleep(2)", tenant=TA, actor=MGRG, role="cp_api", check=False)
+        time.sleep(0.7)
+        adding = pool.submit(query, sql, tenant=TA, role="cp_api", check=False)
+        cancelled, added = cancelling.result(), adding.result()
+    expect(cancelled.returncode == 0 and added.returncode != 0 and "23514" in added.stderr,
+           "inclusao que espera o cancelamento ve a reserva encerrada e e recusada")
+    expect(value(f"select count(*) from cp.visit_permits where id='{g7}'") == "0", "nenhum convidado criado depois do cancelamento")
 
 def main():
     guard()
