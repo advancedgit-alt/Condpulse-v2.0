@@ -1,3 +1,4 @@
+import { credentialPage, eventPage } from './access';
 import { currentRules, move, type CreateMove } from './moves';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
@@ -176,6 +177,10 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
     createReservation: (tenantId: string, body: CreateReservation, key: string) =>
       request(`${tenant(tenantId)}/reservations`, (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }),
         { method: 'POST', body, key: operationKey(key) }),
+    unitCredentials: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/access-credentials`, (value) => credentialPage(value, unitId), signal ? { signal } : {}),
+    unitDeviceEvents: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/device-events`, eventPage, signal ? { signal } : {}),
     moveRules: (tenantId: string, signal?: AbortSignal) => request(`${tenant(tenantId)}/move-rules`, currentRules, signal ? { signal } : {}),
     unitMoves: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/moves`, (value) => {
