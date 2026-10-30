@@ -2875,6 +2875,51 @@ def outbox_replay_checks():
     expect(error(f"UPDATE cp.outbox SET attempt_base=0 WHERE id='{F1}'", "42501", tenant=TA, role="cp_worker"), "worker nao muda a base das tentativas")
     query(f"SET session_replication_role=replica; DELETE FROM cp.outbox WHERE id in ('{F1}','{S1}','{D1}','{P1}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{OP}'; DELETE FROM platform.accounts WHERE id='{OP}'")
 
+def occurrence_checks():
+    """V033: ocorrencias da portaria. Portaria (concierge.operate) e gestao (requests.manage) registram e encerram com
+    resolucao; autoria, nomes e horarios vem do banco; nada e apagado; unidade e moradores nao veem."""
+    CO, MG, RO = "10000000-0000-4000-8000-0000000007a1", "10000000-0000-4000-8000-0000000007a2", "10000000-0000-4000-8000-0000000007a3"
+    O1, O2 = "89000000-0000-4000-8000-000000000001", "89000000-0000-4000-8000-000000000002"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{CO}','ACTIVE'),('{MG}','ACTIVE'),('{RO}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{CO}',NULL,'PORTARIA OCORRENCIA','CONCIERGE','ACTIVE'),('{TA}','{MG}',NULL,'GESTAO OCORRENCIA','MANAGER','ACTIVE'),
+                ('{TA}','{RO}','{UA}','MORADOR OCORRENCIA','RESIDENT','ACTIVE');
+    """)
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    manager = "SET LOCAL app.capabilities='requests.manage'; "
+    def create(identifier, extra_cols="", extra_vals=""):
+        return (f"INSERT INTO cp.concierge_occurrences(id,tenant_id,category,title,description,unit_id{extra_cols}) "
+                f"VALUES('{identifier}','{TA}','EQUIPMENT','Portao da garagem','Nao fecha sozinho','{UA}'{extra_vals})")
+    expect(error(create(O1), "42501", tenant=TA, actor=RO, role="cp_api"), "morador nao registra ocorrencia")
+    expect(error(create(O1, ",created_by", f",'{MG}'"), "42501", tenant=TA, actor=CO, role="cp_api"), "autoria vem do banco")
+    expect(error(create(O1, ",state", ",'RESOLVED'"), "42501", tenant=TA, actor=CO, role="cp_api"), "ocorrencia nasce aberta")
+    query(concierge + create(O1), tenant=TA, actor=CO, role="cp_api")
+    expect(value(f"select state||':'||created_by||':'||created_by_name||':'||version from cp.concierge_occurrences where id='{O1}'")
+           == f"OPEN:{CO}:PORTARIA OCORRENCIA:0", "portaria registra com autoria e nome do proprio vinculo")
+    expect(error(concierge + create(O2).replace("'Portao da garagem'", "'ab'"), "23514", tenant=TA, actor=CO, role="cp_api"), "titulo de 3 a 120")
+    expect(value(f"select count(*) from cp.concierge_occurrences where id='{O1}'", tenant=TA, actor=RO, role="cp_api") == "0",
+           "morador nao ve ocorrencias da portaria")
+    expect(value(f"{manager}select count(*) from cp.concierge_occurrences where id='{O1}'", tenant=TA, actor=MG, role="cp_api") == "1",
+           "gestao ve as ocorrencias")
+    expect(value(f"{concierge}select count(*) from cp.concierge_occurrences where id='{O1}'", tenant=TB, actor=CO, role="cp_api", check=False) in ("0", ""),
+           "outro condominio nao ve")
+    expect(error(concierge + f"UPDATE cp.concierge_occurrences SET title='Outro' WHERE id='{O1}'", "42501", tenant=TA, actor=CO, role="cp_api"),
+           "conteudo da ocorrencia nao muda")
+    expect(error(concierge + f"UPDATE cp.concierge_occurrences SET state='RESOLVED',version=1 WHERE id='{O1}'", "23514", tenant=TA, actor=CO, role="cp_api"),
+           "encerrar exige resolucao")
+    expect(error(concierge + f"UPDATE cp.concierge_occurrences SET state='RESOLVED',resolution='Ok',version=5 WHERE id='{O1}'", "23514",
+                 tenant=TA, actor=CO, role="cp_api"), "encerrar pela versao lida")
+    query(manager + f"UPDATE cp.concierge_occurrences SET state='RESOLVED',resolution='Motor ajustado',version=1 WHERE id='{O1}'", tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select state||':'||resolved_by||':'||resolved_by_name||':'||(resolved_at is not null) from cp.concierge_occurrences where id='{O1}'")
+           == f"RESOLVED:{MG}:GESTAO OCORRENCIA:true", "gestao encerra com resolucao; autoria e horario do banco")
+    expect(error(concierge + f"UPDATE cp.concierge_occurrences SET state='OPEN',resolution=NULL,version=2 WHERE id='{O1}'", "23514",
+                 tenant=TA, actor=CO, role="cp_api"), "ocorrencia encerrada e final")
+    expect(error(concierge + f"DELETE FROM cp.concierge_occurrences WHERE id='{O1}'", "42501", tenant=TA, actor=CO, role="cp_api"), "ocorrencia nao e apagada")
+    expect(error("select count(*) from cp.concierge_occurrences", "42501", tenant=TA, role="cp_worker"), "worker nao le ocorrencias")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.concierge_occurrences WHERE id in ('{O1}','{O2}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{CO}','{MG}','{RO}'); DELETE FROM platform.accounts WHERE id in ('{CO}','{MG}','{RO}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2991,6 +3036,7 @@ def main():
     waitlist_offer_notice_checks()
     unit_notice_checks()
     outbox_replay_checks()
+    occurrence_checks()
     delegation_checks()
     move_checks()
     credential_checks()

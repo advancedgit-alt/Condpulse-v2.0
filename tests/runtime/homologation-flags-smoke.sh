@@ -54,7 +54,8 @@ for route in /v1/me "/v1/tenants/$tenant/reservations" "/v1/tenants/$tenant/mana
   "/v1/tenants/$tenant/units/$unit/notifications" "/v1/tenants/$tenant/management/announcements" \
   "/v1/tenants/$tenant/units/$unit/announcements" "/v1/tenants/$tenant/management/requests" \
   "/v1/tenants/$tenant/units/$unit/requests" "/v1/tenants/$tenant/management/imports" \
-  "/v1/tenants/$tenant/management/access-credentials" "/v1/tenants/$tenant/concierge/pending-revocations" /v1/platform/tenants /v1/platform/billing/plans; do
+  "/v1/tenants/$tenant/management/access-credentials" "/v1/tenants/$tenant/concierge/pending-revocations" \
+  "/v1/tenants/$tenant/concierge/occurrences" /v1/platform/outbox /v1/platform/tenants /v1/platform/billing/plans; do
   status=$(curl -sS -o "$body" -w '%{http_code}' "$base$route")
   if [ "$status" != 401 ]; then echo "Rota sem sessão respondeu $status: $route" >&2; exit 1; fi
   node -e "const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); if(p.code!=='AUTHENTICATION_REQUIRED') process.exit(1)" "$body"
