@@ -28,12 +28,12 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 ## Fila de espera de reservas — CP-040
 
-- V023: entrada num período ocupado com as regras vigentes; período liberado vira retenção `HELD` de até 15 minutos ao primeiro da fila (exclusão GiST impede duas ofertas no mesmo período); aceitar confirma ou vira pedido; recusar ou vencer passa a vez; passada periódica no worker atrás de `CP_WORKER_WAITLIST_ENABLED=false` (worker não implantado). Atrás de `CP_RESERVATIONS_ENABLED` (ligada); V023 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [FILA_ESPERA.md](FILA_ESPERA.md).
+- V023: entrada num período ocupado com as regras vigentes; período liberado vira retenção `HELD` de até 15 minutos ao primeiro da fila (exclusão GiST impede duas ofertas no mesmo período); aceitar confirma ou vira pedido; recusar ou vencer passa a vez; passada periódica no worker atrás de `CP_WORKER_WAITLIST_ENABLED=false` (worker não implantado). Atrás de `CP_RESERVATIONS_ENABLED` (ligada); Merge `867d8ff` (PR #68, CI 40992527169 verde). V023 aplicada na homologação em 29/10/2026 pelo executor protegido (migrate 40993166940; repetição 40993369928 sem linha nova; 22 linhas no histórico; RLS FORCE na fila, 8 funções `waitlist_*`, nenhuma tabela `cp` sem RLS completa, zero entradas). Smoke público 40993532095 verde no deployment do merge. Não homologado com login real. Detalhes em [FILA_ESPERA.md](FILA_ESPERA.md).
 - Pendentes: aviso da oferta (worker), fila pelo celular, visão da gestão e ensaio com Auth real.
 
 ## Prestador recorrente — CP-039
 
-- V022: regra de dias, horário local e período gera janelas (convites) por dia no fuso do condomínio; fora delas não há convite; revogar a regra revoga as janelas na mesma transação. Atrás de `CP_VISITS_ENABLED` (ligada); V022 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [VISITAS.md](VISITAS.md).
+- V022: regra de dias, horário local e período gera janelas (convites) por dia no fuso do condomínio; fora delas não há convite; revogar a regra revoga as janelas na mesma transação. Atrás de `CP_VISITS_ENABLED` (ligada); Merge `075b289` (PR #67, CI 40983247724 verde). V022 aplicada na homologação em 29/10/2026 pelo executor protegido (migrate 40983836465; repetição 40984751973 sem linha nova). Smoke público 40985329016 verde no deployment do merge. Não homologado com login real. Detalhes em [VISITAS.md](VISITAS.md).
 - Pendentes: prestador pelo celular, expansão contínua pelo worker e ensaio com Auth real.
 
 ## Convidados de reserva — CP-038

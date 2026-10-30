@@ -1226,7 +1226,21 @@
         "db/migrations/V022__recurring_visit_rules.sql",
         "tests/database/run.py#visit_rule_checks",
         "apps/backend/src/test/java/br/com/condpulse/database/VisitRuleJdbcTest.java",
-        "apps/web/e2e/visit-rules.spec.ts"
+        "apps/web/e2e/visit-rules.spec.ts",
+        {
+          "batch": "visit-rules-20261029",
+          "commit": "075b28941876a62eb6c5336f5569c382aeafe68a",
+          "branch": "feat/cp-039 (PR #67)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40983836465",
+          "commands": [
+            "CI foundation 40983247724",
+            "database-operations migrate 40983836465",
+            "repeticao 40984751973",
+            "public-runtime-smoke 40985329016"
+          ],
+          "scope": "V022 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; smoke publico verde. Sem login real."
+        }
       ]
     },
     {
@@ -1238,7 +1252,21 @@
         "db/migrations/V023__reservation_waitlist.sql",
         "tests/database/run.py#waitlist_checks",
         "apps/backend/src/test/java/br/com/condpulse/database/WaitlistJdbcTest.java",
-        "apps/web/e2e/waitlist.spec.ts"
+        "apps/web/e2e/waitlist.spec.ts",
+        {
+          "batch": "waitlist-20261029",
+          "commit": "867d8ff06008127d966d0436f47fa1dbaf27a4ec",
+          "branch": "feat/cp-040-waitlist (PR #68)",
+          "environment": "GitHub Actions/PostgreSQL17.11 descartavel; homologacao rpnrqfrfwywglvyykgrg",
+          "url": "https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/40993166940",
+          "commands": [
+            "CI foundation 40992527169",
+            "database-operations migrate 40993166940",
+            "repeticao 40993369928",
+            "public-runtime-smoke 40993532095"
+          ],
+          "scope": "V023 aplicada na homologacao pelo executor protegido; repeticao sem linha nova; RLS FORCE e 8 funcoes conferidas por SQL somente leitura; smoke publico verde. Worker nao implantado; sem login real."
+        }
       ]
     },
     {
