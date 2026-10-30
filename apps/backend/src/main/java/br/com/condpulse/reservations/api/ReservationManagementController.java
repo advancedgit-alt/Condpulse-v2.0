@@ -33,6 +33,11 @@ public class ReservationManagementController {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore())
    .body(service.reservations(account(jwt),tenantId,assurance(jwt),status,from,until));
  }
+ @GetMapping("/v1/tenants/{tenantId}/management/waitlist")
+ public ResponseEntity<ReservationManagementModels.ManagedWaitlistPage> waitlist(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @RequestParam(defaultValue="true") boolean open) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.waitlist(account(jwt),tenantId,assurance(jwt),open));
+ }
  @PostMapping("/v1/tenants/{tenantId}/management/reservations/{reservationId}/decision")
  public ResponseEntity<ReservationManagementModels.ManagedReservation> decide(@AuthenticationPrincipal Jwt jwt,
      @PathVariable UUID tenantId,@PathVariable UUID reservationId,@RequestBody ReservationManagementModels.Decision request) {
