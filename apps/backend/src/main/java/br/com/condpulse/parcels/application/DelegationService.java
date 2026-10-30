@@ -81,8 +81,11 @@ public class DelegationService {
    Instant until=request.validUntil()==null?now.plus(DEFAULT_VALIDITY):request.validUntil();
    if(until.isBefore(now.plus(MINIMUM_VALIDITY)) || until.isAfter(now.plus(MAXIMUM_VALIDITY)))
     throw invalid("DELEGATION_VALIDITY_INVALID","A autorização vale de 15 minutos a 7 dias.");
-   if("DELIVERED".equals(parcel.status())) throw new BusinessProblem("PARCEL_ALREADY_DELIVERED",409,"Esta encomenda já foi retirada.");
    store.lockParcel(tenant,parcelId);
+   // Relido sob a trava: retirada ou anulação concluídas enquanto esta criação esperava não recebem autorização.
+   var locked=parcels.parcel(tenant,parcelId,false);
+   if(locked==null || "VOIDED".equals(locked.status())) throw parcelNotFound();
+   if("DELIVERED".equals(locked.status())) throw new BusinessProblem("PARCEL_ALREADY_DELIVERED",409,"Esta encomenda já foi retirada.");
    // Nova autorização substitui a anterior: o código antigo deixa de valer na mesma transação.
    store.closeActive(tenant,parcelId);
    String code=String.format("%08d",RANDOM.nextInt(100_000_000));

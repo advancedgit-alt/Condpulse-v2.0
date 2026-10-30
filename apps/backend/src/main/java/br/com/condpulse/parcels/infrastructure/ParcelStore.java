@@ -67,6 +67,9 @@ public class ParcelStore {
   return "RECEIVED".equals(status)?" order by p.received_at,p.id":" order by p.received_at desc,p.id desc";
  }
  public ParcelModels.Parcel parcel(UUID tenant,UUID parcel,boolean lock) {
+  // Travar a encomenda (retirada, anulação, retirada por código) toma antes a trava da autorização de retirada, a mesma da
+  // criação e do cancelamento: a autorização nunca é criada em paralelo com o encerramento da encomenda (V024).
+  if(lock) jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"cp.parcel_delegations:"+tenant+":"+parcel);
   var rows=jdbc.query(SELECT+" where p.tenant_id=? and p.id=?"+(lock?" for update of p":""),PARCEL,tenant,parcel);
   return rows.isEmpty()?null:rows.getFirst();
  }
