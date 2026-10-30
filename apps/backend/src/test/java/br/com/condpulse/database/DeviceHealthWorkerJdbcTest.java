@@ -138,6 +138,30 @@ class DeviceHealthWorkerJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void aHeartbeatAgesWithTheDatabaseClockEvenWithoutANewCheck() throws Exception {
+  monitor.runOnce();
+  // Sem nova consulta: com limite de sinal zero, o último sinal gravado já é antigo pelo relógio atual do banco.
+  var aged=tenants.execute(manager,db.tenantA,AAL2,context->new CredentialStore(db.jdbc).health(db.tenantA,CredentialService.HEALTH_STALE,
+   Duration.ZERO,CredentialService.CLOCK_DRIFT)).connectors().stream().filter(c->c.connectorId().equals(connector)).findFirst().orElseThrow();
+  assertEquals("OK",aged.status());
+  assertEquals("OFFLINE:HEARTBEAT_STALE",device(aged,entrance).status()+":"+device(aged,entrance).reason());
+  db.assertEmptyContext();
+ }
+
+ @Test void aRejectedRevocationIsCountedAsRejectedWithoutAPendingDate() throws Exception {
+  simulator.scenario("leitor-entrada",Scenario.REJECT);
+  var card=create("Cartão recusado");
+  reconciler.runOnce();
+  credentials.revoke(manager,db.tenantA,AAL2,card.credentialId(),new CredentialModels.Revoke("Revogação recusada",card.version()));
+  reconciler.runOnce();
+  var health=health();
+  var entry=device(health,entrance);
+  assertEquals(0,entry.pendingRevoke());
+  assertEquals(1,entry.rejected());
+  assertNull(entry.oldestPendingRevocation(),"Recusa não é revogação pendente");
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
  @Test void reconciliationAfterAnOutageSendsOnlyTheFinalState() throws Exception {
   simulator.scenario("leitor-entrada",Scenario.OFFLINE);
   var card=create("Cartão queda");
