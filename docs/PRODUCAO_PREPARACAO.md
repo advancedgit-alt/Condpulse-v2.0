@@ -12,7 +12,7 @@ Storage, origem nem aplicação apontando para ele; a Vercel Production `condpul
 | --- | --- | --- | --- | --- |
 | 1 | `inspect` do banco de produção (não escreve) | Claude ou responsável | `production-database-operations.yml`, `operation=inspect` | Environment `condpulse-production-database-operations` com `CP_PRODUCTION_DATABASE_PASSWORD` (já usado no migrate de 29/10) |
 | 2 | Migrate V018 até a última migration aprovada na homologação | Claude, **com OK** | mesmo workflow, `operation=migrate` | OK do responsável, janela sem outro DDL, backup compatível |
-| 3 | Login runtime de menor privilégio (`cp_api`) e login do worker (`cp_worker`, NOLOGIN até a hospedagem) | Responsável (ou execução autorizada por escrito) | SQL operacional revisado, senha só no cofre | Decisão de onde a senha fica guardada |
+| 3 | Logins exclusivos de menor privilégio: `cp_runtime_*` membro só do grupo `cp_api` e `cp_worker_*` membro só do grupo `cp_worker` (este `NOLOGIN` até a hospedagem). Os grupos `cp_api` e `cp_worker` continuam `NOLOGIN`, como exigem `infra/validate-release.mjs` e `infra/operations/worker-login.sql` | Responsável (ou execução autorizada por escrito) | SQL operacional revisado, senha só no cofre | Decisão de onde a senha fica guardada |
 | 4 | Auth do projeto: signup público desligado (feito), MFA TOTP, SMTP próprio, URLs de redirecionamento | Responsável | Painel Supabase Auth | Provedor SMTP escolhido |
 | 5 | Storage: três buckets privados e políticas, chave de serviço só no cofre | Responsável | Painel Supabase Storage / cofre | — |
 | 6 | Origem de produção: projeto Vercel **separado** (ou Coolify, ADR-0005), domínio, variáveis próprias (nunca cópia das de homologação) | Responsável | Vercel / DNS | Decisão de domínio e custo |
