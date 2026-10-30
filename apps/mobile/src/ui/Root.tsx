@@ -8,6 +8,7 @@ import { Announcements } from './Announcements';
 import { Inbox } from './Inbox';
 import { DeviceAccess } from './DeviceAccess';
 import { Moves, type MovePendingStore } from './Moves';
+import { Requests, type RequestPendingStore } from './Requests';
 import { Visits, type PermitPendingStore } from './Visits';
 import type { RulePendingStore } from './VisitRules';
 import type { GuestPendingStore } from './ReservationGuests';
@@ -98,6 +99,7 @@ function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager:
   const [movePending] = useState<MovePendingStore>(() => new Map());
   const [delegationPending] = useState<DelegationPendingStore>(() => new Map());
   const [permitPending] = useState<PermitPendingStore>(() => new Map());
+  const [requestPending] = useState<RequestPendingStore>(() => new Map());
   const [rulePending] = useState<RulePendingStore>(() => new Map());
   const [guestPending] = useState<GuestPendingStore>(() => new Map());
   // A resposta precisa ser da mesma conta da sessão; outra conta encerra tudo.
@@ -126,6 +128,8 @@ function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager:
     {active && active.unitId ? <Reservations key={active.membershipId} api={api} accountId={accountId}
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={pending} guestPending={guestPending} />
       : active ? <Text style={styles.body}>Este vínculo não tem unidade: as reservas ficam com os moradores e com a gestão na web.</Text> : null}
+    {active && active.unitId && ['RESIDENT', 'RESPONSIBLE'].includes(active.role) ? <Requests key={`requests-${active.membershipId}`} api={api}
+      accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={requestPending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE'].includes(active.role) ? <Moves key={`moves-${active.membershipId}`} api={api} accountId={accountId}
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={movePending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Visits key={`visits-${active.membershipId}`} api={api}
