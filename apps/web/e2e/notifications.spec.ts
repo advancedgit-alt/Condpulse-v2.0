@@ -7,9 +7,10 @@ const minutes = (value: number) => new Date(Date.now() + value * 60_000).toISOSt
 const WAITING = '93000000-0000-4000-8000-000000000001';
 const DELIVERED = '93000000-0000-4000-8000-000000000002';
 const VOIDED = '93000000-0000-4000-8000-000000000003';
+const OFFER = '93000000-0000-4000-8000-000000000004';
 
 interface Notice {
-  notificationId: string; unitId: string; kind: 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED'; resourceId: string; resourceState: string | null;
+  notificationId: string; unitId: string; kind: 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED'; resourceId: string; resourceState: string | null;
   state: 'AVAILABLE' | 'READ_IN_APP'; createdAt: string; readAt: string | null;
 }
 async function json(route: Route, status: number, body: unknown) {
@@ -66,6 +67,20 @@ test('caixa da unidade lista avisos sem marcar leitura; só abrir registra a lei
   await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/acessos$`));
   expect(state.opens.map((item) => item.id)).toEqual([WAITING]);
   expect(state.opens[0]!.csrf).toBeTruthy();
+});
+
+test('oferta da fila de espera aparece só para quem entrou e leva às reservas para aceitar', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installInbox(page);
+  state.items = [{ notificationId: OFFER, unitId: UNIT_A, kind: 'WAITLIST_OFFERED', resourceId: '82000000-0000-4000-8000-000000000001',
+    resourceState: 'OFFERED', state: 'AVAILABLE', createdAt: minutes(-1), readAt: null }];
+  await signIn(page);
+  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  const offer = page.getByRole('list', { name: 'Avisos da unidade' }).getByRole('listitem').filter({ hasText: 'Vaga da fila de espera' });
+  await expect(offer.getByText('Situação atual: oferta aguardando o seu aceite, com prazo.')).toBeVisible();
+  await offer.getByRole('button', { name: 'Abrir e ver reservas' }).click();
+  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
+  expect(state.opens.map((item) => item.id)).toEqual([OFFER]);
 });
 
 test('abertura que termina depois de a pessoa sair da página não a leva de volta para outra tela', async ({ page }) => {

@@ -23,6 +23,10 @@ describe('contrato da caixa da unidade', () => {
     expect(inboxNotification({ ...notice, resourceState: null }).resourceState).toBeNull();
     expect(() => inboxNotification({ ...notice, resourceState: 'WAITING' })).toThrow();
     expect(inboxNotification({ ...notice, kind: 'ARRIVAL_WAITING', resourceState: 'EXPIRED' }).resourceState).toBe('EXPIRED');
+    // Oferta da fila de espera (V030): situação da entrada da fila.
+    expect(inboxNotification({ ...notice, kind: 'WAITLIST_OFFERED', resourceState: 'OFFERED' }).kind).toBe('WAITLIST_OFFERED');
+    expect(inboxNotification({ ...notice, kind: 'WAITLIST_OFFERED', resourceState: 'ACCEPTED' }).resourceState).toBe('ACCEPTED');
+    expect(() => inboxNotification({ ...notice, kind: 'WAITLIST_OFFERED', resourceState: 'RECEIVED' })).toThrow();
   });
   it('lista sem cache de dados alheios e abertura só pelo POST, confirmando a leitura devolvida', async () => {
     let reply: () => Response = () => json({ items: [notice], unread: 1 });

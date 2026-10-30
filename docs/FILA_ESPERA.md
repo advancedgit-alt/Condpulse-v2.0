@@ -70,8 +70,8 @@ aceitar usam `Idempotency-Key`; resultado incerto repete com a mesma chave. Test
 
 ## Pendentes
 
-Aviso da oferta na caixa interna/push (o evento `WAITLIST_OFFERED` vai ao outbox; o worker não está implantado — BLOQUEADO na implantação do worker),
-visão da fila para a gestão, conferência de vínculo do autor no momento da oferta (hoje conferido no
+Push da oferta; a entrega na caixa interna existe desde a V030 (só para quem entrou na fila), mas depende do worker
+contínuo, que não está implantado — BLOQUEADO na implantação do worker; conferência de vínculo do autor no momento da oferta (hoje conferido no
 aceite) e ensaio com Auth real.
 
 ## Visão da gestão (V029)

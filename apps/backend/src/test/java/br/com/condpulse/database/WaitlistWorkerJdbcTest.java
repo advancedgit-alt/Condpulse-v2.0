@@ -3,7 +3,14 @@ package br.com.condpulse.database;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.UUID;
+import br.com.condpulse.notifications.application.InboxEffect;
+import br.com.condpulse.notifications.application.NotificationService;
+import br.com.condpulse.notifications.application.OutboxWorker;
+import br.com.condpulse.notifications.infrastructure.InboxStore;
+import br.com.condpulse.notifications.infrastructure.NotificationStore;
+import br.com.condpulse.notifications.infrastructure.OutboxStore;
 import br.com.condpulse.notifications.application.WorkerTransactions;
 import br.com.condpulse.reservations.application.ReservationModels;
 import br.com.condpulse.reservations.application.ReservationService;
@@ -38,7 +45,9 @@ class WaitlistWorkerJdbcTest {
  private static ReservationService reservations;
  private static WaitlistService waitlist;
  private static WaitlistSweep sweep;
- private static UUID accountD,unitD;
+ private static OutboxWorker inboxWorker;
+ private static NotificationService inbox;
+ private static UUID accountD,unitD,roommate;
  private UUID amenity;
  private Instant start;
 
@@ -50,7 +59,14 @@ class WaitlistWorkerJdbcTest {
   reservations=new ReservationService(api,store);
   waitlist=new WaitlistService(api,store,new WaitlistStore(db.jdbc),new AuditRecorder(db.jdbc),
    br.com.condpulse.reservations.application.WaitlistOffers.NONE);
-  sweep=new WaitlistSweep(new WorkerTransactions(workerDb.jdbc,workerDb.manager),new WaitlistSweepStore(workerDb.jdbc));
+  var workerTransactions=new WorkerTransactions(workerDb.jdbc,workerDb.manager);
+  sweep=new WaitlistSweep(workerTransactions,new WaitlistSweepStore(workerDb.jdbc));
+  inboxWorker=new OutboxWorker(workerTransactions,new OutboxStore(workerDb.jdbc),List.of(new InboxEffect(new InboxStore(workerDb.jdbc))));
+  inbox=new NotificationService(api,new NotificationStore(db.jdbc));
+  roommate=UUID.randomUUID(); db.extraAccounts.add(roommate);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",roommate);
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) values(?,?,?,'OUTRO MORADOR FILA','RESIDENT','ACTIVE')",
+   db.tenantA,roommate,db.unitA);
   accountD=UUID.randomUUID(); unitD=UUID.randomUUID(); db.extraAccounts.add(accountD);
   db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",accountD);
   db.adminUpdate("insert into cp.units(id,tenant_id,label) values(?,?,'FILA WORKER D')",unitD,db.tenantA);
@@ -98,5 +114,38 @@ class WaitlistWorkerJdbcTest {
   assertEquals("2",db.adminString("select count(*) from cp.outbox where event_type='WAITLIST_OFFERED' and aggregate_id in (?,?)",
    first.waitlistId(),second.waitlistId()));
   db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
+ @Test void offerNoticeGoesOnlyToWhoJoinedWhileTheHoldIsValid() throws Exception {
+  var booked=reservations.create(db.accountC,db.tenantA,key(),new ReservationModels.Create(db.otherUnitA,amenity,start,start.plusSeconds(7200),1)).reservation();
+  var entry=waitlist.join(db.accountA,db.tenantA,key(),new WaitlistModels.Join(db.unitA,amenity,start,start.plusSeconds(7200),1)).entry();
+  reservations.cancel(db.accountC,db.tenantA,booked.reservationId(),key(),new ReservationModels.Cancel(db.otherUnitA,booked.version()));
+  assertTrue(sweep.runOnce()>=1);
+  assertEquals("OFFERED",state(entry.waitlistId()));
+  inboxWorker.runTenant(db.tenantA);
+  assertEquals("DELIVERED",db.adminString("select state from cp.outbox where tenant_id=? and event_type='WAITLIST_OFFERED' and aggregate_id=?",
+   db.tenantA,entry.waitlistId()));
+  assertEquals("1",db.adminString("select count(*) from cp.notifications where tenant_id=? and account_id=? and kind='WAITLIST_OFFERED'",db.tenantA,db.accountA));
+  assertEquals("0",db.adminString("select count(*) from cp.notifications where tenant_id=? and account_id=?",db.tenantA,roommate),
+   "Outro morador da unidade não pode aceitar a oferta e não recebe o aviso");
+  var notice=inbox.unit(db.accountA,db.tenantA,db.unitA).items().getFirst();
+  assertEquals("WAITLIST_OFFERED",notice.kind()); assertEquals(entry.waitlistId(),notice.resourceId()); assertEquals("OFFERED",notice.resourceState());
+  assertTrue(inbox.unit(roommate,db.tenantA,db.unitA).items().isEmpty());
+  // Prazo vencido antes da passada: a caixa mostra a situação atual, sem esperar o worker.
+  db.adminUpdateWithoutTriggers("update cp.reservation_waitlist set offer_expires_at=clock_timestamp()-interval '1 second' where id=?",entry.waitlistId());
+  assertEquals("EXPIRED",inbox.unit(db.accountA,db.tenantA,db.unitA).items().getFirst().resourceState());
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
+ @Test void expiredHoldIsSkippedWithoutNotice() throws Exception {
+  var booked=reservations.create(db.accountC,db.tenantA,key(),new ReservationModels.Create(db.otherUnitA,amenity,start,start.plusSeconds(7200),1)).reservation();
+  var entry=waitlist.join(db.accountA,db.tenantA,key(),new WaitlistModels.Join(db.unitA,amenity,start,start.plusSeconds(7200),1)).entry();
+  reservations.cancel(db.accountC,db.tenantA,booked.reservationId(),key(),new ReservationModels.Cancel(db.otherUnitA,booked.version()));
+  sweep.runOnce();
+  db.adminUpdate("update cp.reservations set expires_at=clock_timestamp()-interval '1 second' where id=?::uuid",offerOf(entry.waitlistId()));
+  inboxWorker.runTenant(db.tenantA);
+  assertEquals("SKIPPED",db.adminString("select state from cp.outbox where tenant_id=? and event_type='WAITLIST_OFFERED' and aggregate_id=?",
+   db.tenantA,entry.waitlistId()));
+  assertEquals("0",db.adminString("select count(*) from cp.notifications where tenant_id=?",db.tenantA));
  }
 }

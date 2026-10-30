@@ -9,18 +9,32 @@ import { colors, touch } from './theme';
 /**
  * Caixa da unidade no celular (parte do CP-035): avisos gerados pelo worker para quem pode agir na unidade. Aparecer
  * aqui não é leitura; só "Abrir" registra a abertura, com horário do servidor. O aviso não traz o nome do visitante nem
- * a descrição: depois de abrir, a pessoa vê o detalhe na seção de visitas ou de encomendas, com as próprias permissões.
+ * a descrição: depois de abrir, a pessoa vê o detalhe na seção de visitas, de encomendas ou na fila de espera, com as próprias permissões.
  * Sem notificação no aparelho neste recorte.
  */
 const kindText: Record<InboxNotification['kind'], string> = {
   ARRIVAL_WAITING: 'Chegada aguardando resposta da unidade', PARCEL_RECEIVED: 'Encomenda recebida na portaria',
+  WAITLIST_OFFERED: 'Vaga da fila de espera',
 };
-const resourceText: Record<string, string> = {
-  WAITING: 'Situação atual: aguardando resposta.', APPROVED: 'Situação atual: entrada autorizada pela unidade.',
-  DENIED: 'Situação atual: entrada recusada pela unidade.', EXPIRED: 'Situação atual: prazo de resposta encerrado; nada foi liberado.',
-  CANCELLED: 'Situação atual: chegada encerrada pela portaria.', RECEIVED: 'Situação atual: aguardando retirada.',
-  DELIVERED: 'Situação atual: retirada registrada.',
+const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> = {
+  ARRIVAL_WAITING: {
+    WAITING: 'Situação atual: aguardando resposta.', APPROVED: 'Situação atual: entrada autorizada pela unidade.',
+    DENIED: 'Situação atual: entrada recusada pela unidade.', EXPIRED: 'Situação atual: prazo de resposta encerrado; nada foi liberado.',
+    CANCELLED: 'Situação atual: chegada encerrada pela portaria.',
+  },
+  PARCEL_RECEIVED: { RECEIVED: 'Situação atual: aguardando retirada.', DELIVERED: 'Situação atual: retirada registrada.' },
+  WAITLIST_OFFERED: {
+    OFFERED: 'Situação atual: oferta aguardando o seu aceite, com prazo.', ACCEPTED: 'Situação atual: oferta aceita.',
+    LEFT: 'Situação atual: você saiu da fila ou recusou a oferta.', EXPIRED: 'Situação atual: prazo da oferta encerrado; a vaga seguiu na fila.',
+    CLOSED: 'Situação atual: o período começou e a entrada foi encerrada.',
+  },
 };
+const opened: Record<InboxNotification['kind'], string> = {
+  ARRIVAL_WAITING: 'Aviso aberto. A chegada aparece em “Visitas”, nesta tela, para responder.',
+  PARCEL_RECEIVED: 'Aviso aberto. A encomenda aparece em “Encomendas”, nesta tela.',
+  WAITLIST_OFFERED: 'Aviso aberto. A oferta aparece em “Fila de espera”, nas reservas desta tela, para aceitar no prazo.',
+};
+const section: Record<InboxNotification['kind'], string> = { ARRIVAL_WAITING: 'visits', PARCEL_RECEIVED: 'parcels', WAITLIST_OFFERED: 'waitlist' };
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain;
 /** Recurso desligado ou vínculo que mudou: a caixa some sem erro técnico. */
@@ -53,9 +67,8 @@ export function Inbox({ api, accountId, tenantId, unitId, timeZone }: { api: Con
     try {
       await api.openNotification(tenantId, item.notificationId);
       // O detalhe fica na seção da própria unidade, consultado de novo com as permissões de quem abriu.
-      void queries.invalidateQueries({ queryKey: [...scope, item.kind === 'ARRIVAL_WAITING' ? 'visits' : 'parcels'] });
-      setOutcome(item.kind === 'ARRIVAL_WAITING' ? 'Aviso aberto. A chegada aparece em “Visitas”, nesta tela, para responder.'
-        : 'Aviso aberto. A encomenda aparece em “Encomendas”, nesta tela.');
+      void queries.invalidateQueries({ queryKey: [...scope, section[item.kind]] });
+      setOutcome(opened[item.kind]);
     } catch (error) { setFailure(error); }
     finally { setOpening(null); void queries.invalidateQueries({ queryKey: key }); }
   }
@@ -74,7 +87,7 @@ export function Inbox({ api, accountId, tenantId, unitId, timeZone }: { api: Con
             <View key={item.notificationId} style={styles.card} accessibilityLabel={`${kindText[item.kind]}, ${item.state === 'AVAILABLE' ? 'não aberto' : 'aberto'}`}>
               <Text style={styles.cardTitle}>{`${kindText[item.kind]} · ${item.state === 'AVAILABLE' ? 'Não aberto' : 'Aberto'}`}</Text>
               <Text style={styles.body}>{`Gerado em ${formatWhen(item.createdAt, timeZone)}${item.readAt ? ` · aberto por você em ${formatWhen(item.readAt, timeZone)}` : ''}`}</Text>
-              <Text style={styles.body}>{item.resourceState ? resourceText[item.resourceState]! : 'Este registro não está mais disponível para o seu vínculo.'}</Text>
+              <Text style={styles.body}>{item.resourceState ? resourceTexts[item.kind][item.resourceState]! : 'Este registro não está mais disponível para o seu vínculo.'}</Text>
               <Button label={opening === item.notificationId ? 'Abrindo…' : `${item.state === 'AVAILABLE' ? 'Abrir' : 'Abrir de novo'}: ${kindText[item.kind]}, ${formatWhen(item.createdAt, timeZone)}`}
                 disabled={opening !== null} onPress={() => void open(item)} />
             </View>)}</View>}

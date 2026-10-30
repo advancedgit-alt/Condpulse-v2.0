@@ -14631,7 +14631,8 @@
             "type": "string",
             "enum": [
               "ARRIVAL_WAITING",
-              "PARCEL_RECEIVED"
+              "PARCEL_RECEIVED",
+              "WAITLIST_OFFERED"
             ]
           },
           "resourceId": {
@@ -14643,7 +14644,7 @@
               "string",
               "null"
             ],
-            "description": "Situação atual do registro para quem lê (chegada: WAITING, APPROVED, DENIED, EXPIRED, CANCELLED; encomenda: RECEIVED, DELIVERED). null quando o registro não está mais visível (ex.: encomenda anulada)."
+            "description": "Situação atual do registro para quem lê (chegada: WAITING, APPROVED, DENIED, EXPIRED, CANCELLED; encomenda: RECEIVED, DELIVERED; oferta da fila: OFFERED, ACCEPTED, LEFT, EXPIRED, CLOSED). null quando o registro não está mais visível (ex.: encomenda anulada)."
           },
           "state": {
             "type": "string",

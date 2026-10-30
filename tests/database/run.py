@@ -2708,6 +2708,53 @@ def waitlist_management_checks():
            "gestao nao altera entradas da fila")
     expect(value(f"select count(*) from cp.reservation_waitlist where tenant_id='{TA}'") == total, "nada mudou")
 
+def waitlist_offer_notice_checks():
+    """V030: oferta da fila vira aviso so para quem entrou na fila, com o prazo ainda valendo; o worker nao avisa outros."""
+    MO, DO = "10000000-0000-4000-8000-0000000004a1", "10000000-0000-4000-8000-0000000004a2"
+    H1, W1, E1 = ("81000000-0000-4000-8000-000000000001", "82000000-0000-4000-8000-000000000001", "83000000-0000-4000-8000-000000000001")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MO}','ACTIVE'),('{DO}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MO}','{UA}','OUTRO MORADOR OFERTA','RESIDENT','ACTIVE'),('{TA}','{DO}','{UA}','DEPENDENTE OFERTA','DEPENDENT','ACTIVE');
+        SET session_replication_role=replica;
+        INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,expires_at)
+          VALUES('{H1}','{TA}','{RA}','{UA}','{AA}','BOOKING','HELD',now()+interval '30 days',now()+interval '30 days 2 hours',
+                 now()+interval '30 days',now()+interval '30 days 2 hours','{{}}',clock_timestamp()+interval '15 minutes');
+        INSERT INTO cp.reservation_waitlist(id,tenant_id,amenity_id,unit_id,created_by,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,
+            state,offer_reservation_id,offered_at,offer_expires_at)
+          VALUES('{W1}','{TA}','{RA}','{UA}','{AA}',now()+interval '30 days',now()+interval '30 days 2 hours',now()+interval '30 days',
+                 now()+interval '30 days 2 hours','{{}}','OFFERED','{H1}',clock_timestamp(),clock_timestamp()+interval '15 minutes');
+        INSERT INTO cp.outbox(id,tenant_id,event_type,aggregate_id,aggregate_version,payload)
+          VALUES('{E1}','{TA}','WAITLIST_OFFERED','{W1}',1,jsonb_build_object('waitlistId','{W1}','unitId','{UA}','amenityId','{RA}',
+                 'reservationId','{H1}','expiresAt',clock_timestamp()+interval '15 minutes'));
+    """)
+    def notify(account, kind="WAITLIST_OFFERED", resource=W1):
+        return (f"INSERT INTO cp.notifications(tenant_id,account_id,unit_id,outbox_id,kind,resource_id) "
+                f"VALUES('{TA}','{account}','{UA}','{E1}','{kind}','{resource}')")
+    query(f"UPDATE cp.outbox SET state='LEASED',attempts=1,lease_until=clock_timestamp()+interval '60 seconds' WHERE id='{E1}'", tenant=TA, role="cp_worker")
+    expect(error(notify(MO), "42501", tenant=TA, role="cp_worker"), "outro morador da unidade nao recebe a oferta de quem entrou na fila")
+    expect(error(notify(AA, kind="PARCEL_RECEIVED"), "42501", tenant=TA, role="cp_worker"), "tipo do aviso corresponde ao evento da oferta")
+    expect(error(notify(AA, resource=H1), "42501", tenant=TA, role="cp_worker"), "aviso aponta a entrada da fila, nao a retencao")
+    query(notify(AA), tenant=TA, role="cp_worker")
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E1}'") == "1", "quem entrou na fila recebe o aviso da oferta")
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E1}'", tenant=TA, role="cp_api") == "1", "autor ve o aviso da oferta")
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E1}'", tenant=TA, actor=MO, role="cp_api") == "0",
+           "outro morador nao ve o aviso da oferta")
+    # Dependente autor so com a permissao de reservar (a mesma que permite entrar na fila).
+    query(f"SET session_replication_role=replica; UPDATE cp.reservations SET created_by='{DO}' WHERE id='{H1}'; "
+          f"UPDATE cp.reservation_waitlist SET created_by='{DO}' WHERE id='{W1}'")
+    expect(error(notify(DO), "42501", tenant=TA, role="cp_worker"), "dependente sem permissao de reservar nao recebe a oferta")
+    query(f"UPDATE cp.memberships SET permissions='{{\"reservations\":{{\"create\":true}}}}' WHERE account_id='{DO}'")
+    query(notify(DO), tenant=TA, role="cp_worker")
+    expect(value(f"select count(*) from cp.notifications where outbox_id='{E1}' and account_id='{DO}'", tenant=TA, actor=DO, role="cp_api") == "1",
+           "dependente com permissao de reservar ve a propria oferta")
+    query(f"UPDATE cp.memberships SET permissions='{{}}' WHERE account_id='{DO}'")
+    expect(value(f"select count(*) from cp.notifications where account_id='{DO}'", tenant=TA, actor=DO, role="cp_api") == "0",
+           "sem a permissao o aviso da oferta deixa de aparecer")
+    query(f"DELETE FROM cp.notifications WHERE outbox_id='{E1}'; DELETE FROM cp.outbox WHERE id='{E1}'; "
+          f"SET session_replication_role=replica; DELETE FROM cp.reservation_waitlist WHERE id='{W1}'; DELETE FROM cp.reservations WHERE id='{H1}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MO}','{DO}'); DELETE FROM platform.accounts WHERE id in ('{MO}','{DO}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2821,6 +2868,7 @@ def main():
     visit_rule_checks()
     waitlist_checks()
     waitlist_management_checks()
+    waitlist_offer_notice_checks()
     delegation_checks()
     move_checks()
     credential_checks()
