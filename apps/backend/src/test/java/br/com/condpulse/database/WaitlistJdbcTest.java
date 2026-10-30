@@ -108,6 +108,20 @@ class WaitlistJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void closedByTimeMoreThanSevenDaysAgoIsNotListedAsRecent() throws Exception {
+  bookAsC();
+  var stale=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
+  // Passada da fila parada: a entrada continua WAITING no banco, mas o período começou há 10 dias (encerrada pelo tempo).
+  db.adminUpdate("update cp.reservation_waitlist set starts_at=starts_at-interval '20 days',ends_at=ends_at-interval '20 days',"
+   +"occupied_from=occupied_from-interval '20 days',occupied_until=occupied_until-interval '20 days' where id=?",stale.waitlistId());
+  db.adminUpdate("update cp.reservation_waitlist set starts_at=clock_timestamp()-interval '10 days',ends_at=clock_timestamp()-interval '10 days'+interval '2 hours',"
+   +"occupied_from=clock_timestamp()-interval '10 days',occupied_until=clock_timestamp()-interval '10 days'+interval '2 hours' where id=?",stale.waitlistId());
+  var all=management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,false).entries();
+  assertTrue(all.stream().noneMatch(e->e.waitlistId().equals(stale.waitlistId())),"Encerrada pelo tempo há mais de 7 dias não aparece entre as recentes");
+  assertTrue(management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,true).entries().stream().noneMatch(e->e.waitlistId().equals(stale.waitlistId())));
+  db.assertEmptyContext();
+ }
+
  @Test void cancellationOffersThePeriodToTheFirstInLineAndAcceptingConfirmsOnce() throws Exception {
   var booked=bookAsC();
   String joinKey=key();
