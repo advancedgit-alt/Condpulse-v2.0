@@ -235,7 +235,11 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
    result.add(send(deviceId,credentialRef,version,action));
   }
   var application=new AccessModels.Application(jobRef(credentialRef,version,action),credentialRef,version,action,result);
-  jobs.put(key,application);
+  // Histórico por destino: a repetição parcial atualiza só os destinos enviados e preserva os demais.
+  var merged=new java.util.LinkedHashMap<String,Destination>();
+  if(previous!=null) previous.destinations().forEach(d->merged.put(d.deviceId(),d));
+  result.forEach(d->merged.put(d.deviceId(),d));
+  jobs.put(key,new AccessModels.Application(application.jobRef(),credentialRef,version,action,List.copyOf(merged.values())));
   return application;
  }
 
@@ -243,7 +247,14 @@ public final class SimulatedAccessAdapter implements AccessAdapter {
  private Destination refresh(String deviceId,String credentialRef,long version,Action action,Destination before) {
   if(before.outcome()!=Outcome.ACCEPTED) return before;
   var applied=device(deviceId).applied.get(credentialRef);
-  if(applied==null || applied.version()<version) return before;
+  if(applied==null || applied.version()<version) {
+   // Versão maior recebida depois substituiu esta na fila: não há mais confirmação a aguardar.
+   var pending=device(deviceId).pending.get(credentialRef);
+   if(pending!=null && pending.version()>version)
+    return new Destination(deviceId,Outcome.REJECTED,applied==null?null:applied.version(),applied==null?null:applied.action(),
+     applied==null?null:applied.at(),"STALE_VERSION",null);
+   return before;
+  }
   if(applied.version()==version && applied.action()==action) return new Destination(deviceId,Outcome.APPLIED,applied.version(),applied.action(),applied.at(),null,null);
   if(applied.version()==version) return new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"VERSION_CONFLICT",null);
   return new Destination(deviceId,Outcome.REJECTED,applied.version(),applied.action(),applied.at(),"STALE_VERSION",null);

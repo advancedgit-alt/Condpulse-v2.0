@@ -170,6 +170,27 @@ class SimulatedAccessAdapterTest {
   assertEquals(Action.REVOKE,query(1,"leitor-1").destination("leitor-1").appliedAction());
  }
 
+ @Test void repeatingAnAcceptedCommandShowsTheNewerPendingVersion() {
+  adapter.scenario("leitor-1",Scenario.ACK_ONLY);
+  assertEquals(Outcome.ACCEPTED,apply(1,"leitor-1").destination("leitor-1").outcome());
+  assertEquals(Outcome.ACCEPTED,revoke(2,"leitor-1").destination("leitor-1").outcome());
+  var repeated=apply(1,"leitor-1").destination("leitor-1");
+  assertEquals(Outcome.REJECTED,repeated.outcome(),"A v1 saiu da fila: não há confirmação a aguardar");
+  assertEquals("STALE_VERSION",repeated.reason());
+  assertEquals(query(1,"leitor-1").destination("leitor-1").reason(),repeated.reason(),"Repetição e consulta concordam");
+ }
+
+ @Test void partialRepetitionKeepsTheOmittedDestinations() {
+  adapter.scenario("leitor-1",Scenario.REJECT);
+  assertEquals(Outcome.REJECTED,apply(1,"leitor-1","leitor-2").destination("leitor-1").outcome());
+  apply(1,"leitor-2");
+  adapter.scenario("leitor-1",Scenario.CONFIRM);
+  var full=apply(1,"leitor-1","leitor-2");
+  assertEquals(Outcome.REJECTED,full.destination("leitor-1").outcome(),"Destino recusado não é reenviado por ter ficado fora de uma repetição");
+  assertEquals(0,adapter.applications("leitor-1"));
+  assertEquals(Outcome.APPLIED,full.destination("leitor-2").outcome());
+ }
+
  @Test void olderPendingIsDroppedWhenANewerVersionIsApplied() {
   adapter.scenario("leitor-1",Scenario.ACK_ONLY);
   apply(1,"leitor-1");
