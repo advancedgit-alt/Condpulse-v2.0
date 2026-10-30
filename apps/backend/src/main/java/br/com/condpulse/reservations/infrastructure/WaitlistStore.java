@@ -118,6 +118,9 @@ public class WaitlistStore {
    """,(r,n)->r.getBoolean("active"),tenant,reservation);
   return rows.size()==1 && rows.getFirst();
  }
+ public boolean amenityActive(UUID tenant,UUID amenity) {
+  return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from cp.amenities where tenant_id=? and id=? and active)",Boolean.class,tenant,amenity));
+ }
  public String accept(UUID tenant,UUID entry,long expectedVersion) {
   return jdbc.queryForObject("select cp.waitlist_accept(?,?,?)",String.class,tenant,entry,expectedVersion);
  }

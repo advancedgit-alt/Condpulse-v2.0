@@ -184,6 +184,7 @@ BEGIN
  FOR entry IN SELECT w.* FROM cp.reservation_waitlist w
    WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity AND w.state='WAITING'
     AND w.starts_at>clock_timestamp()
+    AND EXISTS(SELECT 1 FROM cp.amenities a WHERE a.tenant_id=w.tenant_id AND a.id=w.amenity_id AND a.active)
     AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
      AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED')
      AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)'))
@@ -213,7 +214,7 @@ END $$;
 REVOKE ALL ON FUNCTION cp.waitlist_offer(uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_offer(uuid,uuid) TO cp_api;
 
--- Aceite da própria oferta (a API já conferiu autoria, vínculo e cota sob a trava da unidade): retenção em vigor vira
+-- Aceite da própria oferta (a API já conferiu autoria, vínculo e cota sob a trava da unidade), em área ativa: retenção em vigor vira
 -- reserva confirmada, ou pedido com prazo de decisão se as regras aceitas exigem aprovação. Devolve o novo estado.
 CREATE FUNCTION cp.waitlist_accept(target_tenant uuid,target_entry uuid,expected_version bigint) RETURNS text
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
@@ -227,6 +228,9 @@ BEGIN
   WHERE r.tenant_id=target_tenant AND r.id=entry.offer_reservation_id FOR UPDATE;
  IF NOT FOUND OR target.status<>'HELD' OR target.expires_at<=clock_timestamp() THEN
   RAISE EXCEPTION 'oferta vencida' USING ERRCODE='23514';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM cp.amenities a WHERE a.tenant_id=target_tenant AND a.id=entry.amenity_id AND a.active) THEN
+  RAISE EXCEPTION 'área inativa' USING ERRCODE='23514';
  END IF;
  next_status:=CASE WHEN entry.rule_snapshot->>'approvalRequired'='true' THEN 'PENDING_APPROVAL'
   WHEN entry.rule_snapshot->>'approvalRequired'='false' THEN 'CONFIRMED' END;
