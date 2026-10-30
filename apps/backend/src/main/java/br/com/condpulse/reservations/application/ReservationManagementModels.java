@@ -22,5 +22,14 @@ public final class ReservationManagementModels {
  public record ManagedReservationPage(List<ManagedReservation> reservations,boolean truncated) {
   public ManagedReservationPage { reservations=List.copyOf(reservations); }
  }
+ /**
+  * Fila de espera vista pela gestão (CP-040), só leitura. state efetivo: WAITING, OFFERED, ACCEPTED, LEFT, EXPIRED ou
+  * CLOSED; position só para WAITING; offerExpiresAt só na oferta.
+  */
+ public record ManagedWaitlistEntry(UUID waitlistId,UUID unitId,String unitLabel,UUID amenityId,String amenityName,String state,
+     Instant startsAt,Instant endsAt,Integer position,Instant offerExpiresAt,Instant closedAt,Instant createdAt) {}
+ public record ManagedWaitlistPage(List<ManagedWaitlistEntry> entries,boolean truncated) {
+  public ManagedWaitlistPage { entries=List.copyOf(entries); }
+ }
  public record BlockMutation(ManagedReservation reservation,boolean replayed,int responseStatus) {}
 }

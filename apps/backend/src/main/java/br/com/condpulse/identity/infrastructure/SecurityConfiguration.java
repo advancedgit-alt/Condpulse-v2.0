@@ -68,7 +68,7 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/blocks","/v1/tenants/*/management/units",
       "/v1/tenants/*/management/amenities","/v1/tenants/*/management/audit-events",
       "/v1/tenants/*/management/memberships","/v1/tenants/*/management/invitations",
-      "/v1/tenants/*/management/reservations").authenticated()
+      "/v1/tenants/*/management/reservations","/v1/tenants/*/management/waitlist").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/blocks","/v1/tenants/*/management/units",
       "/v1/tenants/*/management/amenities","/v1/tenants/*/management/memberships/*/decision",
       "/v1/tenants/*/management/memberships/*/revoke","/v1/tenants/*/management/invitations",

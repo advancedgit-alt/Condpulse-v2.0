@@ -22,6 +22,10 @@ export interface ManagementState {
   membershipStatus: string;
   /** Outro gestor já gravou a mesma decisão: o servidor devolve o estado atual sem aplicar esta. */
   decisionAlreadyApplied?: boolean;
+  /** Fila de espera (CP-040), só leitura pela gestão. */
+  waitlist?: Record<string, unknown>[];
+  waitlistFailures?: number;
+  waitlistQueries?: string[];
 }
 
 async function json(route: Route, status: number, body: unknown) {
@@ -83,6 +87,14 @@ export async function installManagementApi(page: Page, initial: Partial<Manageme
     const path = url.pathname.replace(`/v1/tenants/${TENANT_A}/management`, '');
     state.managementRequests.push(`${request.method()} ${path}`);
     if (state.assurance !== 'AAL2') { await problem(route, 403, 'MFA_REQUIRED'); return; }
+    if (request.method() === 'GET' && path === '/waitlist') {
+      const open = url.searchParams.get('open') === 'true';
+      (state.waitlistQueries ??= []).push(open ? 'open' : 'all');
+      if ((state.waitlistFailures ?? 0) > 0) { state.waitlistFailures! -= 1; await problem(route, 503, 'MANAGEMENT_DEPENDENCY_UNAVAILABLE'); return; }
+      const rows = state.waitlist ?? [];
+      await json(route, 200, { entries: rows.filter((item) => !open || item.state === 'WAITING' || item.state === 'OFFERED'), truncated: false });
+      return;
+    }
     if (request.method() === 'GET' && path === '/reservations') {
       const status = url.searchParams.get('status');
       const rows = [pendingReservation(state)].filter((item) => !status || item.status === status);

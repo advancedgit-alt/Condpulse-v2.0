@@ -205,6 +205,13 @@ public class ReservationManagementService {
   if(value==null) throw new IllegalStateException("Reserva alterada não foi encontrada na mesma transação.");
   return value;
  }
+ /** Fila de espera do condomínio (CP-040), só leitura, para quem decide reservas (AAL2). */
+ public ReservationManagementModels.ManagedWaitlistPage waitlist(UUID actor,UUID tenant,AssuranceLevel assurance,boolean open) {
+  return execute(actor,tenant,assurance,context->{
+   context.requireCapability(StaffCapability.DECIDE_RESERVATIONS);
+   return store.waitlist(tenant,open);
+  });
+ }
  private <T> T execute(UUID actor,UUID tenant,AssuranceLevel assurance,Function<TenantContext,T> action) {
   try { return transactions.execute(actor,tenant,assurance,action); }
   catch(DataAccessException error) {
