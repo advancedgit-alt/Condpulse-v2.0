@@ -67,6 +67,14 @@ public class ReservationService {
   String route="/v1/tenants/"+tenant+"/reservations";
   // A fila tem prioridade sobre o período liberado: retenções vencidas expiram e a oferta acontece antes da criação.
   offers.offerForAmenity(actor,tenant,request.amenityId());
+  try { return createNow(actor,tenant,key,request,hash,route); }
+  catch(BusinessProblem refused) {
+   // Recusa pela fila: o período liberado é oferecido a quem aguarda (cancelamento concorrente ainda sem oferta).
+   if("WAITLIST_PRIORITY".equals(refused.code())) offers.offerForAmenity(actor,tenant,request.amenityId());
+   throw refused;
+  }
+ }
+ private ReservationModels.Mutation createNow(UUID actor,UUID tenant,String key,ReservationModels.Create request,String hash,String route) {
   return execute(actor,tenant,context->{
    // Reautorizar antes de consultar qualquer resposta idempotente.
    context.requireBookableUnit(request.unitId());
@@ -83,6 +91,9 @@ public class ReservationService {
    store.expireStale(tenant,request.unitId(),request.amenityId(),window.occupiedFrom(),window.occupiedUntil());
    if(store.activeCount(tenant,request.unitId(),now)>=amenity.policy().maximumActivePerUnit())
     throw new BusinessProblem("UNIT_RESERVATION_QUOTA_REACHED",409,"A unidade atingiu o limite de reservas ativas para esta regra.");
+   // Período liberado com fila aguardando: a vaga vai primeiro para a fila (a oferta roda depois desta recusa).
+   if(store.waitlistBlocks(tenant,request.amenityId(),window.occupiedFrom(),window.occupiedUntil()))
+    throw new BusinessProblem("WAITLIST_PRIORITY",409,"Há fila de espera para este período. Entre na fila ou escolha outro horário.");
    var reservation=store.create(tenant,actor,request,amenity,window,context.timeZone().getId());
    store.record(tenant,actor,reservation,"PENDING_APPROVAL".equals(reservation.status())
     ?"RESERVATION_REQUESTED":"RESERVATION_CREATED",UUID.randomUUID());

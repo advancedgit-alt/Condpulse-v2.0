@@ -58,8 +58,10 @@ public class WaitlistStore {
  }
  public int openEntries(UUID tenant,UUID unit) {
   Integer count=jdbc.queryForObject("""
-   select count(*) from cp.reservation_waitlist
-   where tenant_id=? and unit_id=? and state in ('WAITING','OFFERED') and starts_at>clock_timestamp()
+   select count(*) from cp.reservation_waitlist w
+   left join cp.reservations r on r.tenant_id=w.tenant_id and r.id=w.offer_reservation_id
+   where w.tenant_id=? and w.unit_id=? and w.starts_at>clock_timestamp()
+    and (w.state='WAITING' or (w.state='OFFERED' and r.status='HELD' and r.expires_at>clock_timestamp()))
    """,Integer.class,tenant,unit);
   return count==null?0:count;
  }

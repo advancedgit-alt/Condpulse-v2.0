@@ -260,3 +260,28 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION cp.waitlist_position(uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_position(uuid,uuid) TO cp_api;
+
+-- Prioridade da fila sobre a reserva direta: com a trava da fila da área (a mesma da oferta), diz se alguém aguarda um
+-- período livre que se sobrepõe ao pedido. A criação chama antes de gravar; com fila, recusa e a oferta segue para quem
+-- aguarda. Devolve só o booleano, sem dados de outras unidades.
+CREATE FUNCTION cp.waitlist_blocks(target_tenant uuid,target_amenity uuid,range_from timestamptz,range_until timestamptz) RETURNS boolean
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE previous text:=coalesce(current_setting('app.waitlist_offer',true),''); waiting boolean;
+BEGIN
+ IF target_tenant IS NULL OR target_amenity IS NULL OR target_tenant IS DISTINCT FROM platform.current_tenant_id() THEN
+  RAISE EXCEPTION 'condomínio indisponível' USING ERRCODE='42501';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.waitlist:'||target_tenant::text||':'||target_amenity::text,0));
+ PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||target_amenity::text,true);
+ SELECT EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity
+   AND w.state='WAITING' AND w.starts_at>clock_timestamp()
+   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)'))
+  -- Período ainda ocupado: a exclusão recusa a criação como conflito comum; a prioridade vale para o período livre.
+  AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.amenity_id=target_amenity
+   AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
+   AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')) INTO waiting;
+ PERFORM set_config('app.waitlist_offer',previous,true);
+ RETURN waiting;
+END $$;
+REVOKE ALL ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) TO cp_api;

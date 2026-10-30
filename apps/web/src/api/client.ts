@@ -56,6 +56,7 @@ const messages: Record<string, string> = {
   WAITLIST_OFFER_EXPIRED: 'O prazo da oferta terminou e a vaga seguiu para o próximo da fila.',
   WAITLIST_CLOSED: 'Esta entrada da fila já foi encerrada.',
   WAITLIST_AUTHOR_REQUIRED: 'Somente quem entrou na fila pode alterar esta entrada.',
+  WAITLIST_PRIORITY: 'Há fila de espera para este período: a vaga vai primeiro para quem aguarda. Entre na fila ou escolha outro horário.',
   UNIT_RESERVATION_QUOTA_REACHED: 'A unidade atingiu o limite de reservas previsto para esta área.',
   RESERVATION_CHANGED: 'A reserva foi alterada. Atualize os dados antes de continuar.',
   RESERVATION_CANCELLATION_CLOSED: 'O prazo para cancelar esta reserva terminou.',
