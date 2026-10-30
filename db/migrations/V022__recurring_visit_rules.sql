@@ -84,6 +84,9 @@ BEGIN
   NEW.created_at:=clock_timestamp();
   RETURN NEW;
  END IF;
+ -- Exclusiva contra a expansão (que segura a trava compartilhada enquanto grava janelas desta regra): janela gerada
+ -- em paralelo termina antes e é revogada pelo gatilho de encerramento, ou a expansão espera e vê a regra revogada.
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.visit_rules:'||OLD.tenant_id::text||':'||OLD.id::text,0));
  IF OLD.state<>'ACTIVE' OR NEW.state<>'REVOKED' OR NEW.version<>OLD.version+1 THEN
   RAISE EXCEPTION 'transição de regra não permitida' USING ERRCODE='23514';
  END IF;
@@ -199,6 +202,11 @@ BEGIN
  SELECT t.time_zone INTO zone FROM platform.tenants t WHERE t.id=target_tenant;
  IF zone IS NULL THEN RETURN 0; END IF;
  today:=(clock_timestamp() AT TIME ZONE zone)::date;
+ -- Trava compartilhada de cada regra ativa (ordem estável) antes de gerar janelas; a revogação toma a mesma trava em
+ -- modo exclusivo. O INSERT abaixo é um comando novo: enxerga a revogação confirmada enquanto esperava a trava.
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended('cp.visit_rules:'||r.tenant_id::text||':'||r.id::text,0))
+  FROM (SELECT r.tenant_id,r.id FROM cp.visit_rules r WHERE r.tenant_id=target_tenant
+   AND (target_unit IS NULL OR r.unit_id=target_unit) AND r.state='ACTIVE' AND r.valid_until>=today ORDER BY r.id) r;
  INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until,rule_id,window_date)
   SELECT gen_random_uuid(),r.tenant_id,r.visitor_id,r.unit_id,r.purpose,r.created_by,
    (d::date+r.starts_local) AT TIME ZONE zone,(d::date+r.ends_local) AT TIME ZONE zone,r.id,d::date
@@ -215,3 +223,21 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION cp.expand_visit_rules(uuid,uuid,integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.expand_visit_rules(uuid,uuid,integer) TO cp_api;
+
+-- Eventos de regra (VISIT_RULE_*) referem-se à própria regra; os demais VISIT_* continuam exigindo o convite.
+DROP POLICY outbox_visit_events ON cp.outbox;
+CREATE POLICY outbox_visit_events ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_api
+ WITH CHECK((event_type NOT LIKE 'VISIT\_%' OR (event_type LIKE 'VISIT\_RULE\_%' AND EXISTS(SELECT 1 FROM cp.visit_rules v
+   WHERE v.tenant_id=cp.outbox.tenant_id AND v.id=cp.outbox.aggregate_id))
+   OR (event_type NOT LIKE 'VISIT\_RULE\_%' AND EXISTS(SELECT 1 FROM cp.visit_permits p
+   WHERE p.tenant_id=cp.outbox.tenant_id AND p.id=cp.outbox.aggregate_id)))
+  AND (event_type NOT LIKE 'ARRIVAL\_%' OR EXISTS(SELECT 1 FROM cp.arrival_requests r
+   WHERE r.tenant_id=cp.outbox.tenant_id AND r.id=cp.outbox.aggregate_id)));
+
+-- A pessoa da regra é visível a quem vê a regra (outros adultos da unidade), mesmo antes de existir janela.
+DROP POLICY visitors_read_scope ON cp.visitors;
+CREATE POLICY visitors_read_scope ON cp.visitors AS RESTRICTIVE FOR SELECT TO cp_api
+ USING(platform.has_capability('concierge.operate') OR created_by=platform.current_actor_id()
+  OR EXISTS(SELECT 1 FROM cp.visit_permits p WHERE p.tenant_id=cp.visitors.tenant_id AND p.visitor_id=cp.visitors.id)
+  OR EXISTS(SELECT 1 FROM cp.arrival_requests r WHERE r.tenant_id=cp.visitors.tenant_id AND r.visitor_id=cp.visitors.id)
+  OR EXISTS(SELECT 1 FROM cp.visit_rules v WHERE v.tenant_id=cp.visitors.tenant_id AND v.visitor_id=cp.visitors.id));

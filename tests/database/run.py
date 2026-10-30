@@ -1904,6 +1904,31 @@ def visit_rule_checks():
         single, bulk = single.result(), bulk.result()
     expect(single.returncode == 0 and bulk.returncode == 0, "revogacao de janela e da regra concorrentes sem deadlock")
     expect(value(f"select count(*) from cp.visit_permits where rule_id='{R3}' and state='ACTIVE'") == "0", "nenhuma janela ativa depois das duas revogacoes")
+    # Expansao e revogacao da mesma regra se serializam: nenhuma janela ativa sobra numa regra revogada.
+    R4, VR4 = "77000000-0000-4000-8000-0000000000b4", "76000000-0000-4000-8000-0000000000b4"
+    query(rule(R4, VR4), tenant=TA, role="cp_api")
+    whole4 = f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{AA}',revoke_reason='Encerrado',version=version+1 WHERE id='{R4}'"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        expanding = pool.submit(query, f"SELECT cp.expand_visit_rules('{TA}','{UA}',2); SELECT pg_sleep(2)", tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        revoking = pool.submit(query, whole4, tenant=TA, role="cp_api", check=False)
+        expanded, revoked4 = expanding.result(), revoking.result()
+    expect(expanded.returncode == 0 and revoked4.returncode == 0, "expansao e revogacao concorrentes terminam")
+    expect(value(f"select count(*) filter(where state='ACTIVE')||':'||count(*) from cp.visit_permits where rule_id='{R4}'") == "0:3",
+           "janelas geradas durante a revogacao sao revogadas junto")
+    # Eventos de regra referem-se a regra visivel; id inexistente e recusado.
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','VISIT_RULE_CREATED',gen_random_uuid(),0,'{{}}')",
+                 "42501", tenant=TA, role="cp_api"), "evento de regra sem regra e recusado")
+    query(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','VISIT_RULE_CREATED','{R4}',0,'{{}}')",
+          tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_RULE_CREATED' and aggregate_id='{R4}'") == "1", "evento de regra existente e aceito")
+    # Outro adulto da unidade ve a pessoa da regra ainda sem janela (comeca alem do horizonte).
+    ADR, R5, VR5 = "10000000-0000-4000-8000-0000000000b5", "77000000-0000-4000-8000-0000000000b5", "76000000-0000-4000-8000-0000000000b5"
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{ADR}','ACTIVE'); "
+          f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions) VALUES('{TA}','{ADR}','{UA}','ADULTO REGRAS','RESIDENT','ACTIVE','{{}}')")
+    query(rule(R5, VR5, vfrom=f"{today}+30", vuntil=f"{today}+40"), tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.visit_rules r join cp.visitors v on v.tenant_id=r.tenant_id and v.id=r.visitor_id where r.id='{R5}'",
+                 tenant=TA, actor=ADR, role="cp_api") == "1", "outro adulto ve a regra e a pessoa antes da primeira janela")
     # Revogar a regra derruba as janelas validas na mesma transacao, com evento.
     def revoke(identifier, actor=AA):
         return (f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{actor}',revoke_reason='Contrato encerrado',version=version+1 WHERE id='{identifier}'")

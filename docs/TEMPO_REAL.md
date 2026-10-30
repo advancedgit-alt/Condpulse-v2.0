@@ -57,8 +57,9 @@ atualizar).
 
 ## Pendências
 
-- **Celular**: o aplicativo ainda não abre o canal (React Native não tem `EventSource`); fica com consulta ao abrir e
-  botões de atualizar até a parte móvel deste ticket.
+- **Celular** (PR da parte móvel): canal lido por `XMLHttpRequest` em fluxo com o token Bearer no cabeçalho, mesmas regras
+  da web; fecha em segundo plano e consulta tudo ao voltar. Ver `apps/mobile/README.md`. Ensaio em aparelho real depende
+  do build de desenvolvimento (bloqueio registrado em STATUS).
 - **Vercel**: confirmar que o Container Runtime (beta) entrega a resposta em fluxo, sem buffer, e o tempo máximo de
   requisição, antes de ligar a flag; ajustar `CP_REALTIME_LIFETIME_SECONDS` abaixo desse limite. Na imagem nginx, o
   cabeçalho `X-Accel-Buffering: no` desliga o buffer.
