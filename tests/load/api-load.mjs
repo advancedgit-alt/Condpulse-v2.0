@@ -53,7 +53,7 @@ let residents = [];
 function seed() {
   ensure(sql("select count(*) from pg_roles where rolname='cp_ci_login' and rolcanlogin and not rolsuper and not rolbypassrls and pg_has_role(rolname,'cp_api','MEMBER')") === '1', 'RUNTIME_ROLE_NOT_READY');
   const policy = JSON.stringify({ schemaVersion: 1, weekDays: [1, 2, 3, 4, 5, 6, 7], opensAt: '00:00', closesAt: '23:59', minimumLeadMinutes: 0,
-    maximumAdvanceDays: 366, maximumDurationMinutes: 600, maximumActivePerUnit: 999, cancellationLeadMinutes: 0 });
+    maximumAdvanceDays: 366, maximumDurationMinutes: 600, maximumActivePerUnit: 100, cancellationLeadMinutes: 0 });
   // Unidades com 4 moradores cada; uma conta por sessão.
   sql(`begin;
     insert into platform.tenants(id,name,time_zone,active) values('${tenant}','CONDOMINIO SINTETICO CARGA','America/Sao_Paulo',true);
