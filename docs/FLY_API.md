@@ -5,7 +5,7 @@ Situação: preparado neste PR, **nada executado**. Nenhum login de banco, segre
 ## O que muda
 
 A API de homologação (`rpnrqfrfwywglvyykgrg`) passa a poder rodar como contêiner sempre ligado no app Fly
-`condpulse-v2-0` (organização `condpulse-agencia-rami`, região `gru`), em vez do Container Runtime da Vercel. Motivo:
+`condpulse-v2-0` (organização `personal` (exibida como "Personal" no painel), região `gru`), em vez do Container Runtime da Vercel. Motivo:
 16-17 s de início a frio medidos na Vercel (STATUS, 30/10/2026). A imagem é a mesma (`Dockerfile.vercel`, bases
 fixadas por digest, perfil `api`, sem migração, preflight antes do Spring).
 
@@ -77,7 +77,7 @@ O deploy não recebe senha de banco, token da Vercel nem chave publicável.
 
 ## O que o responsável precisa fazer
 
-- Cadastrar cartão de cobrança na organização `condpulse-agencia-rami` (máquina sempre ligada é paga). Sem isso a
+- Cadastrar cartão de cobrança na organização `personal` (exibida como "Personal" no painel) (máquina sempre ligada é paga). Sem isso a
   Fly recusa criar a máquina.
 - Aprovar, nesta ordem, os dispatches `inspect`, `apply` e `deploy`.
 
