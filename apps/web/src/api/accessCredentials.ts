@@ -110,6 +110,48 @@ function eventPage(value: unknown): { events: DeviceEvent[]; truncated: boolean 
   if (!record(value) || typeof value.truncated !== 'boolean' || !Array.isArray(value.events) || value.events.length > 100) throw invalidResponse();
   return { events: list(value.events, deviceEvent), truncated: value.truncated };
 }
+/** Saúde dos equipamentos (CP-048): "no ar" só com observação recente; sem informação recente nunca vira "no ar". */
+export const deviceHealthStatuses = ['ONLINE', 'OFFLINE', 'UNKNOWN', 'RETIRED'] as const;
+const deviceHealthReasons = ['HEARTBEAT_STALE', 'HEARTBEAT_MISSING', 'NOT_REPORTED', 'STALE', 'NEVER_CHECKED', 'CONNECTOR_UNREACHABLE', 'CONNECTOR_DISABLED'] as const;
+export interface DeviceHealth {
+  deviceId: UUID; label: string; direction: typeof directions[number]; status: typeof deviceHealthStatuses[number];
+  reason: typeof deviceHealthReasons[number] | null; observedAt: ISODateTime | null; stateSince: ISODateTime | null; lastHeartbeat: ISODateTime | null;
+  clockSkewSeconds: number | null; clockDrift: boolean; pendingApply: number; pendingRevoke: number; rejected: number; oldestPendingRevocation: ISODateTime | null;
+}
+export interface ConnectorHealth {
+  connectorId: UUID; provider: 'SIMULATED' | 'PARTNER'; label: string; status: 'OK' | 'UNREACHABLE' | 'UNKNOWN' | 'DISABLED'; reason: string | null;
+  checkedAt: ISODateTime | null; lastReachableAt: ISODateTime | null; pendingCommands: number | null; observedDelaySeconds: number | null; devices: DeviceHealth[];
+}
+export interface AccessHealth { generatedAt: ISODateTime; staleAfterSeconds: number; connectors: ConnectorHealth[] }
+const count = (value: unknown): value is number => isInteger(value) && value >= 0;
+const optionalCount = (value: unknown) => value === null || count(value);
+function deviceHealth(value: unknown, connector: ConnectorHealth['status']): DeviceHealth {
+  if (!record(value) || !isUUID(value.deviceId) || !text(value.label, 1, 120) || !oneOf(value.direction, directions) || !oneOf(value.status, deviceHealthStatuses)
+      || !(value.reason === null || oneOf(value.reason, deviceHealthReasons)) || !optionalDate(value.observedAt) || !optionalDate(value.stateSince)
+      || !optionalDate(value.lastHeartbeat) || !(value.clockSkewSeconds === null || isInteger(value.clockSkewSeconds)) || typeof value.clockDrift !== 'boolean'
+      || !count(value.pendingApply) || !count(value.pendingRevoke) || !count(value.rejected) || !optionalDate(value.oldestPendingRevocation)) throw invalidResponse();
+  // "No ar" exige conector respondendo e observação; sem informação sempre tem motivo; revogação pendente tem data.
+  if ((value.status === 'ONLINE' && (connector !== 'OK' || value.observedAt === null || value.reason !== null))
+      || (value.status === 'UNKNOWN' && value.reason === null) || (value.status === 'OFFLINE' && value.observedAt === null)
+      || ((value.pendingRevoke > 0) !== (value.oldestPendingRevocation !== null))) throw invalidResponse();
+  return { deviceId: value.deviceId, label: value.label, direction: value.direction, status: value.status, reason: value.reason as DeviceHealth['reason'],
+    observedAt: value.observedAt as string | null, stateSince: value.stateSince as string | null, lastHeartbeat: value.lastHeartbeat as string | null,
+    clockSkewSeconds: value.clockSkewSeconds as number | null, clockDrift: value.clockDrift, pendingApply: value.pendingApply, pendingRevoke: value.pendingRevoke,
+    rejected: value.rejected, oldestPendingRevocation: value.oldestPendingRevocation as string | null };
+}
+export function accessHealth(value: unknown): AccessHealth {
+  if (!record(value) || !isDate(value.generatedAt) || !count(value.staleAfterSeconds) || !Array.isArray(value.connectors)) throw invalidResponse();
+  return { generatedAt: value.generatedAt, staleAfterSeconds: value.staleAfterSeconds, connectors: list(value.connectors, (item) => {
+    if (!record(item) || !isUUID(item.connectorId) || !oneOf(item.provider, ['SIMULATED', 'PARTNER'] as const) || !text(item.label, 1, 120)
+        || !oneOf(item.status, ['OK', 'UNREACHABLE', 'UNKNOWN', 'DISABLED'] as const) || !code(item.reason) || !optionalDate(item.checkedAt)
+        || !optionalDate(item.lastReachableAt) || !optionalCount(item.pendingCommands) || !optionalCount(item.observedDelaySeconds) || !Array.isArray(item.devices)) throw invalidResponse();
+    if ((item.status === 'OK' && (item.checkedAt === null || item.reason !== null)) || (item.status === 'UNREACHABLE' && item.reason === null)) throw invalidResponse();
+    const status = item.status;
+    return { connectorId: item.connectorId, provider: item.provider, label: item.label, status, reason: item.reason as string | null,
+      checkedAt: item.checkedAt as string | null, lastReachableAt: item.lastReachableAt as string | null, pendingCommands: item.pendingCommands as number | null,
+      observedDelaySeconds: item.observedDelaySeconds as number | null, devices: list(item.devices, (entry) => deviceHealth(entry, status)) };
+  }) };
+}
 const residentKinds: readonly DeviceEvent['kind'][] = ['AUTHORIZED', 'DENIED', 'RELAY_TRIGGERED', 'DOOR_OPENED', 'PASSAGE_DETECTED'];
 
 export function createAccessCredentialsApi(client: CondPulseApi = api) {
@@ -138,6 +180,7 @@ export function createAccessCredentialsApi(client: CondPulseApi = api) {
         if (page.events.some((item) => !residentKinds.includes(item.kind) || item.state !== 'ACCEPTED')) throw invalidResponse();
         return page;
       }, options(signal)),
+    health: async (tenantId: string, signal?: AbortSignal) => client.call(`${tenant(tenantId)}/access-health`, accessHealth, options(signal)),
     recentEvents: async (tenantId: string, signal?: AbortSignal) =>
       client.call(`${tenant(tenantId)}/concierge/device-events`, eventPage, options(signal)),
     create: async (tenantId: string, key: string, body: CreateCredentialBody) =>

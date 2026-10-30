@@ -1389,8 +1389,13 @@
       "id": "CP-048",
       "delivery": "Saúde e reconciliação. Heartbeat, relógio, backlog e comparação do estado desejado/aplicado.",
       "acceptance": "Equipamento offline aparece como offline; reconciliação recupera estado final, não reproduz fila obsoleta.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "db/migrations/V028__device_health.sql",
+        "tests/database/run.py#device_health_checks",
+        "apps/backend/src/test/java/br/com/condpulse/database/DeviceHealthWorkerJdbcTest.java",
+        "apps/web/e2e/access-credentials.spec.ts"
+      ]
     },
     {
       "id": "CP-049",

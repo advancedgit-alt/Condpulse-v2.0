@@ -121,7 +121,7 @@ public class SecurityConfiguration {
     // Credenciais de acesso (CP-046): gestão (AAL2), portaria (AAL2) ou o próprio vínculo no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-connectors","/v1/tenants/*/management/access-credentials",
       "/v1/tenants/*/concierge/pending-revocations","/v1/tenants/*/units/*/access-credentials","/v1/tenants/*/units/*/device-events",
-      "/v1/tenants/*/concierge/device-events").authenticated()
+      "/v1/tenants/*/concierge/device-events","/v1/tenants/*/access-health").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-credentials",
       "/v1/tenants/*/management/access-credentials/*/revoke").authenticated()
     // Caixa interna da unidade: autenticação aqui; somente os próprios avisos, com vínculo vigente, no serviço e no banco.

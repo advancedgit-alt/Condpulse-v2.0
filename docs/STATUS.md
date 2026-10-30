@@ -33,6 +33,10 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 
 - Varredura axe (WCAG 2.1 A/AA) no Playwright em desktop e 390 px: entrada, contextos, início/reservas/encomendas/acessos da unidade, cinco seções da gestão, portaria (visitas e encomendas), recuperação de acesso e link de visita. Achado corrigido: o botão da área anunciava nome diferente do texto visível (WCAG 2.5.3); agora o nome começa pelo texto visível ("Reservar esta área: <área>"). APIs sintéticas; ensaio com leitor de tela, fonte ampliada e aparelhos reais segue pendente (CP-053, bloqueio do CP-012).
 
+## Saúde dos equipamentos e reconciliação — CP-048
+
+- V028: saúde por conector e por equipamento gravada pelo worker com horários do banco; leitura só para gestão e portaria (AAL2). "No ar" só com observação recente e conector respondendo; conector sem resposta ou observação antiga aparecem como "sem informação recente". Pendências por equipamento contra o estado desejado atual; reconciliação depois de queda envia só o estado final (simulador). Mesmas flags (`CP_ACCESS_CREDENTIALS_ENABLED`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`). Testado só com o adaptador simulado; V028 aplicada na homologação só depois do merge.
+
 ## Histórico residencial dos equipamentos — CP-049
 
 - API e web: a unidade vê as próprias credenciais e os eventos das próprias credenciais (7 dias), com autorização, recusa, abertura e passagem distintas, direção ausente como ausente e "Sem registro de saída" sem inferir presença; a portaria vê as últimas 24 horas com quarentena. Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (desligada na Vercel). Sem migration nova. Celular: seção "Meu acesso pelos equipamentos" com as próprias credenciais, situação por equipamento e eventos de 7 dias (Jest; sem ensaio em aparelho, ver bloqueio do CP-012). Pendentes: eventos reais (parceiro, CP-044).
@@ -40,7 +44,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Eventos dos equipamentos — CP-047
 
 - V027: eventos buscados pelo worker em cada conector ativo, gravados no condomínio do conector, deduplicados por eventId; equipamento desconhecido em quarentena; unidade só pela credencial; direção e evidência ausentes continuam ausentes; confirmação de credencial por evento só para a versão desejada atual. Mesma flag do worker (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Merge `4aecd42` (PR #82, CI 41015244529 verde). V027 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41016020661; repetição 41016239482 sem linha nova; 26 linhas no histórico; ENABLE/FORCE RLS nas duas tabelas novas, nenhuma tabela `cp` sem RLS completa, nenhum evento gravado). Smoke público 41016429982 verde. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
-- Pendentes: tela do histórico (CP-049), saúde dos equipamentos (CP-048) e webhook assinado do parceiro (CP-044, BLOQUEADO).
+- Pendentes: webhook assinado do parceiro (CP-044, BLOQUEADO).
 
 ## Credenciais de acesso e revogação prioritária — CP-046
 

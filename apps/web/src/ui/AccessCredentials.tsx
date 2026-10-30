@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { accessCredentials, type Credential, type CredentialKind, type CredentialStatus, type DeviceEvent } from '../api/accessCredentials';
+import { accessCredentials, type ConnectorHealth, type Credential, type CredentialKind, type CredentialStatus, type DeviceEvent, type DeviceHealth } from '../api/accessCredentials';
 import { management } from '../api/management';
 import { displayText } from '../api/text';
 import { Empty, ErrorState, Loading, Notice, errorMessage } from './primitives';
@@ -267,5 +267,68 @@ export function ConciergeDeviceEvents() {
               <span>{formatWhen(event.occurredAt, scope.timeZone)}{event.deviceLabel ? <> · <bdi>{event.deviceLabel}</bdi></> : null}
                 {event.unitLabel ? <> · unidade <bdi>{event.unitLabel}</bdi></> : null}{event.credentialLabel ? <> · <bdi>{event.credentialLabel}</bdi></> : null}</span></div></li>)}</ol>}
     {list.data?.truncated ? <Notice tone="warning">A lista mostra os 100 eventos mais recentes.</Notice> : null}
+  </section>;
+}
+
+const connectorHealthText: Record<ConnectorHealth['status'], [string, string]> = {
+  OK: ['Integração respondendo', 'status-ready'], UNREACHABLE: ['Integração sem resposta', 'status-overdue'],
+  UNKNOWN: ['Sem informação recente da integração', 'status-pending'], DISABLED: ['Integração desativada', 'status-neutral'],
+};
+const deviceHealthText: Record<DeviceHealth['status'], [string, string]> = {
+  ONLINE: ['No ar', 'status-ready'], OFFLINE: ['Fora do ar', 'status-overdue'], UNKNOWN: ['Sem informação recente', 'status-pending'], RETIRED: ['Retirado', 'status-neutral'],
+};
+const deviceReasonText: Record<NonNullable<DeviceHealth['reason']>, string> = {
+  HEARTBEAT_STALE: 'sem sinal do equipamento há mais de 5 minutos', HEARTBEAT_MISSING: 'a integração não informou sinal do equipamento', NOT_REPORTED: 'a integração não informou este equipamento',
+  STALE: 'última consulta há mais de 10 minutos', NEVER_CHECKED: 'a integração ainda não foi consultada',
+  CONNECTOR_UNREACHABLE: 'a integração não respondeu', CONNECTOR_DISABLED: 'integração desativada',
+};
+const plural = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`;
+
+function DeviceHealthRow({ device, timeZone }: { device: DeviceHealth; timeZone: string }) {
+  const [label, tone] = deviceHealthText[device.status];
+  const pending = [device.pendingRevoke ? plural(device.pendingRevoke, 'revogação pendente', 'revogações pendentes') : null,
+    device.pendingApply ? plural(device.pendingApply, 'ativação pendente', 'ativações pendentes') : null,
+    device.rejected ? plural(device.rejected, 'recusa do equipamento', 'recusas do equipamento') : null].filter(Boolean).join(' · ');
+  return <li className="management-row"><div><strong><bdi>{device.label}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span>
+    {device.clockDrift ? <span className="status-pill status-overdue">{`Relógio diferente em ${Math.abs(device.clockSkewSeconds ?? 0)} s`}</span> : null}
+    <span>{device.reason ? `${deviceReasonText[device.reason]}. ` : ''}{device.status === 'OFFLINE' && device.stateSince && !device.reason ? `Fora do ar desde ${formatWhen(device.stateSince, timeZone)}. ` : ''}
+      {device.observedAt ? `Última observação em ${formatWhen(device.observedAt, timeZone)}.` : 'Nenhuma observação ainda.'}</span>
+    {pending ? <span>{pending}{device.oldestPendingRevocation ? ` (revogação mais antiga em ${formatWhen(device.oldestPendingRevocation, timeZone)})` : ''}</span>
+      : <span>Nenhuma credencial aguardando este equipamento.</span>}</div></li>;
+}
+
+/**
+ * Saúde dos equipamentos (CP-048) para a gestão e a portaria. "No ar" só aparece com observação recente; equipamento
+ * fora do ar com credencial pendente pede a contingência local, porque a revogação não chegou.
+ */
+export function AccessHealthSection() {
+  const scope = useManagement();
+  const query = useQuery({ queryKey: managementKey(scope, 'access-health'), queryFn: ({ signal }) => accessCredentials.health(scope.tenantId, signal),
+    refetchInterval: (state) => hidden(state.state.error) ? false : 60_000 });
+  if (useAccessGuard(query.error)) return null;
+  if (hidden(query.error)) return null;
+  const stale = query.isError && query.data !== undefined && !query.isFetching;
+  const attention = (query.data?.connectors ?? []).some((item) => item.devices.some((device) => device.status !== 'ONLINE' && device.status !== 'RETIRED' && device.pendingRevoke > 0));
+  return <section className="management-section" aria-labelledby="access-health-title">
+    <div className="section-heading"><div><span className="section-index">ACESSO</span><h2 id="access-health-title">Saúde dos equipamentos</h2></div>
+      <div className="button-row"><button className="button button-secondary button-compact" type="button" disabled={query.isFetching} onClick={() => void query.refetch()}>Atualizar saúde</button></div></div>
+    <p className="field-help">Situação informada pela integração na última consulta. Quando volta ao ar, o equipamento recebe só o estado atual de cada credencial, sem repetir comandos antigos.</p>
+    {stale ? <Notice tone="warning">{`Não foi possível atualizar a saúde (${errorMessage(query.error)}). Os dados abaixo são da última consulta e podem não refletir a situação atual.`}</Notice> : null}
+    {attention ? <Notice tone="warning">Há revogação pendente em equipamento fora do ar ou sem informação recente. Siga a contingência local nesse acesso.</Notice> : null}
+    {query.isPending ? <div className="panel"><Loading label="Consultando a saúde dos equipamentos…" /></div>
+      : query.isError && !query.data ? <ErrorState error={query.error} retry={() => void query.refetch()} />
+        : !query.data || query.data.connectors.length === 0 ? <div className="panel"><Empty title="Nenhuma integração">Nenhuma integração de acesso cadastrada neste condomínio.</Empty></div>
+          : query.data.connectors.map((connector) => {
+            const [label, tone] = connectorHealthText[connector.status];
+            return <div key={connector.connectorId} className="panel" aria-label={`Integração ${connector.label}`}>
+              <p><strong><bdi>{connector.label}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span></p>
+              <p className="field-help">{connector.checkedAt ? `Última consulta em ${formatWhen(connector.checkedAt, scope.timeZone)}` : 'Ainda não consultada'}
+                {connector.status === 'UNREACHABLE' && connector.lastReachableAt ? `; última resposta em ${formatWhen(connector.lastReachableAt, scope.timeZone)}` : ''}
+                {connector.status === 'OK' && connector.pendingCommands !== null ? `; ${plural(connector.pendingCommands, 'comando na fila', 'comandos na fila')} do parceiro` : ''}.</p>
+              {connector.devices.length === 0 ? <Empty title="Nenhum equipamento">Nenhum equipamento cadastrado nesta integração.</Empty>
+                : <ol className="management-list" aria-label={`Equipamentos de ${connector.label}`}>{connector.devices.map((device) =>
+                  <DeviceHealthRow key={device.deviceId} device={device} timeZone={scope.timeZone} />)}</ol>}
+            </div>;
+          })}
   </section>;
 }

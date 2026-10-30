@@ -21,7 +21,7 @@ interface Synthetic {
 interface CredentialState {
   connectors: unknown[]; credentials: Synthetic[]; creates: { key: string; body: Record<string, unknown> }[]; keys: Map<string, Synthetic>;
   revokes: unknown[]; managedQueries: string[]; loseNextCreate: boolean; listFailures: number; unavailable: boolean; revokeConflict: boolean;
-  pendingFailures: number; deviceEvents: Record<string, unknown>[]; eventFailures: number;
+  pendingFailures: number; deviceEvents: Record<string, unknown>[]; eventFailures: number; health: Record<string, unknown>; healthFailures: number; healthQueries: number;
 }
 async function json(route: Route, status: number, body: unknown, headers: Record<string, string> = {}) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store', ...headers }, body: JSON.stringify(body) });
@@ -38,9 +38,18 @@ const synthetic = (overrides: Partial<Synthetic> = {}): Synthetic => ({ credenti
 const connector = { connectorId: CONNECTOR, provider: 'SIMULATED', label: 'Integração sintética', status: 'ACTIVE', devices: [
   { deviceId: DEVICE_IN, label: 'Entrada social', direction: 'ENTRY', status: 'ACTIVE' }, { deviceId: DEVICE_OUT, label: 'Garagem', direction: 'BOTH', status: 'ACTIVE' }] };
 
+const now = () => new Date().toISOString();
+const deviceHealth = (overrides: Record<string, unknown> = {}) => ({ deviceId: DEVICE_IN, label: 'Entrada social', direction: 'ENTRY', status: 'ONLINE', reason: null,
+  observedAt: now(), stateSince: now(), lastHeartbeat: now(), clockSkewSeconds: 0, clockDrift: false, pendingApply: 0, pendingRevoke: 0, rejected: 0,
+  oldestPendingRevocation: null, ...overrides });
+const health = (connectorOverrides: Record<string, unknown> = {}, list: Record<string, unknown>[] = [deviceHealth(),
+  deviceHealth({ deviceId: DEVICE_OUT, label: 'Garagem', direction: 'BOTH' })]) => ({ generatedAt: now(), staleAfterSeconds: 600, connectors: [{
+  connectorId: CONNECTOR, provider: 'SIMULATED', label: 'Integração sintética', status: 'OK', reason: null, checkedAt: now(), lastReachableAt: now(),
+  pendingCommands: 0, observedDelaySeconds: 0, devices: list, ...connectorOverrides }] });
+
 async function installCredentialsApi(page: Page, initial: Partial<CredentialState> = {}): Promise<CredentialState> {
   const state: CredentialState = { connectors: [connector], credentials: [], creates: [], keys: new Map(), revokes: [], managedQueries: [],
-    loseNextCreate: false, listFailures: 0, unavailable: false, revokeConflict: false, pendingFailures: 0, deviceEvents: [], eventFailures: 0, ...initial };
+    loseNextCreate: false, listFailures: 0, unavailable: false, revokeConflict: false, pendingFailures: 0, deviceEvents: [], eventFailures: 0, health: health(), healthFailures: 0, healthQueries: 0, ...initial };
   await page.route(`**/v1/tenants/${TENANT_A}/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -63,6 +72,12 @@ async function installCredentialsApi(page: Page, initial: Partial<CredentialStat
       await json(route, 200, { events: state.deviceEvents.filter((item) => !resident || (item.state === 'ACCEPTED'
         && ['AUTHORIZED', 'DENIED', 'RELAY_TRIGGERED', 'DOOR_OPENED', 'PASSAGE_DETECTED'].includes(item.kind as string))), truncated: false });
       return;
+    }
+    if (path === '/access-health') {
+      if (state.unavailable) { await problem(route, 404, 'SYNTHETIC_TEST_ROUTE_NOT_FOUND'); return; }
+      state.healthQueries++;
+      if (state.healthFailures > 0) { state.healthFailures--; await problem(route, 503, 'CREDENTIAL_DEPENDENCY_UNAVAILABLE'); return; }
+      await json(route, 200, state.health); return;
     }
     if (path === '/access-connectors') { await json(route, 200, { connectors: state.connectors }); return; }
     if (path === '/management/memberships') {
@@ -337,4 +352,69 @@ test('portaria vê os eventos das últimas 24 horas, com quarentena', async ({ p
   state.deviceEvents = [];
   await section.getByRole('button', { name: 'Atualizar eventos' }).click();
   await expect(section.getByText('Nenhum evento dos equipamentos nas últimas 24 horas.')).toBeVisible();
+});
+
+test('gestão vê equipamento fora do ar com revogação pendente, relógio diferente e pede contingência', async ({ page }) => {
+  const state = await openManagement(page, { health: health({}, [
+    deviceHealth({ clockSkewSeconds: 120, clockDrift: true }),
+    deviceHealth({ deviceId: DEVICE_OUT, label: 'Garagem', direction: 'BOTH', status: 'OFFLINE', stateSince: new Date(Date.now() - 3_600_000).toISOString(),
+      pendingRevoke: 1, pendingApply: 2, oldestPendingRevocation: new Date(Date.now() - 1_800_000).toISOString() })]) });
+  const section = page.getByRole('region', { name: 'Saúde dos equipamentos' });
+  const list = section.getByRole('list', { name: 'Equipamentos de Integração sintética' });
+  await expect(section.getByText('Integração respondendo')).toBeVisible();
+  await expect(list.locator(':scope > li')).toHaveCount(2);
+  const entrance = list.locator(':scope > li').filter({ hasText: 'Entrada social' });
+  await expect(entrance.getByText('No ar', { exact: true })).toBeVisible();
+  await expect(entrance.getByText('Relógio diferente em 120 s')).toBeVisible();
+  await expect(entrance.getByText('Nenhuma credencial aguardando este equipamento.')).toBeVisible();
+  const garage = list.locator(':scope > li').filter({ hasText: 'Garagem' });
+  await expect(garage.getByText('Fora do ar', { exact: true })).toBeVisible();
+  await expect(garage.getByText(/Fora do ar desde/)).toBeVisible();
+  await expect(garage.getByText(/1 revogação pendente · 2 ativações pendentes/)).toBeVisible();
+  await expect(section.getByText(/Siga a contingência local nesse acesso/)).toBeVisible();
+  // A integração para de responder: nenhum equipamento aparece no ar.
+  state.health = health({ status: 'UNREACHABLE', reason: 'ADAPTER_ERROR', pendingCommands: null, observedDelaySeconds: null,
+    lastReachableAt: new Date(Date.now() - 900_000).toISOString() }, [
+    deviceHealth({ status: 'UNKNOWN', reason: 'CONNECTOR_UNREACHABLE' }),
+    deviceHealth({ deviceId: DEVICE_OUT, label: 'Garagem', status: 'UNKNOWN', reason: 'CONNECTOR_UNREACHABLE', pendingRevoke: 1, oldestPendingRevocation: now() })]);
+  await section.getByRole('button', { name: 'Atualizar saúde' }).click();
+  await expect(section.getByText('Integração sem resposta')).toBeVisible();
+  await expect(section.getByText(/última resposta em/)).toBeVisible();
+  await expect(list.getByText('Sem informação recente')).toHaveCount(2);
+  await expect(list.getByText(/a integração não respondeu/)).toHaveCount(2);
+  await expect(list.getByText('No ar', { exact: true })).toHaveCount(0);
+  await expect(section.getByText(/Siga a contingência local nesse acesso/)).toBeVisible();
+  state.healthFailures = 1;
+  await section.getByRole('button', { name: 'Atualizar saúde' }).click();
+  await expect(section.getByText(/Não foi possível atualizar a saúde/)).toBeVisible();
+  await section.getByRole('button', { name: 'Atualizar saúde' }).click();
+  await expect(section.getByText(/Não foi possível atualizar a saúde/)).toHaveCount(0);
+});
+
+test('saúde: resposta que afirma no ar sem integração respondendo é recusada', async ({ page }) => {
+  await openManagement(page, { health: health({ status: 'UNKNOWN', reason: 'STALE' }, [deviceHealth()]) });
+  const section = page.getByRole('region', { name: 'Saúde dos equipamentos' });
+  await expect(section.getByRole('button', { name: 'Tentar novamente' })).toBeVisible();
+  await expect(section.getByText('No ar', { exact: true })).toHaveCount(0);
+});
+
+test('portaria vê a saúde; sem integração mostra o vazio; falha na primeira consulta oferece nova tentativa', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  await openConcierge(page, api);
+  const state = await installCredentialsApi(page, { healthFailures: 1 });
+  await signIn(page);
+  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  const section = page.getByRole('region', { name: 'Saúde dos equipamentos' });
+  await section.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(section.getByRole('list', { name: 'Equipamentos de Integração sintética' }).locator(':scope > li')).toHaveCount(2);
+  state.health = { generatedAt: now(), staleAfterSeconds: 600, connectors: [] };
+  await section.getByRole('button', { name: 'Atualizar saúde' }).click();
+  await expect(section.getByText('Nenhuma integração de acesso cadastrada neste condomínio.')).toBeVisible();
+});
+
+test('saúde: função desligada esconde a seção', async ({ page }) => {
+  await openManagement(page, { unavailable: true });
+  await expect(page.getByText('As credenciais de acesso ainda não estão ativas neste ambiente.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Saúde dos equipamentos' })).toHaveCount(0);
 });

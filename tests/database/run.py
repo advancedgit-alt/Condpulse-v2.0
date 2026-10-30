@@ -2620,6 +2620,69 @@ def device_event_checks():
         expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text||has_table_privilege('cp_worker','cp.{table}','DELETE')::text") == "falsefalse",
                f"ninguem apaga cp.{table}")
 
+def device_health_checks():
+    """V028: saude por conector e equipamento gravada so pelo worker, com horarios do banco e leitura so de gestao e portaria."""
+    MG, RS, CN = ("10000000-0000-4000-8000-0000000002f1", "10000000-0000-4000-8000-0000000002f2", "10000000-0000-4000-8000-0000000002f3")
+    U1, MR = "20000000-0000-4000-8000-0000000002f1", "51000000-0000-4000-8000-0000000002f1"
+    KA, KB = "43000000-0000-4000-8000-0000000002f1", "43000000-0000-4000-8000-0000000002f2"
+    DA, DB = "44000000-0000-4000-8000-0000000002f1", "44000000-0000-4000-8000-0000000002f2"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{RS}','ACTIVE'),('{CN}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{U1}','{TA}','SAUDE 1');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES(gen_random_uuid(),'{TA}','{MG}',NULL,'GESTAO SAUDE','MANAGER','ACTIVE'),('{MR}','{TA}','{RS}','{U1}','MORADOR SAUDE','RESIDENT','ACTIVE'),
+                (gen_random_uuid(),'{TA}','{CN}',NULL,'PORTARIA SAUDE','CONCIERGE','ACTIVE');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{KA}','{TA}','SIMULATED','A'),('{KB}','{TB}','SIMULATED','B');
+        INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label) VALUES('{DA}','{TA}','{KA}','leitor-1','Entrada'),
+          ('{DB}','{TB}','{KB}','leitor-1','Condominio B');
+    """)
+    worker = lambda sql, tenant=TA: query(sql, tenant=tenant, actor=None, role="cp_worker")
+    connector = lambda reachable, pending="NULL", delay="NULL", reason="NULL": (
+        f"INSERT INTO cp.access_connector_health(tenant_id,connector_id,reachable,pending_commands,observed_delay_ms,failure_reason) "
+        f"VALUES('{TA}','{KA}',{reachable},{pending},{delay},{reason}) ON CONFLICT(tenant_id,connector_id) DO UPDATE SET reachable=excluded.reachable,"
+        f"pending_commands=excluded.pending_commands,observed_delay_ms=excluded.observed_delay_ms,failure_reason=excluded.failure_reason")
+    device = lambda online, skew="NULL", dev=DA, tenant=TA: (
+        f"INSERT INTO cp.access_device_health(tenant_id,device_id,online,last_heartbeat,clock_skew_ms) VALUES('{tenant}','{dev}',{online},clock_timestamp(),{skew}) "
+        f"ON CONFLICT(tenant_id,device_id) DO UPDATE SET online=excluded.online,last_heartbeat=excluded.last_heartbeat,clock_skew_ms=excluded.clock_skew_ms")
+    worker(connector("true", "3", "1500"))
+    expect(value(f"select (last_reachable_at=checked_at)::text from cp.access_connector_health where connector_id='{KA}'") == "true",
+           "conector respondeu: ultima resposta e a propria verificacao")
+    first = value(f"select last_reachable_at from cp.access_connector_health where connector_id='{KA}'")
+    worker(connector("false", reason="'ADAPTER_ERROR'"))
+    expect(value(f"select reachable::text||':'||(last_reachable_at::text='{first}')::text||':'||(checked_at>last_reachable_at)::text "
+                 f"from cp.access_connector_health where connector_id='{KA}'") == "false:true:true", "falha mantem a ultima resposta e avanca a verificacao")
+    expect(error(connector("false"), "23514", tenant=TA, actor=None, role="cp_worker"), "conector sem resposta exige motivo")
+    expect(error(connector("false", "2", reason="'ADAPTER_ERROR'"), "23514", tenant=TA, actor=None, role="cp_worker"), "sem resposta nao ha fila informada")
+    expect(error(f"UPDATE cp.access_connector_health SET checked_at=now()-interval '1 day'", "42501", tenant=TA, actor=None, role="cp_worker"),
+           "worker nao escolhe o horario da verificacao")
+    worker(device("true", "1200"))
+    since = value(f"select state_since from cp.access_device_health where device_id='{DA}'")
+    worker(device("true", "800"))
+    expect(value(f"select (state_since::text='{since}')::text||':'||clock_skew_ms from cp.access_device_health where device_id='{DA}'") == "true:800",
+           "mesmo estado mantem o desde quando")
+    worker(device("false"))
+    expect(value(f"select online::text||':'||(state_since=observed_at)::text||':'||(state_since::text<>'{since}')::text from cp.access_device_health where device_id='{DA}'")
+           == "false:true:true", "fora do ar comeca a contar quando o estado muda")
+    expect(error(device("true", "90000000"), "23514", tenant=TA, actor=None, role="cp_worker"), "relogio fora da faixa e recusado")
+    expect(query(device("true", dev=DB, tenant=TB), tenant=TA, actor=None, role="cp_worker", check=False).returncode != 0
+           and value(f"select count(*) from cp.access_device_health where device_id='{DB}'") == "0", "worker no condominio A nao grava saude do B")
+    expect(error(f"INSERT INTO cp.access_device_health(tenant_id,device_id,online) VALUES('{TA}','{DB}',true)", "23503", tenant=TA, actor=None, role="cp_worker"),
+           "equipamento do condominio B nao entra no A")
+    expect(error(f"UPDATE cp.access_device_health SET observed_at=now()-interval '1 day'", "42501", tenant=TA, actor=None, role="cp_worker"),
+           "worker nao escolhe o horario da observacao")
+    expect(value("SET LOCAL app.capabilities='memberships.manage'; select count(*) from cp.access_device_health", tenant=TA, actor=MG, role="cp_api") == "1",
+           "gestao ve a saude")
+    expect(value("SET LOCAL app.capabilities='concierge.operate'; select count(*) from cp.access_connector_health", tenant=TA, actor=CN, role="cp_api") == "1",
+           "portaria ve a saude")
+    expect(value("select (select count(*) from cp.access_device_health)+(select count(*) from cp.access_connector_health)", tenant=TA, actor=RS, role="cp_api") == "0",
+           "morador nao ve a saude dos equipamentos")
+    expect(error(f"INSERT INTO cp.access_device_health(tenant_id,device_id,online) VALUES('{TA}','{DA}',true)", "42501", tenant=TA, actor=MG, role="cp_api"),
+           "aplicacao nao grava saude")
+    for table in ("access_connector_health", "access_device_health"):
+        expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text||has_table_privilege('cp_worker','cp.{table}','DELETE')::text") == "falsefalse",
+               f"ninguem apaga cp.{table}")
+        expect(value(f"select relforcerowsecurity::text from pg_class where oid='cp.{table}'::regclass") == "true", f"RLS forcado em cp.{table}")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2736,6 +2799,7 @@ def main():
     move_checks()
     credential_checks()
     device_event_checks()
+    device_health_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

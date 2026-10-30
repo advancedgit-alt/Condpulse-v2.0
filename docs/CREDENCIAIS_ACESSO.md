@@ -70,11 +70,28 @@ condomínio **dono do conector**: o condomínio nunca vem do conteúdo do evento
   ela a tela mostra "Sem registro de saída" e avisa que isso não significa que a pessoa continua no condomínio.
 - **Portaria/gestão** (`GET /concierge/device-events`, AAL2): últimas 24 horas do condomínio, inclusive quarentena.
 
+## Saúde e reconciliação (CP-048)
+
+- **V028**: `cp.access_connector_health` (respondeu ou não, motivo, fila e atraso informados pelo parceiro) e
+  `cp.access_device_health` (no ar ou fora do ar, último sinal, diferença de relógio). O worker consulta `health` de
+  cada conector ativo e grava no condomínio do conector; verificação, observação, última resposta e "desde quando"
+  são horários do banco. Ninguém apaga; a aplicação só lê (gestão e portaria; morador não vê).
+- **Leitura** (`GET /access-health`, AAL2): conector `OK`, `UNREACHABLE` (com motivo e última resposta), `UNKNOWN`
+  (nunca consultado ou consulta com mais de 10 minutos) ou `DISABLED`. Equipamento `ONLINE` só com conector respondendo,
+  observação recente e sinal informado com menos de 5 minutos (sem sinal informado: `UNKNOWN`); `OFFLINE` quando informou estar fora do ar (ou sinal antigo);
+  `UNKNOWN` em qualquer outra situação — nunca "no ar" presumido. Relógio com diferença acima de 60 s é sinalizado,
+  sem correção.
+- **Reconciliação**: pendências por equipamento comparam o estado desejado **atual** com o confirmado (ativações,
+  revogações e recusas). Quando o equipamento volta, a reconciliação envia só o estado final: cartão criado e revogado
+  durante a queda recebe apenas a revogação (teste `DeviceHealthWorkerJdbcTest`).
+- **Tela**: "Saúde dos equipamentos" na aba Acesso da gestão e na portaria (visitas), com aviso de contingência quando há
+  revogação pendente em equipamento fora do ar ou sem informação.
+
 ## Rotas
 
 `GET /v1/tenants/{t}/access-connectors`, `GET|POST /management/access-credentials` (`Idempotency-Key`),
 `POST /management/access-credentials/{id}/revoke`, `GET /concierge/pending-revocations`,
-`GET /units/{u}/access-credentials`, `GET /units/{u}/device-events`, `GET /concierge/device-events`. Contrato em `contracts/openapi.json`.
+`GET /units/{u}/access-credentials`, `GET /units/{u}/device-events`, `GET /concierge/device-events`, `GET /access-health`. Contrato em `contracts/openapi.json`.
 
 ## Evidências
 
