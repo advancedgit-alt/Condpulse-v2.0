@@ -149,6 +149,10 @@ function call(port, path, { method = 'GET', token, body, key } = {}) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(key ? { 'Idempotency-Key': key } : {}),
       ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}) } }, (response) => {
       const chunks = []; response.on('data', (chunk) => chunks.push(chunk));
+      // Resposta interrompida depois dos cabeçalhos não emite 'end': sem isto a promessa ficaria pendente para sempre.
+      response.on('aborted', () => reject(new Error('RESPONSE_ABORTED')));
+      response.on('error', () => reject(new Error('RESPONSE_ABORTED')));
+      response.on('close', () => { if (!response.complete) reject(new Error('RESPONSE_ABORTED')); });
       response.on('end', () => {
         let json; try { json = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { json = undefined; }
         done({ status: response.statusCode, body: json });
