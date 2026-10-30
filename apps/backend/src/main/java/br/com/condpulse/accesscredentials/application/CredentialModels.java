@@ -36,6 +36,16 @@ public final class CredentialModels {
  public record Connectors(List<Connector> connectors) {
   public Connectors { connectors=List.copyOf(connectors); }
  }
+ /**
+  * Evento do equipamento como o parceiro informou (CP-049): autorização, recusa, abertura (relé/porta) e passagem são
+  * tipos diferentes; direção e evidência ausentes continuam null. exitRecorded só existe para passagem de entrada: diz
+  * se há passagem de saída posterior da mesma credencial — nunca presença.
+  */
+ public record DeviceEvent(UUID eventId,String kind,String direction,String evidence,Instant occurredAt,String deviceLabel,String credentialLabel,
+     String unitLabel,String state,String quarantineReason,Boolean exitRecorded) {}
+ public record EventPage(List<DeviceEvent> events,boolean truncated) {
+  public EventPage { events=List.copyOf(events); }
+ }
  public record Create(UUID connectorId,UUID membershipId,String kind,String label) {}
  public record Revoke(String reason,Long expectedVersion) {}
  public record Mutation(Credential credential,boolean replayed,int status) {}

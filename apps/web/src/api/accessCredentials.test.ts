@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { createAccessCredentialsApi, credential } from './accessCredentials';
+import { createAccessCredentialsApi, credential, deviceEvent } from './accessCredentials';
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -59,5 +59,27 @@ describe('contrato das credenciais de acesso', () => {
     await expect(client.revoke(tenant, id, { reason: 'Perdido', expectedVersion: 0 })).rejects.toMatchObject({ uncertain: true });
     reply = () => json({ credentials: [active], truncated: false });
     await expect(client.pendingRevocations(tenant)).rejects.toThrow();
+  });
+  it('evento do equipamento: quarentena sem equipamento, saída registrada só para passagem de entrada', () => {
+    const passage = { eventId: '46000000-0000-4000-8000-000000000001', kind: 'PASSAGE_DETECTED', direction: 'ENTRY', evidence: 'TURNSTILE_SENSOR',
+      occurredAt: '2030-01-01T12:00:00Z', deviceLabel: 'Entrada', credentialLabel: 'Cartão', unitLabel: '101', state: 'ACCEPTED', quarantineReason: null, exitRecorded: false };
+    expect(deviceEvent(passage).exitRecorded).toBe(false);
+    expect(deviceEvent({ ...passage, direction: null, exitRecorded: null }).direction).toBeNull();
+    expect(() => deviceEvent({ ...passage, direction: 'EXIT' })).toThrow();
+    expect(() => deviceEvent({ ...passage, kind: 'AUTHORIZED' })).toThrow();
+    expect(() => deviceEvent({ ...passage, state: 'QUARANTINED' })).toThrow();
+    expect(() => deviceEvent({ ...passage, state: 'QUARANTINED', quarantineReason: 'UNKNOWN_DEVICE' })).toThrow();
+    expect(deviceEvent({ ...passage, state: 'QUARANTINED', quarantineReason: 'UNKNOWN_DEVICE', deviceLabel: null, exitRecorded: null }).state).toBe('QUARANTINED');
+    expect(() => deviceEvent({ ...passage, evidence: 'sensor livre' })).toThrow();
+    expect(() => deviceEvent({ ...passage, kind: 'PRESENCE' })).toThrow();
+  });
+  it('a unidade só recebe eventos de acesso aceitos', async () => {
+    const fetcher = vi.fn<typeof globalThis.fetch>();
+    fetcher.mockImplementation(async () => json({ events: [{ eventId: '46000000-0000-4000-8000-000000000002', kind: 'CREDENTIAL_APPLIED', direction: null,
+      evidence: null, occurredAt: '2030-01-01T12:00:00Z', deviceLabel: 'Entrada', credentialLabel: 'Cartão', unitLabel: '101', state: 'ACCEPTED',
+      quarantineReason: null, exitRecorded: null }], truncated: false }));
+    const client = createAccessCredentialsApi(new CondPulseApi({ fetch: fetcher }));
+    await expect(client.unitEvents(tenant, '20000000-0000-4000-8000-000000000001')).rejects.toThrow();
+    expect((await client.recentEvents(tenant)).events).toHaveLength(1);
   });
 });

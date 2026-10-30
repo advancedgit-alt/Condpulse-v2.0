@@ -54,6 +54,14 @@ public class CredentialController {
  public ResponseEntity<CredentialModels.Page> unit(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID unitId) {
   return ok(service.unit(account(jwt),tenantId,unitId));
  }
+ @GetMapping("/v1/tenants/{tenantId}/units/{unitId}/device-events")
+ public ResponseEntity<CredentialModels.EventPage> unitEvents(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID unitId) {
+  return ok(service.unitEvents(account(jwt),tenantId,unitId));
+ }
+ @GetMapping("/v1/tenants/{tenantId}/concierge/device-events")
+ public ResponseEntity<CredentialModels.EventPage> recentEvents(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId) {
+  return ok(service.recentEvents(account(jwt),tenantId,assurance(jwt)));
+ }
  private static <T> ResponseEntity<T> ok(T body) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body); }
  private static UUID account(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
  private static AssuranceLevel assurance(Jwt jwt) { return AssuranceLevel.fromClaim(jwt.getClaims().get("aal")); }

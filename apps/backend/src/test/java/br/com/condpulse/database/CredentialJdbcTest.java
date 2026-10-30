@@ -165,4 +165,33 @@ class CredentialJdbcTest {
   assertEquals(2,credentials.pendingRevocations(concierge,db.tenantA,AAL2).credentials().size(),"Revogação física pendente aparece na portaria");
   db.assertEmptyContext();
  }
+ private void deviceEvent(String id,UUID device,UUID credential,String kind,String direction,String state,String reason,String ago) throws Exception {
+  db.adminUpdate("insert into cp.device_events(tenant_id,connector_id,external_event_id,device_id,credential_id,kind,direction,occurred_at,received_at,state,quarantine_reason) "
+   +"values(?,?,?,?,?,?,?,clock_timestamp()-?::interval,clock_timestamp()-?::interval,?,?)",db.tenantA,connector,id,device,credential,kind,direction,ago,ago,state,reason);
+ }
+
+ @Test void unitHistoryShowsOwnEquipmentEventsWithoutInferringPresence() throws Exception {
+  UUID holder=membershipOf(db.accountA,db.unitA);
+  var card=credentials.create(manager,db.tenantA,AAL2,key(),new CredentialModels.Create(connector,holder,"CARD","Cartão histórico")).credential();
+  deviceEvent("h-1",deviceIn,card.credentialId(),"AUTHORIZED",null,"ACCEPTED",null,"3 hours");
+  deviceEvent("h-2",deviceIn,card.credentialId(),"PASSAGE_DETECTED","ENTRY","ACCEPTED",null,"3 hours");
+  deviceEvent("h-3",deviceOut,card.credentialId(),"PASSAGE_DETECTED","EXIT","ACCEPTED",null,"2 hours");
+  deviceEvent("h-4",deviceIn,card.credentialId(),"PASSAGE_DETECTED","ENTRY","ACCEPTED",null,"1 hour");
+  deviceEvent("h-5",deviceIn,card.credentialId(),"CREDENTIAL_APPLIED",null,"ACCEPTED",null,"4 hours");
+  deviceEvent("h-6",deviceIn,card.credentialId(),"PASSAGE_DETECTED",null,"ACCEPTED",null,"30 minutes");
+  deviceEvent("h-7",null,null,"DEVICE_OFFLINE",null,"QUARANTINED","UNKNOWN_DEVICE","10 minutes");
+  deviceEvent("h-8",deviceIn,card.credentialId(),"PASSAGE_DETECTED","ENTRY","ACCEPTED",null,"8 days");
+  var history=credentials.unitEvents(db.accountA,db.tenantA,db.unitA).events();
+  assertEquals(List.of("PASSAGE_DETECTED:-:null","PASSAGE_DETECTED:ENTRY:false","PASSAGE_DETECTED:EXIT:null","PASSAGE_DETECTED:ENTRY:true","AUTHORIZED:-:null"),
+   history.stream().map(e->e.kind()+":"+(e.direction()==null?"-":e.direction())+":"+e.exitRecorded()).toList(),
+   "Sem eventos internos, sem quarentena, sem mais de 7 dias; saída só quando registrada");
+  assertEquals("Cartão histórico",history.getFirst().credentialLabel());
+  assertTrue(credentials.unitEvents(db.accountC,db.tenantA,db.otherUnitA).events().isEmpty(),"Outra unidade não vê");
+  assertEquals("UNIT_ACCESS_DENIED",code(()->credentials.unitEvents(db.accountC,db.tenantA,db.unitA)));
+  var recent=credentials.recentEvents(concierge,db.tenantA,AAL2).events();
+  assertEquals(7,recent.size(),"Portaria vê as últimas 24 horas, inclusive quarentena e eventos internos");
+  assertTrue(recent.stream().anyMatch(e->"QUARANTINED".equals(e.state()) && "UNKNOWN_DEVICE".equals(e.quarantineReason()) && e.deviceLabel()==null));
+  assertEquals("STAFF_ACCESS_DENIED",code(()->credentials.recentEvents(db.accountA,db.tenantA,AAL2)));
+  db.assertEmptyContext();
+ }
 }

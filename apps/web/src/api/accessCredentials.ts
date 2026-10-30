@@ -82,6 +82,35 @@ function connectors(value: unknown): AccessConnector[] {
   });
 }
 
+/** Evento do equipamento (CP-049): tipos distintos para autorização, recusa, abertura e passagem; nada inferido. */
+export const deviceEventKinds = ['AUTHORIZED', 'DENIED', 'RELAY_TRIGGERED', 'DOOR_OPENED', 'PASSAGE_DETECTED', 'CREDENTIAL_APPLIED',
+  'CREDENTIAL_REJECTED', 'CREDENTIAL_REVOKED', 'DEVICE_ONLINE', 'DEVICE_OFFLINE'] as const;
+export interface DeviceEvent {
+  eventId: UUID; kind: typeof deviceEventKinds[number]; direction: 'ENTRY' | 'EXIT' | 'UNKNOWN' | null; evidence: string | null; occurredAt: ISODateTime;
+  deviceLabel: string | null; credentialLabel: string | null; unitLabel: string | null; state: 'ACCEPTED' | 'QUARANTINED';
+  quarantineReason: string | null; exitRecorded: boolean | null;
+}
+const code = (value: unknown) => value === null || (typeof value === 'string' && /^[A-Z0-9_]{1,60}$/.test(value));
+export function deviceEvent(value: unknown): DeviceEvent {
+  if (!record(value) || !isUUID(value.eventId) || !oneOf(value.kind, deviceEventKinds) || !(value.direction === null || oneOf(value.direction, ['ENTRY', 'EXIT', 'UNKNOWN'] as const))
+      || !code(value.evidence) || !isDate(value.occurredAt) || !(value.deviceLabel === null || text(value.deviceLabel, 1, 120))
+      || !(value.credentialLabel === null || text(value.credentialLabel, 1, 80)) || !(value.unitLabel === null || text(value.unitLabel, 1, 160))
+      || !oneOf(value.state, ['ACCEPTED', 'QUARANTINED'] as const) || !code(value.quarantineReason)
+      || !(value.exitRecorded === null || typeof value.exitRecorded === 'boolean')) throw invalidResponse();
+  // Quarentena tem motivo e não tem equipamento; "saída registrada" só existe para passagem de entrada.
+  if ((value.state === 'QUARANTINED') !== (value.quarantineReason !== null) || (value.state === 'QUARANTINED' && value.deviceLabel !== null)
+      || (value.exitRecorded !== null && !(value.kind === 'PASSAGE_DETECTED' && value.direction === 'ENTRY'))) throw invalidResponse();
+  return { eventId: value.eventId, kind: value.kind, direction: value.direction as DeviceEvent['direction'], evidence: value.evidence as string | null,
+    occurredAt: value.occurredAt, deviceLabel: value.deviceLabel as string | null, credentialLabel: value.credentialLabel as string | null,
+    unitLabel: value.unitLabel as string | null, state: value.state, quarantineReason: value.quarantineReason as string | null,
+    exitRecorded: value.exitRecorded as boolean | null };
+}
+function eventPage(value: unknown): { events: DeviceEvent[]; truncated: boolean } {
+  if (!record(value) || typeof value.truncated !== 'boolean' || !Array.isArray(value.events) || value.events.length > 100) throw invalidResponse();
+  return { events: list(value.events, deviceEvent), truncated: value.truncated };
+}
+const residentKinds: readonly DeviceEvent['kind'][] = ['AUTHORIZED', 'DENIED', 'RELAY_TRIGGERED', 'DOOR_OPENED', 'PASSAGE_DETECTED'];
+
 export function createAccessCredentialsApi(client: CondPulseApi = api) {
   const tenant = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}`;
   const options = (signal?: AbortSignal) => signal ? { signal } : {};
@@ -95,6 +124,21 @@ export function createAccessCredentialsApi(client: CondPulseApi = api) {
         if (page.credentials.some((item) => item.status !== 'REVOKING')) throw invalidResponse();
         return page;
       }, options(signal)),
+    unitCredentials: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      client.call(`${tenant(tenantId)}/units/${identifier(unitId)}/access-credentials`, (value) => {
+        const page = credentialPage(value);
+        if (page.credentials.some((item) => item.unitId !== unitId)) throw invalidResponse();
+        return page;
+      }, options(signal)),
+    unitEvents: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      client.call(`${tenant(tenantId)}/units/${identifier(unitId)}/device-events`, (value) => {
+        const page = eventPage(value);
+        // A unidade só recebe autorização, recusa, abertura e passagem aceitas.
+        if (page.events.some((item) => !residentKinds.includes(item.kind) || item.state !== 'ACCEPTED')) throw invalidResponse();
+        return page;
+      }, options(signal)),
+    recentEvents: async (tenantId: string, signal?: AbortSignal) =>
+      client.call(`${tenant(tenantId)}/concierge/device-events`, eventPage, options(signal)),
     create: async (tenantId: string, key: string, body: CreateCredentialBody) =>
       client.call(`${tenant(tenantId)}/management/access-credentials`, (value, response) => {
         const created = credential(value, true);

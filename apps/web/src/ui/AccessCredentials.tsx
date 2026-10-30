@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { accessCredentials, type Credential, type CredentialKind, type CredentialStatus } from '../api/accessCredentials';
+import { accessCredentials, type Credential, type CredentialKind, type CredentialStatus, type DeviceEvent } from '../api/accessCredentials';
 import { management } from '../api/management';
 import { displayText } from '../api/text';
 import { Empty, ErrorState, Loading, Notice, errorMessage } from './primitives';
@@ -196,5 +196,76 @@ export function ConciergePendingRevocations() {
           : <ol className="management-list" aria-label="Revogações pendentes">{list.data.credentials.map((item) =>
             <li key={item.credentialId} className="management-row"><CredentialDetails item={item} timeZone={scope.timeZone} /></li>)}</ol>}
     {list.data?.truncated ? <Notice tone="warning">A lista mostra as 100 revogações pendentes mais antigas.</Notice> : null}
+  </section>;
+}
+
+/** Descrição do evento sem inferir nada além do que o equipamento informou (CP-049). */
+export function describeDeviceEvent(event: DeviceEvent): string {
+  switch (event.kind) {
+    case 'AUTHORIZED': return 'Acesso autorizado pelo equipamento';
+    case 'DENIED': return 'Acesso negado pelo equipamento';
+    case 'RELAY_TRIGGERED': return 'Abertura acionada';
+    case 'DOOR_OPENED': return 'Porta aberta';
+    case 'PASSAGE_DETECTED': return event.direction === 'ENTRY' ? 'Passagem de entrada' : event.direction === 'EXIT' ? 'Passagem de saída'
+      : 'Passagem sem direção registrada';
+    case 'CREDENTIAL_APPLIED': return 'Credencial aplicada no equipamento';
+    case 'CREDENTIAL_REJECTED': return 'Credencial recusada pelo equipamento';
+    case 'CREDENTIAL_REVOKED': return 'Credencial removida do equipamento';
+    case 'DEVICE_ONLINE': return 'Equipamento voltou a responder';
+    case 'DEVICE_OFFLINE': return 'Equipamento sem resposta';
+  }
+}
+
+/** Unidade: as próprias credenciais e o histórico dos equipamentos (7 dias), sem presença inferida. */
+export function UnitDeviceAccess({ accountId, tenantId, unitId, timeZone }: { accountId: string; tenantId: string; unitId: string; timeZone: string }) {
+  const key = ['private', accountId, 'tenant', tenantId, 'unit', unitId, 'device-access'] as const;
+  const own = useQuery({ queryKey: [...key, 'credentials'], queryFn: ({ signal }) => accessCredentials.unitCredentials(tenantId, unitId, signal) });
+  const events = useQuery({ queryKey: [...key, 'events'], queryFn: ({ signal }) => accessCredentials.unitEvents(tenantId, unitId, signal), enabled: !hidden(own.error) });
+  if (hidden(own.error) || hidden(events.error) || codeOf(own.error) === 'UNIT_ACCESS_DENIED') return null;
+  const stale = (own.isError && own.data !== undefined && !own.isFetching) || (events.isError && events.data !== undefined && !events.isFetching);
+  return <section className="management-section" aria-labelledby="device-access-title">
+    <div className="section-heading"><div><span className="section-index">05 / EQUIPAMENTOS</span><h2 id="device-access-title">Meu acesso pelos equipamentos</h2></div>
+      <div className="button-row"><button className="button button-secondary button-compact" type="button" disabled={own.isFetching || events.isFetching}
+        onClick={() => { void own.refetch(); void events.refetch(); }}>Atualizar equipamentos</button></div></div>
+    <p className="field-help">O que os equipamentos informaram nos últimos 7 dias. Sem registro de saída não significa que você continua no condomínio.</p>
+    {stale ? <Notice tone="warning">Não foi possível atualizar. Os dados abaixo são da última consulta.</Notice> : null}
+    {own.isPending ? <div className="panel"><Loading label="Consultando suas credenciais…" /></div>
+      : own.isError && !own.data ? <ErrorState error={own.error} retry={() => void own.refetch()} />
+        : !own.data || own.data.credentials.length === 0 ? <div className="panel"><Empty title="Nenhuma credencial">A gestão ainda não cadastrou cartão ou QR para você.</Empty></div>
+          : <ol className="management-list" aria-label="Minhas credenciais">{own.data.credentials.map((item) =>
+            <li key={item.credentialId} className="management-row"><CredentialDetails item={item} timeZone={timeZone} /></li>)}</ol>}
+    {events.isPending && !hidden(own.error) ? <div className="panel"><Loading label="Consultando eventos dos equipamentos…" /></div>
+      : events.isError && !events.data ? <ErrorState error={events.error} retry={() => void events.refetch()} />
+        : !events.data || events.data.events.length === 0 ? <p className="field-help">Nenhum evento dos equipamentos nos últimos 7 dias.</p>
+          : <ol className="management-list" aria-label="Eventos dos equipamentos">{events.data.events.map((event) =>
+            <li key={event.eventId} className="management-row"><div><strong>{describeDeviceEvent(event)}</strong>
+              {event.exitRecorded === false ? <span className="status-pill status-pending">Sem registro de saída</span> : null}
+              <span>{formatWhen(event.occurredAt, timeZone)}{event.deviceLabel ? <> · <bdi>{event.deviceLabel}</bdi></> : null}{event.credentialLabel ? <> · <bdi>{event.credentialLabel}</bdi></> : null}</span></div></li>)}</ol>}
+    {events.data?.truncated ? <Notice tone="warning">A lista mostra os 100 eventos mais recentes.</Notice> : null}
+  </section>;
+}
+
+/** Portaria: eventos dos equipamentos nas últimas 24 horas, inclusive quarentena. */
+export function ConciergeDeviceEvents() {
+  const scope = useManagement();
+  const list = useQuery({ queryKey: conciergeKey(scope, 'device-events'), queryFn: ({ signal }) => accessCredentials.recentEvents(scope.tenantId, signal),
+    refetchInterval: (query) => hidden(query.state.error) ? false : 60_000 });
+  if (useAccessGuard(list.error)) return null;
+  if (hidden(list.error)) return null;
+  const stale = list.isError && list.data !== undefined && !list.isFetching;
+  return <section className="management-section" aria-labelledby="device-events-title">
+    <div className="section-heading"><div><span className="section-index">ACESSO</span><h2 id="device-events-title">Eventos dos equipamentos</h2></div>
+      <div className="button-row"><button className="button button-secondary button-compact" type="button" disabled={list.isFetching} onClick={() => void list.refetch()}>Atualizar eventos</button></div></div>
+    <p className="field-help">Últimas 24 horas, como os equipamentos informaram. Sem registro de saída não significa que a pessoa continua no condomínio.</p>
+    {stale ? <Notice tone="warning">{`Não foi possível atualizar os eventos (${errorMessage(list.error)}). A lista é da última consulta.`}</Notice> : null}
+    {list.isPending ? <div className="panel"><Loading label="Consultando eventos dos equipamentos…" /></div>
+      : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
+        : !list.data || list.data.events.length === 0 ? <div className="panel"><Empty title="Nenhum evento">Nenhum evento dos equipamentos nas últimas 24 horas.</Empty></div>
+          : <ol className="management-list" aria-label="Eventos dos equipamentos">{list.data.events.map((event) =>
+            <li key={event.eventId} className="management-row"><div><strong>{describeDeviceEvent(event)}</strong>
+              {event.state === 'QUARANTINED' ? <span className="status-pill status-overdue">Em quarentena: equipamento desconhecido ou dado fora do formato</span> : null}
+              <span>{formatWhen(event.occurredAt, scope.timeZone)}{event.deviceLabel ? <> · <bdi>{event.deviceLabel}</bdi></> : null}
+                {event.unitLabel ? <> · unidade <bdi>{event.unitLabel}</bdi></> : null}{event.credentialLabel ? <> · <bdi>{event.credentialLabel}</bdi></> : null}</span></div></li>)}</ol>}
+    {list.data?.truncated ? <Notice tone="warning">A lista mostra os 100 eventos mais recentes.</Notice> : null}
   </section>;
 }

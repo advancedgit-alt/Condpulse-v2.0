@@ -1396,8 +1396,12 @@
       "id": "CP-049",
       "delivery": "Histórico residencial protegido. Mostrar acessos pertinentes e distinguir autorização, abertura e passagem.",
       "acceptance": "Sem identificador de saída, exibir sem registro de saída; nada de presença inferida.",
-      "status": "PLANEJADO",
-      "evidence": []
+      "status": "EM_IMPLEMENTACAO",
+      "evidence": [
+        "apps/backend/src/test/java/br/com/condpulse/database/CredentialJdbcTest.java#unitHistoryShowsOwnEquipmentEventsWithoutInferringPresence",
+        "apps/web/e2e/access-credentials.spec.ts",
+        "apps/web/src/api/accessCredentials.test.ts"
+      ]
     },
     {
       "id": "CP-050",
