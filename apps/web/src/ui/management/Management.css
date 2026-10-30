@@ -1,5 +1,9 @@
-.management-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 28px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
-.management-tabs>a{min-height:48px;display:inline-flex;align-items:center;padding:10px 16px;border-radius:10px;text-decoration:none;color:var(--muted);font-size:.86rem;font-weight:650}
+/* Abas de seção: uma linha compacta com rolagem horizontal; sombras laterais indicam que há mais abas. */
+.management-tabs{display:flex;flex-wrap:nowrap;gap:4px;margin:0 0 26px;padding:5px;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#bfceda transparent;
+  background:linear-gradient(90deg,var(--surface) 30%,#fff0) 0 0/36px 100% no-repeat local,linear-gradient(270deg,var(--surface) 30%,#fff0) 100% 0/36px 100% no-repeat local,radial-gradient(farthest-side at 0 50%,#102a432e,#102a4300) 0 0/12px 100% no-repeat scroll,radial-gradient(farthest-side at 100% 50%,#102a432e,#102a4300) 100% 0/12px 100% no-repeat scroll,var(--surface)}
+.management-tabs>a{flex:0 0 auto;min-height:48px;display:inline-flex;align-items:center;padding:8px 14px;border-radius:9px;text-decoration:none;color:var(--muted);font-size:.84rem;font-weight:650;white-space:nowrap;scroll-snap-align:start}
+.management-tabs>a:hover{color:var(--navy);background:#f1f6f8}
+.management-tabs>a:focus-visible{outline-offset:-3px}
 .management-tabs>a[aria-current=page]{background:#e8f4f3;color:#006b72;font-weight:750}
 .management-section{display:grid;gap:16px;margin-bottom:34px;min-width:0}
 .management-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
@@ -37,7 +41,7 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 .tenant-search input{width:min(320px,100%)}
 .management-context{display:grid;gap:12px;margin-top:22px}
 @media(max-width:900px){.management-columns{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:640px){.management-tabs{margin-bottom:22px}.management-tabs>a{flex:1 1 auto;justify-content:center;padding:10px 12px}.management-row{padding:16px}.mfa-qr{width:180px;height:180px}}
+@media(max-width:640px){.management-tabs{margin:0 -4px 20px;padding:4px}.management-tabs>a{padding:8px 11px;font-size:.8rem}.management-row{padding:16px}.mfa-qr{width:180px;height:180px}}
 .announcement-body{white-space:pre-line;overflow-wrap:anywhere;font-size:.88rem;line-height:1.55;color:var(--ink,inherit);margin:0;flex-basis:100%}
 .audience-options{display:grid;gap:6px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .request-detail{display:grid;gap:10px;flex-basis:100%;min-width:0}

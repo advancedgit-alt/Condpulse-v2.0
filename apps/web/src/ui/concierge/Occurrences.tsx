@@ -40,7 +40,7 @@ export function OccurrenceSection({ canPickUnit }: { canPickUnit: boolean }) {
     <label className="checkbox-row"><input type="checkbox" checked={resolved} onChange={(event) => setResolved(event.target.checked)} /> Mostrar encerradas dos últimos 30 dias</label>
     {list.isPending ? <div className="panel"><Loading label="Consultando ocorrências…" /></div>
       : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-        : !list.data || list.data.occurrences.length === 0 ? <div className="panel"><Empty title="Nenhuma ocorrência em aberto">Quando algo precisar de verificação, registre aqui para a equipe acompanhar.</Empty></div>
+        : !list.data || list.data.occurrences.length === 0 ? <div className="panel"><Empty icon="alert" title="Nenhuma ocorrência em aberto">Quando algo precisar de verificação, registre aqui para a equipe acompanhar.</Empty></div>
           : <ol className="management-list" aria-label="Ocorrências">{list.data.occurrences.map((item) => <OccurrenceRow key={item.occurrenceId} item={item} done={setOutcome} />)}</ol>}
     {list.data?.truncated ? <Notice tone="warning">A lista mostra as 100 primeiras.</Notice> : null}
   </section>;

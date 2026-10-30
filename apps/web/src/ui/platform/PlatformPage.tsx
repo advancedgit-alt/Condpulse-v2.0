@@ -6,7 +6,7 @@ import { platform, type PlatformTenant, type PlatformTenantChange } from '../../
 import { collapseText, displayText } from '../../api/text';
 import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
-import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
+import { Empty, ErrorState, Icon, Loading, Notice, SectionTabs, errorMessage, type IconName } from '../primitives';
 import { formatWhen } from '../dateTime';
 import '../management/Management.css';
 import { OutboxSection } from './Outbox';
@@ -14,8 +14,8 @@ import { BillingSection, billingActionLabel, billingAuditDetails } from './Billi
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 
 export type { Outcome } from './shared';
-const sections = [{ id: 'condominios', label: 'Condomínios' }, { id: 'financeiro', label: 'Financeiro' }, { id: 'auditoria', label: 'Auditoria' },
-  { id: 'fila', label: 'Fila de tarefas' }] as const;
+const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'financeiro', label: 'Financeiro', icon: 'card' },
+  { id: 'auditoria', label: 'Auditoria', icon: 'clock' }, { id: 'fila', label: 'Fila de tarefas', icon: 'list' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 type Section = typeof sections[number]['id'];
 /** Seções liberadas pelas capacidades da sessão; a navegação lateral e as abas usam a mesma regra (o servidor confere de novo). */
 export function visiblePlatformSections(capabilities: readonly string[]) {
@@ -71,7 +71,7 @@ function PlatformGate({ accountId, section }: { accountId: string; section: Sect
   if (session.isPending) return <div className="panel"><Loading label="Conferindo o acesso à plataforma…" /></div>;
   if (session.isError && !session.data) {
     const code = session.error instanceof ApiError ? session.error.code : '';
-    if (code === 'PLATFORM_ACCESS_DENIED') return <div className="panel"><Empty title="Área restrita">Esta área é exclusiva da administração da plataforma. O acesso é concedido por procedimento operacional, não pelo condomínio.</Empty></div>;
+    if (code === 'PLATFORM_ACCESS_DENIED') return <div className="panel"><Empty icon="shield" title="Área restrita">Esta área é exclusiva da administração da plataforma. O acesso é concedido por procedimento operacional, não pelo condomínio.</Empty></div>;
     if (code === 'API_NOT_AVAILABLE') return <div className="panel"><Empty title="Painel indisponível">O painel da plataforma não está ativo neste ambiente.</Empty></div>;
     return <ErrorState error={session.error} retry={() => void session.refetch()} />;
   }
@@ -95,8 +95,7 @@ function PlatformConsole({ section }: { section: Section }) {
     <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
       <p>Cadastro, estado e assinatura dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
-    <nav className="management-tabs" aria-label="Seções do painel master">{visible.map((item) =>
-      <Link key={item.id} to={`/master/${item.id}`} aria-current={item.id === current ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    <SectionTabs label="Seções do painel master" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: `/master/${item.id}` }))} />
     {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'fila' ? <OutboxSection /> : <TenantSection />}
   </>;
 }
@@ -133,7 +132,7 @@ function TenantSection() {
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {tenants.isPending ? <div className="panel"><Loading label="Consultando condomínios…" /></div>
       : tenants.isError && !tenants.data ? <ErrorState error={tenants.error} retry={() => void tenants.refetch()} />
-        : !tenants.data || tenants.data.tenants.length === 0 ? <div className="panel"><Empty title="Nenhum condomínio">{search
+        : !tenants.data || tenants.data.tenants.length === 0 ? <div className="panel"><Empty icon="building" title="Nenhum condomínio">{search
           ? 'Nenhum condomínio corresponde à busca.' : 'Os condomínios cadastrados pelo onboarding aparecerão aqui.'}</Empty></div>
           : <ol className="management-list" aria-label="Condomínios">{tenants.data.tenants.map((tenant) => <li key={tenant.tenantId} className="management-row">
             <div><strong><bdi>{tenant.name}</bdi></strong> <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
@@ -238,7 +237,7 @@ function AuditSection() {
     <p className="field-help">Registros somente leitura, com autor e motivo. Horários em {PLATFORM_ZONE}.</p>
     {pages.isPending ? <div className="panel"><Loading label="Consultando auditoria…" /></div>
       : pages.isError && events.length === 0 ? <ErrorState error={pages.error} retry={() => void pages.refetch()} />
-        : events.length === 0 ? <div className="panel"><Empty title="Sem registros">As alterações feitas pela plataforma aparecerão aqui.</Empty></div>
+        : events.length === 0 ? <div className="panel"><Empty icon="clock" title="Sem registros">As alterações feitas pela plataforma aparecerão aqui.</Empty></div>
           : <ol className="management-list audit-list" aria-label="Eventos da plataforma">{events.map((event) => <li key={event.eventId} className="management-row">
             <div><strong>{actionLabels[event.action] ?? billingActionLabel(event.action) ?? event.action}</strong>
               <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · <bdi>{tenantName(event.tenantId)}</bdi> · ator {short(event.actorId)}</span>

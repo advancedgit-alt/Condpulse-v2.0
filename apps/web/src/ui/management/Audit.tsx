@@ -35,7 +35,7 @@ export function AuditSection() {
     <p className="field-help">Registros somente leitura. Identificadores aparecem abreviados; nenhuma senha, token ou e-mail é gravado na trilha.</p>
     {pages.isPending ? <div className="panel"><Loading label="Consultando auditoria…" /></div>
       : pages.isError && events.length === 0 ? <ErrorState error={pages.error} retry={() => void pages.refetch()} />
-        : events.length === 0 ? <div className="panel"><Empty title="Sem registros">As alterações da gestão aparecerão aqui.</Empty></div>
+        : events.length === 0 ? <div className="panel"><Empty icon="clock" title="Sem registros">As alterações da gestão aparecerão aqui.</Empty></div>
           : <ol className="management-list audit-list" aria-label="Eventos de auditoria">{events.map((event) => <li key={event.eventId} className="management-row">
             <div><strong>{actionLabels[event.action] ?? event.action}</strong>
               <span>{formatWhen(event.createdAt, scope.timeZone)} · {event.resourceType.toLowerCase()} {short(event.resourceId)} · ator {short(event.actorId)}</span>

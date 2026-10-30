@@ -6,7 +6,7 @@
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(min-width:1700px){.app-main{padding-top:52px}.reservation-layout{grid-template-columns:minmax(0,1fr) 275px;gap:38px}.app-header{padding-left:55px;padding-right:55px}.app-main{padding-left:55px;padding-right:55px}.amenity-card{padding:29px}.amenity-card h3{font-size:1.4rem}.amenity-note{font-size:.78rem}.status-pill{font-size:.68rem}.amenity-details{font-size:.83rem}.guide-card{padding:30px}.guide-card ol{font-size:.86rem}}
 @media(max-width:1200px){.sidebar{width:215px;padding-left:22px;padding-right:22px}.app-body{margin-left:215px}.app-header{padding-left:28px;padding-right:28px}.app-main{padding:32px 28px}.reservation-layout{display:block}.reservation-aside{display:none}.operation-tray{margin-left:243px;margin-right:28px}.context-grid{gap:35px}.login-story{padding:44px}.login-form-side{padding:50px 8%}.residence-heading h1{font-size:1.95rem}}
-@media(max-width:900px){.sidebar{display:none}.app-body{margin-left:0}.app-header{padding:15px 24px;min-height:80px}.header-mobile-brand{display:block}.header-mobile-brand .brand{font-size:1.25rem}.header-mobile-brand .brand-mark{transform:scale(.8);transform-origin:left center;width:23px;margin-right:-4px}.header-breadcrumb{display:none}.app-main{padding:32px 24px}.app-footer{padding-left:24px;padding-right:24px}.operation-tray{margin:16px 24px}.context-grid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.login-story{padding:40px}.login-story h1{font-size:3.4rem}.login-story-copy{margin-top:65px}.login-form-side{padding:45px 8%}.login-form-wrap h2{font-size:1.9rem}.header-actions{gap:15px}.context-badge{max-width:210px}}
+@media(max-width:900px){.app-header{padding:15px 24px;min-height:80px}.header-mobile-brand .brand{font-size:1.25rem}.header-mobile-brand .brand-mark{transform:scale(.8);transform-origin:left center;width:23px;margin-right:-4px}.header-breadcrumb{display:none}.app-main{padding:32px 24px}.app-footer{padding-left:24px;padding-right:24px}.operation-tray{margin:16px 24px}.context-grid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.login-story{padding:40px}.login-story h1{font-size:3.4rem}.login-story-copy{margin-top:65px}.login-form-side{padding:45px 8%}.login-form-wrap h2{font-size:1.9rem}.header-actions{gap:15px}.context-badge{max-width:210px}}
 @media(max-width:640px){h1{font-size:2rem}.login-page{display:block}.login-story{display:none}.login-form-side{padding:32px 26px;min-height:100dvh}.mobile-brand{display:block;margin-bottom:60px}.login-form-wrap{margin:0 auto}.login-form-wrap h2{font-size:2rem}.login-footer{margin-top:auto;padding-top:60px}.login-form-wrap>.eyebrow{font-size:.63rem}.app-header{padding:12px 18px;gap:10px;min-height:80px}.app-header .button-compact{padding:10px;font-size:.68rem;gap:6px}.header-actions{gap:12px}.logout-button{font-size:.71rem}.logout-button svg{width:17px}.app-main{padding:29px 18px}.app-footer{padding:20px 18px;font-size:.59rem}.context-grid{display:block}.context-form{padding:26px}.context-aside{margin-top:30px;padding:0 8px}.context-aside h2{font-size:1.4rem}.context-aside h2 br{display:none}.context-aside .round-icon{display:none}.context-aside>p{max-width:450px}.page-intro{margin-bottom:26px}.page-intro>p,.residence-heading>div>p{font-size:.85rem}.residence-heading{display:block;margin-bottom:28px}.residence-heading h1{font-size:1.85rem}.context-badge{margin-top:22px;max-width:none;padding:12px 15px}.context-badge>div{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.context-badge span{margin:0}.section-heading h2{font-size:1.3rem}.amenity-grid{grid-template-columns:minmax(0,1fr);gap:15px}.amenity-card{padding:24px}.amenity-top{margin-bottom:17px}.amenity-card h3{font-size:1.3rem}.status-pill{font-size:.65rem}.amenity-details{font-size:.79rem}.amenity-note{font-size:.74rem}.reservation-row{gap:12px}.reservation-card{padding:20px}.reservation-date-icon{display:none}.reservation-info{min-width:0;flex-basis:100%}.reservation-info p{font-size:.8rem}.reservation-info small{font-size:.66rem}.reservation-actions{gap:4px}.reservation-filter{gap:10px}.reservation-filter>span{flex-basis:100%;margin-top:3px}.section-index{font-size:.6rem}.booking-panel{padding:22px}.two-fields{grid-template-columns:minmax(0,1fr);gap:17px}.policy-summary{padding:17px}.policy-summary dl>div{grid-template-columns:minmax(0,1fr);gap:4px}.policy-summary dt{font-weight:650}.operation-tray{margin:14px 18px}.notice{padding:16px}.notice .button{font-size:.8rem}.session-card{padding:28px}.session-content h1{font-size:1.7rem}.eyebrow{font-size:.65rem}.header-mobile-brand .brand{font-size:1.14rem}.header-mobile-brand .brand-mark{width:20px;gap:3px}.context-page .panel{overflow-wrap:anywhere}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .section-index,.header-breadcrumb,.context-badge span,.aside-note,.guide-card ol,.guide-card>p,.timezone-note,.reservation-filter>span,.reservation-info small,.reservation-actions>span,.policy-summary dt,.field-help,.status-neutral,.login-footer,.security-caption,.app-footer{color:var(--muted)}
@@ -22,3 +22,37 @@
 .guest-list li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
 .guest-form{display:grid;gap:6px;max-width:420px}
 .guest-form input{min-height:40px;padding:8px 10px;border:1px solid #cdd6e0;border-radius:8px;font:inherit}
+/* Navegação lateral: altura da janela, lista rolável entre a marca e o rodapé; vira gaveta abaixo de 1024 px. */
+.sidebar{padding:28px 18px 18px;overflow:hidden}
+.sidebar-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 9px;flex:none}
+.sidebar-label{flex:none;margin:32px 14px 10px;color:#9db4c6;letter-spacing:.12em}
+.sidebar-nav{flex:1 1 auto;min-height:0;display:grid;align-content:start;gap:2px;overflow-y:auto;overscroll-behavior:contain;margin:0 -6px;padding:4px 6px;scrollbar-width:thin;scrollbar-color:#ffffff40 transparent}
+.nav-item{min-height:48px;padding:11px 14px;border:1px solid transparent}
+.nav-item:hover{background:#ffffff0a;color:#fff}
+.nav-item>svg{width:20px;height:20px;color:#8fb3c6}
+.nav-item>span:not(.nav-dot){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar a:focus-visible,.sidebar button:focus-visible{outline-color:#65d5cd;outline-offset:-3px}
+.sidebar-bottom{flex:none;margin-top:0;padding:16px 14px 0;border-top:1px solid #ffffff14}
+.sidebar-line{display:none}
+.sidebar-caption{display:block;font-size:.82rem;line-height:1.55}
+.sidebar-bottom p{margin-top:10px}
+@media(max-height:820px){.sidebar-caption{display:none}.sidebar-bottom p{margin-top:0}.sidebar-label{margin-top:24px}}
+.header-start{display:flex;align-items:center;gap:12px;min-width:0}
+.menu-toggle,.menu-close{display:none;align-items:center;justify-content:center;width:48px;height:48px;padding:0;border-radius:10px;background:transparent;color:inherit;flex:none}
+.sidebar-backdrop{display:none}
+@media(max-width:1023px){
+.sidebar{width:min(300px,86vw);transform:translateX(-100%);visibility:hidden;transition:transform .2s ease,visibility 0s linear .2s;z-index:40}
+.menu-open .sidebar{transform:none;visibility:visible;transition:transform .2s ease;box-shadow:8px 0 32px #0b1f3340}
+.menu-open .sidebar-backdrop{display:block;position:fixed;inset:0;z-index:39;background:#0b1f3366}
+.app-body{margin-left:0}
+.menu-toggle{display:inline-flex;color:var(--navy);border:1px solid #cbd9e3;background:#fff}
+.menu-close{display:inline-flex;color:#d1e0eb}
+.header-mobile-brand{display:block}
+.operation-tray{margin:16px 24px}
+.residence-heading{margin-bottom:26px}
+}
+@media(max-width:640px){.operation-tray{margin:14px 18px}.header-start{gap:10px}.empty-state{padding:26px 12px}.empty-icon{width:48px;height:48px;margin-bottom:14px}}
+/* Títulos proporcionais à largura. */
+h1{font-size:clamp(1.6rem,1.15rem + 1.6vw,2.4rem)}
+.residence-heading h1{font-size:clamp(1.5rem,1.05rem + 1.5vw,2.1rem);overflow-wrap:anywhere;margin-bottom:10px}
+@media(max-width:420px){.app-header .button-compact>svg{display:none}.app-header .button-compact{white-space:nowrap}.header-actions{gap:8px}}

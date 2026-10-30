@@ -38,10 +38,10 @@ export function RequestSection() {
         <button className="button button-secondary button-compact" type="button" disabled={list.isFetching} onClick={() => void list.refetch()}>Atualizar</button>
       </div></div>
     <p className="field-help">A unidade vê o andamento, o prazo comunicado e as mensagens visíveis; comentários internos e o nome de quem responde pela equipe ficam só aqui.</p>
-    {unavailable ? <div className="panel"><Empty title="Pedidos indisponíveis">Os pedidos ainda não estão ativos neste ambiente.</Empty></div>
+    {unavailable ? <div className="panel"><Empty icon="chat" title="Pedidos indisponíveis">Os pedidos ainda não estão ativos neste ambiente.</Empty></div>
       : list.isPending ? <div className="panel"><Loading label="Consultando pedidos…" /></div>
         : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-          : !list.data || list.data.requests.length === 0 ? <div className="panel"><Empty title="Nenhum pedido">Nenhum pedido neste filtro.</Empty></div>
+          : !list.data || list.data.requests.length === 0 ? <div className="panel"><Empty icon="chat" title="Nenhum pedido">Nenhum pedido neste filtro.</Empty></div>
             : <ol className="management-list" aria-label="Pedidos das unidades">{list.data.requests.map((item) => {
               const [label, tone] = stateLabels[item.state];
               return <li key={item.requestId} className="management-row">

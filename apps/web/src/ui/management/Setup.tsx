@@ -135,7 +135,7 @@ export function AmenitySection() {
       <button className="button button-secondary button-compact" type="button" onClick={() => setEditing('new')} disabled={editing !== null}>Nova área</button></div>
     {editing === 'new' ? <AmenityForm area={null} onClose={() => setEditing(null)} /> : null}
     {areas.isPending ? <div className="panel"><Loading label="Consultando áreas…" /></div> : areas.isError ? <ErrorState error={areas.error} retry={() => void areas.refetch()} />
-      : areas.data.length === 0 ? <div className="panel"><Empty title="Nenhuma área cadastrada">Cadastre a primeira área com regras explícitas.</Empty></div>
+      : areas.data.length === 0 ? <div className="panel"><Empty icon="grid" title="Nenhuma área cadastrada">Cadastre a primeira área com regras explícitas.</Empty></div>
         : <div className="management-grid">{areas.data.map((area) => editing === area.amenityId
           ? <AmenityForm key={area.amenityId} area={area} onClose={() => setEditing(null)} />
           : <article key={area.amenityId} className="amenity-card">
@@ -238,7 +238,7 @@ export function UnitSection() {
       </form>
     </div>
     {units.isPending ? <div className="panel"><Loading label="Consultando unidades…" /></div> : units.isError ? <ErrorState error={units.error} retry={() => void units.refetch()} />
-      : units.data.units.length === 0 ? <div className="panel"><Empty title="Nenhuma unidade cadastrada">Crie as unidades antes de convidar moradores.</Empty></div>
+      : units.data.units.length === 0 ? <div className="panel"><Empty icon="building" title="Nenhuma unidade cadastrada">Crie as unidades antes de convidar moradores.</Empty></div>
         : <ul className="management-list" aria-label="Unidades">{units.data.units.map((unit) => <li key={unit.unitId} className="management-row">
           <div><strong>{unit.blockName ? `${unit.blockName} · ` : ''}{unit.label}</strong><span className={`status-pill ${unit.status === 'ACTIVE' ? 'status-ready' : 'status-neutral'}`}>{unit.status === 'ACTIVE' ? 'Ativa' : 'Inativa'}</span></div>
           {editing === unit.unitId ? <UnitEditor unit={unit} blocks={blocks.data ?? []} onClose={() => setEditing(null)} />

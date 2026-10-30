@@ -61,7 +61,7 @@ export function MembershipList({ status, empty }: { status: MembershipStatus | n
   if (list.isError) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
   return <>
     {done ? <Notice tone={done.tone}>{done.text}</Notice> : null}
-    {list.data.memberships.length === 0 ? <div className="panel"><Empty title="Nada por aqui">{empty}</Empty></div>
+    {list.data.memberships.length === 0 ? <div className="panel"><Empty icon="users" title="Nada por aqui">{empty}</Empty></div>
       : <ul className="management-list" aria-label="Vínculos">{list.data.memberships.map((item) => <MembershipItem key={item.membershipId} membership={item} onDone={setDone} />)}</ul>}
     {list.data.truncated ? <Notice tone="warning">Há mais vínculos do que o limite desta consulta. Filtre por situação.</Notice> : null}
   </>;
@@ -139,7 +139,7 @@ function InvitationList() {
     `Convite de ${name} revogado.`, async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'invitations') }); });
   return <>
     <ActionFeedback state={action.state} />
-    {list.data.length === 0 ? <div className="panel"><Empty title="Nenhum convite">Os convites emitidos aparecerão aqui, sem e-mail ou token.</Empty></div>
+    {list.data.length === 0 ? <div className="panel"><Empty icon="users" title="Nenhum convite">Os convites emitidos aparecerão aqui, sem e-mail ou token.</Empty></div>
       : <ul className="management-list" aria-label="Convites">{list.data.map((item) => <li key={item.invitationId} className="management-row">
         <div><strong>{item.displayName}</strong><span>{roleLabels[item.role] ?? item.role}{item.unitLabel ? ` · ${item.unitLabel}` : ''} · expira {formatWhen(item.expiresAt, scope.timeZone)}</span>
           <span className={`status-pill ${statusTone(item.status)}`}>{invitationStatus[item.status]}</span></div>

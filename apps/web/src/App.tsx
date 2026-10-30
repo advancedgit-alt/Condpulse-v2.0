@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthBoundary, AuthProvider, LoginPage, useAuth } from './ui/Auth';
@@ -15,7 +15,7 @@ import { ConciergePage, conciergeSections } from './ui/concierge/ConciergePage';
 import { ParcelsPage } from './ui/Parcels';
 import { VisitsPage } from './ui/Visits';
 import { UnitEvents } from './ui/UnitEvents';
-import { Brand, Icon, OfflineNotice } from './ui/primitives';
+import { Brand, Icon, OfflineNotice, type IconName } from './ui/primitives';
 import './styles.css';
 
 export default function App() {
@@ -56,6 +56,26 @@ function Shell() {
   const location = useLocation();
   const queries = useQueryClient();
   const [switching, setSwitching] = useState(false);
+  // Abaixo de 1024 px a navegação lateral vira gaveta: fecha ao navegar, com Esc ou tocando fora.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuToggle = useRef<HTMLButtonElement>(null);
+  const menuClose = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) {
+      // Depois que o conteúdo deixa de ser inerte, o foco volta ao botão que abriu o menu.
+      if (restoreFocus.current) { restoreFocus.current = false; menuToggle.current?.focus(); }
+      return;
+    }
+    menuClose.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { restoreFocus.current = true; setMenuOpen(false); } };
+    const narrow = window.matchMedia('(min-width: 1024px)');
+    const onWide = () => { if (narrow.matches) setMenuOpen(false); };
+    window.addEventListener('keydown', onKey); narrow.addEventListener('change', onWide);
+    return () => { window.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onWide); };
+  }, [menuOpen]);
+  function closeMenu() { restoreFocus.current = true; setMenuOpen(false); }
   const tenantId = location.pathname.split('/')[2];
   const unitId = location.pathname.split('/')[3];
   const managing = location.pathname.startsWith('/gestao/');
@@ -86,5 +106,18 @@ function Shell() {
     await queries.cancelQueries({ queryKey: ['private'] }); queries.removeQueries({ queryKey: ['private'] });
     navigate('/contextos'); setSwitching(false);
   }
-  return <div className="app-frame"><aside className="sidebar"><Link className="brand-link" to="/contextos" aria-label="CondPulse, selecionar unidade"><Brand light /></Link><div className="sidebar-label">{managing ? 'GESTÃO DO CONDOMÍNIO' : mastering ? 'ADMINISTRAÇÃO DA PLATAFORMA' : concierging ? 'PORTARIA' : 'PORTAL DO MORADOR'}</div><nav aria-label="Navegação principal">{mastering ? masterNavigation.items.map((item) => <Link key={item.id} className={`nav-item${item.id === masterSection ? ' active' : ''}`} aria-current={item.id === masterSection ? 'page' : undefined} to={`/master/${item.id}`}><Icon name={item.id === 'auditoria' ? 'clock' : item.id === 'financeiro' ? 'calendar' : item.id === 'fila' ? 'box' : 'shield'} /><span>{item.label}</span>{item.id === masterSection ? <span className="nav-dot" /> : null}</Link>) : managed ? managementSections.map((item) => <Link key={item.id} className={`nav-item${item.id === section ? ' active' : ''}`} aria-current={item.id === section ? 'page' : undefined} to={`/gestao/${tenantId}/${item.id}`}><Icon name={item.id === 'reservas' ? 'calendar' : item.id === 'auditoria' ? 'clock' : item.id === 'pendencias' ? 'check' : item.id === 'avisos' ? 'bell' : item.id === 'pedidos' ? 'box' : 'shield'} /><span>{item.label}</span>{item.id === section ? <span className="nav-dot" /> : null}</Link>) : portaria ? conciergeSections.map((item) => <Link key={item.id} className={`nav-item${item.id === conciergeSection ? ' active' : ''}`} aria-current={item.id === conciergeSection ? 'page' : undefined} to={`/portaria/${tenantId}/${item.id}`}><Icon name={item.id === 'visitas' ? 'door' : item.id === 'ocorrencias' ? 'bell' : 'box'} /><span>{item.label}</span>{item.id === conciergeSection ? <span className="nav-dot" /> : null}</Link>) : contextSelected ? residentItems.map((item) => <Link key={item.id} className={`nav-item${item.id === residentSection ? ' active' : ''}`} aria-current={item.id === residentSection ? 'page' : undefined} to={`${residence}/${item.id}`}><Icon name={item.icon} /><span>{item.label}</span>{item.id === residentSection ? <span className="nav-dot" /> : null}</Link>) : <Link className="nav-item active" aria-current="page" to="/contextos"><Icon name="home" /><span>Seu contexto</span><span className="nav-dot" /></Link>}</nav><div className="sidebar-bottom"><div className="sidebar-line" /><span className="sidebar-caption">Um condomínio.<br />Muitas boas conexões.</span><p>CondPulse · Vida em comunidade</p></div></aside><div className="app-body"><header className="app-header"><div><div className="header-mobile-brand"><Brand /></div><span className="header-breadcrumb">{managing ? 'Gestão do condomínio' : mastering ? 'Administração da plataforma' : concierging ? 'Portaria' : 'Portal do morador'}<span aria-hidden="true"> / </span><strong>{mastering ? 'Painel master' : (managing ? managed?.tenantName : concierging ? portaria?.tenantName : tenant?.tenantName) ?? 'Seu acesso'}</strong></span></div><div className="header-actions">{contextSelected || managing || mastering || concierging ? <button className="button button-secondary button-compact" onClick={() => void changeContext()} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : managing || mastering || concierging ? 'Trocar acesso' : 'Trocar unidade'}</span></button> : null}<button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && auth.identity && tenantId && unitId ? <UnitEvents accountId={auth.identity.accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice /><Outlet /></main><footer className="app-footer"><span>CondPulse</span><span>{managing ? 'Gestão do condomínio · Ações exigem segundo fator' : mastering ? 'Administração da plataforma · Ações exigem segundo fator' : concierging ? 'Portaria · Ações exigem segundo fator' : 'Portal do morador · Seu acesso é pessoal'}</span></footer></div></div>;
+  const navItems: { id: string; label: string; icon: IconName; to: string; current: boolean }[] = mastering
+    ? masterNavigation.items.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/master/${item.id}`, current: item.id === masterSection }))
+    : managed ? managementSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/gestao/${tenantId}/${item.id}`, current: item.id === section }))
+    : portaria ? conciergeSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/portaria/${tenantId}/${item.id}`, current: item.id === conciergeSection }))
+    : contextSelected ? residentItems.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `${residence}/${item.id}`, current: item.id === residentSection }))
+    : [{ id: 'contextos', label: 'Seu contexto', icon: 'home', to: '/contextos', current: true }];
+  return <div className={`app-frame${menuOpen ? ' menu-open' : ''}`}>
+    <aside className="sidebar" id="app-sidebar"><div className="sidebar-top"><Link className="brand-link" to="/contextos" aria-label="CondPulse, selecionar unidade"><Brand light /></Link>
+      <button ref={menuClose} type="button" className="menu-close" onClick={closeMenu} aria-label="Fechar menu"><Icon name="close" /></button></div>
+      <div className="sidebar-label">{managing ? 'GESTÃO DO CONDOMÍNIO' : mastering ? 'ADMINISTRAÇÃO DA PLATAFORMA' : concierging ? 'PORTARIA' : 'PORTAL DO MORADOR'}</div>
+      <nav className="sidebar-nav" aria-label="Navegação principal">{navItems.map((item) => <Link key={item.id} className={`nav-item${item.current ? ' active' : ''}`} aria-current={item.current ? 'page' : undefined} to={item.to}><Icon name={item.icon} /><span>{item.label}</span>{item.current ? <span className="nav-dot" /> : null}</Link>)}</nav>
+      <div className="sidebar-bottom"><div className="sidebar-line" /><span className="sidebar-caption">Um condomínio.<br />Muitas boas conexões.</span><p>CondPulse · Vida em comunidade</p></div></aside>
+    <div className="sidebar-backdrop" aria-hidden="true" onClick={closeMenu} />
+    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand /></div><span className="header-breadcrumb">{managing ? 'Gestão do condomínio' : mastering ? 'Administração da plataforma' : concierging ? 'Portaria' : 'Portal do morador'}<span aria-hidden="true"> / </span><strong>{mastering ? 'Painel master' : (managing ? managed?.tenantName : concierging ? portaria?.tenantName : tenant?.tenantName) ?? 'Seu acesso'}</strong></span></div><div className="header-actions">{contextSelected || managing || mastering || concierging ? <button className="button button-secondary button-compact" onClick={() => void changeContext()} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : managing || mastering || concierging ? 'Trocar acesso' : 'Trocar unidade'}</span></button> : null}<button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && auth.identity && tenantId && unitId ? <UnitEvents accountId={auth.identity.accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice /><Outlet /></main><footer className="app-footer"><span>CondPulse</span><span>{managing ? 'Gestão do condomínio · Ações exigem segundo fator' : mastering ? 'Administração da plataforma · Ações exigem segundo fator' : concierging ? 'Portaria · Ações exigem segundo fator' : 'Portal do morador · Seu acesso é pessoal'}</span></footer></div></div>;
 }
