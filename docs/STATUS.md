@@ -15,19 +15,24 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - **Testes automatizados** (sintéticos, sem serviços reais): Vitest 129 e Playwright 83 na web local da branch do #51; CI `foundation`/`web`/`release-config` por PR. Isso é "implementado e testado em CI", não homologado.
 - **Nada foi homologado com login real**: o ensaio de gestão em AAL2, reservas, avisos e pedidos depende do TOTP do titular.
 
+### Correções de 30/10/2026 (uso real na homologação)
+
+- Volta ao login e segundo fator repetido: rotas de módulos desligados respondiam 401 em vez de 404 (o despacho de erro do contêiner caía em `denyAll`); o navegador encerrava a sessão e o novo login voltava a AAL1. Reproduzido no navegador do responsável; corrigido no PR #107 (teste falhou antes, run 41076274611). Depois do deploy: `/access-connectors` e `/units/{u}/events` respondem 404 com a sessão mantida.
+- Lentidão: medição no navegador mostrou cerca de 1 s por consulta com o servidor ativo e 16-17 s quando a Vercel liga uma cópia nova do contêiner Java. Mudança da API para execução contínua no Fly.io aprovada pelo responsável (BLOQUEADO abaixo pela conta).
+
 ### Bloqueios
 
-- BLOQUEADO: cadastro do TOTP da conta de gestão da homologação — titular da conta — tela de segurança da aplicação na URL de homologação. Destrava as jornadas reais (item 5).
+- TOTP da conta de gestão: cadastrado pelo titular (informado em 30/10/2026). Sessão AAL2 confirmada no painel.
 - BLOQUEADO: contas de teste extras (outra unidade e outro condomínio) para as negações reais — responsável — novo manifesto de onboarding aprovado.
-- BLOQUEADO: escolha e credencial do provedor SMTP — responsável — painel do Supabase Auth/cofre. Destrava recuperação por e-mail e envio de convites.
-- BLOQUEADO: credencial `cp_worker` e hospedagem do worker contínuo — responsável — decisão de hospedagem (custo) e cofre. Preparação pronta no repositório (manifesto, validador, SQL do login `NOLOGIN` e roteiro em [WORKER_IMPLANTACAO.md](WORKER_IMPLANTACAO.md)), nada executado.
-- BLOQUEADO: aprovação da conta que recebe o primeiro papel de plataforma — responsável — por escrito, nomeando a conta.
+- BLOQUEADO: SMTP do Supabase Auth com Resend (remetente `condpulse.com.br`, domínio já verificado na conta Resend do responsável) — responsável — integração Supabase no painel do Resend ou credencial SMTP no painel do Supabase Auth.
+- BLOQUEADO: hospedagem do worker e da API no Fly.io (aprovada em 30/10/2026, região São Paulo) — responsável — criar a conta no Fly.io e cadastrar `FLY_API_TOKEN` nos secrets do GitHub (contas não podem ser criadas por esta sessão).
+- Papel de plataforma: `PLATFORM_ADMIN` concedido em 30/10/2026 15:11Z à conta indicada pelo responsável no chat (11:38 America/Sao_Paulo), pelas mesmas pré-condições de `ops/sql/platform-admin-grant.sql` (conta ativa, TOTP verificado, nenhum papel ativo); evento `INSERT/ACTIVE` gravado pelo gatilho.
 - BLOQUEADO: chave de serviço do Storage (`CP_STORAGE_SERVICE_KEY`) na Vercel `condpulse` para ligar `CP_FILES_ENABLED` — responsável — cofre/painel da Vercel (segredo; não pode ser lido nem copiado por mim).
 - BLOQUEADO: build de desenvolvimento do aplicativo e aparelhos Android/iOS para o ensaio do CP-012 — responsável — conta Expo/EAS ou máquina com Android Studio/Xcode (decisão de custo) e aparelhos de teste.
-- BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
-- BLOQUEADO: ligar `CP_ACCESS_CREDENTIALS_ENABLED=true` (Production) no projeto Vercel `condpulse` — responsável — painel da Vercel, ou reconectar o conector da Vercel desta sessão com acesso ao projeto `condpulse` (em 30/10/2026 o conector só enxerga `app-advanced`, que não pode ser alterado). Sem a flag a API responde 404 e a web mostra "Credenciais indisponíveis"; nada mais muda.
+- `CP_PARCEL_CODE_KEY`: gerada no runner (32 bytes) e gravada como sensitive pelo workflow `runtime-flags` (apply 41083523914, inspect 41083425728); valor nunca exibido. Vale a partir do deployment seguinte.
+- `CP_ACCESS_CREDENTIALS_ENABLED=true` (Production) gravada pelo workflow `runtime-flags` (apply 41083523914); conferência de leitura no mesmo run. Vale a partir do deployment seguinte.
 - BLOQUEADO: carga representativa do CP-052 (100 rps/1.000 sessões fora do runner) — responsável — ambiente dedicado ou janela na homologação com OK de custo e de uso do limite de 16 conexões da role, mais contas de teste sintéticas no Auth. O ensaio no runner ([CARGA.md](CARGA.md)) não declara capacidade.
-- BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável. Roteiro em ordem, sem execução: [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
+- OK do responsável para integrar a produção dado em 30/10/2026; execução em andamento conforme [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
 
 ## Acessibilidade automática — CP-007/CP-053
 
