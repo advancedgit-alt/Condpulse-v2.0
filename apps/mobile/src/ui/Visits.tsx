@@ -6,6 +6,7 @@ import { normalizeDocument, type Arrival, type CreatePermit, type Permit } from 
 import { formatWhen, toInstant, wallTimeInZone } from '../time';
 import type { KeyFactory } from './Reservations';
 import { colors, touch } from './theme';
+import { VisitRules, type RulePendingStore } from './VisitRules';
 
 /**
  * Acessos da unidade no celular (CP-025, CP-026 e CP-037): chegadas que aguardam a resposta da unidade e convites.
@@ -43,9 +44,9 @@ function Field({ label, value, onChange, disabled }: { label: string; value: str
     <TextInput accessibilityLabel={label} style={styles.input} value={value} onChangeText={onChange} editable={!disabled} autoCapitalize="none" autoCorrect={false} /></View>;
 }
 
-export function Visits({ api, accountId, membership, newKey, webOrigin, now = () => new Date(), pending: sharedPending, share = defaultShare }: {
+export function Visits({ api, accountId, membership, newKey, webOrigin, now = () => new Date(), pending: sharedPending, share = defaultShare, rulePending }: {
   api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; webOrigin: string | null; now?: () => Date;
-  pending?: PermitPendingStore; share?: ShareFn;
+  pending?: PermitPendingStore; share?: ShareFn; rulePending?: RulePendingStore;
 }) {
   const { tenantId, unitId, timeZone } = membership;
   const [ownPending] = useState<PermitPendingStore>(() => new Map());
@@ -94,6 +95,7 @@ export function Visits({ api, accountId, membership, newKey, webOrigin, now = ()
               <View key={item.permitId} style={styles.card}><PermitSummary item={item} timeZone={timeZone} /></View>)}</View> : null}
             {permits.data.truncated ? <Notice tone="info">A lista mostra os 100 convites de fim mais recente.</Notice> : null}
           </View>}
+    <VisitRules api={api} accountId={accountId} membership={membership} newKey={newKey} now={now} pending={rulePending} />
   </View>;
 }
 

@@ -27,6 +27,7 @@ function fakeApi() {
   const api = {
     unitArrivals: jest.fn(async () => { if (state.arrivalsError) throw state.arrivalsError; return { arrivals: state.arrivals, truncated: false }; }),
     unitPermits: jest.fn(async () => { if (state.permitsError) throw state.permitsError; return { permits: state.permits, truncated: false }; }),
+    unitRules: jest.fn(async () => ({ rules: [], truncated: false })),
     decideArrival: jest.fn(async (_t: string, _u: string, id: string, decision: 'APPROVE' | 'DENY') => {
       state.decisions.push(decision);
       if (state.decideError) throw state.decideError;

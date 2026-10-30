@@ -7,6 +7,7 @@ import { colors, touch } from './theme';
 import { DeviceAccess } from './DeviceAccess';
 import { Moves, type MovePendingStore } from './Moves';
 import { Visits, type PermitPendingStore } from './Visits';
+import type { RulePendingStore } from './VisitRules';
 import { Parcels, type DelegationPendingStore } from './Parcels';
 import { Reservations, type KeyFactory, type PendingStore } from './Reservations';
 import type { EventSourceFactory } from '../api/events';
@@ -94,6 +95,7 @@ function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager:
   const [movePending] = useState<MovePendingStore>(() => new Map());
   const [delegationPending] = useState<DelegationPendingStore>(() => new Map());
   const [permitPending] = useState<PermitPendingStore>(() => new Map());
+  const [rulePending] = useState<RulePendingStore>(() => new Map());
   // A resposta precisa ser da mesma conta da sessão; outra conta encerra tudo.
   const mismatch = identity.data !== undefined && identity.data.accountId !== accountId;
   useEffect(() => { if (mismatch) void manager.expire(); }, [mismatch, manager]);
@@ -119,7 +121,7 @@ function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager:
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE'].includes(active.role) ? <Moves key={`moves-${active.membershipId}`} api={api} accountId={accountId}
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={movePending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Visits key={`visits-${active.membershipId}`} api={api}
-      accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={permitPending} webOrigin={webOrigin} /> : null}
+      accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={permitPending} rulePending={rulePending} webOrigin={webOrigin} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Parcels key={`parcels-${active.membershipId}`} api={api}
       accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={delegationPending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <DeviceAccess key={`device-access-${active.membershipId}`} api={api}

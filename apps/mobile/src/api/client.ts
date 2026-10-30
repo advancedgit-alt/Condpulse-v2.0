@@ -1,6 +1,6 @@
 import { credentialPage, eventPage } from './access';
 import { currentRules, move, type CreateMove } from './moves';
-import { arrival, arrivalPage, permit, permitLink, permitPage, type CreatePermit } from './visits';
+import { arrival, arrivalPage, permit, permitLink, permitPage, rulePage, visitRule, type CreatePermit, type CreateRule } from './visits';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
 import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type WaitlistChange } from './waitlist';
@@ -207,6 +207,22 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
         if (updated.permitId !== permitId || updated.shareLinkActive) throw invalid(true);
         return updated;
       }, { method: 'POST' }),
+    unitRules: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/visit-rules`, (value) => rulePage(value, unitId), signal ? { signal } : {}),
+    createRule: (tenantId: string, unitId: string, body: CreateRule, key: string) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/visit-rules`, (value, response) => {
+        const created = visitRule(value, unitId);
+        const repeated = replayed(response);
+        if (!repeated && (created.state !== 'ACTIVE' || created.visitorName !== body.visitorName || created.startTime !== body.startTime
+          || created.endTime !== body.endTime || created.weekDays.join() !== body.weekDays.join())) throw invalid(true);
+        return { rule: created, replayed: repeated };
+      }, { method: 'POST', body, key: operationKey(key) }),
+    revokeRule: (tenantId: string, unitId: string, ruleId: string, body: { reason: string; expectedVersion: number }) =>
+      request(`${tenant(tenantId)}/visit-rules/${identifier(ruleId)}/revoke`, (value) => {
+        const revoked = visitRule(value, unitId);
+        if (revoked.ruleId !== ruleId || revoked.state !== 'REVOKED') throw invalid(true);
+        return revoked;
+      }, { method: 'POST', body }),
     unitArrivals: (tenantId: string, unitId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/units/${identifier(unitId)}/arrivals`, (value) => arrivalPage(value, unitId), signal ? { signal } : {}),
     decideArrival: (tenantId: string, unitId: string, arrivalId: string, decision: 'APPROVE' | 'DENY') =>
