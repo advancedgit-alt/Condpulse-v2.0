@@ -15,6 +15,7 @@ import { AuditSection } from './Audit';
 import { MembershipList, PeopleSection } from './People';
 import { PendingReservations, ReservationAgenda } from './Reservations';
 import { AmenitySection, UnitSection } from './Setup';
+import { OccurrenceSection } from '../concierge/Occurrences';
 import { ManagementProvider, type ManagementScope } from './shared';
 import './Management.css';
 
@@ -29,6 +30,7 @@ export const managementSections = [
   { id: 'pedidos', label: 'Pedidos' },
   { id: 'mudancas', label: 'Mudanças' },
   { id: 'acesso', label: 'Acesso' },
+  { id: 'ocorrencias', label: 'Ocorrências' },
   { id: 'auditoria', label: 'Auditoria' },
 ] as const;
 export type ManagementSection = typeof managementSections[number]['id'];
@@ -96,6 +98,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'pedidos' ? <RequestSection /> : null}
     {section === 'mudancas' ? <MoveManagementSection /> : null}
     {section === 'acesso' ? <><AccessHealthSection /><CredentialManagementSection /></> : null}
+    {section === 'ocorrencias' ? <OccurrenceSection canPickUnit={false} /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;
 }

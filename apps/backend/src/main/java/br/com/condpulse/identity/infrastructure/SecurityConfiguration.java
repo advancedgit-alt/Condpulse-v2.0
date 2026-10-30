@@ -122,6 +122,8 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-connectors","/v1/tenants/*/management/access-credentials",
       "/v1/tenants/*/concierge/pending-revocations","/v1/tenants/*/units/*/access-credentials","/v1/tenants/*/units/*/device-events",
       "/v1/tenants/*/concierge/device-events","/v1/tenants/*/access-health").authenticated()
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/concierge/occurrences").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/concierge/occurrences","/v1/tenants/*/concierge/occurrences/*/resolve").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-credentials",
       "/v1/tenants/*/management/access-credentials/*/revoke").authenticated()
     // Caixa interna da unidade: autenticação aqui; somente os próprios avisos, com vínculo vigente, no serviço e no banco.

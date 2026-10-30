@@ -11,12 +11,14 @@ import { dateInZone, formatWhen } from '../dateTime';
 import { ActionFeedback, ManagementProvider, useAccessGuard, useAction, useManagement, type ActionResult, type ManagementScope } from '../management/shared';
 import { codeOf, conciergeKey, repeatFailure, settleFailure, unitName, useIntent } from './shared';
 import { ArrivalDesk } from './Arrivals';
+import { OccurrenceSection } from './Occurrences';
 import { ConciergeMoves } from '../Moves';
 import { AccessHealthSection, ConciergeDeviceEvents, ConciergePendingRevocations } from '../AccessCredentials';
 import '../management/Management.css';
 
-export type ConciergeSection = 'encomendas' | 'visitas';
-export const conciergeSections: { id: ConciergeSection; label: string }[] = [{ id: 'encomendas', label: 'Encomendas' }, { id: 'visitas', label: 'Visitas' }];
+export type ConciergeSection = 'encomendas' | 'visitas' | 'ocorrencias';
+export const conciergeSections: { id: ConciergeSection; label: string }[] = [{ id: 'encomendas', label: 'Encomendas' }, { id: 'visitas', label: 'Visitas' },
+  { id: 'ocorrencias', label: 'Ocorrências' }];
 
 /** Portaria do condomínio: exige vínculo CONCIERGE vigente e segundo fator; o servidor confere de novo em cada ação. */
 export function ConciergePage({ section }: { section: ConciergeSection }) {
@@ -58,13 +60,15 @@ function ConciergeGate({ scope, section }: { scope: ManagementScope; section: Co
   }
   return <ManagementProvider value={value}>
     <div className="residence-heading"><div><span className="eyebrow">PORTARIA</span><h1>{scope.tenantName}</h1>
-      <p>{section === 'visitas'
+      <p>{section === 'ocorrencias'
+        ? 'Ocorrências registradas e encerradas ficam com o seu acesso e o horário do servidor; moradores não veem este registro.'
+        : section === 'visitas'
         ? 'Chegadas, confirmações e encerramentos ficam registrados com o seu acesso. Sem resposta da unidade nada é liberado automaticamente.'
         : 'Recebimentos, retiradas e anulações ficam registrados com o seu acesso. O aviso ao morador segue em fila e nunca condiciona o registro.'} Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão da portaria</span></div></div></div>
     <nav className="management-tabs" aria-label="Seções da portaria">{conciergeSections.map((item) =>
       <Link key={item.id} to={`/portaria/${scope.tenantId}/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
-    {section === 'visitas' ? <><ArrivalDesk /><ConciergePendingRevocations /><AccessHealthSection /><ConciergeDeviceEvents /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
+    {section === 'ocorrencias' ? <OccurrenceSection canPickUnit /> : section === 'visitas' ? <><ArrivalDesk /><ConciergePendingRevocations /><AccessHealthSection /><ConciergeDeviceEvents /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
   </ManagementProvider>;
 }
 

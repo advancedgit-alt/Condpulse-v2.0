@@ -11327,6 +11327,261 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/concierge/occurrences": {
+      "get": {
+        "operationId": "listOccurrences",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "description": "Ocorrências da portaria (CP-027), registro interno da equipe: abertas (mais antigas primeiro) e, com resolved=true, as encerradas dos últimos 30 dias. Portaria (concierge.operate) ou gestão (requests.manage), AAL2. Moradores não acessam.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrencePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem concierge.operate nem requests.manage) ou MFA_REQUIRED"
+          },
+          "503": {
+            "description": "OCCURRENCE_DEPENDENCY_UNAVAILABLE"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_VISITS_ENABLED=false"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOccurrence",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Registra ocorrência com identificador gerado pela tela: repetir com o mesmo identificador e o mesmo conteúdo devolve o registro (200, Idempotency-Replayed: true); outro conteúdo é OCCURRENCE_ID_CONFLICT. Autoria, nome e horário vêm do banco.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OccurrenceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Occurrence"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Occurrence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OCCURRENCE_*_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem concierge.operate nem requests.manage) ou MFA_REQUIRED"
+          },
+          "503": {
+            "description": "OCCURRENCE_DEPENDENCY_UNAVAILABLE"
+          },
+          "409": {
+            "description": "OCCURRENCE_ID_CONFLICT"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/occurrences/{occurrenceId}/resolve": {
+      "post": {
+        "operationId": "resolveOccurrence",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "occurrenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Encerra pela versão lida com a resolução; repetir com a mesma resolução devolve o estado. Encerrada é final.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OccurrenceResolve"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Occurrence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OCCURRENCE_VERSION_REQUIRED ou OCCURRENCE_RESOLUTION_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem concierge.operate nem requests.manage) ou MFA_REQUIRED"
+          },
+          "503": {
+            "description": "OCCURRENCE_DEPENDENCY_UNAVAILABLE"
+          },
+          "404": {
+            "description": "OCCURRENCE_NOT_FOUND"
+          },
+          "409": {
+            "description": "OCCURRENCE_CHANGED ou OCCURRENCE_RESOLVED"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18389,6 +18644,196 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500
+          }
+        }
+      },
+      "Occurrence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occurrenceId",
+          "category",
+          "title",
+          "description",
+          "unitId",
+          "unitLabel",
+          "state",
+          "createdByName",
+          "createdByMe",
+          "createdAt",
+          "resolution",
+          "resolvedByName",
+          "resolvedAt",
+          "version"
+        ],
+        "properties": {
+          "occurrenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "EQUIPMENT",
+              "SECURITY",
+              "MAINTENANCE",
+              "CLEANING",
+              "NOISE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "RESOLVED"
+            ]
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "createdByMe": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "resolvedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "OccurrencePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occurrences",
+          "open",
+          "truncated"
+        ],
+        "properties": {
+          "occurrences": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Occurrence"
+            }
+          },
+          "open": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OccurrenceCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occurrenceId",
+          "category",
+          "title",
+          "description",
+          "unitId"
+        ],
+        "properties": {
+          "occurrenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "EQUIPMENT",
+              "SECURITY",
+              "MAINTENANCE",
+              "CLEANING",
+              "NOISE",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "OccurrenceResolve": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "resolution",
+          "expectedVersion"
+        ],
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
