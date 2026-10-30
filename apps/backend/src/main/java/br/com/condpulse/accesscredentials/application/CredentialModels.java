@@ -48,7 +48,8 @@ public final class CredentialModels {
  }
  /**
   * Saúde de um equipamento (CP-048). status: ONLINE (informou estar no ar, com sinal recente), OFFLINE (informou estar
-  * fora do ar, ou sinal antigo: reason HEARTBEAT_STALE), UNKNOWN (sem informação recente: reason NOT_REPORTED, STALE ou
+  * fora do ar, ou sinal antigo: reason HEARTBEAT_STALE), UNKNOWN (sem informação recente: reason NOT_REPORTED, STALE,
+  * HEARTBEAT_MISSING (no ar sem nenhum sinal informado) ou
   * o motivo do conector) ou RETIRED. pending*: credenciais cujo estado desejado atual ainda não foi confirmado neste
   * equipamento; rejected: recusa definitiva da versão atual.
   */

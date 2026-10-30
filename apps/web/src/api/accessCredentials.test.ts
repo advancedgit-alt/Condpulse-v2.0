@@ -96,6 +96,7 @@ describe('contrato das credenciais de acesso', () => {
     expect(() => accessHealth(body({ status: 'UNREACHABLE', reason: 'ADAPTER_ERROR' }, [dev()]))).toThrow();
     expect(() => accessHealth(body({ status: 'UNREACHABLE', reason: null }, []))).toThrow();
     expect(() => accessHealth(body({}, [dev({ status: 'UNKNOWN' })]))).toThrow();
+    expect(accessHealth(body({}, [dev({ status: 'UNKNOWN', reason: 'HEARTBEAT_MISSING', lastHeartbeat: null })])).connectors[0]!.devices[0]!.reason).toBe('HEARTBEAT_MISSING');
     expect(() => accessHealth(body({}, [dev({ pendingRevoke: 1 })]))).toThrow();
     expect(() => accessHealth(body({}, [dev({ pendingApply: -1 })]))).toThrow();
     expect(accessHealth(body({ status: 'UNREACHABLE', reason: 'ADAPTER_ERROR' }, [dev({ status: 'UNKNOWN', reason: 'CONNECTOR_UNREACHABLE', pendingRevoke: 1,

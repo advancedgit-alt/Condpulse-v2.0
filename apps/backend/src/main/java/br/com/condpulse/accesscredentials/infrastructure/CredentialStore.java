@@ -178,6 +178,7 @@ public class CredentialStore {
     else if(r.getObject("online")==null) { status="UNKNOWN"; reason="NOT_REPORTED"; }
     else if(!r.getBoolean("fresh")) { status="UNKNOWN"; reason="STALE"; }
     else if(!r.getBoolean("online")) status="OFFLINE";
+    else if(r.getTimestamp("last_heartbeat")==null) { status="UNKNOWN"; reason="HEARTBEAT_MISSING"; }
     else if(r.getBoolean("heartbeat_old")) { status="OFFLINE"; reason="HEARTBEAT_STALE"; }
     else status="ONLINE";
     Long skew=r.getObject("clock_skew_ms",Long.class);

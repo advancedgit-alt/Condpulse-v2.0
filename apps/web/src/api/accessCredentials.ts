@@ -112,7 +112,7 @@ function eventPage(value: unknown): { events: DeviceEvent[]; truncated: boolean 
 }
 /** Saúde dos equipamentos (CP-048): "no ar" só com observação recente; sem informação recente nunca vira "no ar". */
 export const deviceHealthStatuses = ['ONLINE', 'OFFLINE', 'UNKNOWN', 'RETIRED'] as const;
-const deviceHealthReasons = ['HEARTBEAT_STALE', 'NOT_REPORTED', 'STALE', 'NEVER_CHECKED', 'CONNECTOR_UNREACHABLE', 'CONNECTOR_DISABLED'] as const;
+const deviceHealthReasons = ['HEARTBEAT_STALE', 'HEARTBEAT_MISSING', 'NOT_REPORTED', 'STALE', 'NEVER_CHECKED', 'CONNECTOR_UNREACHABLE', 'CONNECTOR_DISABLED'] as const;
 export interface DeviceHealth {
   deviceId: UUID; label: string; direction: typeof directions[number]; status: typeof deviceHealthStatuses[number];
   reason: typeof deviceHealthReasons[number] | null; observedAt: ISODateTime | null; stateSince: ISODateTime | null; lastHeartbeat: ISODateTime | null;

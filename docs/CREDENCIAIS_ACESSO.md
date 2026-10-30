@@ -78,7 +78,7 @@ condomínio **dono do conector**: o condomínio nunca vem do conteúdo do evento
   são horários do banco. Ninguém apaga; a aplicação só lê (gestão e portaria; morador não vê).
 - **Leitura** (`GET /access-health`, AAL2): conector `OK`, `UNREACHABLE` (com motivo e última resposta), `UNKNOWN`
   (nunca consultado ou consulta com mais de 10 minutos) ou `DISABLED`. Equipamento `ONLINE` só com conector respondendo,
-  observação recente e sinal com menos de 5 minutos; `OFFLINE` quando informou estar fora do ar (ou sinal antigo);
+  observação recente e sinal informado com menos de 5 minutos (sem sinal informado: `UNKNOWN`); `OFFLINE` quando informou estar fora do ar (ou sinal antigo);
   `UNKNOWN` em qualquer outra situação — nunca "no ar" presumido. Relógio com diferença acima de 60 s é sinalizado,
   sem correção.
 - **Reconciliação**: pendências por equipamento comparam o estado desejado **atual** com o confirmado (ativações,

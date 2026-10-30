@@ -278,7 +278,7 @@ const deviceHealthText: Record<DeviceHealth['status'], [string, string]> = {
   ONLINE: ['No ar', 'status-ready'], OFFLINE: ['Fora do ar', 'status-overdue'], UNKNOWN: ['Sem informação recente', 'status-pending'], RETIRED: ['Retirado', 'status-neutral'],
 };
 const deviceReasonText: Record<NonNullable<DeviceHealth['reason']>, string> = {
-  HEARTBEAT_STALE: 'sem sinal do equipamento há mais de 5 minutos', NOT_REPORTED: 'a integração não informou este equipamento',
+  HEARTBEAT_STALE: 'sem sinal do equipamento há mais de 5 minutos', HEARTBEAT_MISSING: 'a integração não informou sinal do equipamento', NOT_REPORTED: 'a integração não informou este equipamento',
   STALE: 'última consulta há mais de 10 minutos', NEVER_CHECKED: 'a integração ainda não foi consultada',
   CONNECTOR_UNREACHABLE: 'a integração não respondeu', CONNECTOR_DISABLED: 'integração desativada',
 };

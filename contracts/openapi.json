@@ -17656,6 +17656,7 @@
             "enum": [
               null,
               "HEARTBEAT_STALE",
+              "HEARTBEAT_MISSING",
               "NOT_REPORTED",
               "STALE",
               "NEVER_CHECKED",
