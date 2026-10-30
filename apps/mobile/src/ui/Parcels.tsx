@@ -19,6 +19,8 @@ const stateText: Record<Delegation['state'], string> = {
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 /** 503 sem a chave do código é recusa certa: nada foi gravado. */
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain && error.code !== 'DELEGATION_UNAVAILABLE';
+/** Autorização com resultado incerto, por conta/condomínio/unidade/encomenda, fora do formulário: sobrevive à troca de vínculo. */
+export type DelegationPendingStore = Map<string, { key: string; body: CreateDelegation }>;
 const hidden = (error: unknown) => error instanceof ApiError && (error.status === 404 || ['UNIT_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'].includes(error.code));
 
 function Button({ label, onPress, disabled, secondary }: { label: string; onPress(): void; disabled?: boolean; secondary?: boolean }) {
@@ -36,10 +38,12 @@ function Field({ label, value, onChange, disabled }: { label: string; value: str
 }
 const volumes = (item: Parcel) => `${item.quantity} ${item.quantity === 1 ? 'volume' : 'volumes'}`;
 
-export function Parcels({ api, accountId, membership, newKey, now = () => new Date() }: {
-  api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date;
+export function Parcels({ api, accountId, membership, newKey, now = () => new Date(), pending: sharedPending }: {
+  api: CondPulseApi; accountId: string; membership: Membership & { unitId: string }; newKey: KeyFactory; now?: () => Date; pending?: DelegationPendingStore;
 }) {
   const { tenantId, unitId, timeZone } = membership;
+  const [ownPending] = useState<DelegationPendingStore>(() => new Map());
+  const pending = sharedPending ?? ownPending;
   const key = ['private', accountId, 'tenant', tenantId, 'unit', unitId, 'parcels'] as const;
   const retry = (count: number, error: unknown) => !hidden(error) && count < 1;
   const waiting = useQuery({ queryKey: [...key, 'RECEIVED'], queryFn: ({ signal }) => api.unitParcels(tenantId, unitId, 'RECEIVED', signal), retry });
@@ -61,7 +65,8 @@ export function Parcels({ api, accountId, membership, newKey, now = () => new Da
                 <Text style={styles.cardTitle}>{`${volumes(item)} · a retirar`}</Text>
                 <Text style={styles.body}>{`Recebida em ${formatWhen(item.receivedAt, timeZone)} · guardada em ${item.storageLocation}`}</Text>
                 {item.description ? <Text style={styles.body}>{item.description}</Text> : null}
-                <ParcelDelegation api={api} baseKey={key} tenantId={tenantId} parcel={item} timeZone={timeZone} newKey={newKey} now={now} />
+                <ParcelDelegation api={api} baseKey={key} tenantId={tenantId} parcel={item} timeZone={timeZone} newKey={newKey} now={now}
+                  store={pending} storeKey={`${accountId}|${tenantId}|${unitId}|${item.parcelId}`} />
               </View>)}</View>}
           {waiting.data.truncated ? <Notice tone="info">A lista mostra as 100 encomendas mais antigas aguardando retirada.</Notice> : null}
           <Text style={styles.subtitle}>Retiradas</Text>
@@ -77,13 +82,14 @@ export function Parcels({ api, accountId, membership, newKey, now = () => new Da
   </View>;
 }
 
-function ParcelDelegation({ api, baseKey, tenantId, parcel, timeZone, newKey, now }: {
+function ParcelDelegation({ api, baseKey, tenantId, parcel, timeZone, newKey, now, store, storeKey }: {
   api: CondPulseApi; baseKey: readonly unknown[]; tenantId: string; parcel: Parcel; timeZone: string; newKey: KeyFactory; now(): Date;
+  store: DelegationPendingStore; storeKey: string;
 }) {
   const queries = useQueryClient();
   const key = [...baseKey, 'delegation', parcel.parcelId];
   const current = useQuery({ queryKey: key, queryFn: ({ signal }) => api.parcelDelegation(tenantId, parcel.parcelId, signal) });
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => store.has(storeKey));
   // Retrato da autorização exibida ao abrir a confirmação: o cancelamento vale só para ela, mesmo que a consulta mude.
   const [revoking, setRevoking] = useState<{ delegationId: string; version: number; name: string } | null>(null);
   const [code, setCode] = useState<{ value: string; name: string } | null>(null);
@@ -114,7 +120,7 @@ function ParcelDelegation({ api, baseKey, tenantId, parcel, timeZone, newKey, no
       <Text style={styles.body}>Envie à pessoa autorizada. Ele aparece só agora; na portaria ela informa o código e mostra o documento.</Text>
     </View> : null}
     {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
-    {creating ? <DelegationForm api={api} tenantId={tenantId} parcel={parcel} timeZone={timeZone} replacing={active} newKey={newKey} now={now}
+    {creating ? <DelegationForm api={api} tenantId={tenantId} parcel={parcel} timeZone={timeZone} replacing={active} newKey={newKey} now={now} store={store} storeKey={storeKey}
       close={(result) => { setCreating(false); if (result) { setCode(result.code ? { value: result.code, name: result.name } : null); setNotice(result.notice); } void refresh(); }} />
       : revoking ? <View style={styles.gap} accessibilityLabel="Confirmação de cancelamento da autorização">
         <Text style={styles.body}>{`Cancelar a autorização de ${revoking.name}? O código deixa de valer imediatamente.`}</Text>
@@ -130,8 +136,9 @@ function ParcelDelegation({ api, baseKey, tenantId, parcel, timeZone, newKey, no
   </View>;
 }
 
-function DelegationForm({ api, tenantId, parcel, timeZone, replacing, newKey, now, close }: {
+function DelegationForm({ api, tenantId, parcel, timeZone, replacing, newKey, now, close, store, storeKey }: {
   api: CondPulseApi; tenantId: string; parcel: Parcel; timeZone: string; replacing: boolean; newKey: KeyFactory; now(): Date;
+  store: DelegationPendingStore; storeKey: string;
   close(result: { code: string | null; name: string; notice: { tone: 'info' | 'success'; text: string } } | null): void;
 }) {
   const [name, setName] = useState('');
@@ -142,7 +149,7 @@ function DelegationForm({ api, tenantId, parcel, timeZone, replacing, newKey, no
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   // Envio com resultado incerto: a repetição manda exatamente o mesmo corpo com a mesma chave, sem revalidar o prazo.
-  const [pending, setPending] = useState<{ key: string; body: CreateDelegation } | null>(null);
+  const [pending, setPending] = useState<{ key: string; body: CreateDelegation } | null>(() => store.get(storeKey) ?? null);
   const person = name.trim().replace(/\s+/g, ' ');
   const documentValue = normalizeDocument(document);
   let validUntil: string | null = null; let periodError: string | null = null;
@@ -157,17 +164,20 @@ function DelegationForm({ api, tenantId, parcel, timeZone, replacing, newKey, no
   async function submit() {
     if (busy || !valid) return;
     const attempt = pending ?? { key: newKey(), body: { delegateName: person, documentLast4: documentValue, validUntil } };
+    // Guardado antes do envio: se a seção for desmontada no meio, a volta retoma a mesma chave.
+    store.set(storeKey, attempt);
     setBusy(true); setFailure(null);
     try {
       const result = await api.delegate(tenantId, parcel.parcelId, attempt.body, attempt.key);
-      setPending(null);
+      setPending(null); store.delete(storeKey);
       close(result.code ? { code: result.code, name: result.delegation.delegateName, notice: { tone: 'success',
         text: `Autorização criada para ${result.delegation.delegateName} até ${formatWhen(result.delegation.validUntil, timeZone)}.` } }
         : { code: null, name: result.delegation.delegateName, notice: { tone: 'info',
           text: 'Esta autorização já estava criada, mas o código só aparece na primeira resposta. Gere uma nova autorização para ter outro código.' } });
     } catch (error) {
       setFailure(error);
-      setPending(uncertain(error) ? attempt : null);
+      if (uncertain(error)) setPending(attempt);
+      else { setPending(null); store.delete(storeKey); }
     } finally { setBusy(false); }
   }
   const disabled = busy || locked;

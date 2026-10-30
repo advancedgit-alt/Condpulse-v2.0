@@ -4,7 +4,7 @@ import { newQueryClient } from '../src/App';
 import { ApiError, type CondPulseApi } from '../src/api/client';
 import { delegation, issued, normalizeDocument, parcel, type Delegation, type Parcel } from '../src/api/parcels';
 import { ContractError } from '../src/api/reservations';
-import { Parcels } from '../src/ui/Parcels';
+import { Parcels, type DelegationPendingStore } from '../src/ui/Parcels';
 
 const TENANT = '00000000-0000-4000-8000-000000000001';
 const UNIT = '20000000-0000-4000-8000-000000000001';
@@ -54,12 +54,12 @@ function fakeApi() {
 const clients: ReturnType<typeof newQueryClient>[] = [];
 afterEach(async () => { await cleanup(); for (const client of clients.splice(0)) client.clear(); });
 let counter = 0;
-async function mount(setup?: (fake: ReturnType<typeof fakeApi>) => void) {
-  const fake = fakeApi();
+async function mount(setup?: (fake: ReturnType<typeof fakeApi>) => void, pending?: DelegationPendingStore, existing?: ReturnType<typeof fakeApi>) {
+  const fake = existing ?? fakeApi();
   setup?.(fake);
   const queries = newQueryClient(Infinity); clients.push(queries);
   await render(<QueryClientProvider client={queries}>
-    <Parcels api={fake.api} accountId={ACCOUNT} now={now} newKey={() => `test:parc-${String(++counter).padStart(12, '0')}`}
+    <Parcels api={fake.api} accountId={ACCOUNT} now={now} pending={pending} newKey={() => `test:parc-${String(++counter).padStart(12, '0')}`}
       membership={{ membershipId: '51000000-0000-4000-8000-000000000001', tenantId: TENANT, tenantName: 'CONDOMÍNIO FICTÍCIO',
         timeZone: 'America/Sao_Paulo', unitId: UNIT, role: 'RESIDENT' }} />
   </QueryClientProvider>);
@@ -207,4 +207,21 @@ describe('encomendas no celular', () => {
     expect(await screen.findByText(/Autorização em vigor/)).toBeTruthy();
     expect(fake.state.revokes).toHaveLength(1);
   }, 10000);
+
+  it('autorização incerta continua travada depois de trocar de vínculo e voltar: repete a mesma chave', async () => {
+    const pending: DelegationPendingStore = new Map();
+    const fake = await mount((f) => { f.state.errors.create.push(uncertain()); }, pending);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Autorizar retirada por terceiro' }));
+    await fireEvent.changeText(screen.getByLabelText('Nome de quem vai retirar'), 'Terceiro Fictício');
+    await fireEvent.press(screen.getByRole('button', { name: 'Gerar código' }));
+    expect(await screen.findByRole('button', { name: 'Tentar confirmar a mesma autorização' })).toBeTruthy();
+    await cleanup();
+    await mount(undefined, pending, fake);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Tentar confirmar a mesma autorização' }));
+    expect(await screen.findByText(/o código só aparece na primeira resposta/)).toBeTruthy();
+    expect(fake.state.creates).toHaveLength(2);
+    expect(fake.state.creates[1]!.key).toBe(fake.state.creates[0]!.key);
+    expect(fake.state.creates[1]!.body).toEqual(fake.state.creates[0]!.body);
+    expect(pending.size).toBe(0);
+  });
 });
