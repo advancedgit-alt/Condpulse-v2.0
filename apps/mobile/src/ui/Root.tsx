@@ -7,6 +7,7 @@ import { colors, touch } from './theme';
 import { Announcements } from './Announcements';
 import { Inbox } from './Inbox';
 import { DeviceAccess } from './DeviceAccess';
+import { AccessHistory } from './AccessHistory';
 import { Moves, type MovePendingStore } from './Moves';
 import { Requests, type RequestPendingStore } from './Requests';
 import { Visits, type PermitPendingStore } from './Visits';
@@ -134,6 +135,8 @@ function Home({ manager, api, accountId, newKey, events, webOrigin }: { manager:
       membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={movePending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Visits key={`visits-${active.membershipId}`} api={api}
       accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={permitPending} rulePending={rulePending} webOrigin={webOrigin} /> : null}
+    {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <AccessHistory key={`access-history-${active.membershipId}`} api={api}
+      accountId={accountId} tenantId={active.tenantId} unitId={active.unitId} timeZone={active.timeZone} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <Parcels key={`parcels-${active.membershipId}`} api={api}
       accountId={accountId} membership={{ ...active, unitId: active.unitId }} newKey={newKey} pending={delegationPending} /> : null}
     {active && active.unitId && ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT'].includes(active.role) ? <DeviceAccess key={`device-access-${active.membershipId}`} api={api}
