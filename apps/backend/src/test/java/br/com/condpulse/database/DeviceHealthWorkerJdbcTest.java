@@ -140,9 +140,11 @@ class DeviceHealthWorkerJdbcTest {
 
  @Test void aHeartbeatAgesWithTheDatabaseClockEvenWithoutANewCheck() throws Exception {
   monitor.runOnce();
-  // Sem nova consulta: com limite de sinal zero, o último sinal gravado já é antigo pelo relógio atual do banco.
+  // Sem nova consulta: com limite de sinal de 1 s, depois de 2 s o último sinal gravado já é antigo pelo relógio do banco
+  // (comparado com o horário da observação, continuaria "novo").
+  Thread.sleep(2000);
   var aged=tenants.execute(manager,db.tenantA,AAL2,context->new CredentialStore(db.jdbc).health(db.tenantA,CredentialService.HEALTH_STALE,
-   Duration.ZERO,CredentialService.CLOCK_DRIFT)).connectors().stream().filter(c->c.connectorId().equals(connector)).findFirst().orElseThrow();
+   Duration.ofSeconds(1),CredentialService.CLOCK_DRIFT)).connectors().stream().filter(c->c.connectorId().equals(connector)).findFirst().orElseThrow();
   assertEquals("OK",aged.status());
   assertEquals("OFFLINE:HEARTBEAT_STALE",device(aged,entrance).status()+":"+device(aged,entrance).reason());
   db.assertEmptyContext();
