@@ -137,4 +137,36 @@ class DeviceEventWorkerJdbcTest {
   assertEquals("REVOKED",status(card.credentialId()));
   db.assertEmptyContext(); workerDb.assertEmptyContext();
  }
+ @Test void aPassThatHitsThePageLimitResumesWhereItStopped() throws Exception {
+  var card=create("Cartão muitas passagens");
+  reconciler.runOnce();
+  String ref=externalRef(card.credentialId());
+  for(int i=0;i<5;i++) simulator.emitPassage("leitor-entrada",ref,AccessModels.Direction.ENTRY,false);
+  long before=Long.parseLong(db.adminString("select count(*) from cp.device_events where tenant_id=?",db.tenantA));
+  // Página de 1 evento e no máximo 2 páginas por passada: a continuação precisa ser guardada entre passadas.
+  var small=new DeviceEventIngestor(worker,syncs,new DeviceEventStore(workerDb.jdbc),
+   (tenant,id,provider)->id.equals(connector)?Optional.<AccessAdapter>of(simulator):Optional.empty(),1,2);
+  int total=(int)before;
+  for(int pass=0;pass<10;pass++) small.runOnce();
+  assertEquals("5",db.adminString("select count(*) from cp.device_events where device_id=? and kind='PASSAGE_DETECTED'",entrance),
+   "Todas as passagens chegam, sem repetir o começo para sempre");
+  assertTrue(total>=0);
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
+ @Test void aFailedWriteDoesNotMoveThePositionPastTheEvent() throws Exception {
+  var card=create("Cartão falha");
+  simulator.emitPassage("leitor-entrada",externalRef(card.credentialId()),AccessModels.Direction.ENTRY,false);
+  db.adminUpdate("revoke insert on cp.device_events from cp_worker");
+  try { ingestor.runOnce(); }
+  finally {
+   db.adminUpdate("grant insert(tenant_id,connector_id,external_event_id,device_id,credential_id,kind,direction,evidence,applied_version,occurred_at,"
+    +"received_at,state,quarantine_reason) on cp.device_events to cp_worker");
+  }
+  assertEquals("0",db.adminString("select count(*) from cp.device_events where tenant_id=?",db.tenantA));
+  assertEquals("0",db.adminString("select count(*) from cp.device_event_cursors where connector_id=?",connector),"Posição não avança sobre evento não gravado");
+  ingestor.runOnce();
+  assertEquals("1",db.adminString("select count(*) from cp.device_events where device_id=? and kind='PASSAGE_DETECTED'",entrance));
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
 }
