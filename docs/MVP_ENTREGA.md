@@ -44,6 +44,14 @@ com o adaptador simulado: não há parceiro físico. Também entraram a varredur
 WCAG automática no Playwright e a carga sintética no runner (sem afirmação de
 capacidade). Nada disso foi exercitado com login real; continua sem aceite.
 
+Ainda em 30/10/2026: V029 (fila de espera na visão da gestão, só leitura) aplicada
+na homologação (migrate 41032308046, repetição 41032667535 sem linha nova, smoke
+41032881505). O aplicativo Expo passou a cobrir, além de reservas, visitas,
+encomendas, mudanças e acessos, os prestadores recorrentes, os convidados de
+reserva, os avisos, os pedidos, a caixa da unidade e o histórico de entradas e
+saídas (PRs #93, #94, #96, #97 e #98). Evidência só de Jest no CI: sem aparelho,
+sem build de desenvolvimento e sem login real (BLOQUEADO em STATUS).
+
 O rótulo Vercel `Production` do deployment atual identifica o escopo de hospedagem;
 não comprova aceite de produção operacional. Nenhum recurso novo faturável foi
 criado por este lote de planejamento.
