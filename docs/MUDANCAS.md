@@ -26,13 +26,15 @@ Atrás de `CP_REQUESTS_ENABLED` (a mesma flag dos pedidos da unidade). Banco: V0
 - Web: seção "Mudança e entrega de móveis" no início da unidade (regras, pedido com aceite, retirada com confirmação),
   aba "Mudanças" da gestão (publicar/editar regras, filtro, aprovar, recusar, cancelar) e "Mudanças aprovadas" na aba
   Visitas da portaria (escolha do dia).
+- Celular (morador e responsável): regras, pedido com aceite, chave mantida depois de resultado incerto e retirada com
+  confirmação; dependente e recurso desligado escondem a seção.
 
 ## Evidências
 
 `tests/database/run.py` (`move_checks`), `MoveJdbcTest`, `DatabaseRoleGuardJdbcTest`; web `api/moves.test.ts` e
-`e2e/moves.spec.ts` (todos os botões das três telas).
+`e2e/moves.spec.ts` (todos os botões das três telas); celular `__tests__/moves.test.tsx`.
 
 ## Pendentes
 
 Aviso à portaria e à unidade pela caixa interna/push (os eventos `MOVE_*` vão ao outbox; o worker não está implantado —
-BLOQUEADO na implantação do worker), pedido pelo celular e ensaio com Auth real.
+BLOQUEADO na implantação do worker), ensaio em aparelho real e ensaio com Auth real.

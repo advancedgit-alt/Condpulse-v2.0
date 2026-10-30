@@ -29,7 +29,7 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Mudança e entrega de móveis — CP-042
 
 - V025: a gestão publica as regras (texto, dias, horário local, antecedência e duração) e decide; a unidade (adulto) pede o período aceitando a versão vigente, o banco confere as regras no fuso do condomínio, e a unidade retira antes do início; a portaria vê só as aprovadas. A aprovação não reserva elevador nem área. Atrás de `CP_REQUESTS_ENABLED` (ligada); V025 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [MUDANCAS.md](MUDANCAS.md).
-- Pendentes: avisos (worker), pedido pelo celular e ensaio com Auth real.
+- Celular: pedido, acompanhamento e retirada (Jest). Pendentes: avisos (worker), ensaio em aparelho e com Auth real.
 
 ## Retirada delegada com código — CP-041
 
