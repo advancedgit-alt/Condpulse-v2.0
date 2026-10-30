@@ -4,11 +4,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
+import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.reservations.application.ReservationManagementService;
 import br.com.condpulse.reservations.application.ReservationModels;
 import br.com.condpulse.reservations.application.ReservationService;
 import br.com.condpulse.reservations.application.WaitlistModels;
 import br.com.condpulse.reservations.application.WaitlistOfferRunner;
 import br.com.condpulse.reservations.application.WaitlistService;
+import br.com.condpulse.reservations.infrastructure.ReservationManagementStore;
 import br.com.condpulse.reservations.infrastructure.ReservationStore;
 import br.com.condpulse.reservations.infrastructure.WaitlistStore;
 import br.com.condpulse.shared.application.BusinessProblem;
@@ -34,7 +37,8 @@ class WaitlistJdbcTest {
  /** Sem a oferta prévia: simula a criação que já passou da oferta quando o cancelamento concorrente confirma. */
  private static ReservationService withoutOffer;
  private static WaitlistService waitlist;
- private static UUID accountD,unitD;
+ private static ReservationManagementService management;
+ private static UUID accountD,unitD,manager;
  private UUID amenity;
  private Instant start;
 
@@ -47,7 +51,11 @@ class WaitlistJdbcTest {
   reservations=new ReservationService(transactions,store,offers);
   withoutOffer=new ReservationService(transactions,store);
   waitlist=new WaitlistService(transactions,store,waitlistStore,new AuditRecorder(db.jdbc),offers);
+  management=new ReservationManagementService(transactions,store,new ReservationManagementStore(db.jdbc,store),new AuditRecorder(db.jdbc));
   accountD=UUID.randomUUID(); unitD=UUID.randomUUID(); db.extraAccounts.add(accountD);
+  manager=UUID.randomUUID(); db.extraAccounts.add(manager);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",manager);
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'GESTAO FILA JDBC','MANAGER','ACTIVE')",db.tenantA,manager);
   db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",accountD);
   db.adminUpdate("insert into cp.units(id,tenant_id,label) values(?,?,'FILA JDBC D')",unitD,db.tenantA);
   db.adminUpdate("insert into cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) values(?,?,?,'MORADOR FILA D','RESIDENT','ACTIVE')",
@@ -73,6 +81,44 @@ class WaitlistJdbcTest {
  }
  private WaitlistModels.Entry current(UUID account,UUID unit,UUID id) {
   return waitlist.unitEntries(account,db.tenantA,unit).entries().stream().filter(e->e.waitlistId().equals(id)).findFirst().orElseThrow();
+ }
+
+ @Test void managementSeesTheWholeQueueReadOnlyAndResidentsDoNot() throws Exception {
+  var booked=bookAsC();
+  var first=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
+  var second=waitlist.join(accountD,db.tenantA,key(),joinBody(unitD)).entry();
+  var page=management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,true);
+  var mine=page.entries().stream().filter(e->e.amenityId().equals(amenity)).toList();
+  assertEquals(2,mine.size(),"A gestão vê as duas unidades na fila");
+  assertEquals(first.waitlistId(),mine.get(0).waitlistId());
+  assertEquals(1,mine.get(0).position());
+  assertEquals(2,mine.get(1).position());
+  assertEquals("FILA JDBC D",mine.get(1).unitLabel());
+  assertEquals("SALAO FILA JDBC",mine.get(1).amenityName());
+  assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->management.waitlist(db.accountA,db.tenantA,AssuranceLevel.AAL2,true)).code());
+  assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->management.waitlist(manager,db.tenantA,AssuranceLevel.AAL1,true)).code());
+  // A unidade continua vendo só a própria entrada.
+  assertEquals(1,waitlist.unitEntries(accountD,db.tenantA,unitD).entries().size());
+  // Saída da fila: some da lista aberta e aparece entre as encerradas.
+  waitlist.leave(accountD,db.tenantA,second.waitlistId(),new WaitlistModels.Change(unitD,second.version()));
+  assertEquals(1,management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,true).entries().stream().filter(e->e.amenityId().equals(amenity)).count());
+  assertEquals("LEFT",management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,false).entries().stream()
+   .filter(e->e.waitlistId().equals(second.waitlistId())).findFirst().orElseThrow().state());
+  assertNotNull(booked);
+  db.assertEmptyContext();
+ }
+
+ @Test void closedByTimeMoreThanSevenDaysAgoIsNotListedAsRecent() throws Exception {
+  bookAsC();
+  var stale=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
+  // Passada da fila parada: a entrada continua WAITING no banco, mas o período começou há 10 dias (encerrada pelo tempo).
+  // Fixture: período movido para o passado sem o gatilho (que, com razão, impede mudar o período de uma entrada).
+  db.adminUpdateWithoutTriggers("update cp.reservation_waitlist w set starts_at=t.s,ends_at=t.s+interval '2 hours',occupied_from=t.s,"
+   +"occupied_until=t.s+interval '2 hours' from (select now()-interval '10 days' as s) t where w.id=?",stale.waitlistId());
+  var all=management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,false).entries();
+  assertTrue(all.stream().noneMatch(e->e.waitlistId().equals(stale.waitlistId())),"Encerrada pelo tempo há mais de 7 dias não aparece entre as recentes");
+  assertTrue(management.waitlist(manager,db.tenantA,AssuranceLevel.AAL2,true).entries().stream().noneMatch(e->e.waitlistId().equals(stale.waitlistId())));
+  db.assertEmptyContext();
  }
 
  @Test void cancellationOffersThePeriodToTheFirstInLineAndAcceptingConfirmsOnce() throws Exception {

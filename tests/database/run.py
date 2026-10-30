@@ -2683,6 +2683,31 @@ def device_health_checks():
                f"ninguem apaga cp.{table}")
         expect(value(f"select relforcerowsecurity::text from pg_class where oid='cp.{table}'::regclass") == "true", f"RLS forcado em cp.{table}")
 
+def waitlist_management_checks():
+    """V029: gestao que decide reservas le a fila do condominio; nao entra, nao sai e nao muda entradas."""
+    MG, OT = "10000000-0000-4000-8000-0000000003a1", "10000000-0000-4000-8000-0000000003a2"
+    UO = "20000000-0000-4000-8000-0000000003a1"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{OT}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UO}','{TA}','FILA OUTRA');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{MG}',NULL,'GESTAO FILA','MANAGER','ACTIVE'),('{TA}','{OT}','{UO}','OUTRA FILA','RESIDENT','ACTIVE');
+    """)
+    total = value(f"select count(*) from cp.reservation_waitlist where tenant_id='{TA}'")
+    expect(int(total) > 0, "ha entradas da fila para conferir")
+    expect(value("SET LOCAL app.capabilities='reservations.decide'; select count(*) from cp.reservation_waitlist", tenant=TA, actor=MG, role="cp_api") == total,
+           "gestao que decide reservas ve a fila inteira do condominio")
+    expect(value("SET LOCAL app.capabilities='memberships.manage'; select count(*) from cp.reservation_waitlist", tenant=TA, actor=MG, role="cp_api") == "0",
+           "outra capacidade da gestao nao ve a fila")
+    expect(value("select count(*) from cp.reservation_waitlist", tenant=TA, actor=OT, role="cp_api") == "0",
+           "morador de outra unidade nao ve a fila das demais")
+    expect(value("SET LOCAL app.capabilities='reservations.decide'; select count(*) from cp.reservation_waitlist", tenant=TB, actor=MG, role="cp_api",
+                 check=False) in ("0", ""), "gestao do condominio A nao ve a fila do B")
+    expect(value(f"SET LOCAL app.capabilities='reservations.decide'; WITH changed AS (UPDATE cp.reservation_waitlist SET state='LEFT',version=version+1 "
+                 f"WHERE tenant_id='{TA}' AND state='WAITING' RETURNING 1) SELECT count(*) FROM changed", tenant=TA, actor=MG, role="cp_api") == "0",
+           "gestao nao altera entradas da fila")
+    expect(value(f"select count(*) from cp.reservation_waitlist where tenant_id='{TA}'") == total, "nada mudou")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -2795,6 +2820,7 @@ def main():
     reservation_guest_checks()
     visit_rule_checks()
     waitlist_checks()
+    waitlist_management_checks()
     delegation_checks()
     move_checks()
     credential_checks()

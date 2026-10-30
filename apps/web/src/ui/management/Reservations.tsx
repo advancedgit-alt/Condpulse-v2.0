@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { newOperationKey } from '../../api/client';
-import { management, type DecisionResult, type ManagedReservation, type ReservationStatus } from '../../api/management';
+import { management, type DecisionResult, type ManagedReservation, type ManagedWaitlistEntry, type ReservationStatus } from '../../api/management';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { addDays, dateInZone, formatWhen, money, toInstant } from '../dateTime';
 import { ActionFeedback, ReasonForm, managementKey, reservationStatusLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
@@ -130,7 +130,57 @@ export function ReservationAgenda() {
       {range.error ? <Notice tone="error">{range.error}</Notice>
         : <ReservationList status={status || null} from={range.from} until={range.until} empty="Nenhuma reserva neste período." />}
     </section>
+    <WaitlistOverview />
   </>;
+}
+
+const waitlistLabels: Record<ManagedWaitlistEntry['state'], [string, string]> = {
+  WAITING: ['Aguardando', 'status-pending'], OFFERED: ['Oferta em aberto', 'status-ready'], ACCEPTED: ['Aceita', 'status-neutral'],
+  LEFT: ['Saiu da fila', 'status-neutral'], EXPIRED: ['Oferta vencida', 'status-neutral'], CLOSED: ['Encerrada sem vaga', 'status-neutral'],
+};
+
+/**
+ * Fila de espera do condomínio (CP-040), só leitura: quem aguarda cada período, em que posição, e as ofertas em aberto
+ * com o prazo. A gestão não reordena nem oferece: a vaga liberada vai ao primeiro da fila pela passada automática.
+ */
+/** Período completo: o fim só com horário no mesmo dia; com a data quando atravessa a meia-noite (fuso do condomínio). */
+function period(startsAt: string, endsAt: string, timeZone: string) {
+  const sameDay = dateInZone(timeZone, new Date(startsAt)) === dateInZone(timeZone, new Date(endsAt));
+  const time = new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(endsAt));
+  return `${formatWhen(startsAt, timeZone)} até ${sameDay ? time : formatWhen(endsAt, timeZone)}`;
+}
+
+function WaitlistOverview() {
+  const scope = useManagement();
+  const [open, setOpen] = useState(true);
+  const query = useQuery({ queryKey: managementKey(scope, 'waitlist', open), queryFn: ({ signal }) => management.waitlist(scope.tenantId, open, signal) });
+  const guarded = useAccessGuard(query.error);
+  if (guarded) return null;
+  const stale = query.isError && query.data !== undefined && !query.isFetching;
+  return <section aria-labelledby="waitlist-title" className="management-section">
+    <div className="section-heading"><div><span className="section-index">FILA</span><h2 id="waitlist-title">Fila de espera</h2></div>
+      <div className="button-row">
+        <label className="sr-only" htmlFor="waitlist-filter">Filtrar fila de espera</label>
+        <select id="waitlist-filter" value={open ? 'open' : 'all'} onChange={(event) => setOpen(event.target.value === 'open')}>
+          <option value="open">Em aberto</option><option value="all">Inclui encerradas (7 dias)</option>
+        </select>
+        <button className="button button-secondary button-compact" type="button" disabled={query.isFetching} onClick={() => void query.refetch()}>Atualizar fila</button>
+      </div></div>
+    <p className="field-help">Somente leitura. Quando um período é liberado, a vaga vai automaticamente ao primeiro da fila, que tem até 15 minutos para aceitar. Horários em {scope.timeZone}.</p>
+    {stale ? <Notice tone="warning">Não foi possível atualizar a fila. A lista é da última consulta.</Notice> : null}
+    {query.isPending ? <div className="panel"><Loading label="Consultando a fila de espera…" /></div>
+      : query.isError && !query.data ? <ErrorState error={query.error} retry={() => void query.refetch()} />
+        : query.data.entries.length === 0 ? <div className="panel"><Empty title="Fila vazia">{open ? 'Nenhuma unidade aguardando período.' : 'Nenhuma entrada nos últimos 7 dias.'}</Empty></div>
+          : <ol className="management-list" aria-label="Fila de espera">{query.data.entries.map((item) => {
+            const [label, tone] = waitlistLabels[item.state];
+            return <li key={item.waitlistId} className="management-row"><div>
+              <strong><bdi>{item.amenityName}</bdi> · {period(item.startsAt, item.endsAt, scope.timeZone)}</strong> <span className={`status-pill ${tone}`}>{label}</span>
+              <span>Unidade <bdi>{item.unitLabel}</bdi>{item.position !== null ? ` · ${item.position}º da fila` : ''} · entrou em {formatWhen(item.createdAt, scope.timeZone)}</span>
+              {item.state === 'OFFERED' && item.offerExpiresAt ? <span>Oferta vale até {formatWhen(item.offerExpiresAt, scope.timeZone)}</span> : null}
+            </div></li>;
+          })}</ol>}
+    {query.data?.truncated ? <Notice tone="warning">A lista mostra as 200 primeiras entradas.</Notice> : null}
+  </section>;
 }
 
 /** Bloqueio idempotente: a mesma chave é reaproveitada enquanto área, período e motivo não mudam. */

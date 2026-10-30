@@ -73,3 +73,11 @@ aceitar usam `Idempotency-Key`; resultado incerto repete com a mesma chave. Test
 Aviso da oferta na caixa interna/push (o evento `WAITLIST_OFFERED` vai ao outbox; o worker não está implantado — BLOQUEADO na implantação do worker),
 visão da fila para a gestão, conferência de vínculo do autor no momento da oferta (hoje conferido no
 aceite) e ensaio com Auth real.
+
+## Visão da gestão (V029)
+
+- `GET /v1/tenants/{t}/management/waitlist?open=true|false` (AAL2, `reservations.decide`, atrás de `CP_MANAGEMENT_ENABLED`): fila do
+  condomínio por área e período, com unidade, posição de quem aguarda e prazo da oferta em vigor; `open=false` inclui as
+  encerradas dos últimos 7 dias. Só leitura: a política de leitura passou a aceitar `reservations.decide`; as de entrada e
+  alteração continuam só da unidade e da passada da fila.
+- Web: seção "Fila de espera" na aba Reservas da gestão (Playwright com varredura WCAG).

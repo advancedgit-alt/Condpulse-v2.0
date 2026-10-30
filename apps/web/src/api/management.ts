@@ -132,6 +132,24 @@ function auditEvent(value: unknown): AuditEvent {
   return { eventId: value.eventId, actorId: value.actorId, action: value.action, resourceType: value.resourceType,
     resourceId: value.resourceId, reason: (value.reason ?? null) as string | null, createdAt: value.createdAt };
 }
+/** Fila de espera vista pela gestão (CP-040), só leitura. */
+export const waitlistStates = ['WAITING', 'OFFERED', 'ACCEPTED', 'LEFT', 'EXPIRED', 'CLOSED'] as const;
+export interface ManagedWaitlistEntry {
+  waitlistId: UUID; unitId: UUID; unitLabel: string; amenityId: UUID; amenityName: string; state: typeof waitlistStates[number];
+  startsAt: ISODateTime; endsAt: ISODateTime; position: number | null; offerExpiresAt: ISODateTime | null; closedAt: ISODateTime | null; createdAt: ISODateTime;
+}
+export function managedWaitlistEntry(value: unknown): ManagedWaitlistEntry {
+  if (!record(value) || !isUUID(value.waitlistId) || !isUUID(value.unitId) || !isString(value.unitLabel) || !value.unitLabel || !isUUID(value.amenityId)
+      || !isString(value.amenityName) || !value.amenityName || !oneOf(value.state, waitlistStates) || !isDate(value.startsAt) || !isDate(value.endsAt)
+      || Date.parse(value.endsAt) <= Date.parse(value.startsAt) || !(value.position === null || (isInteger(value.position) && value.position >= 1))
+      || !(value.offerExpiresAt === null || isDate(value.offerExpiresAt)) || !(value.closedAt === null || isDate(value.closedAt)) || !isDate(value.createdAt))
+    throw invalidResponse();
+  // Posição só para quem aguarda; prazo só na oferta em vigor.
+  if ((value.position !== null) !== (value.state === 'WAITING') || (value.state === 'OFFERED' && value.offerExpiresAt === null)) throw invalidResponse();
+  return { waitlistId: value.waitlistId, unitId: value.unitId, unitLabel: value.unitLabel, amenityId: value.amenityId, amenityName: value.amenityName,
+    state: value.state, startsAt: value.startsAt, endsAt: value.endsAt, position: value.position as number | null,
+    offerExpiresAt: value.offerExpiresAt as string | null, closedAt: value.closedAt as string | null, createdAt: value.createdAt };
+}
 const page = <T, K extends string>(key: K, decode: (item: unknown) => T) => (value: unknown): { [P in K]: T[] } & { truncated: boolean } => {
   if (!record(value) || typeof value.truncated !== 'boolean') throw invalidResponse();
   return { [key]: list(value[key], decode), truncated: value.truncated } as { [P in K]: T[] } & { truncated: boolean };
@@ -178,6 +196,12 @@ export function createManagementApi(client: CondPulseApi = api) {
       return client.call(`${base(tenantId)}/reservations${suffix}`, page('reservations', (item) => managedReservation(item)),
         signal ? { signal } : {}) as Promise<ManagedReservationPage>;
     },
+    waitlist: async (tenantId: string, open: boolean, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/waitlist?open=${open}`, (value) => {
+        const result = page('entries', managedWaitlistEntry)(value);
+        if (open && result.entries.some((item) => item.state !== 'WAITING' && item.state !== 'OFFERED')) throw invalidResponse();
+        return result;
+      }, signal ? { signal } : {}),
     decideReservation: async (tenantId: string, reservationId: string, body: { decision: 'APPROVE' | 'REJECT'; expectedVersion: number; reason: string | null }) =>
       client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/decision`, (value, response): DecisionResult => {
         const header = response.headers.get('Reservation-Decision-Applied');

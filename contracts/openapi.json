@@ -11051,6 +11051,79 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/waitlist": {
+      "get": {
+        "operationId": "listManagedWaitlist",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "open",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "description": "Gestão que decide reservas (AAL2, reservations.decide): fila de espera do condomínio, só leitura (CP-040). open=true (padrão) traz quem aguarda e as ofertas em vigor; open=false inclui as encerradas dos últimos 7 dias. A gestão não oferece, não reordena nem altera entradas.",
+        "responses": {
+          "200": {
+            "description": "Fila de espera",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedWaitlistPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, estado alterado, prazo vencido ou período ocupado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17821,6 +17894,109 @@
             "items": {
               "$ref": "#/components/schemas/AccessConnectorHealth"
             }
+          }
+        }
+      },
+      "ManagedWaitlistEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "waitlistId",
+          "unitId",
+          "unitLabel",
+          "amenityId",
+          "amenityName",
+          "state",
+          "startsAt",
+          "endsAt",
+          "position",
+          "offerExpiresAt",
+          "closedAt",
+          "createdAt"
+        ],
+        "properties": {
+          "waitlistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "amenityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amenityName": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "WAITING",
+              "OFFERED",
+              "ACCEPTED",
+              "LEFT",
+              "EXPIRED",
+              "CLOSED"
+            ]
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Só para WAITING."
+          },
+          "offerExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ManagedWaitlistPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entries",
+          "truncated"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/ManagedWaitlistEntry"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       }
