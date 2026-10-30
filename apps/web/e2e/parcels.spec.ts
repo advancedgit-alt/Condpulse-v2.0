@@ -10,7 +10,7 @@ const DEPENDENT = '50000000-0000-4000-8000-0000000000f2';
 interface SyntheticParcel {
   parcelId: string; unitId: string; unitLabel: string; blockName: string | null; quantity: number; description: string; storageLocation: string;
   status: 'RECEIVED' | 'DELIVERED' | 'VOIDED'; receivedAt: string; version: number;
-  handoff: null | { recipientName: string; deliveredAt: string; evidenceKind: 'ASSISTED' }; voidReason: string | null; voidedAt: string | null;
+  handoff: null | { recipientName: string; deliveredAt: string; evidenceKind: 'ASSISTED' | 'DELEGATION' }; voidReason: string | null; voidedAt: string | null;
 }
 interface ParcelState {
   parcels: SyntheticParcel[]; receives: { key: string; body: unknown }[]; deliveries: { key: string; body: unknown }[]; voids: { key: string; body: unknown }[];
@@ -95,6 +95,7 @@ async function installParcelsApi(page: Page, api: ApiState, concierge: boolean):
       await json(route, 200, parcel, { 'Idempotency-Replayed': 'false' });
       return;
     }
+    if (/^\/parcels\/[^/]+\/delegation$/.test(path) && request.method() === 'GET') { await json(route, 200, { delegation: null }); return; }
     if (path === `/units/${UNIT_A}/parcels` && request.method() === 'GET') {
       const status = url.searchParams.get('status');
       await json(route, 200, { parcels: state.parcels.filter((item) => item.status !== 'VOIDED' && (!status || item.status === status)), truncated: false });

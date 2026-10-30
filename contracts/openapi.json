@@ -9441,6 +9441,374 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}/delegation": {
+      "get": {
+        "operationId": "getParcelDelegation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Autorização de retirada por terceiro mais recente da encomenda (unidade que vê as encomendas ou portaria). Nunca devolve o código.",
+        "responses": {
+          "200": {
+            "description": "Autorização atual ou null",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelDelegationCurrent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "PARCEL_NOT_FOUND"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createParcelDelegation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Quem pode retirar pela unidade autoriza um terceiro para esta encomenda (validade de 15 minutos a 7 dias; padrão 48 h). O código de 8 dígitos aparece só nesta resposta; o banco guarda apenas hash com sal. Repetição com a mesma chave devolve a autorização com code=null. Nova autorização encerra a anterior.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelDelegationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Autorização criada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelDelegationIssued"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "DELEGATION_NAME_INVALID, DELEGATION_DOCUMENT_INVALID, DELEGATION_VALIDITY_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "DELEGATION_NOT_ALLOWED (sem permissão de retirada)"
+          },
+          "404": {
+            "description": "PARCEL_NOT_FOUND"
+          },
+          "409": {
+            "description": "PARCEL_ALREADY_DELIVERED, DELEGATION_CHANGED ou chave de idempotência"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}/delegation/revoke": {
+      "post": {
+        "operationId": "revokeParcelDelegation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Cancela a autorização em vigor pela versão lida; o código deixa de valer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelDelegationRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Autorização cancelada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelDelegation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "DELEGATION_VERSION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "DELEGATION_NOT_ALLOWED"
+          },
+          "404": {
+            "description": "PARCEL_NOT_FOUND"
+          },
+          "409": {
+            "description": "DELEGATION_NOT_ACTIVE ou DELEGATION_CHANGED"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/parcels/{parcelId}/handoff-code": {
+      "post": {
+        "operationId": "handoffParcelByCode",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARCELS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "parcelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Portaria (capacidade concierge.operate, AAL2) confere o código da própria encomenda e o documento da pessoa autorizada. Código errado conta tentativa e é gravado mesmo com a recusa; na quinta errada a autorização é bloqueada. Código de outra encomenda nunca vale; código usado não volta a valer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelCodeHandoff"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Retirada registrada (repetição devolve a mesma)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PARCEL_VERSION_REQUIRED, PARCEL_IDENTITY_CHECK_REQUIRED, DELEGATION_CODE_REQUIRED ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_CAPABILITY_REQUIRED ou DELEGATION_NOT_ALLOWED"
+          },
+          "404": {
+            "description": "PARCEL_NOT_FOUND"
+          },
+          "409": {
+            "description": "DELEGATION_CODE_INVALID, DELEGATION_LOCKED, DELEGATION_EXPIRED, DELEGATION_NOT_FOUND, PARCEL_ALREADY_DELIVERED, PARCEL_VOIDED ou PARCEL_CHANGED"
+          },
+          "503": {
+            "description": "PARCEL_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11928,7 +12296,7 @@
           "deliveredAt",
           "evidenceKind"
         ],
-        "description": "Retirada registrada pela portaria: nome do vínculo residencial escolhido. Sem identificador da conta da equipe; operador e horário ficam na auditoria.",
+        "description": "Retirada registrada pela portaria: nome do vínculo residencial escolhido ou da pessoa autorizada pela unidade. Sem identificador da conta da equipe; operador e horário ficam na auditoria.",
         "properties": {
           "recipientName": {
             "type": "string",
@@ -11942,9 +12310,10 @@
           "evidenceKind": {
             "type": "string",
             "enum": [
-              "ASSISTED"
+              "ASSISTED",
+              "DELEGATION"
             ],
-            "description": "ASSISTED: documento conferido pela portaria. Código e delegação ainda não existem."
+            "description": "ASSISTED: pessoa com vínculo, documento conferido pela portaria. DELEGATION: terceiro autorizado pela unidade, código e documento conferidos (CP-041)."
           }
         }
       },
@@ -14936,6 +15305,209 @@
           },
           "reservation": {
             "$ref": "#/components/schemas/Reservation"
+          }
+        }
+      },
+      "ParcelDelegation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "delegationId",
+          "parcelId",
+          "unitId",
+          "delegateName",
+          "documentLast4",
+          "validUntil",
+          "state",
+          "attempts",
+          "attemptsLeft",
+          "createdByMe",
+          "createdAt",
+          "usedAt",
+          "closedAt",
+          "version"
+        ],
+        "properties": {
+          "delegationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parcelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "delegateName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9A-Z]{2,4}$"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "USED",
+              "REVOKED",
+              "LOCKED",
+              "CLOSED",
+              "EXPIRED"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "attemptsLeft": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "createdByMe": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "usedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ParcelDelegationCurrent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "delegation"
+        ],
+        "properties": {
+          "delegation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ParcelDelegation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ParcelDelegationCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "delegateName"
+        ],
+        "properties": {
+          "delegateName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ParcelDelegationIssued": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "delegation",
+          "code"
+        ],
+        "properties": {
+          "delegation": {
+            "$ref": "#/components/schemas/ParcelDelegation"
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]{8}$",
+            "description": "Só na primeira resposta; null na repetição."
+          }
+        }
+      },
+      "ParcelDelegationRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ParcelCodeHandoff": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "identityChecked",
+          "expectedVersion"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          },
+          "identityChecked": {
+            "type": "boolean",
+            "const": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       }

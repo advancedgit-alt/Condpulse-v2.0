@@ -56,8 +56,8 @@ concedê-las: nem a gestão nem o cadastro operacional gravam `permissions` (o c
 - **Privacidade**: as respostas não trazem contas da equipe; quem recebeu, entregou ou anulou fica na auditoria do
   condomínio. A portaria vê nome e papel dos vínculos residenciais do condomínio (para conferir quem retira), sem
   proprietários, gestão ou equipe.
-- **Fora deste recorte**: foto da embalagem (CP-017), código de retirada e delegação (CP-041), envio do aviso (worker
-  CP-034 e push CP-035) e retenção de fotos.
+- **Fora deste recorte**: foto da embalagem (CP-017), envio do aviso (worker CP-034 e push CP-035) e retenção de
+  fotos. Código de retirada e delegação: seção CP-041 abaixo.
 
 ## Telas web
 
@@ -73,4 +73,30 @@ concedê-las: nem a gestão nem o cadastro operacional gravam `permissions` (o c
 
 - Aplicação remota da V012 com aprovação; ensaio com Auth real e portaria nomeada.
 - Concessão de `parcels.view`/`parcels.pickup` ao dependente (tela e regra; hoje nenhum fluxo grava permissões).
-- Foto, código e delegação, aviso efetivo ao morador e retenção (tickets próprios).
+- Foto, aviso efetivo ao morador e retenção (tickets próprios); delegação pelo celular.
+
+## Retirada delegada com código (CP-041)
+
+Atrás de `CP_PARCELS_ENABLED`. Banco: V024 (`cp.parcel_delegations`).
+
+- **Autorizar**: quem pode retirar pela unidade (adulto, ou dependente com `parcels.pickup`) autoriza um terceiro para
+  uma encomenda ainda a retirar: nome, final do documento (opcional) e validade de 15 minutos a 7 dias (padrão 48 h). O
+  código de 8 dígitos aparece só na resposta da criação; o banco guarda SHA-256 com sal próprio, e a resposta
+  idempotente guarda só o identificador (repetir a mesma chave devolve a autorização sem código). Uma autorização em
+  vigor por encomenda: a nova encerra a anterior. Cancelar é pela versão lida.
+- **Conferir**: a portaria (capacidade e AAL2) informa o código da própria encomenda e confirma o documento. A
+  conferência é feita pelo banco (`cp.parcel_delegation_check`) sob a trava da autorização: código errado conta
+  tentativa, gravada mesmo com a recusa; na quinta errada a autorização fica bloqueada; vencida não vale; código de
+  outra encomenda nunca vale (não há autorização em vigor nela). Código certo marca a autorização como usada e a
+  retirada é registrada na mesma transação, com evidência `DELEGATION` e o nome autorizado; código usado não volta a
+  valer. Retirada assistida ou anulação encerram a autorização em vigor.
+- **API**: `GET`/`POST /v1/tenants/{t}/parcels/{p}/delegation` (`Idempotency-Key`), `POST .../delegation/revoke`,
+  `POST /v1/tenants/{t}/parcels/{p}/handoff-code` (`Idempotency-Key`, gravada só depois do código aceito; o código
+  não entra no hash da intenção).
+- **Web**: na encomenda a retirar, "Autorizar retirada por terceiro" (código exibido uma vez), "Gerar nova
+  autorização" e "Cancelar autorização"; na portaria, "Retirada por código" com o resumo da autorização, tentativas
+  restantes e conferência do documento.
+- **Evidências**: `tests/database/run.py` (`delegation_checks`), `DelegationJdbcTest`, `DatabaseRoleGuardJdbcTest`; web
+  `api/parcels.test.ts` e `e2e/parcel-delegation.spec.ts`.
+- **Pendentes**: delegação pelo celular, aviso ao morador quando o código é usado ou bloqueado (worker) e ensaio com
+  Auth real.

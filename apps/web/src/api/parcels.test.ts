@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { createParcelsApi, parcel } from './parcels';
+import { createParcelsApi, delegation, parcel } from './parcels';
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -26,6 +26,17 @@ describe('contratos das encomendas', () => {
     expect(() => parcel({ ...received, quantity: 0 })).toThrow();
     expect(() => parcel({ ...received, storageLocation: '' })).toThrow();
     expect(() => parcel({ ...received, handoff: undefined })).toThrow();
+  });
+  it('retirada por delegação é aceita; resumo da autorização é coerente e nunca traz código', () => {
+    expect(parcel({ ...received, status: 'DELIVERED', version: 1, handoff: { ...handoff, evidenceKind: 'DELEGATION' } }).handoff?.evidenceKind).toBe('DELEGATION');
+    const active = { delegationId: '41000000-0000-4000-8000-000000000001', parcelId: received.parcelId, unitId: unit, delegateName: 'Terceiro',
+      documentLast4: null, validUntil: '2030-01-02T12:00:00Z', state: 'ACTIVE', attempts: 2, attemptsLeft: 3, createdByMe: true,
+      createdAt: '2030-01-01T12:00:00Z', usedAt: null, closedAt: null, version: 2 };
+    expect(delegation(active).attemptsLeft).toBe(3);
+    expect(() => delegation({ ...active, attemptsLeft: 5 })).toThrow();
+    expect(() => delegation({ ...active, state: 'USED' })).toThrow();
+    expect(() => delegation({ ...active, documentLast4: '123456' })).toThrow();
+    expect(delegation({ ...active, state: 'USED', usedAt: '2030-01-01T15:00:00Z', attemptsLeft: 0 }).state).toBe('USED');
   });
   it('anulada só com motivo, horário e versão avançada; motivo nunca aparece fora da anulação', () => {
     const voided = { ...received, status: 'VOIDED', version: 1, voidReason: 'Unidade errada', voidedAt: '2030-01-01T13:00:00Z' };
