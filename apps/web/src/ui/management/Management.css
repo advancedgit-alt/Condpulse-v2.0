@@ -65,3 +65,6 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 @media (max-width:560px){.import-row{grid-template-columns:1fr}}
 .share-link{display:grid;gap:8px;margin-top:10px}
 .share-link input{width:100%;min-height:40px;padding:8px 10px;border:1px solid #cdd6e0;border-radius:8px;font:inherit;font-size:14px}
+.weekday-picker{display:flex;flex-wrap:wrap;gap:6px 12px;border:1px solid #cdd6e0;border-radius:8px;padding:8px 12px;margin:0}
+.weekday-picker legend{padding:0 4px;font-weight:600}
+.weekday-picker label{display:inline-flex;align-items:center;gap:4px;min-height:32px}

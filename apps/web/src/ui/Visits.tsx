@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { collapseText, displayText } from '../api/text';
-import { visits, type AccessRecord, type Arrival, type CreatePermitBody, type VisitPermit } from '../api/visits';
+import { visits, type AccessRecord, type Arrival, type CreatePermitBody, type CreateRuleBody, type VisitPermit, type VisitRule } from '../api/visits';
 import { useAuth } from './Auth';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from './primitives';
 import { dateInZone, formatWhen, toInstant, wallTimeInZone } from './dateTime';
@@ -23,10 +23,10 @@ export function VisitsPage() {
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido pela gestão antes de acompanhar os acessos.</Notice>; }
   return <UnitAccess key={`${identity.accountId}:${tenantId}:${unitId}`} accountId={identity.accountId} tenantId={tenantId} unitId={unitId}
-    tenantName={membership.tenantName} timeZone={membership.timeZone} />;
+    tenantName={membership.tenantName} timeZone={membership.timeZone} adult={membership.role !== 'DEPENDENT'} />;
 }
 
-interface Scope { accountId: string; tenantId: string; unitId: string; tenantName: string; timeZone: string }
+interface Scope { accountId: string; tenantId: string; unitId: string; tenantName: string; timeZone: string; adult: boolean }
 const unitKey = (scope: Scope, ...parts: unknown[]) => ['private', scope.accountId, 'tenant', scope.tenantId, 'unit', scope.unitId, 'visits', ...parts] as const;
 const denied = (error: unknown) => ['UNIT_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'].includes(codeOf(error));
 const unavailable = (error: unknown) => codeOf(error) === 'API_NOT_AVAILABLE';
@@ -54,12 +54,13 @@ function UnitAccess(scope: Scope) {
   const arrivals = useQuery({ queryKey: unitKey(scope, 'arrivals'), queryFn: ({ signal }) => visits.unitArrivals(scope.tenantId, scope.unitId, signal),
     refetchInterval: (query) => denied(query.state.error) || unavailable(query.state.error) ? false : 10_000 });
   const permits = useQuery({ queryKey: unitKey(scope, 'permits'), queryFn: ({ signal }) => visits.unitPermits(scope.tenantId, scope.unitId, signal) });
+  const rules = useQuery({ queryKey: unitKey(scope, 'rules'), queryFn: ({ signal }) => visits.unitRules(scope.tenantId, scope.unitId, signal) });
   const records = useQuery({ queryKey: unitKey(scope, 'access'), queryFn: ({ signal }) => visits.unitRecords(scope.tenantId, scope.unitId, signal) });
   const refresh = () => { void queries.invalidateQueries({ queryKey: unitKey(scope) }); };
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ACESSOS</span><h1>Acessos da unidade</h1>
       <p>Chegadas que aguardam a sua resposta, convites e entradas registradas em {scope.tenantName}. Convite não substitui a conferência da portaria. Horários em {scope.timeZone}.</p></div>
-      <button className="button button-secondary button-compact" type="button" disabled={arrivals.isFetching || permits.isFetching || records.isFetching} onClick={refresh}>Atualizar</button></div>
+      <button className="button button-secondary button-compact" type="button" disabled={arrivals.isFetching || permits.isFetching || rules.isFetching || records.isFetching} onClick={refresh}>Atualizar</button></div>
     {unavailable(arrivals.error) || unavailable(permits.error) ? <div className="panel"><Empty title="Acessos indisponíveis">Os acessos ainda não estão ativos neste ambiente.</Empty></div> : <>
       <section className="management-section" aria-labelledby="arrivals-title">
         <div className="section-heading"><div><span className="section-index">01 / CHEGADAS</span><h2 id="arrivals-title">Chegadas na portaria</h2></div></div>
@@ -75,8 +76,16 @@ function UnitAccess(scope: Scope) {
             : permits.isError && !permits.data ? <ErrorState error={permits.error} retry={() => void permits.refetch()} />
               : <Permits scope={scope} permits={permits.data?.permits ?? []} truncated={permits.data?.truncated ?? false} />}
       </section>
+      <section className="management-section" aria-labelledby="rules-title">
+        <div className="section-heading"><div><span className="section-index">03 / RECORRENTES</span><h2 id="rules-title">Prestadores recorrentes</h2></div></div>
+        {rules.isPending ? <div className="panel"><Loading label="Consultando prestadores…" /></div>
+          : denied(rules.error) ? <p className="field-help">Prestadores recorrentes não estão disponíveis para o seu vínculo. Peça a um responsável pela unidade.</p>
+            : unavailable(rules.error) ? <p className="field-help">Prestadores recorrentes ainda não estão ativos neste ambiente.</p>
+              : rules.isError && !rules.data ? <ErrorState error={rules.error} retry={() => void rules.refetch()} />
+                : <Rules scope={scope} rules={rules.data?.rules ?? []} truncated={rules.data?.truncated ?? false} />}
+      </section>
       <section className="management-section" aria-labelledby="history-title">
-        <div className="section-heading"><div><span className="section-index">03 / HISTÓRICO</span><h2 id="history-title">Entradas e saídas</h2></div></div>
+        <div className="section-heading"><div><span className="section-index">04 / HISTÓRICO</span><h2 id="history-title">Entradas e saídas</h2></div></div>
         {records.isPending ? <div className="panel"><Loading label="Consultando registros…" /></div>
           : denied(records.error) ? <p className="field-help">O histórico de entradas desta unidade não está disponível para o seu vínculo.</p>
             : records.isError && !records.data ? <ErrorState error={records.error} retry={() => void records.refetch()} />
@@ -242,6 +251,8 @@ function PermitRow({ scope, permit, children }: { scope: Scope; permit: VisitPer
     <div><strong><bdi>{permit.visitorName}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span>
       <span>De {formatWhen(permit.validFrom, scope.timeZone)} até {formatWhen(permit.validUntil, scope.timeZone)}{permit.documentLast4 ? ` · documento final ${permit.documentLast4}` : ''}</span>
       {permit.purpose ? <span><bdi>{permit.purpose}</bdi></span> : null}
+      {permit.ruleId ? <span className="field-help">Janela de prestador recorrente: revogar aqui cancela só este dia.</span>
+        : permit.reservationId ? <span className="field-help">Convidado de reserva: termina com o evento.</span> : null}
       <span className="field-help">{permit.createdByMe ? 'Criado por você' : 'Criado por outra pessoa da unidade'}</span>
       {permit.revokeReason ? <span>Revogado: <bdi>{permit.revokeReason}</bdi></span> : null}</div>
     {children}
@@ -341,6 +352,166 @@ function RevokeForm({ scope, permit, close }: { scope: Scope; permit: VisitPermi
     {action.notice}
     <div className="button-row">
       <button className="button button-danger" type="submit" disabled={normalized === null || action.pending}>{action.pending ? 'Revogando…' : 'Revogar convite'}</button>
+      <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.pending}><Icon name="arrow" />Voltar</button>
+    </div>
+  </form>;
+}
+
+/** Dias da semana ISO (1 = segunda … 7 = domingo), como o servidor guarda. */
+const weekDayNames = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'] as const;
+const shortDay = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'] as const;
+const dayList = (days: number[]) => days.length === 7 ? 'todos os dias' : days.map((day) => weekDayNames[day - 1]).join(', ');
+const formatDay = (day: string) => { const [year, month, date] = day.split('-'); return `${date}/${month}/${year}`; };
+const ruleLabels: Record<VisitRule['state'], [string, string]> = {
+  ACTIVE: ['Ativa', 'status-ready'], REVOKED: ['Revogada', 'status-neutral'], EXPIRED: ['Encerrada', 'status-neutral'],
+};
+/** Dia de hoje (aaaa-mm-dd) no fuso do condomínio. */
+const todayIn = (timeZone: string) => wallTimeInZone(timeZone).slice(0, 10);
+const addDays = (day: string, amount: number) => new Date(Date.parse(`${day}T00:00:00Z`) + amount * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Prestador recorrente (CP-039): diarista, cuidador etc. A regra gera janelas (convites) só nos dias e horários
+ * escolhidos; fora delas não há convite e a portaria segue o procedimento de chegada sem convite.
+ */
+function Rules({ scope, rules, truncated }: { scope: Scope; rules: VisitRule[]; truncated: boolean }) {
+  const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const active = rules.filter((rule) => rule.state === 'ACTIVE');
+  const closed = rules.filter((rule) => rule.state !== 'ACTIVE');
+  const finish = (result: Outcome | null) => { setCreating(false); setRevoking(null); if (result) setOutcome(result); };
+  return <>
+    <div className="button-row">{!creating ? <button className="button button-compact" type="button" onClick={() => { setOutcome(null); setRevoking(null); setCreating(true); }}>Cadastrar prestador</button> : null}</div>
+    {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
+    {creating ? <RuleForm scope={scope} close={finish} /> : null}
+    {active.length === 0 && !creating ? <div className="panel"><Empty title="Nenhum prestador recorrente">Cadastre quem vem em dias fixos: a portaria vê o convite só nos dias e horários da regra.</Empty></div>
+      : <ol className="management-list" aria-label="Prestadores ativos">{active.map((rule) => <RuleRow key={rule.ruleId} scope={scope} rule={rule}>
+        {revoking === rule.ruleId ? <RuleRevokeForm scope={scope} rule={rule} close={finish} />
+          : scope.adult || rule.createdByMe ? <div className="button-row"><button className="button button-secondary button-compact" type="button"
+            onClick={() => { setOutcome(null); setCreating(false); setRevoking(rule.ruleId); }}>Revogar regra</button></div> : null}
+      </RuleRow>)}</ol>}
+    {closed.length > 0 ? <ol className="management-list" aria-label="Prestadores encerrados">{closed.map((rule) => <RuleRow key={rule.ruleId} scope={scope} rule={rule} />)}</ol> : null}
+    {truncated ? <Notice tone="warning">A lista mostra as 100 regras mais recentes.</Notice> : null}
+  </>;
+}
+
+function RuleRow({ scope, rule, children }: { scope: Scope; rule: VisitRule; children?: ReactNode }) {
+  const [label, tone] = ruleLabels[rule.state];
+  return <li className="management-row">
+    <div><strong><bdi>{rule.visitorName}</bdi></strong> <span className={`status-pill ${tone}`}>{label}</span>
+      <span>{dayList(rule.weekDays)}, das {rule.startTime} às {rule.endTime} · de {formatDay(rule.validFrom)} até {formatDay(rule.validUntil)}{rule.documentLast4 ? ` · documento final ${rule.documentLast4}` : ''}</span>
+      {rule.purpose ? <span><bdi>{rule.purpose}</bdi></span> : null}
+      {rule.state === 'ACTIVE' ? <span className="field-help">{rule.nextWindowFrom && rule.nextWindowUntil
+        ? `Próxima janela: ${formatWhen(rule.nextWindowFrom, scope.timeZone)} até ${formatWhen(rule.nextWindowUntil, scope.timeZone)}.`
+        : 'Sem janela nos próximos dias.'}</span> : null}
+      <span className="field-help">{rule.createdByMe ? 'Criada por você' : 'Criada por outra pessoa da unidade'}</span>
+      {rule.revokeReason ? <span>Revogada: <bdi>{rule.revokeReason}</bdi></span> : null}</div>
+    {children}
+  </li>;
+}
+
+function RuleForm({ scope, close }: { scope: Scope; close(result: Outcome | null): void }) {
+  const queries = useQueryClient();
+  const action = useLocalAction();
+  const today = todayIn(scope.timeZone);
+  const [name, setName] = useState('');
+  const [document, setDocument] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [days, setDays] = useState<number[]>([]);
+  const [startTime, setStartTime] = useState('08:00');
+  const [endTime, setEndTime] = useState('17:00');
+  const [validFrom, setValidFrom] = useState(today);
+  const [validUntil, setValidUntil] = useState(() => addDays(today, 30));
+  const intent = useIntent();
+  const [locked, setLocked] = useState(false);
+  const visitor = displayText(name, 160);
+  const documentValue = collapseText(document).toUpperCase();
+  const documentValid = documentValue === '' || /^[0-9A-Z]{2,4}$/.test(documentValue);
+  const purposeValue = collapseText(purpose) ? displayText(purpose, 200) : '';
+  const timeValid = /^\d{2}:\d{2}$/.test(startTime) && /^\d{2}:\d{2}$/.test(endTime) && startTime < endTime;
+  const periodError = !/^\d{4}-\d{2}-\d{2}$/.test(validFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(validUntil) ? 'Informe o período.'
+    : validFrom < today ? 'A regra começa hoje ou depois.'
+      : validFrom > addDays(today, 90) ? 'A regra começa em até 90 dias.'
+        : validUntil < validFrom ? 'O fim precisa ser no início ou depois.'
+          : validUntil > addDays(validFrom, 180) ? 'A regra vale por até 180 dias.' : null;
+  const valid = visitor !== null && [...visitor].length >= 2 && documentValid && purposeValue !== null && days.length > 0 && timeValid && periodError === null;
+  const toggle = (day: number) => setDays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day].sort((a, b) => a - b));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!valid) return;
+    const body: CreateRuleBody = { visitorName: visitor!, documentLast4: documentValue || null, purpose: purposeValue || null, weekDays: days, startTime, endTime, validFrom, validUntil };
+    const key = intent.keyFor(JSON.stringify(body));
+    const { value: result, error } = await action.run(async () => {
+      try { return await visits.createRule(scope.tenantId, scope.unitId, key, body); }
+      catch (failure) { throw repeatFailure(failure); }
+    });
+    await queries.invalidateQueries({ queryKey: unitKey(scope) });
+    if (error !== undefined) { settleFailure(error, locked, intent, setLocked); return; }
+    if (result) {
+      close(result.rule.visitorName === body.visitorName && result.rule.state === 'ACTIVE'
+        ? { tone: result.replayed ? 'info' : 'success', text: `${result.replayed ? 'Esta regra já estava cadastrada' : 'Prestador cadastrado'}: ${result.rule.visitorName}, ${dayList(result.rule.weekDays)}, das ${result.rule.startTime} às ${result.rule.endTime}.` }
+        : { tone: 'warning', text: 'A resposta não confirmou a regra. Atualize e confira a lista.' });
+    }
+  }
+  const busy = action.pending || locked;
+  return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label="Cadastrar prestador recorrente">
+    <label htmlFor="rule-name">Nome do prestador</label>
+    <input id="rule-name" required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
+    <label htmlFor="rule-document">Final do documento (opcional)</label>
+    <input id="rule-document" maxLength={4} value={document} onChange={(event) => setDocument(event.target.value)} disabled={busy} aria-invalid={!documentValid} />
+    <label htmlFor="rule-purpose">Serviço (opcional)</label>
+    <input id="rule-purpose" maxLength={200} value={purpose} onChange={(event) => setPurpose(event.target.value)} disabled={busy} placeholder="Ex.: limpeza" />
+    <fieldset className="weekday-picker" disabled={busy}>
+      <legend>Dias da semana</legend>
+      {shortDay.map((label, index) => <label key={label}><input type="checkbox" checked={days.includes(index + 1)} onChange={() => toggle(index + 1)}
+        aria-label={weekDayNames[index]} />{label}</label>)}
+    </fieldset>
+    <label htmlFor="rule-start">Chega a partir de</label>
+    <input id="rule-start" type="time" required value={startTime} onChange={(event) => setStartTime(event.target.value)} disabled={busy} />
+    <label htmlFor="rule-end">Até</label>
+    <input id="rule-end" type="time" required value={endTime} onChange={(event) => setEndTime(event.target.value)} disabled={busy} />
+    {!timeValid ? <span className="field-help" role="status">O fim precisa ser depois do início, no mesmo dia.</span> : null}
+    <label htmlFor="rule-from">Primeiro dia</label>
+    <input id="rule-from" type="date" required min={today} value={validFrom} onChange={(event) => setValidFrom(event.target.value)} disabled={busy} />
+    <label htmlFor="rule-until">Último dia</label>
+    <input id="rule-until" type="date" required min={validFrom} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} disabled={busy} />
+    {periodError ? <span className="field-help" role="status">{periodError}</span> : null}
+    <span className="field-help">Horários em {scope.timeZone}. Fora dos dias e horários da regra não há convite.</span>
+    {action.notice}
+    {locked ? <Notice tone="warning">O resultado não foi confirmado e os dados ficaram travados. Atualize a lista: se a regra já aparece, não cadastre de novo.
+      <span className="button-row"><button className="button button-secondary button-compact" type="button" disabled={action.pending}
+        onClick={() => { intent.reset(); setLocked(false); action.clear(); }}>Conferi a lista: cadastrar outra regra</button></span></Notice> : null}
+    <div className="button-row">
+      <button className="button" type="submit" disabled={!valid || action.pending}>{action.pending ? 'Cadastrando…' : locked ? 'Tentar confirmar a mesma regra' : 'Cadastrar prestador'}</button>
+      <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.pending}>Voltar</button>
+    </div>
+  </form>;
+}
+
+function RuleRevokeForm({ scope, rule, close }: { scope: Scope; rule: VisitRule; close(result: Outcome | null): void }) {
+  const queries = useQueryClient();
+  const action = useLocalAction();
+  const [read] = useState(rule.version);
+  const [reason, setReason] = useState('');
+  const normalized = displayText(reason, 500);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (normalized === null) return;
+    const { value: result, error } = await action.run(() => visits.revokeRule(scope.tenantId, rule.ruleId, { reason: normalized, expectedVersion: read }));
+    await queries.invalidateQueries({ queryKey: unitKey(scope) });
+    if (result) close(result.ruleId === rule.ruleId && result.state === 'REVOKED'
+      ? { tone: 'success', text: `Regra de ${result.visitorName} revogada. As próximas janelas foram canceladas.` }
+      : { tone: 'warning', text: 'A resposta não confirmou a revogação. Atualize e confira a lista.' });
+    else if (['VISIT_RULE_REVOKED', 'VISIT_RULE_CHANGED', 'VISIT_RULE_NOT_FOUND'].includes(codeOf(error)))
+      close({ tone: 'warning', text: `${errorMessage(error)} Nada foi alterado.` });
+  }
+  return <form className="reason-form" onSubmit={(event) => void submit(event)} aria-label={`Revogar regra de ${rule.visitorName}`}>
+    <Notice tone="warning">Revogar cancela as janelas em vigor e as próximas. Quem chegar depois segue o procedimento de chegada sem convite.</Notice>
+    <label htmlFor={`rule-revoke-${rule.ruleId}`}>Motivo</label>
+    <textarea id={`rule-revoke-${rule.ruleId}`} required maxLength={500} rows={2} value={reason} onChange={(event) => setReason(event.target.value)} disabled={action.pending} />
+    {action.notice}
+    <div className="button-row">
+      <button className="button button-danger" type="submit" disabled={normalized === null || action.pending}>{action.pending ? 'Revogando…' : 'Revogar regra'}</button>
       <button className="button button-secondary" type="button" onClick={() => close(null)} disabled={action.pending}><Icon name="arrow" />Voltar</button>
     </div>
   </form>;

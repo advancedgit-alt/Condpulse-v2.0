@@ -17,6 +17,20 @@ export interface VisitPermit {
   shareLinkActive: boolean;
   /** Reserva do convidado (CP-038); null em convite comum. */
   reservationId: UUID | null;
+  /** Regra de prestador recorrente que gerou esta janela (CP-039); null em convite comum. */
+  ruleId: UUID | null;
+}
+/** Prestador recorrente (CP-039): a regra gera janelas (convites); sozinha não autoriza. */
+export interface VisitRule {
+  ruleId: UUID; unitId: UUID; visitorName: string; documentLast4: string | null; purpose: string | null; weekDays: number[];
+  startTime: string; endTime: string; validFrom: string; validUntil: string; state: 'ACTIVE' | 'REVOKED' | 'EXPIRED'; createdByMe: boolean;
+  revokedAt: ISODateTime | null; revokeReason: string | null; version: number; createdAt: ISODateTime;
+  nextWindowFrom: ISODateTime | null; nextWindowUntil: ISODateTime | null;
+}
+export interface RulePage { rules: VisitRule[]; truncated: boolean }
+export interface CreateRuleBody {
+  visitorName: string; documentLast4: string | null; purpose: string | null; weekDays: number[]; startTime: string; endTime: string;
+  validFrom: string; validUntil: string;
 }
 /** Token devolvido uma única vez; a web o leva no fragmento (/visita#token). */
 export interface PermitLink { token: string; validUntil: ISODateTime }
@@ -64,7 +78,8 @@ export function visitPermit(value: unknown, uncertain = false): VisitPermit {
       || !oneOf(value.state, ['SCHEDULED', 'ACTIVE', 'REVOKED', 'EXPIRED']) || typeof value.createdByMe !== 'boolean'
       || !(value.revokedAt === null || instant(value.revokedAt)) || !optional(value.revokeReason, 500) || !isInteger(value.version)
       || !instant(value.createdAt) || Date.parse(value.validUntil) <= Date.parse(value.validFrom)
-      || typeof value.shareLinkActive !== 'boolean' || !(value.reservationId === null || isUUID(value.reservationId))) throw invalidResponse(uncertain);
+      || typeof value.shareLinkActive !== 'boolean' || !(value.reservationId === null || isUUID(value.reservationId))
+      || !(value.ruleId === null || isUUID(value.ruleId))) throw invalidResponse(uncertain);
   // Revogado somente com motivo e horário, e com a versão já avançada.
   const revoked = value.state === 'REVOKED';
   if (revoked !== (value.revokedAt !== null) || revoked !== (value.revokeReason !== null) || (revoked && value.version < 1)) throw invalidResponse(uncertain);
@@ -72,8 +87,33 @@ export function visitPermit(value: unknown, uncertain = false): VisitPermit {
     visitorName: value.visitorName, documentLast4: value.documentLast4 as string | null, purpose: value.purpose as string | null,
     validFrom: value.validFrom, validUntil: value.validUntil, state: value.state, createdByMe: value.createdByMe,
     revokedAt: value.revokedAt as ISODateTime | null, revokeReason: value.revokeReason as string | null, version: value.version, createdAt: value.createdAt,
-    shareLinkActive: value.shareLinkActive, reservationId: value.reservationId as string | null };
+    shareLinkActive: value.shareLinkActive, reservationId: value.reservationId as string | null,
+    ruleId: value.ruleId as string | null };
 }
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+export function visitRule(value: unknown, uncertain = false): VisitRule {
+  if (!record(value) || !isUUID(value.ruleId) || !isUUID(value.unitId) || !text(value.visitorName, 2, 160) || !document(value.documentLast4)
+      || !optional(value.purpose, 200) || !Array.isArray(value.weekDays) || value.weekDays.length < 1 || value.weekDays.length > 7
+      || value.weekDays.some((day) => !Number.isInteger(day) || day < 1 || day > 7) || new Set(value.weekDays).size !== value.weekDays.length
+      || !isString(value.startTime) || !HHMM.test(value.startTime) || !isString(value.endTime) || !HHMM.test(value.endTime) || value.startTime >= value.endTime
+      || !isString(value.validFrom) || !DAY.test(value.validFrom) || !isString(value.validUntil) || !DAY.test(value.validUntil) || value.validUntil < value.validFrom
+      || !oneOf(value.state, ['ACTIVE', 'REVOKED', 'EXPIRED']) || typeof value.createdByMe !== 'boolean'
+      || !(value.revokedAt === null || instant(value.revokedAt)) || !optional(value.revokeReason, 500) || !isInteger(value.version) || !instant(value.createdAt)
+      || !(value.nextWindowFrom === null || instant(value.nextWindowFrom)) || !(value.nextWindowUntil === null || instant(value.nextWindowUntil))
+      || (value.nextWindowFrom === null) !== (value.nextWindowUntil === null)) throw invalidResponse(uncertain);
+  const revoked = value.state === 'REVOKED';
+  if (revoked !== (value.revokedAt !== null) || revoked !== (value.revokeReason !== null) || (revoked && value.nextWindowFrom !== null)) throw invalidResponse(uncertain);
+  return { ruleId: value.ruleId, unitId: value.unitId, visitorName: value.visitorName, documentLast4: value.documentLast4 as string | null,
+    purpose: value.purpose as string | null, weekDays: value.weekDays as number[], startTime: value.startTime, endTime: value.endTime,
+    validFrom: value.validFrom, validUntil: value.validUntil, state: value.state, createdByMe: value.createdByMe,
+    revokedAt: value.revokedAt as ISODateTime | null, revokeReason: value.revokeReason as string | null, version: value.version,
+    createdAt: value.createdAt, nextWindowFrom: value.nextWindowFrom as ISODateTime | null, nextWindowUntil: value.nextWindowUntil as ISODateTime | null };
+}
+const rulePage = (value: unknown): RulePage => {
+  if (!record(value) || !Array.isArray(value.rules) || typeof value.truncated !== 'boolean') throw invalidResponse();
+  return { rules: value.rules.map((item) => visitRule(item)), truncated: value.truncated };
+};
 export function permitLink(value: unknown): PermitLink {
   if (!record(value) || !isString(value.token) || !/^[A-Za-z0-9_-]{43}$/.test(value.token) || !instant(value.validUntil)
       || Object.keys(value).length !== 2) throw invalidResponse(true);
@@ -158,6 +198,13 @@ export function createVisitsApi(client: CondPulseApi = api) {
       client.call(`${base(tenantId)}/permits/${identifier(permitId)}/link`, permitLink, { method: 'POST' }),
     revokeLink: async (tenantId: string, permitId: string) =>
       client.call(`${base(tenantId)}/permits/${identifier(permitId)}/link/revoke`, (value) => visitPermit(value, true), { method: 'POST' }),
+    unitRules: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      client.call(`${base(tenantId)}/units/${identifier(unitId)}/visit-rules`, rulePage, options(signal)),
+    createRule: async (tenantId: string, unitId: string, key: string, body: CreateRuleBody) =>
+      client.call(`${base(tenantId)}/units/${identifier(unitId)}/visit-rules`,
+        (value, response) => ({ rule: visitRule(value, true), replayed: replayed(response) }), { method: 'POST', body, key }),
+    revokeRule: async (tenantId: string, ruleId: string, body: { reason: string; expectedVersion: number }) =>
+      client.call(`${base(tenantId)}/visit-rules/${identifier(ruleId)}/revoke`, (value) => visitRule(value, true), { method: 'POST', body }),
     reservationGuests: async (tenantId: string, reservationId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/reservations/${identifier(reservationId)}/guests`, permitPage, options(signal)),
     addGuest: async (tenantId: string, reservationId: string, key: string, body: { visitorName: string; documentLast4: string | null }) =>

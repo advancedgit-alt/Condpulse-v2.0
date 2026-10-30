@@ -40,7 +40,7 @@ public class VisitStore {
     p.created_by=platform.current_actor_id() as created_by_me,p.revoked_at,p.revoke_reason,p.version,p.created_at,
     -- Link em vigor só conta com o convite ainda válido; a portaria não vê links (política) e recebe false.
     p.state='ACTIVE' and p.valid_until>clock_timestamp() and exists(select 1 from cp.permit_links l
-     where l.tenant_id=p.tenant_id and l.permit_id=p.id and l.revoked_at is null) as share_link,p.reservation_id
+     where l.tenant_id=p.tenant_id and l.permit_id=p.id and l.revoked_at is null) as share_link,p.reservation_id,p.rule_id
   from cp.visit_permits p
   join cp.visitors v on v.tenant_id=p.tenant_id and v.id=p.visitor_id
   join cp.units u on u.tenant_id=p.tenant_id and u.id=p.unit_id
@@ -50,7 +50,7 @@ public class VisitStore {
   r.getObject("unit_id",UUID.class),r.getString("unit_label"),r.getString("block_name"),r.getString("full_name"),
   r.getString("document_last4"),r.getString("purpose"),instant(r,"valid_from"),instant(r,"valid_until"),r.getString("effective_state"),
   r.getBoolean("created_by_me"),instant(r,"revoked_at"),r.getString("revoke_reason"),r.getLong("version"),instant(r,"created_at"),
-  r.getBoolean("share_link"),r.getObject("reservation_id",UUID.class));
+  r.getBoolean("share_link"),r.getObject("reservation_id",UUID.class),r.getObject("rule_id",UUID.class));
  private static Instant instant(ResultSet r,String column) throws SQLException {
   Timestamp value=r.getTimestamp(column);
   return value==null?null:value.toInstant();
@@ -134,6 +134,56 @@ public class VisitStore {
    insert into cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until,reservation_id)
    values(?,?,?,?,?,?,?,?,?)
    """,id,tenant,visitor,unit,purpose,actor,java.sql.Timestamp.from(from),java.sql.Timestamp.from(until),reservation);
+ }
+
+ // Prestador recorrente (CP-039).
+ private static final String RULE_SELECT="""
+  select r.id,r.unit_id,v.full_name,v.document_last4,r.purpose,r.week_days,to_char(r.starts_local,'HH24:MI') as starts_local,
+    to_char(r.ends_local,'HH24:MI') as ends_local,r.valid_from,r.valid_until,
+    case when r.state='ACTIVE' and r.valid_until<cp.tenant_today(r.tenant_id) then 'EXPIRED' else r.state end as effective_state,
+    r.created_by=platform.current_actor_id() as created_by_me,r.revoked_at,r.revoke_reason,r.version,r.created_at,w.valid_from as next_from,
+    w.valid_until as next_until
+  from cp.visit_rules r
+  join cp.visitors v on v.tenant_id=r.tenant_id and v.id=r.visitor_id
+  left join lateral (select p.valid_from,p.valid_until from cp.visit_permits p where p.tenant_id=r.tenant_id and p.rule_id=r.id
+    and p.state='ACTIVE' and p.valid_until>clock_timestamp() order by p.valid_from limit 1) w on true
+  """;
+ private static final RowMapper<VisitModels.VisitRule> RULE=(r,n)->{
+  Integer[] days=(Integer[])java.util.Arrays.stream((Object[])r.getArray("week_days").getArray()).map(d->((Number)d).intValue()).toArray(Integer[]::new);
+  return new VisitModels.VisitRule(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("full_name"),
+   r.getString("document_last4"),r.getString("purpose"),java.util.List.of(days),r.getString("starts_local"),r.getString("ends_local"),
+   r.getObject("valid_from",java.time.LocalDate.class),r.getObject("valid_until",java.time.LocalDate.class),r.getString("effective_state"),
+   r.getBoolean("created_by_me"),instant(r,"revoked_at"),r.getString("revoke_reason"),r.getLong("version"),instant(r,"created_at"),
+   instant(r,"next_from"),instant(r,"next_until"));
+ };
+ public VisitModels.RulePage unitRules(UUID tenant,UUID unit) {
+  var rows=jdbc.query(RULE_SELECT+" where r.tenant_id=? and r.unit_id=? order by (r.state<>'ACTIVE'),r.valid_until desc,r.id limit ?",RULE,tenant,unit,PAGE+1);
+  return new VisitModels.RulePage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+ }
+ public VisitModels.VisitRule rule(UUID tenant,UUID rule,boolean lock) {
+  var rows=jdbc.query(RULE_SELECT+" where r.tenant_id=? and r.id=?"+(lock?" for no key update of r":""),RULE,tenant,rule);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
+ public void insertRule(UUID id,UUID tenant,UUID unit,UUID visitor,String purpose,java.util.List<Integer> days,String start,String end,
+   java.time.LocalDate from,java.time.LocalDate until,UUID actor) {
+  jdbc.update("""
+   insert into cp.visit_rules(id,tenant_id,unit_id,visitor_id,purpose,week_days,starts_local,ends_local,valid_from,valid_until,created_by)
+   values(?,?,?,?,?,?::smallint[],?::time,?::time,?,?,?)
+   """,id,tenant,unit,visitor,purpose,"{"+String.join(",",days.stream().map(String::valueOf).toList())+"}",start,end,from,until,actor);
+ }
+ public boolean revokeRule(UUID tenant,UUID rule,long expectedVersion,UUID actor,String reason) {
+  return jdbc.update("""
+   update cp.visit_rules set state='REVOKED',revoked_by=?,revoke_reason=?,version=version+1
+   where tenant_id=? and id=? and state='ACTIVE' and version=?
+   """,actor,reason,tenant,rule,expectedVersion)==1;
+ }
+ /** Materializa as janelas das regras visíveis (unidade ou todas), de hoje até o horizonte, no fuso do condomínio. */
+ public int expandRules(UUID tenant,UUID unit,int horizonDays) {
+  Integer created=jdbc.queryForObject("select cp.expand_visit_rules(?,?,?)",Integer.class,tenant,unit,horizonDays);
+  return created==null?0:created;
+ }
+ public java.time.LocalDate today(UUID tenant) {
+  return jdbc.queryForObject("select cp.tenant_today(?)",java.time.LocalDate.class,tenant);
  }
 
  /** Revoga o link em vigor do convite (se houver), em nome de quem pede; o banco grava o horário. */

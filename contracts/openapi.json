@@ -8833,6 +8833,261 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/visit-rules": {
+      "get": {
+        "operationId": "listVisitRules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Regras de prestador recorrente da unidade (CP-039), com a próxima janela. Gera as janelas dos próximos 7 dias antes de listar.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitRulePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createVisitRule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Regra de prestador recorrente: dias da semana, horário local e período de até 180 dias, começando hoje ou depois no fuso do condomínio (até 90 dias à frente). A regra não autoriza sozinha: gera janelas explícitas (convites com ruleId) num horizonte curto, calculadas pelo banco no fuso do condomínio; fora da janela a portaria não tem convite em vigor.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitRuleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Regra criada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VISIT_RULE_DAYS_INVALID, VISIT_RULE_TIME_INVALID, VISIT_RULE_PERIOD_INVALID, VISITOR_NAME_INVALID ou VISITOR_DOCUMENT_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "IDEMPOTENCY_KEY_REUSED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/visit-rules/{ruleId}/revoke": {
+      "post": {
+        "operationId": "revokeVisitRule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "ruleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Revogação pela versão lida, com motivo; as janelas ainda válidas são revogadas na mesma transação, com um evento por janela.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitRuleRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Regra revogada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VISIT_REVOKE_REASON_REQUIRED ou VISIT_VERSION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "VISIT_RULE_NOT_FOUND"
+          },
+          "409": {
+            "description": "VISIT_RULE_REVOKED ou VISIT_RULE_CHANGED"
+          },
+          "503": {
+            "description": "VISIT_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11613,7 +11868,8 @@
           "version",
           "createdAt",
           "shareLinkActive",
-          "reservationId"
+          "reservationId",
+          "ruleId"
         ],
         "description": "Convite (visita prevista) da unidade: autorização temporal, não prova de identidade nem de entrada.",
         "properties": {
@@ -11708,6 +11964,14 @@
             ],
             "format": "uuid",
             "description": "Reserva do convidado (CP-038); null em convite comum."
+          },
+          "ruleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Regra de prestador recorrente que gerou esta janela (CP-039); null em convite comum."
           }
         }
       },
@@ -13883,6 +14147,227 @@
               "null"
             ],
             "pattern": "^[0-9A-Za-z]{2,4}$"
+          }
+        }
+      },
+      "VisitRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ruleId",
+          "unitId",
+          "visitorName",
+          "documentLast4",
+          "purpose",
+          "weekDays",
+          "startTime",
+          "endTime",
+          "validFrom",
+          "validUntil",
+          "state",
+          "createdByMe",
+          "revokedAt",
+          "revokeReason",
+          "version",
+          "createdAt",
+          "nextWindowFrom",
+          "nextWindowUntil"
+        ],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "visitorName": {
+            "type": "string"
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "weekDays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "description": "Dias ISO (1 = segunda ... 7 = domingo)."
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED",
+              "EXPIRED"
+            ]
+          },
+          "createdByMe": {
+            "type": "boolean"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokeReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextWindowFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "nextWindowUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "VisitRulePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rules",
+          "truncated"
+        ],
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitRule"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "VisitRuleCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "visitorName",
+          "weekDays",
+          "startTime",
+          "endTime",
+          "validFrom",
+          "validUntil"
+        ],
+        "properties": {
+          "visitorName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "weekDays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "description": "Dias ISO (1 = segunda ... 7 = domingo)."
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "VisitRuleRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

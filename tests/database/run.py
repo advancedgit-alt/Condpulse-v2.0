@@ -1836,6 +1836,112 @@ def reservation_guest_checks():
     expect(removed.returncode == 0 and cancelled.returncode == 0, "remocao de convidado e cancelamento da reserva sem deadlock")
     expect(value(f"select state||':'||revoked_by from cp.visit_permits where id='{g12}'") == f"REVOKED:{AA}", "convidado removido antes do cancelamento continua revogado")
 
+def visit_rule_checks():
+    """V022: regra de prestador gera janelas explicitas no fuso do condominio; fora da janela nao ha convite; revogar derruba janelas."""
+    CONR, DEPR, RESR, UR = ("10000000-0000-4000-8000-0000000000b1", "10000000-0000-4000-8000-0000000000b2",
+                            "10000000-0000-4000-8000-0000000000b3", "20000000-0000-4000-8000-0000000000b4")
+    VR1, VR2, VR3 = ("76000000-0000-4000-8000-0000000000b1", "76000000-0000-4000-8000-0000000000b2", "76000000-0000-4000-8000-0000000000b3")
+    R1, R2, R3 = ("77000000-0000-4000-8000-0000000000b1", "77000000-0000-4000-8000-0000000000b2", "77000000-0000-4000-8000-0000000000b3")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{CONR}','ACTIVE'),('{DEPR}','ACTIVE'),('{RESR}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UR}','{TA}','FICTICIA REGRAS');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions)
+          VALUES('{TA}','{CONR}',NULL,'PORTARIA REGRAS','CONCIERGE','ACTIVE','{{}}'),
+                ('{TA}','{DEPR}','{UA}','DEPENDENTE REGRAS','DEPENDENT','ACTIVE','{{}}'),
+                ('{TA}','{RESR}','{UR}','MORADOR REGRAS','RESIDENT','ACTIVE','{{}}');
+    """)
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    today = "cp.tenant_today('" + TA + "')"
+    def rule(identifier, visitor_id, days="ARRAY[1,2,3,4,5,6,7]::smallint[]", start="'00:00'", end="'23:59'", vfrom=today, vuntil=None, actor=AA, unit=UA):
+        vuntil = vuntil or f"{today}+30"
+        return (f"INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{visitor_id}','{TA}','PRESTADOR FICTICIO','{actor}'); "
+                f"INSERT INTO cp.visit_rules(id,tenant_id,unit_id,visitor_id,purpose,week_days,starts_local,ends_local,valid_from,valid_until,created_by) "
+                f"VALUES('{identifier}','{TA}','{unit}','{visitor_id}','LIMPEZA',{days},{start},{end},{vfrom},{vuntil},'{actor}')")
+    query(rule(R1, VR1), tenant=TA, role="cp_api")
+    expect(value(f"select state||':'||version from cp.visit_rules where id='{R1}'") == "ACTIVE:0", "morador cria regra de prestador")
+    expect(error(rule(R2, VR2, vfrom=f"{today}-1"), "23514", tenant=TA, role="cp_api"), "regra nao comeca no passado")
+    expect(error(rule(R2, VR2, vuntil=f"{today}+181"), "23514", tenant=TA, role="cp_api"), "regra dura ate 180 dias")
+    expect(error(rule(R2, VR2, days="ARRAY[1,1]::smallint[]"), "23514", tenant=TA, role="cp_api"), "dias sem repeticao")
+    expect(error(rule(R2, VR2, days="ARRAY[8]::smallint[]"), "23514", tenant=TA, role="cp_api"), "dias de 1 a 7")
+    expect(error(rule(R2, VR2, start="'10:00'", end="'09:00'"), "23514", tenant=TA, role="cp_api"), "fim depois do inicio")
+    expect(error(rule(R2, VR2, actor=DEPR), "42501", tenant=TA, actor=DEPR, role="cp_api"), "dependente sem permissao nao cria regra")
+    expect(error(rule(R2, VR2, unit=UR), "42501", tenant=TA, role="cp_api"), "morador nao cria regra para outra unidade")
+    expect(value(f"select count(*) from cp.visit_rules where id='{R1}'", tenant=TA, actor=RESR, role="cp_api") == "0", "outra unidade nao ve a regra")
+    # A regra sozinha nao autoriza: sem janela materializada nao ha convite.
+    expect(value(f"select count(*) from cp.visit_permits where rule_id='{R1}'") == "0", "regra nao e convite")
+    expect(value(f"select cp.expand_visit_rules('{TA}','{UA}',2)", tenant=TA, role="cp_api") == "3", "morador materializa hoje e os 2 proximos dias")
+    expect(value(f"select cp.expand_visit_rules('{TA}','{UA}',2)", tenant=TA, role="cp_api") == "0", "expansao e idempotente")
+    expect(value(f"select string_agg(((valid_from at time zone 'America/Sao_Paulo')::time)::text||'-'||((valid_until at time zone 'America/Sao_Paulo')::time)::text,',') "
+                 f"from cp.visit_permits where rule_id='{R1}' and window_date={today}") == "00:00:00-23:59:00",
+           "janela no horario local do condominio")
+    expect(value(concierge + f"select cp.expand_visit_rules('{TA}',NULL,3)", tenant=TA, actor=CONR, role="cp_api") == "1",
+           "portaria materializa o dia seguinte do horizonte")
+    expect(value(f"select count(distinct created_by)||':'||min(created_by::text) from cp.visit_permits where rule_id='{R1}'") == f"1:{AA}",
+           "janela fica em nome de quem criou a regra")
+    expect(value(f"select count(*) from cp.visit_permits where id in (select id from cp.visit_permits where rule_id='{R1}')", tenant=TA, actor=RESR, role="cp_api") == "0",
+           "outra unidade nao ve janelas")
+    # Janela forjada (horario diferente da regra) nao entra, nem pela portaria.
+    forged = (f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until,rule_id,window_date) "
+              f"VALUES(gen_random_uuid(),'{TA}','{VR1}','{UA}','LIMPEZA','{AA}',clock_timestamp(),clock_timestamp()+interval '30 days','{R1}',{today}+20)")
+    expect(error(concierge + forged, "42501", tenant=TA, actor=CONR, role="cp_api"), "janela fora do horario da regra e recusada")
+    # Regra so em dias que nao sao hoje: nada para hoje.
+    query(rule(R3, VR3, days=f"ARRAY[((extract(isodow from {today})::int % 7)+1)]::smallint[]", vuntil=f"{today}+1"), tenant=TA, role="cp_api")
+    query(f"select cp.expand_visit_rules('{TA}','{UA}',1)", tenant=TA, role="cp_api")
+    expect(value(f"select count(*)||':'||coalesce(min(window_date-{today}),-1) from cp.visit_permits where rule_id='{R3}'") == "1:1",
+           "dia fora da regra nao gera janela")
+    expect(error(f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,purpose,created_by,valid_from,valid_until) "
+                 f"VALUES(gen_random_uuid(),'{TA}','{VR1}','{UA}','X','{AA}',clock_timestamp(),clock_timestamp()+interval '1 hour')", "23514", tenant=TA, role="cp_api"),
+           "pessoa da regra nao vira convite comum")
+    # Revogacao individual de janela (trava do convite e depois a linha) concorrente com a revogacao da regra: sem deadlock.
+    w3 = value(f"select id from cp.visit_permits where rule_id='{R3}' and state='ACTIVE' order by id limit 1")
+    one = (f"SELECT cp.lock_permit_access('{TA}','{w3}'); SELECT pg_sleep(2); "
+           f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{AA}',revoke_reason='Hoje nao',version=version+1 WHERE id='{w3}' AND state='ACTIVE'")
+    whole = f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{AA}',revoke_reason='Encerrado',version=version+1 WHERE id='{R3}'"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        single = pool.submit(query, one, tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        bulk = pool.submit(query, whole, tenant=TA, role="cp_api", check=False)
+        single, bulk = single.result(), bulk.result()
+    expect(single.returncode == 0 and bulk.returncode == 0, "revogacao de janela e da regra concorrentes sem deadlock")
+    expect(value(f"select count(*) from cp.visit_permits where rule_id='{R3}' and state='ACTIVE'") == "0", "nenhuma janela ativa depois das duas revogacoes")
+    # Expansao e revogacao da mesma regra se serializam: nenhuma janela ativa sobra numa regra revogada.
+    R4, VR4 = "77000000-0000-4000-8000-0000000000b4", "76000000-0000-4000-8000-0000000000b4"
+    query(rule(R4, VR4), tenant=TA, role="cp_api")
+    whole4 = f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{AA}',revoke_reason='Encerrado',version=version+1 WHERE id='{R4}'"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        expanding = pool.submit(query, f"SELECT cp.expand_visit_rules('{TA}','{UA}',2); SELECT pg_sleep(2)", tenant=TA, role="cp_api", check=False)
+        time.sleep(0.7)
+        revoking = pool.submit(query, whole4, tenant=TA, role="cp_api", check=False)
+        expanded, revoked4 = expanding.result(), revoking.result()
+    expect(expanded.returncode == 0 and revoked4.returncode == 0, "expansao e revogacao concorrentes terminam")
+    expect(value(f"select count(*) filter(where state='ACTIVE')||':'||count(*) from cp.visit_permits where rule_id='{R4}'") == "0:3",
+           "janelas geradas durante a revogacao sao revogadas junto")
+    # Eventos de regra referem-se a regra visivel; id inexistente e recusado.
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','VISIT_RULE_CREATED',gen_random_uuid(),0,'{{}}')",
+                 "42501", tenant=TA, role="cp_api"), "evento de regra sem regra e recusado")
+    query(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','VISIT_RULE_CREATED','{R4}',0,'{{}}')",
+          tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_RULE_CREATED' and aggregate_id='{R4}'") == "1", "evento de regra existente e aceito")
+    # Outro adulto da unidade ve a pessoa da regra ainda sem janela (comeca alem do horizonte).
+    ADR, R5, VR5 = "10000000-0000-4000-8000-0000000000b5", "77000000-0000-4000-8000-0000000000b5", "76000000-0000-4000-8000-0000000000b5"
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{ADR}','ACTIVE'); "
+          f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status,permissions) VALUES('{TA}','{ADR}','{UA}','ADULTO REGRAS','RESIDENT','ACTIVE','{{}}')")
+    query(rule(R5, VR5, vfrom=f"{today}+30", vuntil=f"{today}+40"), tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.visit_rules r join cp.visitors v on v.tenant_id=r.tenant_id and v.id=r.visitor_id where r.id='{R5}'",
+                 tenant=TA, actor=ADR, role="cp_api") == "1", "outro adulto ve a regra e a pessoa antes da primeira janela")
+    # Revogar a regra derruba as janelas validas na mesma transacao, com evento.
+    def revoke(identifier, actor=AA):
+        return (f"UPDATE cp.visit_rules SET state='REVOKED',revoked_by='{actor}',revoke_reason='Contrato encerrado',version=version+1 WHERE id='{identifier}'")
+    expect(value(f"WITH u AS ({revoke(R1, actor=RESR)} RETURNING 1) SELECT count(*) FROM u", tenant=TA, actor=RESR, role="cp_api") == "0", "outra unidade nao revoga")
+    query(revoke(R1), tenant=TA, role="cp_api")
+    expect(value(f"select count(*) filter(where state='ACTIVE')||':'||count(*) filter(where revoke_reason='Regra de prestador revogada') "
+                 f"from cp.visit_permits where rule_id='{R1}'") == "0:4", "revogar a regra revoga as janelas")
+    expect(value(f"select count(*) from cp.outbox where event_type='VISIT_PERMIT_REVOKED' and payload->>'ruleId'='{R1}'") == "4", "um evento por janela revogada")
+    expect(value(f"select cp.expand_visit_rules('{TA}','{UA}',3)", tenant=TA, role="cp_api") == "0", "regra revogada nao gera janela nova")
+    expect(error(f"UPDATE cp.visit_rules SET state='ACTIVE',revoked_by=NULL,revoked_at=NULL,revoke_reason=NULL,version=version+1 WHERE id='{R1}'", "42501", tenant=TA, role="cp_api"),
+           "regra revogada nao volta")
+    expect(error(f"DELETE FROM cp.visit_rules WHERE id='{R3}'", "42501", tenant=TA, role="cp_api"), "aplicacao nao apaga regra")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -1946,6 +2052,7 @@ def main():
     attachment_checks()
     permit_link_checks()
     reservation_guest_checks()
+    visit_rule_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
