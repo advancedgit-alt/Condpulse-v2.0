@@ -8,7 +8,6 @@ import br.com.condpulse.accessintegration.application.AccessModels;
 import br.com.condpulse.accesscredentials.infrastructure.CredentialSyncStore;
 import br.com.condpulse.accesscredentials.infrastructure.DeviceEventStore;
 import br.com.condpulse.notifications.application.WorkerTransactions;
-import br.com.condpulse.shared.infrastructure.SqlStates;
 import org.springframework.dao.DataAccessException;
 
 /**
@@ -105,10 +104,10 @@ public class DeviceEventIngestor {
 
  enum Stored { STORED, QUARANTINED, DUPLICATE, CONFIRMED, FAILED }
  private Stored store(UUID tenant,UUID connector,AccessModels.Event event) {
-  record Mapped(UUID device,UUID credential,String reason,boolean fresh) {}
-  Mapped mapped;
+  // Evento e confirmação na mesma transação: falha em qualquer um desfaz os dois e a passada para sem avançar a posição,
+  // então a repetição grava o evento de novo e tenta a confirmação de novo.
   try {
-   mapped=transactions.inTenant(tenant,()->{
+   return transactions.inTenant(tenant,()->{
     UUID device=events.device(tenant,connector,event.deviceExternalId());
     UUID credential=events.credential(tenant,connector,event.credentialExternalId());
     String evidence=event.evidence();
@@ -118,29 +117,22 @@ public class DeviceEventIngestor {
     boolean fresh=events.insert(tenant,connector,event.eventId(),device,reason==null?credential:null,event.kind().name(),
      event.direction()==null?null:event.direction().name(),reason==null?evidence:null,reason==null?event.appliedVersion():null,
      event.occurredAt(),event.receivedAt(),reason);
-    return new Mapped(device,credential,reason,fresh);
+    if(!fresh) return Stored.DUPLICATE;
+    if(reason!=null) return Stored.QUARANTINED;
+    boolean confirmation=(event.kind()==AccessModels.EventKind.CREDENTIAL_APPLIED || event.kind()==AccessModels.EventKind.CREDENTIAL_REVOKED)
+     && event.appliedVersion()!=null && credential!=null;
+    if(!confirmation) return Stored.STORED;
+    String action=event.kind()==AccessModels.EventKind.CREDENTIAL_REVOKED?"REVOKE":"APPLY";
+    // Versão ou ação que não é mais a desejada: o evento fica no histórico, mas não confirma nada.
+    if(!(event.appliedVersion()+":"+action).equals(syncs.desired(tenant,credential))) return Stored.STORED;
+    syncs.record(tenant,credential,device,event.appliedVersion(),action,"APPLIED","DEVICE_EVENT",CredentialReconciler.REJECTED_DELAY);
+    return Stored.CONFIRMED;
    });
   } catch(DataAccessException failure) {
-   // Falha de gravação não é repetição: a passada para aqui sem avançar a posição.
+   // Falha de gravação (inclusive revogação concorrente entre a conferência e a confirmação) não é repetição: a passada
+   // para aqui sem avançar a posição e a próxima repete o evento inteiro.
    LOG.log(System.Logger.Level.WARNING,"Evento não gravado: {0}",failure.getClass().getSimpleName());
    return Stored.FAILED;
-  }
-  if(!mapped.fresh()) return Stored.DUPLICATE;
-  if(mapped.reason()!=null) return Stored.QUARANTINED;
-  boolean confirmation=(event.kind()==AccessModels.EventKind.CREDENTIAL_APPLIED || event.kind()==AccessModels.EventKind.CREDENTIAL_REVOKED)
-   && event.appliedVersion()!=null && mapped.credential()!=null;
-  if(!confirmation) return Stored.STORED;
-  String action=event.kind()==AccessModels.EventKind.CREDENTIAL_REVOKED?"REVOKE":"APPLY";
-  try {
-   transactions.inTenant(tenant,()->{
-    syncs.record(tenant,mapped.credential(),mapped.device(),event.appliedVersion(),action,"APPLIED","DEVICE_EVENT",CredentialReconciler.REJECTED_DELAY);
-    return null;
-   });
-   return Stored.CONFIRMED;
-  } catch(DataAccessException failure) {
-   // Versão ou ação que não é mais a desejada: o evento fica no histórico, mas não confirma nada.
-   if(!"23514".equals(SqlStates.of(failure))) LOG.log(System.Logger.Level.WARNING,"Confirmação por evento adiada: {0}",failure.getClass().getSimpleName());
-   return Stored.STORED;
   }
  }
 }

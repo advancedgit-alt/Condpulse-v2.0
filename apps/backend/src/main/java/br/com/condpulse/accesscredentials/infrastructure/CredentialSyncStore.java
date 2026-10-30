@@ -63,6 +63,12 @@ public class CredentialSyncStore {
   return works.values().stream().map(w->new Work(w.credentialId(),w.externalRef(),w.desiredState(),w.desiredVersion(),w.validUntil(),
    targets.get(w.credentialId()))).toList();
  }
+ /** Versão e ação desejadas atuais da credencial ("1:APPLY"), ou null. */
+ public String desired(UUID tenant,UUID credential) {
+  var rows=jdbc.query("select desired_version||':'||cp.credential_action(desired_state) as desired from cp.access_credentials where tenant_id=? and id=?",
+   (r,n)->r.getString("desired"),tenant,credential);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
  /** Grava o resultado de um comando ou consulta; {@code delaySeconds} até a próxima tentativa (relógio do banco). */
  public void record(UUID tenant,UUID credential,UUID device,long version,String action,String outcome,String reason,long delaySeconds) {
   jdbc.update("""
