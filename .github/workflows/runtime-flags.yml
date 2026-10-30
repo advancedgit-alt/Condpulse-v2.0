@@ -1,0 +1,53 @@
+name: CondPulse runtime flags (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: inspect consulta; apply liga os módulos aprovados e gera chaves próprias ausentes
+        type: choice
+        options: [inspect, apply]
+        default: inspect
+        required: true
+      expected_commit:
+        description: SHA completo revisado da branch principal (40 hex)
+        type: string
+        required: true
+      flags_ack:
+        description: Somente apply; ACK completo obtido na inspeção
+        type: string
+        required: false
+      maintenance_confirmed:
+        description: Alteração aprovada pelo responsável
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: condpulse-runtime-flags
+  cancel-in-progress: false
+jobs:
+  runtime-flags:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'advancedgit-alt/Condpulse-v2.0' && github.ref == 'refs/heads/ccr-5e725112-3x8hyg'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: condpulse-database-operations
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.0"
+      - name: Verify helper without credentials
+        run: node --test tests/runtime-flags.test.mjs
+      - name: Inspect or apply flags (values of secrets never printed)
+        env:
+          CP_VERCEL_TOKEN: ${{ secrets.CP_VERCEL_TOKEN }}
+          CP_FLAGS_OPERATION: ${{ inputs.operation }}
+          CP_FLAGS_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CP_FLAGS_ACK: ${{ inputs.flags_ack }}
+          MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}
+        run: node infra/scripts/runtime-flags/apply.mjs
