@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mesmo conjunto de flags da Vercel Production desde 29/10/2026, mais credenciais de acesso (V026) (recuperação por e-mail e worker
+# Flags da Vercel Production desde 29/10/2026, mais credenciais de acesso (V026, a ligar na Vercel) (recuperação por e-mail e worker
 # continuam desligados). Somente o PostgreSQL descartável do CI; chaves BFF sintéticas geradas
 # nesta execução, nunca gravadas nem impressas. Prova que a API sobe com todos os módulos juntos,
 # que o BFF responde ao CSRF e que as rotas dos módulos continuam exigindo sessão.
