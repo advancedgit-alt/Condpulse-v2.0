@@ -142,7 +142,7 @@ public class CredentialStore {
     count(*) filter (where c.desired_state='ACTIVE' and coalesce(s.outcome,'')<>'REJECTED') as apply,
     count(*) filter (where c.desired_state='REVOKED' and coalesce(s.outcome,'')<>'REJECTED') as revoke,
     count(*) filter (where s.outcome='REJECTED') as rejected,
-    min(c.revoked_at) filter (where c.desired_state='REVOKED' and coalesce(s.outcome,'')<>'REJECTED') as oldest
+    min(c.revoked_at) filter (where c.desired_state='REVOKED') as oldest
    from cp.access_devices d
    join cp.access_credentials c on c.tenant_id=d.tenant_id and c.connector_id=d.connector_id
    left join cp.credential_syncs s on s.tenant_id=c.tenant_id and s.credential_id=c.id and s.device_id=d.id
@@ -159,8 +159,7 @@ public class CredentialStore {
     k.status as connector_status,ch.reachable,ch.checked_at,ch.failure_reason,
     h.observed_at is not null and h.observed_at>clock_timestamp()-make_interval(secs=>?) as fresh,
     ch.checked_at is not null and ch.checked_at>clock_timestamp()-make_interval(secs=>?) as connector_fresh,
-    -- Sinal envelhece pelo relógio atual do banco, mesmo sem nova consulta.
-    h.last_heartbeat is not null and h.last_heartbeat<clock_timestamp()-make_interval(secs=>?) as heartbeat_old
+    h.last_heartbeat is not null and h.last_heartbeat<h.observed_at-make_interval(secs=>?) as heartbeat_old
    from cp.access_devices d
    join cp.access_connectors k on k.tenant_id=d.tenant_id and k.id=d.connector_id
    left join cp.access_device_health h on h.tenant_id=d.tenant_id and h.device_id=d.id
