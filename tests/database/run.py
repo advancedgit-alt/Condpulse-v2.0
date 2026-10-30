@@ -1,5 +1,7 @@
 """Testes de integridade CondPulse, exclusivamente em PostgreSQL descartável."""
 import concurrent.futures
+import hashlib
+import hmac
 import time
 import os
 from pathlib import Path
@@ -2261,18 +2263,22 @@ def delegation_checks():
           VALUES('{Q1}','{TA}','{UD}',1,'CAIXA 1','A1','{CD}'),('{Q2}','{TA}','{UD}',1,'CAIXA 2','A2','{CD}'),
                 ('{Q3}','{TA}','{UD}',1,'CAIXA 3','A3','{CD}'),('{Q4}','{TA}','{UO}',1,'CAIXA 4','A4','{CD}');
     """)
-    salt = "0123456789abcdef0123456789abcdef"
-    def code_hash(code):
-        return f"encode(sha256(convert_to('{salt}:{code}','UTF8')),'hex')"
+    # O codigo e protegido por HMAC com segredo do servidor (fora do banco): o banco so compara o autenticador.
+    secret = bytes(range(32))
+    def mac(did, code):
+        return hmac.new(secret, f"{did}:{code}".encode(), hashlib.sha256).hexdigest()
     counter = [0]
     def delegate(parcel, unit=UD, code="12345678", until="clock_timestamp()+interval '2 days'", name="TERCEIRO FICTICIO"):
         counter[0] += 1
         did = f"41000000-0000-4000-8000-{counter[0]:012d}"
-        return did, (f"INSERT INTO cp.parcel_delegations(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hash,code_salt,valid_until,created_by) "
-                     f"VALUES('{did}','{TA}','{parcel}','{unit}','{name}','9Z',{code_hash(code)},'{salt}',{until},platform.current_actor_id())")
+        return did, (f"INSERT INTO cp.parcel_delegations(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hmac,valid_until,created_by) "
+                     f"VALUES('{did}','{TA}','{parcel}','{unit}','{name}','9Z','{mac(did, code)}',{until},platform.current_actor_id())")
     concierge = "SET LOCAL app.capabilities='concierge.operate'; "
-    def check(parcel, code):
-        return value(concierge + f"SELECT cp.parcel_delegation_check('{TA}','{parcel}','{code}')", tenant=TA, actor=CD, role="cp_api")
+    def check(parcel, code, did=None, candidate=None):
+        did = did or value(f"select coalesce(max(id::text),'41000000-0000-4000-8000-ffffffffffff') from cp.parcel_delegations "
+                           f"where parcel_id='{parcel}' and state='ACTIVE'")
+        candidate = candidate if candidate is not None else mac(did, code)
+        return value(concierge + f"SELECT cp.parcel_delegation_check('{TA}','{parcel}','{did}','{candidate}')", tenant=TA, actor=CD, role="cp_api")
     def state(did):
         return value(f"select state||':'||attempts from cp.parcel_delegations where id='{did}'")
 
@@ -2293,13 +2299,20 @@ def delegation_checks():
            "outra unidade nao ve a delegacao")
     expect(value(f"select count(*) from cp.parcel_delegations where id='{d1}'", tenant=TA, actor=DD, role="cp_api") == "1",
            "quem ve as encomendas da unidade acompanha a delegacao")
-    expect(error(f"SELECT cp.parcel_delegation_check('{TA}','{Q1}','12345678')", "42501", tenant=TA, actor=RD, role="cp_api"),
+    expect(error(f"SELECT cp.parcel_delegation_check('{TA}','{Q1}','{d1}','{mac(d1, '12345678')}')", "42501", tenant=TA, actor=RD, role="cp_api"),
            "somente a portaria confere o codigo")
+    expect(value("select count(*) from information_schema.columns where table_schema='cp' and table_name='parcel_delegations' "
+                 "and column_name in ('code_salt','code_hash')") == "0", "banco nao guarda sal nem hash simples do codigo")
+    plain = value("select encode(sha256(convert_to('12345678','UTF8')),'hex')")
+    expect(check(Q1, "12345678", candidate=plain) == "WRONG" and state(d1) == "ACTIVE:1",
+           "sem o segredo do servidor o codigo nao confere (tentativa contada)")
+    expect(check(Q1, "12345678", did="41000000-0000-4000-8000-ffffffffffff") == "CHANGED" and state(d1) == "ACTIVE:1",
+           "autenticador de outra delegacao nao conta tentativa nem confere")
     # Codigo da encomenda Q1 nao vale para outra encomenda (sem delegacao em Q2).
     expect(check(Q2, "12345678") == "NONE", "delegacao de outra encomenda nao e aceita")
-    expect(check(Q1, "00000000") == "WRONG" and state(d1) == "ACTIVE:1", "codigo errado conta tentativa")
-    expect(check(Q1, "abc") == "WRONG" and state(d1) == "ACTIVE:2", "formato invalido tambem conta tentativa")
-    expect(check(Q1, "12345678") == "OK" and state(d1) == "USED:2", "codigo certo usa a delegacao")
+    expect(check(Q1, "00000000") == "WRONG" and state(d1) == "ACTIVE:2", "codigo errado conta tentativa")
+    expect(check(Q1, "abc", candidate="abc") == "WRONG" and state(d1) == "ACTIVE:3", "formato invalido tambem conta tentativa")
+    expect(check(Q1, "12345678") == "OK" and state(d1) == "USED:3", "codigo certo usa a delegacao")
     expect(value(f"select used_by from cp.parcel_delegations where id='{d1}'") == CD, "uso em nome da portaria")
     expect(check(Q1, "12345678") == "NONE", "codigo usado nao volta a valer")
     # Retirada por delegacao: registro em nome da portaria com o nome da pessoa autorizada.
@@ -2344,7 +2357,7 @@ def delegation_checks():
     _, sql = delegate(Q3)
     expect(error(sql, "42501", tenant=TA, actor=RD, role="cp_api"), "encomenda retirada nao recebe delegacao")
     expect(value("select has_table_privilege('cp_api','cp.parcel_delegations','DELETE')::text") == "false", "aplicacao nao apaga delegacoes")
-    expect(value("select has_column_privilege('cp_api','cp.parcel_delegations','code_hash','UPDATE')::text") == "false",
+    expect(value("select has_column_privilege('cp_api','cp.parcel_delegations','code_hmac','UPDATE')::text") == "false",
            "aplicacao nao troca o codigo de uma delegacao")
 
 def main():

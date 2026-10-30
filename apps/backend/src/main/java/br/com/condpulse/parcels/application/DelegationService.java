@@ -3,7 +3,6 @@ package br.com.condpulse.parcels.application;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.UUID;
 import java.util.function.Function;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -23,7 +22,8 @@ import org.springframework.transaction.TransactionException;
 
 /**
  * Retirada delegada com código (CP-041). Quem pode retirar pela unidade autoriza um terceiro para uma encomenda; o
- * código de 8 dígitos aparece só na resposta da criação e o banco guarda apenas o hash com sal. A portaria confere o
+ * código de 8 dígitos aparece só na resposta da criação e o banco guarda apenas o HMAC com segredo do servidor
+ * ({@link DelegationCodeKey}). A portaria confere o
  * código da própria encomenda (até 5 tentativas; a tentativa errada fica gravada mesmo quando a resposta é recusa) e
  * registra a retirada em nome do terceiro, conferindo o documento.
  */
@@ -37,8 +37,10 @@ public class DelegationService {
  private final DelegationStore store;
  private final ParcelStore parcels;
  private final AuditRecorder audit;
- public DelegationService(TenantTransactionExecutor transactions,DelegationStore store,ParcelStore parcels,AuditRecorder audit) {
-  this.transactions=transactions; this.store=store; this.parcels=parcels; this.audit=audit;
+ private final DelegationCodeKey codeKey;
+ public DelegationService(TenantTransactionExecutor transactions,DelegationStore store,ParcelStore parcels,AuditRecorder audit,
+   DelegationCodeKey codeKey) {
+  this.transactions=transactions; this.store=store; this.parcels=parcels; this.audit=audit; this.codeKey=codeKey;
  }
 
  /** Resumo da delegação mais recente da encomenda (unidade que vê as encomendas ou portaria); nunca o código. */
@@ -62,31 +64,30 @@ public class DelegationService {
    :DisplayText.collapse(request.documentLast4()).toUpperCase(java.util.Locale.ROOT);
   if(document!=null && !document.matches("[0-9A-Z]{2,4}"))
    throw invalid("DELEGATION_DOCUMENT_INVALID","Informe só os 2 a 4 últimos caracteres do documento.");
+  requireCodeKey();
   String route="/v1/tenants/"+tenant+"/parcels/"+parcelId+"/delegation";
   return execute(actor,tenant,AssuranceLevel.AAL1,context->{
    var parcel=parcels.parcel(tenant,parcelId,false);
    if(parcel==null || !ParcelService.residentOf(context,parcel.unitId()) || "VOIDED".equals(parcel.status())) throw parcelNotFound();
-   Instant now=store.now();
-   Instant until=request.validUntil()==null?now.plus(DEFAULT_VALIDITY):request.validUntil();
-   if(until.isBefore(now.plus(MINIMUM_VALIDITY)) || until.isAfter(now.plus(MAXIMUM_VALIDITY)))
-    throw invalid("DELEGATION_VALIDITY_INVALID","A autorização vale de 15 minutos a 7 dias.");
    String hash=ParcelRequestHash.delegate(parcelId,name,String.valueOf(document),request.validUntil()==null?null:request.validUntil());
+   // A repetição devolve a autorização já criada antes de conferir o prazo contra o relógio atual.
    var previous=store.begin(tenant,actor,route,key,hash);
    if(!previous.fresh()) {
     var replay=store.delegation(tenant,previous.resource());
     if(replay==null) throw parcelNotFound();
     return new DelegationModels.Issued(replay,null,true,previous.responseStatus());
    }
+   Instant now=store.now();
+   Instant until=request.validUntil()==null?now.plus(DEFAULT_VALIDITY):request.validUntil();
+   if(until.isBefore(now.plus(MINIMUM_VALIDITY)) || until.isAfter(now.plus(MAXIMUM_VALIDITY)))
+    throw invalid("DELEGATION_VALIDITY_INVALID","A autorização vale de 15 minutos a 7 dias.");
    if("DELIVERED".equals(parcel.status())) throw new BusinessProblem("PARCEL_ALREADY_DELIVERED",409,"Esta encomenda já foi retirada.");
    store.lockParcel(tenant,parcelId);
    // Nova autorização substitui a anterior: o código antigo deixa de valer na mesma transação.
    store.closeActive(tenant,parcelId);
    String code=String.format("%08d",RANDOM.nextInt(100_000_000));
-   byte[] saltBytes=new byte[16]; RANDOM.nextBytes(saltBytes);
-   String salt=HexFormat.of().formatHex(saltBytes);
-   String codeHash=ParcelRequestHash.digest(salt+":"+code);
    UUID id=UUID.randomUUID();
-   store.insert(id,tenant,parcelId,parcel.unitId(),name,document,codeHash,salt,until,actor);
+   store.insert(id,tenant,parcelId,parcel.unitId(),name,document,codeKey.mac(id,code),until,actor);
    var created=store.delegation(tenant,id);
    if(created==null) throw new IllegalStateException("Delegação criada não foi encontrada na mesma transação.");
    audit.record(tenant,actor,"DELEGATION_CREATED","PARCEL_DELEGATION",id,null);
@@ -130,6 +131,7 @@ public class DelegationService {
   if(!Boolean.TRUE.equals(request.identityChecked()))
    throw invalid("PARCEL_IDENTITY_CHECK_REQUIRED","Confirme que conferiu o documento da pessoa que retira.");
   if(request.code()==null || request.code().isBlank()) throw invalid("DELEGATION_CODE_REQUIRED","Informe o código de retirada.");
+  requireCodeKey();
   String hash=ParcelRequestHash.codeHandoff(parcelId,request.expectedVersion());
   String route="/v1/tenants/"+tenant+"/parcels/"+parcelId+"/handoff-code";
   var outcome=execute(actor,tenant,assurance,context->{
@@ -149,7 +151,10 @@ public class DelegationService {
    if("VOIDED".equals(current.status()))
     throw new BusinessProblem("PARCEL_VOIDED",409,"Este registro de encomenda foi anulado e não está mais para retirada.");
    if(current.version()!=request.expectedVersion()) throw new BusinessProblem("PARCEL_CHANGED",409,"A encomenda foi alterada. Atualize a lista.");
-   String result=store.check(tenant,parcelId,request.code().strip());
+   // O autenticador é calculado aqui, com o segredo do servidor, para a delegação em vigor lida; o banco só compara.
+   var active=store.latest(tenant,parcelId);
+   UUID delegationId=active!=null && "ACTIVE".equals(active.state())?active.delegationId():null;
+   String result=store.check(tenant,parcelId,delegationId,delegationId==null?null:codeKey.mac(delegationId,request.code().strip()));
    if(!"OK".equals(result)) {
     var latest=store.latest(tenant,parcelId);
     return new Outcome(null,refusal(result,latest));
@@ -178,8 +183,13 @@ public class DelegationService {
      +(latest==null?0:latest.attemptsLeft())+" tentativas antes do bloqueio da autorização.");
    case "LOCKED" -> new BusinessProblem("DELEGATION_LOCKED",409,"Código incorreto pela quinta vez: a autorização foi bloqueada. A unidade precisa gerar outra.");
    case "EXPIRED" -> new BusinessProblem("DELEGATION_EXPIRED",409,"A autorização desta encomenda venceu. A unidade precisa gerar outra.");
+   case "CHANGED" -> new BusinessProblem("DELEGATION_CHANGED",409,"A autorização foi alterada. Atualize a encomenda.");
    default -> new BusinessProblem("DELEGATION_NOT_FOUND",409,"Não há autorização de retirada em vigor para esta encomenda.");
   };
+ }
+ private void requireCodeKey() {
+  if(!codeKey.available())
+   throw new BusinessProblem("DELEGATION_UNAVAILABLE",503,"A retirada por código ainda não está disponível neste condomínio.");
  }
  private static void requireKey(String key) {
   if(key==null || !key.matches("[A-Za-z0-9._:-]{16,200}"))

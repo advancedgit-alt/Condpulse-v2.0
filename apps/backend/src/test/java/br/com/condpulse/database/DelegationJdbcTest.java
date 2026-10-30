@@ -7,6 +7,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.parcels.application.DelegationCodeKey;
 import br.com.condpulse.parcels.application.DelegationModels;
 import br.com.condpulse.parcels.application.DelegationService;
 import br.com.condpulse.parcels.application.ParcelModels;
@@ -30,6 +31,9 @@ class DelegationJdbcTest {
  private static JdbcDisposableDatabase db;
  private static ParcelService parcels;
  private static DelegationService delegations;
+ private static DelegationService withoutKey;
+ private static final String CODE_KEY=java.util.Base64.getEncoder().encodeToString(new byte[]{
+  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32});
  private static UUID concierge;
 
  @BeforeAll static void setup() throws Exception {
@@ -38,7 +42,8 @@ class DelegationJdbcTest {
   var parcelStore=new ParcelStore(db.jdbc);
   var audit=new AuditRecorder(db.jdbc);
   parcels=new ParcelService(transactions,parcelStore,audit);
-  delegations=new DelegationService(transactions,new DelegationStore(db.jdbc),parcelStore,audit);
+  delegations=new DelegationService(transactions,new DelegationStore(db.jdbc),parcelStore,audit,new DelegationCodeKey(CODE_KEY,null,null));
+  withoutKey=new DelegationService(transactions,new DelegationStore(db.jdbc),parcelStore,audit,new DelegationCodeKey("",null,null));
   concierge=UUID.randomUUID(); db.extraAccounts.add(concierge);
   db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",concierge);
   db.adminUpdate("insert into cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) values(?,?,null,'PORTARIA DELEGACAO JDBC','CONCIERGE','ACTIVE')",
@@ -69,7 +74,9 @@ class DelegationJdbcTest {
   assertEquals(issued.delegation().delegationId(),replay.delegation().delegationId());
   assertFalse(db.adminString("select response_body::text from cp.idempotency_keys where request_key=?",createKey).contains(issued.code()),
    "O código não fica gravado na resposta idempotente");
-  assertNotEquals(issued.code(),db.adminString("select code_hash from cp.parcel_delegations where id=?",issued.delegation().delegationId()));
+  assertEquals(new DelegationCodeKey(CODE_KEY,null,null).mac(issued.delegation().delegationId(),issued.code()),
+   db.adminString("select code_hmac from cp.parcel_delegations where id=?",issued.delegation().delegationId()),
+   "O banco guarda só o HMAC do código com o segredo do servidor");
   assertEquals("1",db.adminString("select count(*) from cp.outbox where event_type='DELEGATION_CREATED' and aggregate_id=?",issued.delegation().delegationId()));
 
   // A portaria vê o resumo, sem código; a outra unidade não vê nada.
@@ -191,6 +198,32 @@ class DelegationJdbcTest {
    assertEquals(List.of("OK","REPLAY"),results,"A mesma operação repetida devolve a retirada feita, não \"já retirada\"");
   } finally { pool.shutdownNow(); }
   assertEquals("1",db.adminString("select count(*) from cp.parcel_handoffs where parcel_id=?",parcel.parcelId()));
+  db.assertEmptyContext();
+ }
+
+ @Test void withoutTheServerKeyDelegationIsUnavailable() throws Exception {
+  var parcel=receive(db.unitA);
+  assertEquals(503,assertThrows(BusinessProblem.class,()->withoutKey.create(db.accountA,db.tenantA,parcel.parcelId(),key(),
+   new DelegationModels.Create("Terceiro",null,null))).status());
+  var issued=delegate(parcel,key());
+  var refused=assertThrows(BusinessProblem.class,()->withoutKey.handoffByCode(concierge,db.tenantA,AAL2,parcel.parcelId(),key(),
+   new DelegationModels.CodeHandoff(issued.code(),true,parcel.version())));
+  assertEquals("DELEGATION_UNAVAILABLE",refused.code());
+  assertEquals("ACTIVE:0",db.adminString("select state||':'||attempts from cp.parcel_delegations where id=?",issued.delegation().delegationId()),
+   "Sem a chave nada é conferido nem contado");
+  db.assertEmptyContext();
+ }
+
+ @Test void repeatNearTheMinimumValidityReturnsTheCreatedAuthorization() throws Exception {
+  var parcel=receive(db.unitA);
+  String createKey=key();
+  var until=java.time.Instant.parse(db.adminString("select to_char(clock_timestamp() at time zone 'UTC'+interval '15 minutes 2 seconds','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"));
+  var request=new DelegationModels.Create("Terceiro Fictício",null,until);
+  var first=delegations.create(db.accountA,db.tenantA,parcel.parcelId(),createKey,request);
+  Thread.sleep(3000);
+  var again=delegations.create(db.accountA,db.tenantA,parcel.parcelId(),createKey,request);
+  assertTrue(again.replayed(),"A repetição confirma a autorização criada mesmo com menos de 15 minutos restantes");
+  assertEquals(first.delegation().delegationId(),again.delegation().delegationId());
   db.assertEmptyContext();
  }
 }

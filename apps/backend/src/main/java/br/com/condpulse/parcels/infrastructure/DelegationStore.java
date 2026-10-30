@@ -38,11 +38,11 @@ public class DelegationStore {
  public int closeActive(UUID tenant,UUID parcel) {
   return jdbc.update("update cp.parcel_delegations set state='CLOSED',version=version+1 where tenant_id=? and parcel_id=? and state='ACTIVE'",tenant,parcel);
  }
- public void insert(UUID id,UUID tenant,UUID parcel,UUID unit,String name,String document,String hash,String salt,Instant validUntil,UUID actor) {
+ public void insert(UUID id,UUID tenant,UUID parcel,UUID unit,String name,String document,String codeHmac,Instant validUntil,UUID actor) {
   jdbc.update("""
-   insert into cp.parcel_delegations(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hash,code_salt,valid_until,created_by)
-   values(?,?,?,?,?,?,?,?,?,?)
-   """,id,tenant,parcel,unit,name,document,hash,salt,Timestamp.from(validUntil),actor);
+   insert into cp.parcel_delegations(id,tenant_id,parcel_id,unit_id,delegate_name,document_last4,code_hmac,valid_until,created_by)
+   values(?,?,?,?,?,?,?,?,?)
+   """,id,tenant,parcel,unit,name,document,codeHmac,Timestamp.from(validUntil),actor);
  }
  public boolean revoke(UUID tenant,UUID id,long expectedVersion,UUID actor) {
   return jdbc.update("""
@@ -50,9 +50,9 @@ public class DelegationStore {
    where tenant_id=? and id=? and state='ACTIVE' and version=?
    """,actor,tenant,id,expectedVersion)==1;
  }
- /** OK, WRONG, LOCKED, EXPIRED ou NONE (V024). */
- public String check(UUID tenant,UUID parcel,String code) {
-  return jdbc.queryForObject("select cp.parcel_delegation_check(?,?,?)",String.class,tenant,parcel,code);
+ /** OK, WRONG, LOCKED, EXPIRED, NONE ou CHANGED (V024); recebe o autenticador, nunca o código. */
+ public String check(UUID tenant,UUID parcel,UUID delegation,String candidate) {
+  return jdbc.queryForObject("select cp.parcel_delegation_check(?,?,?,?)",String.class,tenant,parcel,delegation,candidate);
  }
  /** Delegação usada nesta transação pela portaria (para o nome gravado na retirada). */
  public DelegationModels.Delegation usedByMe(UUID tenant,UUID parcel) {

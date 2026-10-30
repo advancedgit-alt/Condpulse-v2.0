@@ -104,7 +104,7 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT UPDATE(starts_at) ON cp.reservation_waitlist TO cp_api","REVOKE UPDATE(starts_at) ON cp.reservation_waitlist FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(state) ON cp.reservation_waitlist TO cp_api","REVOKE INSERT(state) ON cp.reservation_waitlist FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.reservation_waitlist TO cp_api","REVOKE DELETE ON cp.reservation_waitlist FROM cp_api",false);
-  assertRefusedWith("GRANT UPDATE(code_hash) ON cp.parcel_delegations TO cp_api","REVOKE UPDATE(code_hash) ON cp.parcel_delegations FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(code_hmac) ON cp.parcel_delegations TO cp_api","REVOKE UPDATE(code_hmac) ON cp.parcel_delegations FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(attempts) ON cp.parcel_delegations TO cp_api","REVOKE INSERT(attempts) ON cp.parcel_delegations FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.parcel_delegations TO cp_api","REVOKE DELETE ON cp.parcel_delegations FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.outbox TO cp_worker","REVOKE DELETE ON cp.outbox FROM cp_worker",true);
