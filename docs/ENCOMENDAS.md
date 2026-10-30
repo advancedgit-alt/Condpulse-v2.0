@@ -101,7 +101,10 @@ Atrás de `CP_PARCELS_ENABLED`. Banco: V024 (`cp.parcel_delegations`).
 - **Web**: na encomenda a retirar, "Autorizar retirada por terceiro" (código exibido uma vez), "Gerar nova
   autorização" e "Cancelar autorização"; na portaria, "Retirada por código" com o resumo da autorização, tentativas
   restantes e conferência do documento.
+- **Celular**: seção "Encomendas" do vínculo residencial (a retirar e retiradas) com as mesmas ações da web; código
+  exibido uma vez; envio incerto trava o formulário e repete com a mesma chave e o mesmo corpo; 503
+  `DELEGATION_UNAVAILABLE` é recusa certa (não trava); o canal da unidade com `parcels` consulta a lista de novo.
 - **Evidências**: `tests/database/run.py` (`delegation_checks`), `DelegationJdbcTest`, `DatabaseRoleGuardJdbcTest`; web
-  `api/parcels.test.ts` e `e2e/parcel-delegation.spec.ts`.
-- **Pendentes**: delegação pelo celular, aviso ao morador quando o código é usado ou bloqueado (worker) e ensaio com
+  `api/parcels.test.ts` e `e2e/parcel-delegation.spec.ts`; celular `__tests__/parcels.test.tsx` (Jest simulado).
+- **Pendentes**: ensaio do celular em aparelho, aviso ao morador quando o código é usado ou bloqueado (worker) e ensaio com
   Auth real.
