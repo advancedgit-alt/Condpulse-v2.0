@@ -253,7 +253,7 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
       }, { method: 'POST', body }),
     reservationGuests: (tenantId: string, unitId: string, reservationId: string, signal?: AbortSignal) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/guests`, (value) => {
-        const page = permitPage(value, unitId);
+        const page = permitPage(value, unitId, 500);
         if (page.permits.some((item) => item.reservationId !== reservationId)) throw invalid();
         return page;
       }, signal ? { signal } : {}),

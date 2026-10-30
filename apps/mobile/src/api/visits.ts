@@ -63,8 +63,9 @@ export function arrival(value: unknown, unitId: string): Arrival {
     expiresAt: value.expiresAt as string, decidedAt: value.decidedAt as string | null, decisionSource: value.decisionSource as DecisionSource | null,
     decisionNote: value.decisionNote as string | null, decidedByMe: value.decidedByMe as boolean, version: value.version as number, createdAt: value.createdAt as string };
 }
-export function permitPage(value: unknown, unitId: string): { permits: Permit[]; truncated: boolean } {
-  check(record(value) && Array.isArray(value.permits) && value.permits.length <= 100 && typeof value.truncated === 'boolean');
+/** max: 100 nos convites da unidade; 500 nos convidados de uma reserva (limite do servidor para essa lista). */
+export function permitPage(value: unknown, unitId: string, max = 100): { permits: Permit[]; truncated: boolean } {
+  check(record(value) && Array.isArray(value.permits) && value.permits.length <= max && typeof value.truncated === 'boolean');
   return { permits: (value.permits as unknown[]).map((item) => permit(item, unitId)), truncated: value.truncated as boolean };
 }
 export function arrivalPage(value: unknown, unitId: string): { arrivals: Arrival[]; truncated: boolean } {

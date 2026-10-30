@@ -115,7 +115,7 @@ describe('convidados da reserva no celular', () => {
     expect(await screen.findByRole('button', { name: 'Tentar confirmar o mesmo convidado' })).toBeTruthy();
     await cleanup();
     await mount(fake, pending);
-    await fireEvent.press((await screen.findAllByRole('button')).find((item) => /^Convidados de /.test(item.props.accessibilityLabel))!);
+    // Envio pendente restaurado: a lista já abre travada no mesmo convidado.
     expect(await screen.findByRole('button', { name: 'Tentar confirmar o mesmo convidado' })).toBeTruthy();
     expect(screen.getByLabelText('Nome do convidado').props.value).toBe('Convidado Incerto');
     await press('Tentar confirmar o mesmo convidado');

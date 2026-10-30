@@ -11,8 +11,11 @@ import { colors, touch } from './theme';
 /**
  * Convidados da reserva no celular (CP-038). Cada convidado vira um convite da unidade com a janela do evento (até 1 hora
  * antes do início até o fim do uso), conferido pela portaria; cancelar a reserva revoga todos de uma vez. Resultado
- * incerto mantém a mesma chave para os mesmos dados: repetir confirma o mesmo convidado, sem duplicar.
+ * incerto mantém a mesma chave para os mesmos dados (guardada fora da tela, por conta, condomínio, unidade e reserva:
+ * sobrevive à troca de vínculo): repetir confirma o mesmo convidado, sem duplicar. O limite de convidados é o das regras
+ * aceitas na reserva, decidido pelo servidor.
  */
+export type GuestPendingStore = Map<string, { body: string; key: string; data: { visitorName: string; documentLast4: string | null } }>;
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain;
 const stateLabels: Record<Permit['state'], string> = { SCHEDULED: 'Agendado', ACTIVE: 'Em vigor', REVOKED: 'Revogado', EXPIRED: 'Encerrado' };
@@ -28,11 +31,15 @@ function Notice({ tone, children }: { tone: 'error' | 'info' | 'success'; childr
   return <Text accessibilityRole="alert" style={[styles.notice, styles[tone]]}>{children}</Text>;
 }
 
-export function ReservationGuests({ api, scope, tenantId, unitId, reservation, capacity, timeZone, newKey }: {
-  api: CondPulseApi; scope: readonly unknown[]; tenantId: string; unitId: string; reservation: Reservation; capacity: number | null; timeZone: string; newKey: KeyFactory;
+export function ReservationGuests({ api, scope, accountId, tenantId, unitId, reservation, timeZone, newKey, pending: sharedPending }: {
+  api: CondPulseApi; scope: readonly unknown[]; accountId: string; tenantId: string; unitId: string; reservation: Reservation; timeZone: string; newKey: KeyFactory;
+  pending?: GuestPendingStore;
 }) {
+  const [ownPending] = useState<GuestPendingStore>(() => new Map());
+  const store = sharedPending ?? ownPending;
+  const storeKey = `${accountId}|${tenantId}|${unitId}|${reservation.reservationId}`;
   const queries = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => (sharedPending ?? new Map()).has(`${accountId}|${tenantId}|${unitId}|${reservation.reservationId}`));
   const key = [...scope, 'guests', reservation.reservationId] as const;
   const guests = useQuery({ queryKey: key, enabled: expanded, queryFn: ({ signal }) => api.reservationGuests(tenantId, unitId, reservation.reservationId, signal),
     retry: (count) => count < 1 });
@@ -40,13 +47,13 @@ export function ReservationGuests({ api, scope, tenantId, unitId, reservation, c
   const [document, setDocument] = useState('');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
-  const [intent, setIntent] = useState<{ body: string; key: string; data: { visitorName: string; documentLast4: string | null } } | null>(null);
+  const [intent, setIntentState] = useState<{ body: string; key: string; data: { visitorName: string; documentLast4: string | null } } | null>(() => store.get(storeKey) ?? null);
+  const setIntent = (value: typeof intent) => { if (value) store.set(storeKey, value); else store.delete(storeKey); setIntentState(value); };
   const [outcome, setOutcome] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const label = formatWhen(reservation.startsAt, timeZone);
-  const active = (guests.data?.permits ?? []).filter(open);
-  const full = capacity !== null && active.length >= capacity;
-  const locked = intent !== null && uncertain(failure);
+  // Restaurado da troca de vínculo: sem falha conhecida nesta tela, mas o resultado continua sem confirmação.
+  const locked = intent !== null && (uncertain(failure) || failure === null);
   const visitor = name.trim().replace(/\s+/g, ' ');
   const documentValue = normalizeDocument(document);
   const valid = locked || ([...visitor].length >= 2 && [...visitor].length <= 160 && documentValue !== '');
@@ -93,7 +100,7 @@ export function ReservationGuests({ api, scope, tenantId, unitId, reservation, c
       {guests.data?.truncated ? <Notice tone="info">A lista mostra os convidados ativos primeiro e, depois, os 500 mais recentes.</Notice> : null}
       {outcome ? <Notice tone="success">{outcome}</Notice> : null}
       {failure ? <Notice tone="error">{`${message(failure)}${locked ? ' Use “Tentar confirmar o mesmo convidado”: se já foi registrado, nada novo é gravado.' : ''}`}</Notice> : null}
-      {full && !locked ? <Notice tone="info">{`A área permite até ${capacity} convidados nesta reserva.`}</Notice> : <View style={styles.gap}>
+      <View style={styles.gap}>
         <Text style={styles.label}>Nome do convidado</Text>
         <TextInput accessibilityLabel="Nome do convidado" style={styles.input} value={locked ? intent!.data.visitorName : name} onChangeText={setName}
           editable={!busy && !locked} autoCorrect={false} />
@@ -102,7 +109,7 @@ export function ReservationGuests({ api, scope, tenantId, unitId, reservation, c
           onChangeText={setDocument} editable={!busy && !locked} autoCapitalize="characters" autoCorrect={false} />
         {documentValue === '' && !locked ? <Text style={styles.fieldError}>Informe só os 2 a 4 últimos caracteres do documento, ou deixe em branco.</Text> : null}
         <Button label={busy ? 'Enviando…' : locked ? 'Tentar confirmar o mesmo convidado' : 'Adicionar convidado'} disabled={busy || !valid} onPress={() => void add()} />
-      </View>}
+      </View>
     </View> : null}
   </View>;
 }
