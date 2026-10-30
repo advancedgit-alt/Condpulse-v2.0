@@ -150,6 +150,15 @@ class DeviceHealthWorkerJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void onlineWithoutAHeartbeatIsNeverShownOnline() throws Exception {
+  monitor.runOnce();
+  // O contrato permite online=true sem último sinal; sem sinal não há evidência de que o equipamento está no ar.
+  worker.inTenant(db.tenantA,()->{ new DeviceHealthStore(workerDb.jdbc).device(db.tenantA,entrance,true,null,null); return null; });
+  var entry=device(health(),entrance);
+  assertEquals("UNKNOWN:HEARTBEAT_MISSING",entry.status()+":"+entry.reason());
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
  @Test void aRejectedRevocationIsCountedAsRejectedWithoutAPendingDate() throws Exception {
   simulator.scenario("leitor-entrada",Scenario.REJECT);
   var card=create("Cartão recusado");
