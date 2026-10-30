@@ -94,7 +94,7 @@ class CredentialJdbcTest {
   assertEquals("SYNCING",credential.status());
   assertEquals(List.of("PENDING","PENDING"),credential.devices().stream().map(CredentialModels.DeviceSync::state).toList());
   assertEquals(db.unitA,credential.unitId()); assertEquals("PESSOA FICTICIA JDBC A",credential.holderName());
-  assertEquals("1",db.adminString("select count(*) from cp.outbox where event_type='ACCESS_CREDENTIAL_CREATED' and aggregate_id=?",credential.credentialId()));
+  assertEquals("1",db.adminString("select count(*) from cp.outbox where event_type='CREDENTIAL_CREATED' and aggregate_id=?",credential.credentialId()));
 
   confirm(credential.credentialId(),deviceIn,1,"APPLY");
   var partial=credentials.managed(manager,db.tenantA,AAL2,db.unitA,false).credentials().getFirst();
@@ -130,6 +130,27 @@ class CredentialJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void creationWaitsForAConcurrentMembershipEndingAndIsRefused() throws Exception {
+  UUID holder=membershipOf(accountD,unitD);
+  var pool=java.util.concurrent.Executors.newSingleThreadExecutor();
+  try(var ending=db.adminSession()) {
+   ending.setAutoCommit(false);
+   try(var update=ending.prepareStatement("update cp.memberships set status='REVOKED',version=version+1 where id=?")) {
+    update.setObject(1,holder); update.executeUpdate();
+   }
+   var creating=pool.submit(()->{
+    try { credentials.create(manager,db.tenantA,AAL2,key(),new CredentialModels.Create(connector,holder,"CARD","Cartão concorrente")); return "OK"; }
+    catch(BusinessProblem problem) { return problem.code(); }
+   });
+   Thread.sleep(1500);
+   assertFalse(creating.isDone(),"O cadastro espera o encerramento do vínculo em andamento");
+   ending.commit();
+   assertEquals("CREDENTIAL_HOLDER_INVALID",creating.get(20,java.util.concurrent.TimeUnit.SECONDS));
+  } finally { pool.shutdownNow(); }
+  assertEquals("0",db.adminString("select count(*) from cp.access_credentials where membership_id=?",holder),"Nenhuma credencial ativa para vínculo encerrado");
+  db.assertEmptyContext();
+ }
+
  @Test void endingTheMembershipRevokesItsCredentialsInTheSameTransaction() throws Exception {
   UUID holder=membershipOf(accountD,unitD);
   var first=credentials.create(manager,db.tenantA,AAL2,key(),new CredentialModels.Create(connector,holder,"CARD","Cartão D")).credential();
@@ -140,7 +161,7 @@ class CredentialJdbcTest {
    assertEquals("REVOKED:2",db.adminString("select desired_state||':'||desired_version from cp.access_credentials where id=?",credential.credentialId()));
    assertTrue(db.adminString("select revoke_reason from cp.access_credentials where id=?",credential.credentialId()).startsWith("Vínculo encerrado"));
   }
-  assertEquals("2",db.adminString("select count(*) from cp.audit_log where action='ACCESS_CREDENTIAL_REVOKED' and tenant_id=?",db.tenantA));
+  assertEquals("2",db.adminString("select count(*) from cp.audit_log where action='CREDENTIAL_REVOKED' and tenant_id=?",db.tenantA));
   assertEquals(2,credentials.pendingRevocations(concierge,db.tenantA,AAL2).credentials().size(),"Revogação física pendente aparece na portaria");
   db.assertEmptyContext();
  }

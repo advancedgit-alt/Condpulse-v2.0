@@ -64,21 +64,21 @@ public class CredentialReconciler {
    else send.add(target.externalId());
   }
   List<AccessModels.Destination> results=new ArrayList<>();
-  if(!query.isEmpty()) {
-   for(var destination:call(()->adapter.getApplication(new AccessModels.ApplicationQuery(connector.toString(),work.externalRef(),version,action,query)),query)) {
+  for(var chunk:chunks(query)) {
+   for(var destination:call(()->adapter.getApplication(new AccessModels.ApplicationQuery(connector.toString(),work.externalRef(),version,action,chunk)),chunk)) {
     // A versão não chegou ao equipamento: o comando é idempotente por versão e ação e pode ser repetido.
     if(destination.outcome()==AccessModels.Outcome.UNKNOWN && "VERSION_NOT_PRESENT".equals(destination.reason())) send.add(destination.deviceId());
     else results.add(destination);
    }
   }
   int sent=0;
-  if(!send.isEmpty()) {
-   String correlation="cpc-"+work.credentialId()+"-"+version+"-"+action.name().toLowerCase(java.util.Locale.ROOT);
+  String correlation="cpc-"+work.credentialId()+"-"+version+"-"+action.name().toLowerCase(java.util.Locale.ROOT);
+  for(var chunk:chunks(send)) {
    results.addAll(call(()->action==AccessModels.Action.REVOKE
-    ?adapter.revokeCredential(new AccessModels.RevokeCredential(connector.toString(),correlation,work.externalRef(),version,send,"CREDENTIAL_REVOKED"))
-    :adapter.applyCredential(new AccessModels.ApplyCredential(connector.toString(),correlation,work.externalRef(),work.externalRef(),version,send,
-      null,null,null)),send));
-   sent=send.size();
+    ?adapter.revokeCredential(new AccessModels.RevokeCredential(connector.toString(),correlation,work.externalRef(),version,chunk,"CREDENTIAL_REVOKED"))
+    :adapter.applyCredential(new AccessModels.ApplyCredential(connector.toString(),correlation,work.externalRef(),work.externalRef(),version,chunk,
+      null,null,null)),chunk));
+   sent+=chunk.size();
   }
   int confirmed=0,stale=0;
   for(var destination:results) {
@@ -107,6 +107,15 @@ public class CredentialReconciler {
    }
   }
   return new Pass(sent,confirmed,stale,0);
+ }
+
+ /** Contrato do adaptador: até {@value #MAX_DESTINATIONS} destinos por comando ou consulta. */
+ static final int MAX_DESTINATIONS=50;
+ static List<List<String>> chunks(List<String> destinations) {
+  List<List<String>> result=new ArrayList<>();
+  for(int start=0;start<destinations.size();start+=MAX_DESTINATIONS)
+   result.add(List.copyOf(destinations.subList(start,Math.min(destinations.size(),start+MAX_DESTINATIONS))));
+  return result;
  }
 
  private interface Call { AccessModels.Application run(); }

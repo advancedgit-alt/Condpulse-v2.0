@@ -188,8 +188,10 @@ GRANT EXECUTE ON FUNCTION cp.credential_own(uuid,uuid) TO cp_api;
 
 CREATE POLICY access_connectors_read ON cp.access_connectors AS RESTRICTIVE FOR SELECT TO cp_api
  USING(platform.has_capability('memberships.manage') OR platform.has_capability('concierge.operate'));
+-- A pessoa vê os equipamentos de destino das próprias credenciais (a leitura da credencial já é limitada pela política).
 CREATE POLICY access_devices_read ON cp.access_devices AS RESTRICTIVE FOR SELECT TO cp_api
- USING(platform.has_capability('memberships.manage') OR platform.has_capability('concierge.operate'));
+ USING(platform.has_capability('memberships.manage') OR platform.has_capability('concierge.operate')
+  OR EXISTS(SELECT 1 FROM cp.access_credentials c WHERE c.tenant_id=access_devices.tenant_id AND c.connector_id=access_devices.connector_id));
 CREATE POLICY access_credentials_read ON cp.access_credentials AS RESTRICTIVE FOR SELECT TO cp_api
  USING(platform.has_capability('memberships.manage') OR platform.has_capability('concierge.operate') OR cp.credential_own(tenant_id,membership_id));
 CREATE POLICY credential_syncs_read ON cp.credential_syncs AS RESTRICTIVE FOR SELECT TO cp_api
@@ -202,6 +204,15 @@ CREATE POLICY access_credentials_create ON cp.access_credentials AS RESTRICTIVE 
 CREATE POLICY access_credentials_revoke ON cp.access_credentials AS RESTRICTIVE FOR UPDATE TO cp_api
  USING(platform.has_capability('memberships.manage'))
  WITH CHECK(platform.has_capability('memberships.manage') AND desired_state='REVOKED' AND revoked_by=platform.current_actor_id());
+
+-- Eventos e trilha de credencial só pela gestão, sobre credencial existente, em nome da própria conta.
+CREATE POLICY outbox_credential_events ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_api
+ WITH CHECK(event_type NOT LIKE 'CREDENTIAL\_%' OR (platform.has_capability('memberships.manage') AND EXISTS(SELECT 1 FROM cp.access_credentials c
+  WHERE c.tenant_id=cp.outbox.tenant_id AND c.id=cp.outbox.aggregate_id)));
+CREATE POLICY audit_credential_actions ON cp.audit_log AS RESTRICTIVE FOR INSERT TO cp_api
+ WITH CHECK(action NOT LIKE 'CREDENTIAL\_%' OR (platform.has_capability('memberships.manage') AND actor_id=platform.current_actor_id()
+  AND resource_type='ACCESS_CREDENTIAL' AND EXISTS(SELECT 1 FROM cp.access_credentials c WHERE c.tenant_id=cp.audit_log.tenant_id
+   AND c.id=cp.audit_log.resource_id)));
 
 -- Worker (cp_worker, sem conta): lê o estado desejado e os destinos e grava só o resultado por destino; não cria nem
 -- revoga credencial, não muda conector nem equipamento.

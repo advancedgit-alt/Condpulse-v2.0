@@ -83,8 +83,8 @@ public class CredentialService {
    store.insert(id,tenant,request.connectorId(),request.membershipId(),unit,request.kind(),label,actor);
    var created=store.credential(tenant,id,false);
    if(created==null) throw new IllegalStateException("Credencial não encontrada na mesma transação.");
-   audit.record(tenant,actor,"ACCESS_CREDENTIAL_CREATED","ACCESS_CREDENTIAL",id,null);
-   store.event(tenant,"ACCESS_CREDENTIAL_CREATED",created);
+   audit.record(tenant,actor,"CREDENTIAL_CREATED","ACCESS_CREDENTIAL",id,null);
+   store.event(tenant,"CREDENTIAL_CREATED",created);
    store.finish(tenant,actor,route,key,id,201);
    return new CredentialModels.Mutation(created,false,201);
   });
@@ -106,8 +106,8 @@ public class CredentialService {
     throw new BusinessProblem("CREDENTIAL_ALREADY_REVOKED",409,"Esta credencial já foi revogada.");
    if(current.version()!=request.expectedVersion() || !store.revoke(tenant,credentialId,request.expectedVersion(),actor,reason)) throw changed();
    var revoked=store.credential(tenant,credentialId,false);
-   audit.record(tenant,actor,"ACCESS_CREDENTIAL_REVOKED","ACCESS_CREDENTIAL",credentialId,reason);
-   store.event(tenant,"ACCESS_CREDENTIAL_REVOKED",revoked);
+   audit.record(tenant,actor,"CREDENTIAL_REVOKED","ACCESS_CREDENTIAL",credentialId,reason);
+   store.event(tenant,"CREDENTIAL_REVOKED",revoked);
    return revoked;
   });
  }

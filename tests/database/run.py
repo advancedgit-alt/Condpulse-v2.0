@@ -2530,6 +2530,16 @@ def credential_checks():
            "morador ve o resultado por equipamento da propria credencial")
     expect(value(f"select count(*) from cp.credential_syncs where credential_id='{c1}'", tenant=TA, actor=OT, role="cp_api") == "0",
            "outra unidade nao ve o resultado")
+    expect(value(f"select count(*) from cp.access_devices where connector_id='{K1}'", tenant=TA, actor=RS, role="cp_api") == "2",
+           "morador ve os equipamentos de destino da propria credencial")
+    expect(value(f"select count(*) from cp.access_devices where connector_id='{K2}'", tenant=TA, actor=RS, role="cp_api") == "0",
+           "morador nao ve equipamentos de outra integracao")
+    expect(value(f"select count(*) from cp.access_devices", tenant=TA, actor=OT, role="cp_api") == "0",
+           "morador sem credencial nao ve equipamentos")
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','CREDENTIAL_REVOKED','{c1}',9,'{{}}')",
+                 "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao grava evento de credencial")
+    expect(error(f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) VALUES('{TA}','{RS}','CREDENTIAL_REVOKED','ACCESS_CREDENTIAL','{c1}',gen_random_uuid())",
+                 "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao grava trilha de credencial")
     for table in ("access_credentials", "credential_syncs", "access_devices", "access_connectors"):
         expect(value(f"select has_table_privilege('cp_api','cp.{table}','DELETE')::text") == "false", f"aplicacao nao apaga cp.{table}")
 

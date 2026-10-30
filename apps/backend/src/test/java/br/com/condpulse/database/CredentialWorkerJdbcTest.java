@@ -130,6 +130,23 @@ class CredentialWorkerJdbcTest {
   db.assertEmptyContext(); workerDb.assertEmptyContext();
  }
 
+ @Test void moreDestinationsThanACommandAllowsAreSentInBatches() throws Exception {
+  List<String> externals=new java.util.ArrayList<>(List.of("leitor-entrada","leitor-garagem"));
+  for(int i=0;i<58;i++) {
+   String external="leitor-extra-"+i; externals.add(external);
+   db.adminUpdate("insert into cp.access_devices(tenant_id,connector_id,external_id,label) values(?,?,?,?)",db.tenantA,connector,external,"Extra "+i);
+  }
+  var many=new SimulatedAccessAdapter(connector.toString(),Clock.systemUTC(),false,externals);
+  var batched=new CredentialReconciler(worker,syncs,(tenant,id,provider)->Optional.<AccessAdapter>of(many));
+  var card=create("Cartão muitos destinos");
+  assertEquals(60,batched.runOnce().sent());
+  assertEquals("ACTIVE",current(card.credentialId()).status(),"Todos os 60 equipamentos confirmaram, em lotes de até 50");
+  credentials.revoke(manager,db.tenantA,AAL2,card.credentialId(),new CredentialModels.Revoke("Perdido",current(card.credentialId()).version()));
+  assertEquals(60,batched.runOnce().sent());
+  assertEquals("REVOKED",current(card.credentialId()).status());
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
  @Test void revocationsComeFirstAndConnectorsWithoutAdapterSendNothing() throws Exception {
   var active=create("Cartão ativo");
   var lost=create("Cartão perdido");

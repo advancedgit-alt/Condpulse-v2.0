@@ -106,12 +106,17 @@ public class CredentialStore {
    (r,n)->new CredentialModels.Connector(r.getObject("id",UUID.class),r.getString("provider"),r.getString("label"),r.getString("status"),
     devices.getOrDefault(r.getObject("id",UUID.class),List.of())),tenant));
  }
- /** Vínculo residencial vigente (unidade ativa) visível para a gestão: unidade do vínculo ou null. */
+ /**
+  * Vínculo residencial vigente (unidade ativa) visível para a gestão: unidade do vínculo ou null. Trava o vínculo
+  * (FOR SHARE) até o fim da transação: o encerramento concorrente espera este cadastro e revoga a credencial nova, ou
+  * este cadastro espera o encerramento e vê o vínculo já revogado.
+  */
  public UUID holderUnit(UUID tenant,UUID membership) {
   var rows=jdbc.query("""
    select m.unit_id from cp.memberships m join cp.units u on u.tenant_id=m.tenant_id and u.id=m.unit_id and u.status='ACTIVE'
    where m.tenant_id=? and m.id=? and m.status='ACTIVE' and m.role in ('RESIDENT','RESPONSIBLE','DEPENDENT')
     and m.valid_from<=now() and (m.valid_until is null or m.valid_until>now())
+   for share of m
    """,(r,n)->r.getObject("unit_id",UUID.class),tenant,membership);
   return rows.isEmpty()?null:rows.getFirst();
  }
