@@ -51,7 +51,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 ## Credenciais de acesso e revogação prioritária — CP-046
 
 - V026: estado desejado versionado (ACTIVE na versão 1; revogação final na versão 2); confirmação por equipamento só vale para a versão e a ação desejadas no momento da gravação — confirmação atrasada da ativação nunca reativa credencial revogada (guarda no banco). Gestão (AAL2) cadastra cartão/QR para morador e revoga com motivo; encerrar o vínculo revoga as credenciais na mesma transação; portaria vê as revogações pendentes por equipamento; reconciliação no worker com revogação primeiro e consulta antes de reenviar (`CP_WORKER_ACCESS_SYNC_ENABLED=false`). Atrás de `CP_ACCESS_CREDENTIALS_ENABLED` (ainda desligada na Vercel, ver bloqueio). Merge `b85456e` (PR #79, CI 41010219497 verde). V026 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41010872734; repetição 41011021111 sem linha nova; 25 linhas no histórico; ENABLE/FORCE RLS nas quatro tabelas, nenhuma tabela `cp` sem RLS completa, nenhum conector cadastrado). Smoke público 41011276577 verde. Testado só com o adaptador simulado. Detalhes em [CREDENCIAIS_ACESSO.md](CREDENCIAIS_ACESSO.md).
-- Pendentes: adaptador do parceiro (CP-044, BLOQUEADO), worker contínuo, tela do celular e alerta de pendência acima de 60 s.
+- Atenção de revogação pendente há mais de 60 s (PRD, fila de revogações) na seção "Saúde dos equipamentos" da gestão e da portaria, medida só com horários do servidor (`generatedAt` e revogação mais antiga pendente por equipamento); Playwright.
+- Pendentes: adaptador do parceiro (CP-044, BLOQUEADO), worker contínuo e escalonamento conforme parceiro.
 
 ## Mudança e entrega de móveis — CP-042
 
