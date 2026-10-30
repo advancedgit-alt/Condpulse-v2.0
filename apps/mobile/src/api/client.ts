@@ -1,3 +1,4 @@
+import { currentRules, move, type CreateMove } from './moves';
 import { currentDelegation, delegation, issued, parcelPage, type CreateDelegation } from './parcels';
 import { amenity, availability, ContractError, identifier, list, operationKey, reservation, type CreateReservation } from './reservations';
 import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type WaitlistChange } from './waitlist';
@@ -73,6 +74,18 @@ const messages: Record<string, string> = {
   IDEMPOTENCY_KEY_REUSED: 'Este envio já foi usado para outro pedido. Comece de novo.',
   IDEMPOTENCY_KEY_EXPIRED: 'O prazo para confirmar este envio terminou e não dá para saber se ele foi gravado.',
   ACCOUNT_INACTIVE: 'Seu acesso precisa ser validado pela gestão.',
+  MOVE_RULES_NOT_CONFIGURED: 'A gestão ainda não publicou as regras de mudança.',
+  MOVE_RULES_CHANGED: 'As regras de mudança foram alteradas. Leia a versão atual antes de continuar.',
+  MOVE_WINDOW_OUTSIDE_RULES: 'O período não atende às regras de mudança: confira dias, horário, antecedência e duração.',
+  MOVE_WINDOW_INVALID: 'Informe início e fim, com o fim depois do início.',
+  MOVE_PROVIDER_INVALID: 'Informe o responsável ou a transportadora, com 2 a 160 caracteres.',
+  MOVE_PLATE_INVALID: 'Informe a placa com 5 a 8 letras e números.',
+  MOVE_ITEMS_INVALID: 'Descreva os itens com até 500 caracteres.',
+  MOVE_CHANGED: 'O pedido de mudança foi alterado. Atualize antes de continuar.',
+  MOVE_CLOSED: 'Este pedido de mudança já foi decidido ou encerrado.',
+  MOVE_CANCELLATION_CLOSED: 'O período já começou. Fale com a gestão para cancelar.',
+  MOVE_NOT_FOUND: 'Pedido de mudança não encontrado.',
+  MOVE_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir agora. Confira os pedidos antes de repetir.',
   TENANT_ACCESS_DENIED: 'Condomínio não disponível para este acesso.',
   WAITLIST_SLOT_AVAILABLE: 'O período está livre. Faça a reserva diretamente.',
   WAITLIST_OWN_RESERVATION: 'A unidade já tem reserva ou pedido neste período.',
@@ -163,6 +176,30 @@ export function createApi(options: { baseUrl: string; tokens: TokenSource; fetch
     createReservation: (tenantId: string, body: CreateReservation, key: string) =>
       request(`${tenant(tenantId)}/reservations`, (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }),
         { method: 'POST', body, key: operationKey(key) }),
+    moveRules: (tenantId: string, signal?: AbortSignal) => request(`${tenant(tenantId)}/move-rules`, currentRules, signal ? { signal } : {}),
+    unitMoves: (tenantId: string, unitId: string, signal?: AbortSignal) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/moves`, (value) => {
+        if (!record(value) || typeof value.truncated !== 'boolean') throw invalid();
+        const moves = list(value.moves, move, 100);
+        if (moves.some((item) => item.unitId.toLowerCase() !== unitId.toLowerCase())) throw invalid();
+        return { moves, truncated: value.truncated };
+      }, signal ? { signal } : {}),
+    createMove: (tenantId: string, unitId: string, body: CreateMove, key: string) =>
+      request(`${tenant(tenantId)}/units/${identifier(unitId)}/moves`, (value, response) => {
+        const created = move(value);
+        const repeated = replayed(response);
+        // Pedido novo nasce aguardando, com o período e a versão das regras enviados; repetição devolve o estado atual.
+        if (created.unitId.toLowerCase() !== unitId.toLowerCase() || (!repeated && (created.state !== 'REQUESTED' || created.kind !== body.kind
+          || Date.parse(created.startsAt) !== Date.parse(body.startsAt) || Date.parse(created.endsAt) !== Date.parse(body.endsAt)
+          || created.rulesVersion !== body.acceptedRulesVersion))) throw invalid(true);
+        return { move: created, replayed: repeated };
+      }, { method: 'POST', body, key: operationKey(key) }),
+    cancelMove: (tenantId: string, moveId: string, expectedVersion: number) =>
+      request(`${tenant(tenantId)}/moves/${identifier(moveId)}/cancel`, (value) => {
+        const cancelled = move(value);
+        if (cancelled.moveId !== moveId || cancelled.state !== 'CANCELLED') throw invalid(true);
+        return cancelled;
+      }, { method: 'POST', body: { note: null, expectedVersion } }),
     cancelReservation: (tenantId: string, reservationId: string, body: { unitId: string; expectedVersion: number }, key: string) =>
       request(`${tenant(tenantId)}/reservations/${identifier(reservationId)}/cancel`,
         (value, response) => ({ reservation: reservation(value), replayed: replayed(response) }), { method: 'POST', body, key: operationKey(key) }),

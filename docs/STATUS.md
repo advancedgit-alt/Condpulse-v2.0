@@ -27,6 +27,11 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - BLOQUEADO: chave do código de retirada delegada (`CP_PARCEL_CODE_KEY`, 32 bytes aleatórios em Base64, independente das chaves do BFF) na Vercel `condpulse` — responsável — cofre/painel da Vercel (segredo; não pode ser gerado, lido nem copiado por mim). Sem ela, a autorização e a conferência por código respondem 503 e o restante das encomendas segue normal.
 - BLOQUEADO: OK para integrar a produção (runtime, Auth, Storage, origem e apontamento da Vercel) — responsável.
 
+## Mudança e entrega de móveis — CP-042
+
+- V025: a gestão publica as regras (texto, dias, horário local, antecedência e duração) e decide; a unidade (adulto) pede o período aceitando a versão vigente, o banco confere as regras no fuso do condomínio, e a unidade retira antes do início; a portaria vê só as aprovadas. A aprovação não reserva elevador nem área. Atrás de `CP_REQUESTS_ENABLED` (ligada); V025 aplicada na homologação só depois do merge, pelo executor protegido. Detalhes em [MUDANCAS.md](MUDANCAS.md).
+- Celular: pedido, acompanhamento e retirada (Jest). Pendentes: avisos (worker), ensaio em aparelho e com Auth real.
+
 ## Retirada delegada com código — CP-041
 
 - V024: quem pode retirar autoriza um terceiro para uma encomenda; código de 8 dígitos exibido uma vez; o banco guarda só o HMAC-SHA256 calculado com segredo do servidor fora do banco (`CP_PARCEL_CODE_KEY`) e só compara o autenticador — sem a chave a delegação responde 503 `DELEGATION_UNAVAILABLE`; a portaria confere o código da própria encomenda com até 5 tentativas (gravadas mesmo na recusa) e registra a retirada com evidência `DELEGATION`; código usado não volta a valer. Atrás de `CP_PARCELS_ENABLED` (ligada); Merge `cd31505` (PR #72, CI 40999901120 verde). V024 aplicada na homologação em 30/10/2026 pelo executor protegido (migrate 41000850664; repetição 41001042891 sem linha nova; 23 linhas no histórico; ENABLE/FORCE RLS em `cp.parcel_delegations`). Smoke público 41001237346 verde. Enquanto `CP_PARCEL_CODE_KEY` não for cadastrada, a delegação responde 503 (fail-closed). Não homologado com login real. Detalhes em [ENCOMENDAS.md](ENCOMENDAS.md).

@@ -112,6 +112,12 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/requests/*").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*/messages",
       "/v1/tenants/*/management/requests/*/messages","/v1/tenants/*/management/requests/*/state").authenticated()
+    // Mudança e entrega de móveis (CP-042): vínculo adulto da unidade, gestão (AAL2) ou portaria (AAL2) no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/move-rules","/v1/tenants/*/units/*/moves","/v1/tenants/*/management/moves",
+      "/v1/tenants/*/concierge/moves").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/move-rules").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/moves","/v1/tenants/*/moves/*/cancel",
+      "/v1/tenants/*/management/moves/*/decision").authenticated()
     // Caixa interna da unidade: autenticação aqui; somente os próprios avisos, com vínculo vigente, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/units/*/notifications").authenticated()
     // Canal em tempo real da unidade (CP-036): autenticação aqui; vínculo residencial vigente no serviço e no banco, a cada passada.
