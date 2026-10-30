@@ -1663,11 +1663,11 @@ def reservation_guest_checks():
           VALUES('{TA}','{MGRG}',NULL,'GESTAO CONVIDADOS','MANAGER','ACTIVE'),('{TA}','{RESG}','{UG}','MORADOR CONVIDADOS','RESIDENT','ACTIVE');
         INSERT INTO cp.amenities(id,tenant_id,name,capacity,approval_required) VALUES('{AG}','{TA}','AREA CONVIDADOS',2,false);
     """)
-    def booking(identifier, offset_hours, status="CONFIRMED", unit=UA, actor=AA, kind="BOOKING"):
+    def booking(identifier, offset_hours, status="CONFIRMED", unit=UA, actor=AA, kind="BOOKING", snapshot='{"capacity":2}'):
         start = f"date_trunc('hour',clock_timestamp())+interval '{offset_hours} hours'"
         expires = f"{start}-interval '1 hour'" if status == "PENDING_APPROVAL" else "NULL"
         return (f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,expires_at) "
-                f"VALUES('{identifier}','{TA}','{AG}','{unit}','{actor}','{kind}','{status}',{start},{start}+interval '2 hours',{start},{start}+interval '2 hours','{{}}'::jsonb,{expires})")
+                f"VALUES('{identifier}','{TA}','{AG}','{unit}','{actor}','{kind}','{status}',{start},{start}+interval '2 hours',{start},{start}+interval '2 hours','{snapshot}'::jsonb,{expires})")
     query(booking(RG1, 26), tenant=TA, role="cp_api")
     query(booking(RG2, 50, status="PENDING_APPROVAL"), tenant=TA, role="cp_api")
     query(booking(RG3, 74, unit=UG, actor=RESG), tenant=TA, actor=RESG, role="cp_api")
@@ -1776,6 +1776,36 @@ def reservation_guest_checks():
     expect(cancelled.returncode == 0 and added.returncode != 0 and "23514" in added.stderr,
            "inclusao que espera o cancelamento ve a reserva encerrada e e recusada")
     expect(value(f"select count(*) from cp.visit_permits where id='{g7}'") == "0", "nenhum convidado criado depois do cancelamento")
+    # Caminho da API: o cancelamento trava a unidade e depois a linha (FOR UPDATE) antes de mudar o status; a inclusao
+    # concorrente espera a mesma trava da unidade em vez de travar em ordem inversa (deadlock).
+    RG8 = "31000000-0000-4000-8000-0000000000d8"
+    query(booking(RG8, 194), tenant=TA, role="cp_api")
+    g8, sql = guest(RG8)
+    api_cancel = (f"SELECT pg_advisory_xact_lock(hashtextextended('cp.reservations:{TA}:{UA}',0)); "
+                  f"SELECT 1 FROM cp.reservations WHERE id='{RG8}' FOR UPDATE; SELECT pg_sleep(2); " + cancel.format(RG8))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        cancelling = pool.submit(query, api_cancel, tenant=TA, actor=MGRG, role="cp_api", check=False)
+        time.sleep(0.7)
+        adding = pool.submit(query, sql, tenant=TA, role="cp_api", check=False)
+        cancelled, added = cancelling.result(), adding.result()
+    expect(cancelled.returncode == 0 and "40P01" not in added.stderr and "23514" in added.stderr,
+           "cancelamento pela ordem da API e inclusao concorrente sem deadlock; inclusao recusada")
+    expect(value(f"select count(*) from cp.visit_permits where id='{g8}'") == "0", "nenhum convidado na reserva cancelada pela API")
+    # Capacidade aceita na reserva: mudar a area depois nao altera a reserva; snapshot sem capacidade falha fechado.
+    RG9, RG10 = "31000000-0000-4000-8000-0000000000d9", "31000000-0000-4000-8000-0000000000da"
+    query(booking(RG9, 218), tenant=TA, role="cp_api")
+    query(booking(RG10, 242, snapshot="{}"), tenant=TA, role="cp_api")
+    query(f"UPDATE cp.amenities SET capacity=1 WHERE id='{AG}'")
+    for _ in range(2):
+        _, sql = guest(RG9)
+        query(sql, tenant=TA, role="cp_api")
+    expect(value(f"select count(*) from cp.visit_permits where reservation_id='{RG9}' and state='ACTIVE'") == "2",
+           "reducao posterior da area nao reduz a capacidade aceita")
+    query(f"UPDATE cp.amenities SET capacity=50 WHERE id='{AG}'")
+    _, sql = guest(RG9)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "aumento posterior da area nao amplia a capacidade aceita")
+    _, sql = guest(RG10)
+    expect(error(sql, "23514", tenant=TA, role="cp_api"), "reserva sem capacidade nas regras aceitas nao recebe convidados")
 
 def main():
     guard()

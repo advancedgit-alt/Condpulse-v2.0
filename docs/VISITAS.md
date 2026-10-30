@@ -137,7 +137,9 @@ Atrás de `CP_VISITS_ENABLED`. Banco: V021 (`cp.visit_permits.reservation_id`).
 
 - **Quem**: quem pode convidar pela unidade da reserva (adulto, ou dependente com a permissão de convidar).
 - **O quê**: cada convidado é um convite da unidade com a janela do evento — de até 1 hora antes do início (ou de agora,
-  durante o evento) até o fim do uso —, finalidade "Convidado: <área>", até a capacidade da área em convidados ativos.
+  durante o evento) até o fim do uso —, finalidade "Convidado: <área>", até a capacidade aceita na reserva (snapshot das regras; mudar a área depois não altera
+  a reserva) em convidados ativos, contados por inteiro mesmo quando quem convida é dependente (que continua vendo só os
+  próprios).
   Só reserva de uso confirmada e ainda não encerrada. A portaria vê os convidados nas visitas previstas como qualquer
   convite; o link compartilhável (CP-037) também vale para eles.
 - **Encerramento**: cancelar, rejeitar ou vencer a reserva revoga todos os convidados na mesma transação, por gatilho no
@@ -145,10 +147,12 @@ Atrás de `CP_VISITS_ENABLED`. Banco: V021 (`cp.visit_permits.reservation_id`).
   `VISIT_PERMIT_REVOKED` por convidado no outbox. Repetir o cancelamento não reativa nada. Encerramento sem conta (ex.:
   worker) com convidados falha fechado em vez de deixar convidado válido. A gestão não vê convidados no dia a dia; a
   liberação para revogar vale só durante o encerramento.
+  Inclusão e encerramento usam a mesma trava da unidade dos comandos de reserva, sempre antes da linha: não há convidado
+  ativo em reserva encerrada nem deadlock entre os dois caminhos.
 - **API**: `GET` e `POST /v1/tenants/{t}/reservations/{r}/guests` (`Idempotency-Key` obrigatória); remoção pela revogação
   comum do convite.
 - **Web**: "Convidados" na reserva confirmada (lista, adicionar com chave de operação travada em resultado incerto,
   remover com confirmação); a confirmação de cancelamento avisa que os convidados perdem o convite.
-- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 19 verificações), `ReservationGuestJdbcTest`,
+- **Evidências**: `tests/database/run.py` (`reservation_guest_checks`, 33 verificações, incluindo inclusão e cancelamento simultâneos nas duas ordens e na ordem de travas da API), `ReservationGuestJdbcTest`,
   `VisitSecurityIntegrationTest`; web `e2e/reservation-guests.spec.ts`.
 - **Pendentes**: convidados pelo celular, aviso aos convidados quando a reserva é cancelada e ensaio com Auth real.

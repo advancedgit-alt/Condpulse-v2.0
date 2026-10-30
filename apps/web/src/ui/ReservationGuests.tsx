@@ -77,6 +77,7 @@ export function ReservationGuests({ scope, reservation, capacity, timeZone, lock
                 : <button className="text-button danger-text" type="button" disabled={busy || locked} onClick={() => setRemoving(guest.permitId)}
                     aria-label={`Remover ${guest.visitorName}`}>Remover</button> : null}
             </li>)}</ul>}
+      {guests.data?.truncated ? <Notice tone="warning">A lista mostra os convidados ativos primeiro e, depois, os 500 mais recentes.</Notice> : null}
       {outcome ? <Notice tone="success">{outcome}</Notice> : null}
       {failure ? <Notice tone={uncertain(failure) ? 'warning' : 'error'}>{errorMessage(failure)}</Notice> : null}
       {full && !pendingUncertain ? <Notice tone="info">{`A área permite até ${capacity} convidados nesta reserva.`}</Notice>
