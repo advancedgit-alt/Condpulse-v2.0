@@ -67,6 +67,7 @@ const messages: Record<string, string> = {
   DELEGATION_LOCKED: 'Código incorreto pela quinta vez: a autorização foi bloqueada. A unidade precisa gerar outra.',
   DELEGATION_EXPIRED: 'A autorização desta encomenda venceu. A unidade precisa gerar outra.',
   DELEGATION_NOT_FOUND: 'Não há autorização de retirada em vigor para esta encomenda.',
+  WAITLIST_PRIORITY: 'Há fila de espera para este período: a vaga vai primeiro para quem aguarda. Entre na fila ou escolha outro horário.',
   UNIT_RESERVATION_QUOTA_REACHED: 'A unidade atingiu o limite de reservas previsto para esta área.',
   RESERVATION_CHANGED: 'A reserva foi alterada. Atualize os dados antes de continuar.',
   RESERVATION_CANCELLATION_CLOSED: 'O prazo para cancelar esta reserva terminou.',

@@ -142,6 +142,66 @@ class WaitlistJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void staleHoldsOfOtherAreasDoNotCountAgainstTheAcceptedQuota() throws Exception {
+  // Cota 3: duas reservas ativas da unidade em outros dias, uma retenção vencida em outra área e a oferta em vigor.
+  reservations.create(db.accountA,db.tenantA,key(),new ReservationModels.Create(db.unitA,amenity,start.plusSeconds(86400),start.plusSeconds(86400+3600),1));
+  reservations.create(db.accountA,db.tenantA,key(),new ReservationModels.Create(db.unitA,amenity,start.plusSeconds(2*86400),start.plusSeconds(2*86400+3600),1));
+  UUID other=UUID.randomUUID();
+  db.adminUpdate("""
+   insert into cp.amenities(id,tenant_id,name,capacity,approval_required,buffer_minutes,policy_version,policy)
+   values(?,?,'OUTRA AREA FILA JDBC',10,false,0,1,?::jsonb)
+   """,other,db.tenantA,POLICY);
+  db.adminUpdate("""
+   insert into cp.reservations(tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,expires_at,rule_snapshot)
+   values(?,?,?,?,'BOOKING','HELD',?,?,?,?,clock_timestamp()-interval '1 minute','{}'::jsonb)
+   """,db.tenantA,other,db.unitA,db.accountA,java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),
+   java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)));
+  var booked=bookAsC();
+  var joined=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
+  cancelAsC(booked);
+  var offered=current(db.accountA,db.unitA,joined.waitlistId());
+  assertEquals("OFFERED",offered.state());
+  var accepted=waitlist.accept(db.accountA,db.tenantA,offered.waitlistId(),key(),new WaitlistModels.Change(db.unitA,offered.version()));
+  assertEquals("CONFIRMED",accepted.reservation().status(),"Retenção vencida de outra área não ocupa a cota");
+  db.assertEmptyContext();
+ }
+
+ @Test void directBookingOfAFreedPeriodWaitsForTheQueue() throws Exception {
+  var booked=bookAsC();
+  var joined=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();
+  // Cancelamento concorrente confirmado antes da oferta (aqui, direto no banco, sem a oferta pós-commit).
+  db.adminUpdate("update cp.reservations set status='CANCELLED',version=version+1 where id=?",booked.reservationId());
+  assertEquals("WAITLIST_PRIORITY",assertThrows(BusinessProblem.class,()->reservations.create(accountD,db.tenantA,key(),
+   new ReservationModels.Create(unitD,amenity,start,start.plusSeconds(7200),1))).code());
+  assertEquals("OFFERED",current(db.accountA,db.unitA,joined.waitlistId()).state(),"A recusa leva a oferta a quem aguardava");
+  assertEquals("0",db.adminString("select count(*) from cp.reservations where amenity_id=? and unit_id=?",amenity,unitD));
+  db.assertEmptyContext();
+ }
+ @Test void expiredOffersOfOtherAreasDoNotFillTheOpenEntriesLimit() throws Exception {
+  for(int i=0;i<5;i++) {
+   UUID area=UUID.randomUUID();
+   db.adminUpdate("""
+    insert into cp.amenities(id,tenant_id,name,capacity,approval_required,buffer_minutes,policy_version,policy)
+    values(?,?,?,10,false,0,1,?::jsonb)
+    """,area,db.tenantA,"AREA LIMITE "+i,POLICY);
+   UUID held=UUID.randomUUID();
+   db.adminUpdate("""
+    insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,expires_at,rule_snapshot)
+    values(?,?,?,?,?,'BOOKING','HELD',?,?,?,?,clock_timestamp()-interval '1 minute','{}'::jsonb)
+    """,held,db.tenantA,area,db.unitA,db.accountA,java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),
+    java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)));
+   db.adminUpdate("""
+    insert into cp.reservation_waitlist(tenant_id,amenity_id,unit_id,created_by,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot,
+     state,offer_reservation_id,offered_at,offer_expires_at)
+    values(?,?,?,?,?,?,?,?,'{}'::jsonb,'OFFERED',?,clock_timestamp()-interval '16 minutes',clock_timestamp()-interval '1 minute')
+    """,db.tenantA,area,db.unitA,db.accountA,java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),
+    java.sql.Timestamp.from(start),java.sql.Timestamp.from(start.plusSeconds(3600)),held);
+  }
+  bookAsC();
+  assertEquals("WAITING",waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry().state(),"Ofertas vencidas não contam no limite");
+  db.assertEmptyContext();
+ }
+
  @Test void expiredOfferAdvancesTheLineAndCannotBeAccepted() throws Exception {
   var booked=bookAsC();
   var first=waitlist.join(db.accountA,db.tenantA,key(),joinBody(db.unitA)).entry();

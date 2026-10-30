@@ -138,16 +138,13 @@ CREATE POLICY reservations_decision_update ON cp.reservations AS RESTRICTIVE FOR
   OR (status='CONFIRMED' AND cp.waitlist_accepting(id)));
 
 -- A retenção da oferta e a entrada da fila mudam juntas, por qualquer caminho: aceitar (CONFIRMED/PENDING_APPROVAL),
--- recusar (CANCELLED) ou vencer (EXPIRED). Retenção sem entrada correspondente falha fechado.
+-- recusar (CANCELLED) ou vencer (EXPIRED). Retenção anterior à fila (sem entrada) só muda de estado.
 CREATE FUNCTION cp.reservation_waitlist_offer_closed() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE changed integer;
 BEGIN
  UPDATE cp.reservation_waitlist SET state=CASE NEW.status WHEN 'CANCELLED' THEN 'LEFT' WHEN 'EXPIRED' THEN 'EXPIRED' ELSE 'ACCEPTED' END,
    version=version+1
   WHERE tenant_id=NEW.tenant_id AND offer_reservation_id=NEW.id AND state='OFFERED';
- GET DIAGNOSTICS changed=ROW_COUNT;
- IF changed<>1 THEN RAISE EXCEPTION 'retenção sem oferta da fila' USING ERRCODE='42501'; END IF;
  RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION cp.reservation_waitlist_offer_closed() FROM PUBLIC;
@@ -156,7 +153,8 @@ CREATE TRIGGER reservations_waitlist_offer_closed AFTER UPDATE OF status ON cp.r
 
 -- Oferta: em transação própria, sob a trava da fila da área. Expira retenções e pedidos vencidos da área (linhas
 -- travadas por outro comando ficam para a próxima passada), encerra entradas cujo período começou e oferece cada período
--- livre ao primeiro da fila, em ordem de entrada. Devolve quantas ofertas criou. Papel sem INSERT em reservas (worker)
+-- livre ao primeiro da fila, em ordem de entrada, até o início do período (a fila vem antes da reserva direta).
+-- Devolve quantas ofertas criou. Papel sem INSERT em reservas (worker)
 -- não oferece.
 CREATE FUNCTION cp.waitlist_offer(target_tenant uuid,target_amenity uuid) RETURNS integer
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
@@ -185,7 +183,7 @@ BEGIN
   WHERE tenant_id=target_tenant AND amenity_id=target_amenity AND state='WAITING' AND starts_at<=clock_timestamp();
  FOR entry IN SELECT w.* FROM cp.reservation_waitlist w
    WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity AND w.state='WAITING'
-    AND w.starts_at>clock_timestamp()+interval '5 minutes'
+    AND w.starts_at>clock_timestamp()
     AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=w.tenant_id AND r.amenity_id=w.amenity_id
      AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED')
      AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(w.occupied_from,w.occupied_until,'[)'))
@@ -262,3 +260,28 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION cp.waitlist_position(uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.waitlist_position(uuid,uuid) TO cp_api;
+
+-- Prioridade da fila sobre a reserva direta: com a trava da fila da área (a mesma da oferta), diz se alguém aguarda um
+-- período livre que se sobrepõe ao pedido. A criação chama antes de gravar; com fila, recusa e a oferta segue para quem
+-- aguarda. Devolve só o booleano, sem dados de outras unidades.
+CREATE FUNCTION cp.waitlist_blocks(target_tenant uuid,target_amenity uuid,range_from timestamptz,range_until timestamptz) RETURNS boolean
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE previous text:=coalesce(current_setting('app.waitlist_offer',true),''); waiting boolean;
+BEGIN
+ IF target_tenant IS NULL OR target_amenity IS NULL OR target_tenant IS DISTINCT FROM platform.current_tenant_id() THEN
+  RAISE EXCEPTION 'condomínio indisponível' USING ERRCODE='42501';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.waitlist:'||target_tenant::text||':'||target_amenity::text,0));
+ PERFORM set_config('app.waitlist_offer',target_tenant::text||':'||target_amenity::text,true);
+ SELECT EXISTS(SELECT 1 FROM cp.reservation_waitlist w WHERE w.tenant_id=target_tenant AND w.amenity_id=target_amenity
+   AND w.state='WAITING' AND w.starts_at>clock_timestamp()
+   AND tstzrange(w.occupied_from,w.occupied_until,'[)') && tstzrange(range_from,range_until,'[)'))
+  -- Período ainda ocupado: a exclusão recusa a criação como conflito comum; a prioridade vale para o período livre.
+  AND NOT EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=target_tenant AND r.amenity_id=target_amenity
+   AND r.status IN ('HELD','PENDING_APPROVAL','CONFIRMED') AND NOT (r.status IN ('HELD','PENDING_APPROVAL') AND r.expires_at<=clock_timestamp())
+   AND tstzrange(r.occupied_from,r.occupied_until,'[)') && tstzrange(range_from,range_until,'[)')) INTO waiting;
+ PERFORM set_config('app.waitlist_offer',previous,true);
+ RETURN waiting;
+END $$;
+REVOKE ALL ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.waitlist_blocks(uuid,uuid,timestamptz,timestamptz) TO cp_api;

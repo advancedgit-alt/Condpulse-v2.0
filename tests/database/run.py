@@ -2083,6 +2083,35 @@ def waitlist_checks():
     start, end = slot(192)
     expect(value(f"select count(*) from cp.reservations where amenity_id='{AW}' and status in ('HELD','PENDING_APPROVAL','CONFIRMED') "
                  f"and starts_at={start}") == "1", "um unico ocupante do periodo")
+    # Prioridade da fila: periodo livre com alguem aguardando bloqueia a reserva direta; ocupado segue como conflito comum.
+    r6 = booking(216)
+    e7, sql = join(216, UW1, W1)
+    query(sql, tenant=TA, actor=W1, role="cp_api")
+    start6, end6 = slot(216)
+    blocks = f"SELECT cp.waitlist_blocks('{TA}','{AW}',{start6},{end6})::text"
+    expect(value(blocks, tenant=TA, actor=W2, role="cp_api") == "false", "periodo ocupado nao e prioridade da fila (conflito comum)")
+    query(f"UPDATE cp.reservations SET status='CANCELLED',version=version+1 WHERE id='{r6}'")
+    expect(value(blocks, tenant=TA, actor=W2, role="cp_api") == "true", "periodo liberado com fila aguardando bloqueia a reserva direta")
+    expect(value(f"select count(*) from cp.reservation_waitlist where id='{e7}'", tenant=TA, actor=W2, role="cp_api") == "0",
+           "marca da prioridade nao expoe a entrada")
+    query(offer, tenant=TA, actor=W2, role="cp_api")
+    expect(entry(e7) == "OFFERED:1" and value(blocks, tenant=TA, actor=W2, role="cp_api") == "false", "oferta feita: periodo retido volta a ser conflito comum")
+    # Periodo liberado a poucos minutos do inicio ainda vai para a fila (a oferta vence no inicio).
+    soon = "date_trunc('minute',clock_timestamp())+interval '3 minutes'"
+    counter[0] += 1
+    r5 = f"78000000-0000-4000-8000-{counter[0]:012d}"
+    query(f"INSERT INTO cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+          f"VALUES('{r5}','{TA}','{AW}','{UA}','{AA}','BOOKING','CONFIRMED',{soon},{soon}+interval '1 hour',{soon},{soon}+interval '1 hour','{{}}'::jsonb)",
+          tenant=TA, role="cp_api")
+    counter[0] += 1
+    e6 = f"79000000-0000-4000-8000-{counter[0]:012d}"
+    query(f"INSERT INTO cp.reservation_waitlist(id,tenant_id,amenity_id,unit_id,created_by,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+          f"VALUES('{e6}','{TA}','{AW}','{UW3}','{W3}',{soon},{soon}+interval '1 hour',{soon},{soon}+interval '1 hour','{{\"approvalRequired\":false}}'::jsonb)",
+          tenant=TA, actor=W3, role="cp_api")
+    cancel(r5, AA)
+    expect(value(offer, tenant=TA, actor=AA, role="cp_api") == "1" and entry(e6) == "OFFERED:1", "periodo liberado minutos antes do inicio vai para a fila")
+    expect(value(f"select (expires_at=starts_at)::text from cp.reservations where id=(select offer_reservation_id from cp.reservation_waitlist where id='{e6}')") == "true",
+           "oferta perto do inicio vence no inicio")
     expect(value(f"select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname='reservation_waitlist' "
                  f"and c.relrowsecurity and c.relforcerowsecurity") == "1", "fila com RLS completa")
     expect(value("select has_table_privilege('cp_api','cp.reservation_waitlist','DELETE')::text") == "false", "aplicacao nao apaga entradas da fila")
