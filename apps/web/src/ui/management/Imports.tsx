@@ -79,7 +79,7 @@ export function ImportSection() {
       <div className="panel">
         <h3>Lotes recentes</h3>
         {batches.isPending ? <Loading label="Consultando lotes…" /> : batches.isError ? <ErrorState error={batches.error} retry={() => void batches.refetch()} />
-          : batches.data.length === 0 ? <Empty title="Nenhuma importação">Envie uma planilha para ver a prévia aqui.</Empty>
+          : batches.data.length === 0 ? <Empty icon="upload" title="Nenhuma importação">Envie uma planilha para ver a prévia aqui.</Empty>
             : <ul className="management-list" aria-label="Lotes de importação">{batches.data.map((batch) => <li key={batch.batchId} className="management-row">
               <div><strong>{batch.source}</strong><span className="muted">{formatWhen(batch.createdAt, scope.timeZone)} · {batch.totalRows} linhas</span>
                 <span className={`status-pill ${batch.state === 'APPROVED' ? 'status-ready' : batch.state === 'PREVIEW' ? 'status-pending' : 'status-neutral'}`}>{stateLabels[batch.state]}</span></div>

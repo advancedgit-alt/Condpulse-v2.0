@@ -79,7 +79,7 @@ export function UnitMoves({ scope, timeZone }: { scope: Scope; timeZone: string 
     }} /> : null}
     {list.isPending ? <div className="panel"><Loading label="Consultando os pedidos de mudança…" /></div>
       : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-        : !list.data || list.data.moves.length === 0 ? <div className="panel"><Empty title="Nenhum pedido de mudança">Os pedidos de mudança e de entrega de móveis da unidade aparecem aqui, com a decisão da gestão.</Empty></div>
+        : !list.data || list.data.moves.length === 0 ? <div className="panel"><Empty icon="truck" title="Nenhum pedido de mudança">Os pedidos de mudança e de entrega de móveis da unidade aparecem aqui, com a decisão da gestão.</Empty></div>
           : <ol className="management-list" aria-label="Pedidos de mudança da unidade">{list.data.moves.map((item) => {
             const open = (item.state === 'REQUESTED' || item.state === 'APPROVED') && Date.parse(item.startsAt) > Date.now();
             return <li key={item.moveId} className="management-row">
@@ -231,12 +231,12 @@ export function MoveManagementSection() {
         <button className="button button-secondary button-compact" type="button" disabled={list.isFetching} onClick={() => void list.refetch()}>Atualizar</button>
       </div></div>
     {filter === 'REQUESTED' ? <p className="field-help">Pedidos sem decisão cujo período já começou não podem mais ser decididos: saem desta fila e continuam em “Todos”.</p> : null}
-    {unavailable ? <div className="panel"><Empty title="Mudanças indisponíveis">As mudanças ainda não estão ativas neste ambiente.</Empty></div> : <>
+    {unavailable ? <div className="panel"><Empty icon="truck" title="Mudanças indisponíveis">As mudanças ainda não estão ativas neste ambiente.</Empty></div> : <>
       <MoveRulesEditor />
       {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
       {list.isPending ? <div className="panel"><Loading label="Consultando pedidos de mudança…" /></div>
         : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-          : !list.data || list.data.moves.length === 0 ? <div className="panel"><Empty title="Nenhum pedido de mudança">Nenhum pedido neste filtro.</Empty></div>
+          : !list.data || list.data.moves.length === 0 ? <div className="panel"><Empty icon="truck" title="Nenhum pedido de mudança">Nenhum pedido neste filtro.</Empty></div>
             : <ol className="management-list" aria-label="Pedidos de mudança">{list.data.moves.map((item) => {
               const current = acting?.moveId === item.moveId ? acting.action : null;
               return <li key={item.moveId} className="management-row">
@@ -370,7 +370,7 @@ export function ConciergeMoves() {
     {range === null ? <Notice tone="error">Escolha um dia válido.</Notice>
       : list.isPending ? <div className="panel"><Loading label="Consultando mudanças…" /></div>
         : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-          : !list.data || list.data.moves.length === 0 ? <div className="panel"><Empty title="Nenhuma mudança aprovada">Nenhuma mudança aprovada neste dia.</Empty></div>
+          : !list.data || list.data.moves.length === 0 ? <div className="panel"><Empty icon="truck" title="Nenhuma mudança aprovada">Nenhuma mudança aprovada neste dia.</Empty></div>
             : <ol className="management-list" aria-label="Mudanças aprovadas do dia">{list.data.moves.map((item) =>
               <li key={item.moveId} className="management-row"><MoveDetails item={item} timeZone={scope.timeZone} showUnit /></li>)}</ol>}
     {list.data?.truncated ? <Notice tone="warning">A lista mostra as 100 primeiras mudanças do dia.</Notice> : null}

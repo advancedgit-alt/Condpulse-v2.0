@@ -46,10 +46,10 @@ export function AnnouncementSection() {
     <p className="field-help">Texto simples, sem formatação. A unidade vê só avisos publicados para ela e recebe o texto ao abrir; a abertura fica registrada com a conta de quem abriu, mas não é ciência jurídica nem prova de recebimento.</p>
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {editing?.id === null ? <DraftForm targets={targets} close={close} /> : null}
-    {unavailable ? <div className="panel"><Empty title="Avisos indisponíveis">Os avisos ainda não estão ativos neste ambiente.</Empty></div>
+    {unavailable ? <div className="panel"><Empty icon="bell" title="Avisos indisponíveis">Os avisos ainda não estão ativos neste ambiente.</Empty></div>
       : list.isPending ? <div className="panel"><Loading label="Consultando avisos…" /></div>
         : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-          : !list.data || list.data.announcements.length === 0 ? <div className="panel"><Empty title="Nenhum aviso">Crie um rascunho para publicar ao condomínio, a blocos ou a unidades.</Empty></div>
+          : !list.data || list.data.announcements.length === 0 ? <div className="panel"><Empty icon="bell" title="Nenhum aviso">Crie um rascunho para publicar ao condomínio, a blocos ou a unidades.</Empty></div>
             : <ol className="management-list" aria-label="Avisos do condomínio">{list.data.announcements.map((item) => {
               const [label, tone] = stateLabels[item.state];
               const open = editing?.id === item.announcementId ? editing.action : null;

@@ -6,7 +6,7 @@ import { parcels, type Parcel, type ParcelMutation, type ParcelStatus, type Rece
 import { collapseText, displayText } from '../../api/text';
 import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
-import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from '../primitives';
+import { Empty, ErrorState, Icon, Loading, Notice, SectionTabs, errorMessage, type IconName } from '../primitives';
 import { dateInZone, formatWhen } from '../dateTime';
 import { ActionFeedback, ManagementProvider, useAccessGuard, useAction, useManagement, type ActionResult, type ManagementScope } from '../management/shared';
 import { codeOf, conciergeKey, repeatFailure, settleFailure, unitName, useIntent } from './shared';
@@ -17,15 +17,15 @@ import { AccessHealthSection, ConciergeDeviceEvents, ConciergePendingRevocations
 import '../management/Management.css';
 
 export type ConciergeSection = 'encomendas' | 'visitas' | 'ocorrencias';
-export const conciergeSections: { id: ConciergeSection; label: string }[] = [{ id: 'encomendas', label: 'Encomendas' }, { id: 'visitas', label: 'Visitas' },
-  { id: 'ocorrencias', label: 'Ocorrências' }];
+export const conciergeSections: { id: ConciergeSection; label: string; icon: IconName }[] = [{ id: 'encomendas', label: 'Encomendas', icon: 'box' },
+  { id: 'visitas', label: 'Visitas', icon: 'door' }, { id: 'ocorrencias', label: 'Ocorrências', icon: 'alert' }];
 
 /** Portaria do condomínio: exige vínculo CONCIERGE vigente e segundo fator; o servidor confere de novo em cada ação. */
 export function ConciergePage({ section }: { section: ConciergeSection }) {
   const { identity } = useAuth();
   const { tenantId = '' } = useParams();
   const membership = identity?.memberships.find((item) => item.tenantId === tenantId && item.role === 'CONCIERGE');
-  if (!identity || !membership) return <div className="panel"><Empty title="Portaria indisponível">Seu cadastro não inclui a portaria deste condomínio. Volte para escolher um acesso disponível.</Empty></div>;
+  if (!identity || !membership) return <div className="panel"><Empty icon="shield" title="Portaria indisponível">Seu cadastro não inclui a portaria deste condomínio. Volte para escolher um acesso disponível.</Empty></div>;
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido antes de abrir a portaria.</Notice>; }
   return <ConciergeGate key={`${identity.accountId}:${tenantId}`} section={section} scope={{ accountId: identity.accountId, tenantId,
@@ -66,8 +66,7 @@ function ConciergeGate({ scope, section }: { scope: ManagementScope; section: Co
         ? 'Chegadas, confirmações e encerramentos ficam registrados com o seu acesso. Sem resposta da unidade nada é liberado automaticamente.'
         : 'Recebimentos, retiradas e anulações ficam registrados com o seu acesso. O aviso ao morador segue em fila e nunca condiciona o registro.'} Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão da portaria</span></div></div></div>
-    <nav className="management-tabs" aria-label="Seções da portaria">{conciergeSections.map((item) =>
-      <Link key={item.id} to={`/portaria/${scope.tenantId}/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    <SectionTabs label="Seções da portaria" current={section} items={conciergeSections.map((item) => ({ id: item.id, label: item.label, to: `/portaria/${scope.tenantId}/${item.id}` }))} />
     {section === 'ocorrencias' ? <OccurrenceSection canPickUnit /> : section === 'visitas' ? <><ArrivalDesk /><ConciergePendingRevocations /><AccessHealthSection /><ConciergeDeviceEvents /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
   </ManagementProvider>;
 }
@@ -200,7 +199,7 @@ function ParcelQueue() {
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {list.isPending ? <div className="panel"><Loading label="Consultando encomendas…" /></div>
       : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-        : !list.data || list.data.parcels.length === 0 ? <div className="panel"><Empty title="Nenhuma encomenda">{current.empty}</Empty></div>
+        : !list.data || list.data.parcels.length === 0 ? <div className="panel"><Empty icon="box" title="Nenhuma encomenda">{current.empty}</Empty></div>
           : <ol className="management-list" aria-label="Encomendas">{list.data.parcels.map((parcel) => <li key={parcel.parcelId} className="management-row">
             <div><strong><bdi>{unitName(parcel)}</bdi></strong> <ParcelPill parcel={parcel} />
               <span>{volumes(parcel.quantity)} · <bdi>{parcel.storageLocation}</bdi> · recebida em {formatWhen(parcel.receivedAt, scope.timeZone)}</span>

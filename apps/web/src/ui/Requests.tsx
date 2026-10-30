@@ -42,7 +42,7 @@ export function UnitRequests({ scope, timeZone }: { scope: Scope; timeZone: stri
     }} /> : null}
     {list.isPending ? <div className="panel"><Loading label="Consultando os pedidos…" /></div>
       : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-        : !list.data || list.data.requests.length === 0 ? <div className="panel"><Empty title="Nenhum pedido">Os pedidos abertos pela unidade aparecem aqui, com o andamento informado pela gestão.</Empty></div>
+        : !list.data || list.data.requests.length === 0 ? <div className="panel"><Empty icon="chat" title="Nenhum pedido">Os pedidos abertos pela unidade aparecem aqui, com o andamento informado pela gestão.</Empty></div>
           : <ol className="management-list" aria-label="Pedidos da unidade">{list.data.requests.map((item) => {
             const [label, tone] = stateLabels[item.state];
             return <li key={item.requestId} className="management-row">

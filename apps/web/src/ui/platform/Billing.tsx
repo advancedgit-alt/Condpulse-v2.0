@@ -91,7 +91,7 @@ function Charges() {
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {charges.isPending ? <div className="panel"><Loading label="Consultando cobranças…" /></div>
       : charges.isError && !charges.data ? <ErrorState error={charges.error} retry={() => void charges.refetch()} />
-        : !charges.data || charges.data.charges.length === 0 ? <div className="panel"><Empty title="Nenhuma cobrança">Nenhuma cobrança nesta situação.</Empty></div>
+        : !charges.data || charges.data.charges.length === 0 ? <div className="panel"><Empty icon="card" title="Nenhuma cobrança">Nenhuma cobrança nesta situação.</Empty></div>
           : <ol className="management-list" aria-label="Cobranças">{charges.data.charges.map((charge) => <li key={charge.chargeId} className="management-row">
             <div><strong><bdi>{charge.tenantName}</bdi></strong> <ChargeStatus charge={charge} />
               <span>Período de {formatCivil(charge.periodStart)} a {formatCivil(charge.periodEnd)} · {formatCents(charge.amountCents)} · vencimento em {formatCivil(charge.dueOn)}</span>
@@ -195,7 +195,7 @@ function Subscriptions() {
     {manage && creating ? <SubscriptionForm close={finish} /> : null}
     {subscriptions.isPending ? <div className="panel"><Loading label="Consultando assinaturas…" /></div>
       : subscriptions.isError && !subscriptions.data ? <ErrorState error={subscriptions.error} retry={() => void subscriptions.refetch()} />
-        : !subscriptions.data || subscriptions.data.length === 0 ? <div className="panel"><Empty title="Nenhuma assinatura">As assinaturas dos condomínios aparecerão aqui.</Empty></div>
+        : !subscriptions.data || subscriptions.data.length === 0 ? <div className="panel"><Empty icon="card" title="Nenhuma assinatura">As assinaturas dos condomínios aparecerão aqui.</Empty></div>
           : <ol className="management-list" aria-label="Assinaturas">{subscriptions.data.map((subscription) => <li key={subscription.subscriptionId} className="management-row">
             <div><strong><bdi>{subscription.tenantName}</bdi></strong> <SubscriptionStatus subscription={subscription} />
               <span>Plano <bdi>{subscription.planName}</bdi> · {formatCents(subscription.priceCents)} por {perPeriod(subscription.period)} · início em {formatCivil(subscription.startsOn)} · vencimento no dia {subscription.dueDay}{subscription.endsOn ? ` · ${subscription.endsOn > today() ? 'encerra' : 'encerrada'} em ${formatCivil(subscription.endsOn)}` : ''}</span></div>
@@ -357,7 +357,7 @@ function Plans() {
     {manage && creating ? <PlanForm close={finish} /> : null}
     {plans.isPending ? <div className="panel"><Loading label="Consultando planos…" /></div>
       : plans.isError && !plans.data ? <ErrorState error={plans.error} retry={() => void plans.refetch()} />
-        : !plans.data || plans.data.length === 0 ? <div className="panel"><Empty title="Nenhum plano">Os planos aprovados aparecerão aqui.</Empty></div>
+        : !plans.data || plans.data.length === 0 ? <div className="panel"><Empty icon="card" title="Nenhum plano">Os planos aprovados aparecerão aqui.</Empty></div>
           : <ol className="management-list" aria-label="Planos">{plans.data.map((plan) => <li key={plan.planId} className="management-row">
             <div><strong><bdi>{plan.name}</bdi></strong> <span className={`status-pill ${plan.active ? 'status-ready' : 'status-neutral'}`}>{plan.active ? 'Disponível' : 'Indisponível'}</span>
               <span>{formatCents(plan.priceCents)} por {perPeriod(plan.period)} · versão {plan.version}</span></div>

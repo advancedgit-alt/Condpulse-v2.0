@@ -44,7 +44,7 @@ export function UnitAnnouncements({ scope, timeZone }: { scope: Scope; timeZone:
     <p className="field-help">Abrir mostra o texto e registra a abertura com a sua conta. Abertura não é ciência jurídica nem confirmação de recebimento.</p>
     {list.isPending ? <div className="panel"><Loading label="Consultando os avisos…" /></div>
       : list.isError && !list.data ? <ErrorState error={list.error} retry={() => void list.refetch()} />
-        : !list.data || list.data.announcements.length === 0 ? <div className="panel"><Empty title="Nenhum aviso">Os avisos publicados pela gestão para esta unidade aparecem aqui.</Empty></div>
+        : !list.data || list.data.announcements.length === 0 ? <div className="panel"><Empty icon="bell" title="Nenhum aviso">Os avisos publicados pela gestão para esta unidade aparecem aqui.</Empty></div>
           : <ol className="management-list" aria-label="Avisos do condomínio">{list.data.announcements.map((item) => {
             const content = opened[item.announcementId];
             const openedAt = content?.openedAt ?? item.openedAt;

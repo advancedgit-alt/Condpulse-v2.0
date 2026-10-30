@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
-import { Empty, ErrorState, Icon, Loading, Notice } from '../primitives';
+import { Empty, ErrorState, Icon, Loading, Notice, SectionTabs, type IconName } from '../primitives';
 import { dateInZone } from '../dateTime';
 import { AnnouncementSection } from './Announcements';
 import { RequestSection } from './Requests';
@@ -20,19 +20,19 @@ import { ManagementProvider, type ManagementScope } from './shared';
 import './Management.css';
 
 export const managementSections = [
-  { id: 'pendencias', label: 'Pendências' },
-  { id: 'reservas', label: 'Reservas' },
-  { id: 'areas', label: 'Áreas' },
-  { id: 'unidades', label: 'Unidades' },
-  { id: 'importacao', label: 'Importação' },
-  { id: 'pessoas', label: 'Pessoas' },
-  { id: 'avisos', label: 'Avisos' },
-  { id: 'pedidos', label: 'Pedidos' },
-  { id: 'mudancas', label: 'Mudanças' },
-  { id: 'acesso', label: 'Acesso' },
-  { id: 'ocorrencias', label: 'Ocorrências' },
-  { id: 'auditoria', label: 'Auditoria' },
-] as const;
+  { id: 'pendencias', label: 'Pendências', icon: 'check' },
+  { id: 'reservas', label: 'Reservas', icon: 'calendar' },
+  { id: 'areas', label: 'Áreas', icon: 'grid' },
+  { id: 'unidades', label: 'Unidades', icon: 'building' },
+  { id: 'importacao', label: 'Importação', icon: 'upload' },
+  { id: 'pessoas', label: 'Pessoas', icon: 'users' },
+  { id: 'avisos', label: 'Avisos', icon: 'bell' },
+  { id: 'pedidos', label: 'Pedidos', icon: 'chat' },
+  { id: 'mudancas', label: 'Mudanças', icon: 'truck' },
+  { id: 'acesso', label: 'Acesso', icon: 'key' },
+  { id: 'ocorrencias', label: 'Ocorrências', icon: 'alert' },
+  { id: 'auditoria', label: 'Auditoria', icon: 'clock' },
+] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 export type ManagementSection = typeof managementSections[number]['id'];
 
 /** Gestão do condomínio: exige vínculo MANAGER vigente e segundo fator; o backend confere de novo em cada ação. */
@@ -40,7 +40,7 @@ export function ManagementPage() {
   const { identity } = useAuth();
   const { tenantId = '', section = 'pendencias' } = useParams();
   const membership = identity?.memberships.find((item) => item.tenantId === tenantId && item.role === 'MANAGER');
-  if (!identity || !membership) return <div className="panel"><Empty title="Gestão indisponível">Seu cadastro não inclui a gestão deste condomínio. Volte para escolher um acesso disponível.</Empty></div>;
+  if (!identity || !membership) return <div className="panel"><Empty icon="shield" title="Gestão indisponível">Seu cadastro não inclui a gestão deste condomínio. Volte para escolher um acesso disponível.</Empty></div>;
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido antes de abrir a gestão.</Notice>; }
   const current = managementSections.some((item) => item.id === section) ? section as ManagementSection : 'pendencias';
@@ -86,8 +86,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     <div className="residence-heading"><div><span className="eyebrow">GESTÃO DO CONDOMÍNIO</span><h1>{scope.tenantName}</h1>
       <p>Decisões e cadastros ficam registrados na auditoria com autor e motivo. Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de gestão</span></div></div></div>
-    <nav className="management-tabs" aria-label="Seções da gestão">{managementSections.map((item) =>
-      <Link key={item.id} to={`${base}/${item.id}`} aria-current={item.id === section ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    <SectionTabs label="Seções da gestão" current={section} items={managementSections.map((item) => ({ id: item.id, label: item.label, to: `${base}/${item.id}` }))} />
     {section === 'pendencias' ? <Overview /> : null}
     {section === 'reservas' ? <ReservationAgenda /> : null}
     {section === 'areas' ? <AmenitySection /> : null}

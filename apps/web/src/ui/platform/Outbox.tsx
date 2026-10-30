@@ -43,7 +43,7 @@ export function OutboxSection() {
     {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
     {summary.isPending ? <div className="panel"><Loading label="Consultando a fila…" /></div>
       : summary.isError && !summary.data ? <ErrorState error={summary.error} retry={() => void summary.refetch()} />
-        : tenants.length === 0 ? <div className="panel"><Empty title="Fila vazia">Nenhum condomínio com tarefa pendente, com falha ou ignorada.</Empty></div>
+        : tenants.length === 0 ? <div className="panel"><Empty icon="list" title="Fila vazia">Nenhum condomínio com tarefa pendente, com falha ou ignorada.</Empty></div>
           : <ol className="management-list" aria-label="Fila por condomínio">{tenants.map((item) => <QueueRow key={item.tenantId} item={item} />)}</ol>}
     <div className="reason-form" role="group" aria-label="Filtro das tarefas">
       <label htmlFor="outbox-state">Situação</label>
