@@ -51,7 +51,7 @@ jobs:
           mkdir -p "$copy" && cp -R spec "$copy/"
           python3 -I "$copy/spec/qualidade/validar_estrutura.py"
       - name: BFF staging guards and protocol without managed credentials
-        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs
+        run: node --test --test-reporter=tap tests/bff-configuration.test.mjs tests/bff-configuration-policy.test.mjs tests/runtime-flags.test.mjs
       - name: Manual onboarding boundary without managed credentials
         run: node --test --test-reporter=tap tests/onboarding-operations.test.mjs tests/onboarding-operations-policy.test.mjs
       - name: Compile and unit tests
