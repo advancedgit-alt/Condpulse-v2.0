@@ -84,6 +84,11 @@ function cleanupFixtures() {
     delete from cp.memberships where tenant_id='${tenant}';
     delete from cp.amenities where tenant_id='${tenant}';
     delete from cp.units where tenant_id='${tenant}';
+    set local session_replication_role=replica;
+    delete from cp.security_log where tenant_id='${tenant}';
+    delete from cp.security_log_heads where tenant_id='${tenant}';
+    delete from platform.security_log_anchors where tenant_id='${tenant}';
+    set local session_replication_role=origin;
     delete from platform.tenants where id='${tenant}';
     delete from platform.accounts where id in (select account_id from gone); commit;`);
   ensure(sql(`select count(*) from platform.tenants where id='${tenant}'`) === '0', 'FIXTURE_CLEANUP_FAILED');

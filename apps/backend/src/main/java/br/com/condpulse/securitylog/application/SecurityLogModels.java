@@ -18,6 +18,8 @@ public final class SecurityLogModels {
  public static final String CANONICALIZATION="cpsl1";
 
  /** Papéis de equipe de parceiro: para a gestão local só aparece o papel, nunca a conta (R5.6). */
+ /** Chaves de details com conta de pessoa, ocultadas da gestão local nos eventos da equipe do parceiro (R5.6). */
+ public static final Set<String> PROTECTED_DETAIL_KEYS=Set.of("actorId","accountId");
  public static final Set<String> PARTNER_ROLES=Set.of("PARTNER_ADMIN","SECURITY_LEAD","SECURITY_SUPERVISOR","REMOTE_OPERATOR","TECHNICIAN");
 
  public record Filter(String eventType,String severity,UUID actorId,Instant from,Instant until,Long beforeSeq,int limit) {
@@ -56,8 +58,11 @@ public final class SecurityLogModels {
   /** Gestão local não vê a conta da equipe do parceiro, só o papel (R5.6). */
   public Event maskedForTenant() {
    if(actorRole==null || !PARTNER_ROLES.contains(actorRole)) return this;
+   // Também saem dos detalhes as contas que a equipe do parceiro registrou (ex.: filtro actorId de SENSITIVE_VIEWED).
+   var visible=new java.util.LinkedHashMap<String,Object>(details);
+   visible.keySet().removeAll(PROTECTED_DETAIL_KEYS);
    return new Event(eventId,seq,occurredAt,recordedAt,clockSkewMs,eventType,severity,source,partnerId,null,actorRole,subjectType,subjectId,
-    unitId,pointId,deviceId,reason,evidenceRef,correlationId,traceId,correctsId,details,prevHash,hash);
+    unitId,pointId,deviceId,reason,evidenceRef,correlationId,traceId,correctsId,visible,prevHash,hash);
   }
  }
  public record Page(List<Event> events,Long nextBeforeSeq) {

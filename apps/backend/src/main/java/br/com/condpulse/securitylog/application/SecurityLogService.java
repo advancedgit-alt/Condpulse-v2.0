@@ -74,7 +74,9 @@ public class SecurityLogService {
     throw new BusinessProblem("SECURITY_LOG_EXPORT_TOO_LARGE",400,"Exporte no máximo "+SecurityLogModels.MAX_EXPORT+" eventos por vez.");
    var events=store.range(tenant,from,to);
    // Intervalo contíguo e encadeado: um buraco ou elo quebrado não vira arquivo "íntegro".
-   if(!SecurityLogModels.linked(events,from,to))
+   // O digest de cada evento é recalculado no banco (mesma forma canônica da gravação) e o primeiro elo é conferido com
+   // o evento anterior: dado alterado com os hashes originais nunca sai num manifesto "íntegro".
+   if(!SecurityLogModels.linked(events,from,to) || !store.rangeIntact(tenant,from,to))
     throw new BusinessProblem("SECURITY_LOG_CHAIN_BROKEN",409,"A cadeia do log está quebrada neste intervalo. Verifique a integridade.");
    UUID eventId=UUID.randomUUID();
    var first=events.getFirst();

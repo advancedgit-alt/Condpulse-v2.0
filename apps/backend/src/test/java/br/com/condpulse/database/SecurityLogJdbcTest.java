@@ -173,8 +173,39 @@ class SecurityLogJdbcTest {
   // Alteração manual de um campo (gatilhos desligados) é detectada no evento exato.
   db.adminUpdateWithoutTriggers("update cp.security_log_heads set last_seq=last_seq+1 where tenant_id=?",db.tenantB);
   assertTrue(log.integrity(managerB,db.tenantB,AAL2).intact(),"Cabeça restaurada");
+  // Líder de segurança do parceiro com contrato ativo no condomínio B (V049): lê sem máscara e exporta com manifesto.
+  UUID lead=UUID.randomUUID(),partner=UUID.randomUUID(); db.extraAccounts.add(lead);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",lead);
+  db.adminUpdateWithoutTriggers("insert into platform.partners(id,name,created_by,updated_by) values(?,'PARCEIRO LOG JDBC',?,?)",partner,db.accountA,db.accountA);
+  db.adminUpdateWithoutTriggers("insert into platform.partner_members(id,partner_id,account_id,role,display_name,created_by) values(?,?,?,'SECURITY_LEAD','LIDER LOG JDBC',?)",
+   UUID.randomUUID(),partner,lead,db.accountA);
+  db.adminUpdateWithoutTriggers("insert into platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) "
+   +"values(?,?,?,'SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio do log',?)",UUID.randomUUID(),partner,db.tenantB,db.accountA);
+  log.page(lead,db.tenantB,AAL2,SecurityLogModels.Filter.of(null,null,lead,null,null,null,5));
+  // R5.6: a gestão local vê o papel do líder, sem a conta, nem no actorId registrado nos detalhes da consulta dele.
+  var seenByManager=log.page(managerB,db.tenantB,AAL2,SecurityLogModels.Filter.of("SENSITIVE_VIEWED",null,null,null,null,null,50)).events().stream()
+   .filter(e->"SECURITY_LEAD".equals(e.actorRole())).findFirst().orElseThrow();
+  assertNull(seenByManager.actorAccountId()); assertEquals(partner,seenByManager.partnerId());
+  assertFalse(seenByManager.details().containsKey("actorId"),"Conta do parceiro não aparece nos detalhes para a gestão local");
+  assertFalse(seenByManager.details().toString().contains(lead.toString()));
+  var leadView=log.page(lead,db.tenantB,AAL2,SecurityLogModels.Filter.of("SENSITIVE_VIEWED",null,lead,null,null,null,5)).events().getFirst();
+  assertEquals(lead,leadView.actorAccountId(),"O parceiro vê a própria equipe");
+  var export=log.export(lead,db.tenantB,AAL2,new SecurityLogModels.ExportRequest("Pedido ficticio de auditoria do contrato",null,null));
+  assertEquals(1L,export.manifest().fromSeq()); assertEquals(export.events().size(),export.manifest().count());
+  assertEquals(export.events().getLast().hash(),export.manifest().lastHash()); assertEquals(lead,export.manifest().exportedBy());
+  assertEquals("SECURITY_LEAD|"+partner,db.adminString("select actor_role||'|'||partner_id from cp.security_log where tenant_id=? and id=?",
+   db.tenantB,export.manifest().exportEventId()));
+  assertTrue(log.integrity(managerB,db.tenantB,AAL2).intact());
   db.adminUpdateWithoutTriggers("update cp.security_log set reason='adulterado' where tenant_id=? and seq=1",db.tenantB);
   var broken=log.integrity(managerB,db.tenantB,AAL2);
   assertFalse(broken.intact()); assertEquals("HASH_MISMATCH",broken.problem()); assertEquals(1L,broken.brokenSeq());
+  // Exportação recalcula o digest: evento alterado com os hashes originais recusa o intervalo e nada é gravado.
+  long exported=count(db.tenantB,"LOG_EXPORTED");
+  assertEquals("SECURITY_LOG_CHAIN_BROKEN",assertThrows(BusinessProblem.class,
+   ()->log.export(lead,db.tenantB,AAL2,new SecurityLogModels.ExportRequest("Pedido ficticio de auditoria do contrato",1L,3L))).code());
+  assertEquals(exported,count(db.tenantB,"LOG_EXPORTED"));
+  // Intervalo depois do evento adulterado continua exportável (o elo com o anterior é o hash gravado).
+  long last=Long.parseLong(db.adminString("select max(seq) from cp.security_log where tenant_id=?",db.tenantB));
+  assertEquals(last,log.export(lead,db.tenantB,AAL2,new SecurityLogModels.ExportRequest("Pedido ficticio de auditoria do contrato",2L,last)).manifest().toSeq());
  }
 }

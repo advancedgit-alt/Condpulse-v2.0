@@ -70,6 +70,14 @@ class SecurityLogRulesTest {
   var local=event(1,"0".repeat(64),"a".repeat(64),"MANAGER",actor).maskedForTenant();
   assertEquals(actor,local.actorAccountId());
   assertTrue(partner.details().containsKey("nullable"),"details aceita valor nulo do JSON");
+  // R5.6: contas registradas nos detalhes pela equipe do parceiro também saem para a gestão local.
+  var details=new HashMap<String,Object>(); details.put("actorId",actor.toString()); details.put("accountId",actor.toString()); details.put("view","SECURITY_LOG");
+  var withAccounts=new SecurityLogModels.Event(UUID.randomUUID(),2,Instant.EPOCH,Instant.EPOCH,null,"SENSITIVE_VIEWED","INFO","MANAGEMENT",null,actor,
+   "SECURITY_LEAD","SECURITY_LOG",null,null,null,null,null,null,null,null,null,details,"0".repeat(64),"a".repeat(64)).maskedForTenant();
+  assertEquals(Map.of("view","SECURITY_LOG"),withAccounts.details());
+  var localDetails=new SecurityLogModels.Event(UUID.randomUUID(),2,Instant.EPOCH,Instant.EPOCH,null,"SENSITIVE_VIEWED","INFO","MANAGEMENT",null,actor,
+   "MANAGER","SECURITY_LOG",null,null,null,null,null,null,null,null,null,details,"0".repeat(64),"a".repeat(64)).maskedForTenant();
+  assertEquals(actor.toString(),localDetails.details().get("actorId"),"Equipe local não é mascarada");
  }
 
  @Test void exportRangeMustBeContiguousAndLinked() {

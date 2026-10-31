@@ -46,6 +46,20 @@ public class SecurityLogStore {
   return jdbc.query("select "+COLUMNS+" from cp.security_log where tenant_id=? and seq between ? and ? order by seq",
    (r,n)->event(r),tenant,fromSeq,toSeq);
  }
+ /**
+  * Intervalo íntegro pelo banco: digest recalculado de cada evento igual ao hash gravado e, a partir do segundo evento
+  * do condomínio, prev_hash do primeiro igual ao hash do anterior.
+  */
+ public boolean rangeIntact(UUID tenant,long fromSeq,long toSeq) {
+  Boolean intact=jdbc.queryForObject("""
+   select not exists(select 1 from cp.security_log s where s.tenant_id=? and s.seq between ? and ?
+     and cp.security_log_digest(s.prev_hash,s)<>s.hash)
+    and (?=1 and exists(select 1 from cp.security_log f where f.tenant_id=? and f.seq=1 and f.prev_hash=repeat('0',64))
+     or exists(select 1 from cp.security_log f join cp.security_log b on b.tenant_id=f.tenant_id and b.seq=f.seq-1
+      where f.tenant_id=? and f.seq=? and f.prev_hash=b.hash))
+   """,Boolean.class,tenant,fromSeq,toSeq,fromSeq,tenant,tenant,fromSeq);
+  return Boolean.TRUE.equals(intact);
+ }
  /** Último seq visível do condomínio (0 sem eventos). */
  public long lastSeq(UUID tenant) {
   Long last=jdbc.queryForObject("select coalesce(max(seq),0) from cp.security_log where tenant_id=?",Long.class,tenant);
