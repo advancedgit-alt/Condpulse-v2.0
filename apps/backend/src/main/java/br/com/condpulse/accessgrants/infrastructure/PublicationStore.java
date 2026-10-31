@@ -61,8 +61,8 @@ public class PublicationStore {
    """,(r,n)->r.getObject(1,UUID.class),tenant,tenant,limit);
  }
  public List<UUID> existingSubjects(UUID tenant,List<UUID> ids) {
-  return jdbc.query("select id from cp.access_subjects where tenant_id=? and id=any(?::uuid[]) order by id",(r,n)->r.getObject(1,UUID.class),
-   tenant,ids.toArray(UUID[]::new));
+  return jdbc.query("select id from cp.access_subjects where tenant_id=? and id=any(?::text[]::uuid[]) order by id",(r,n)->r.getObject(1,UUID.class),
+   tenant,ids.stream().map(UUID::toString).toArray(String[]::new));
  }
 
  /**
@@ -82,24 +82,32 @@ public class PublicationStore {
  }
  /** Direito vigente que ficou fora do documento de um destino, com o motivo do predicado único (cp.rights_targets). */
  public record Excluded(UUID deviceId,String issue) {}
+ /** Visão do sujeito numa só avaliação dos alvos: motivos de exclusão e destinos acima do limite do documento. */
+ public record Review(List<Excluded> excluded,List<UUID> oversized) {}
  /**
-  * Destinos onde um direito vigente do sujeito ficou fora do documento (falha fechada: o compilado não o concede e retira o
-  * que estava publicado), um motivo por destino e motivo.
+  * Uma chamada a cp.rights_targets por sujeito (o mesmo filtro de cp.rights_entries: alvo vigente sem motivo entra no
+  * documento): direitos vigentes fora do documento, com motivo por destino, e destinos que passariam de 512 entradas
+  * (o compilado retira tudo deles: falha fechada).
   */
- public List<Excluded> excluded(UUID tenant,UUID subject) {
-  return scan(()->jdbc.query("""
-   select distinct x.device_id,x.issue from cp.rights_targets(?,?) x
-   where x.issue is not null and x.valid_until>clock_timestamp() and cp.access_grant_current(?,x.grant_id,greatest(clock_timestamp(),x.valid_from))
-   order by 1,2
-   """,(r,n)->new Excluded(r.getObject(1,UUID.class),r.getString(2)),tenant,subject,tenant));
+ public Review review(UUID tenant,UUID subject) {
+  var excluded=new java.util.ArrayList<Excluded>();
+  var oversized=new java.util.ArrayList<UUID>();
+  scan(()->{
+   jdbc.query("""
+    with x as materialized (select * from cp.rights_targets(?,?))
+    select device_id,issue from (select distinct device_id,issue from x where issue is not null and is_current) e
+    union all
+    select device_id,null from x where issue is null and is_current group by device_id having count(*)>512
+    order by 1,2
+    """,(org.springframework.jdbc.core.RowCallbackHandler)r->{
+     UUID device=r.getObject(1,UUID.class);
+     if(r.getString(2)!=null) excluded.add(new Excluded(device,r.getString(2))); else oversized.add(device);
+    },tenant,subject);
+   return null;
+  });
+  return new Review(List.copyOf(excluded),List.copyOf(oversized));
  }
- /** Destinos cujo documento passaria de 512 entradas (o compilado retira tudo do destino: falha fechada). */
- public List<UUID> oversized(UUID tenant,UUID subject) {
-  return scan(()->jdbc.query("""
-   select d.device from (select distinct device from cp.rights_destinations(?,?) device) d
-   where jsonb_array_length(cp.rights_entries(?,?,d.device))>512 order by 1
-   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject));
- }
+
  /** Grava o trabalho de um destino; o banco compila de novo e recusa o que não pode publicar. */
  public void planDevice(UUID tenant,UUID operation,UUID subject,UUID device,UUID actor) {
   scan(()->jdbc.update("insert into cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) values(?,?,?,?,'PLAN',?)",

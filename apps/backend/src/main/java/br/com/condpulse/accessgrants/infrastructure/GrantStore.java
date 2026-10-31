@@ -95,11 +95,53 @@ public class GrantStore {
   */
  public record Sweep(GrantModels.Grant grant,boolean originValid) {}
  public List<Sweep> activeInArea(UUID tenant,UUID area) {
-  return scan(()->jdbc.query("select "+GRANT_COLUMNS+" from cp.access_grants g where g.tenant_id=? and g.area_id=? and g.status='ACTIVE' order by g.generation",
-   (r,n)->new Sweep(mapGrant(r,n),r.getBoolean("origin_valid")),tenant,area));
+  // Validade na origem avaliada de uma vez para a área (cp.access_grants_current_now, V046, mesmo predicado de
+  // cp.access_grant_current): uma chamada por direito replanejava a função e estourava o prazo da transação com centenas.
+  return scan(()->jdbc.query("""
+   with cur as materialized (select c.id from cp.access_grants_current_now(?,null,?) c(id))
+   select g.id,g.subject_id,g.context_id,g.area_id,g.policy_id,g.policy_version_id,g.origin_kind,
+    coalesce(g.origin_reservation_id,g.origin_permit_id,g.origin_functional_context_id,g.origin_membership_id) origin_id,g.origin_version,g.valid_from,
+    g.valid_until,g.generation,g.subject_restriction_epoch,g.status,g.status_reason_code,g.revocation_marker_id,g.version,
+    exists(select 1 from cur where cur.id=g.id) origin_valid
+   from cp.access_grants g where g.tenant_id=? and g.area_id=? and g.status='ACTIVE' order by g.generation
+   """,(r,n)->{
+    boolean origin=r.getBoolean("origin_valid");
+    Instant from=r.getTimestamp("valid_from").toInstant(),until=r.getTimestamp("valid_until").toInstant(),now=Instant.now();
+    var g=new GrantModels.Grant(r.getObject("id",UUID.class),r.getObject("subject_id",UUID.class),r.getObject("context_id",UUID.class),
+     r.getObject("area_id",UUID.class),r.getObject("policy_id",UUID.class),r.getObject("policy_version_id",UUID.class),r.getString("origin_kind"),
+     r.getObject("origin_id",UUID.class),r.getLong("origin_version"),from,until,r.getLong("generation"),r.getLong("subject_restriction_epoch"),
+     r.getString("status"),r.getString("status_reason_code"),r.getObject("revocation_marker_id",UUID.class),
+     origin && !from.isAfter(now) && until.isAfter(now),r.getLong("version"));
+    return new Sweep(g,origin);
+   },tenant,area,tenant,area));
  }
  public String key(UUID subject,UUID context,UUID area,UUID version,String kind,UUID origin,long originVersion,long epoch,UUID evidence) {
   return jdbc.queryForObject("select cp.access_grant_key(?,?,?,?,?,?,?,?,?)",String.class,subject,context,area,version,kind,origin,originVersion,epoch,evidence);
+ }
+ /** Chaves de várias derivações numa só consulta (mesma função do banco, na mesma ordem). */
+ public List<String> keys(UUID area,UUID version,List<GrantPlanner.Planned> planned) {
+  if(planned.isEmpty()) return List.of();
+  int n=planned.size();
+  String[] subjects=new String[n],contexts=new String[n],kinds=new String[n],origins=new String[n],evidence=new String[n];
+  Long[] originVersions=new Long[n],epochs=new Long[n];
+  for(int i=0;i<n;i++) {
+   var p=planned.get(i); var c=p.candidate();
+   subjects[i]=c.subjectId().toString(); contexts[i]=c.contextId().toString(); kinds[i]=p.originKind(); origins[i]=p.originId().toString();
+   originVersions[i]=p.originVersion(); epochs[i]=c.restrictionEpoch(); evidence[i]=p.ageEvidenceId()==null?null:p.ageEvidenceId().toString();
+  }
+  return jdbc.query("""
+   select cp.access_grant_key(t.s::uuid,t.c::uuid,?::uuid,?::uuid,t.k,t.o::uuid,t.ov,t.e,t.ev::uuid)
+   from unnest(?::text[],?::text[],?::text[],?::text[],?::bigint[],?::bigint[],?::text[]) with ordinality t(s,c,k,o,ov,e,ev,n) order by t.n
+   """,(r,i)->r.getString(1),area,version,subjects,contexts,kinds,origins,originVersions,epochs,evidence);
+ }
+ /** Estado de cada chave: ACTIVE (já derivado), REVOKED (revogação vence; prevalece) ou ausente. */
+ public java.util.Map<String,String> keyStates(UUID tenant,List<String> keys) {
+  var states=new java.util.HashMap<String,String>();
+  if(keys.isEmpty()) return states;
+  jdbc.query("select derivation_key,status from cp.access_grants where tenant_id=? and derivation_key=any(?::text[]) and status in ('ACTIVE','REVOKED')",
+   (org.springframework.jdbc.core.RowCallbackHandler)r->states.merge(r.getString(1),r.getString(2),(a,b)->"REVOKED".equals(a)||"REVOKED".equals(b)?"REVOKED":a),
+   tenant,keys.toArray(String[]::new));
+  return states;
  }
  /** Estado da chave: ACTIVE (já derivado), REVOKED (revogação vence) ou null. */
  public String keyState(UUID tenant,String key) {

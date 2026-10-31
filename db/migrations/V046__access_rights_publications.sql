@@ -117,30 +117,77 @@ AS $$ SELECT CASE
 REVOKE ALL ON FUNCTION cp.rights_destination_issue(jsonb,text,timestamptz,text[],text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_destination_issue(jsonb,text,timestamptz,text[],text) TO cp_api;
 
+-- Direitos (do sujeito e/ou da área) vigentes na origem agora (no início da janela, quando futura): o mesmo predicado de
+-- cp.access_grant_current (V044), avaliado de uma vez para o conjunto (a função por linha replaneja a cada chamada e
+-- tornava a compilação de centenas de direitos lenta demais para a transação). A paridade com cp.access_grant_current é
+-- conferida no harness para todos os direitos.
+CREATE FUNCTION cp.access_grants_current_now(target_tenant uuid,target_subject uuid,target_area uuid) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT g.id
+  FROM cp.access_grants g
+  CROSS JOIN LATERAL (SELECT greatest(clock_timestamp(),g.valid_from) at) t
+  JOIN cp.access_subjects s ON s.tenant_id=g.tenant_id AND s.id=g.subject_id
+  JOIN cp.access_policies p ON p.tenant_id=g.tenant_id AND p.id=g.policy_id
+  JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id
+  JOIN cp.access_areas a ON a.tenant_id=g.tenant_id AND a.id=g.area_id
+  WHERE g.tenant_id=target_tenant AND (target_subject IS NULL OR g.subject_id=target_subject) AND (target_area IS NULL OR g.area_id=target_area)
+   AND g.status='ACTIVE' AND g.valid_from<=t.at AND g.valid_until>t.at
+   AND s.status='ACTIVE' AND s.restriction_epoch=g.subject_restriction_epoch
+   AND cp.subject_context_current(g.tenant_id,g.context_id)
+   AND p.status<>'RETIRED' AND v.state IN ('APPROVED','PUBLISHED')
+   AND a.status='ACTIVE'
+   AND CASE g.origin_kind
+    WHEN 'VISIT_PERMIT' THEN EXISTS(SELECT 1 FROM cp.visit_permits vp WHERE vp.tenant_id=g.tenant_id AND vp.id=g.origin_permit_id
+      AND vp.state='ACTIVE' AND vp.version=g.origin_version AND vp.valid_until>t.at
+      AND (vp.reservation_id IS NULL OR EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=vp.tenant_id AND r.id=vp.reservation_id
+       AND r.status='CONFIRMED')))
+    WHEN 'RESERVATION' THEN EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=g.tenant_id AND r.id=g.origin_reservation_id
+      AND r.status='CONFIRMED' AND r.version=g.origin_version)
+    ELSE true END
+   AND (g.age_evidence_id IS NULL OR EXISTS(SELECT 1 FROM cp.age_evidence e WHERE e.tenant_id=g.tenant_id AND e.id=g.age_evidence_id
+      AND e.status='VALID' AND e.valid_until>t.at))
+   AND NOT EXISTS(SELECT 1 FROM cp.revocation_markers m WHERE m.tenant_id=g.tenant_id AND m.subject_id=g.subject_id
+      AND m.revoked_through_generation>g.generation
+      AND ((m.target_kind='SUBJECT' AND m.subject_restriction_epoch>=g.subject_restriction_epoch)
+       OR (m.target_kind='CONTEXT' AND m.context_id=g.context_id) OR (m.target_kind='GRANT' AND m.grant_id=g.id))) $$;
+REVOKE ALL ON FUNCTION cp.access_grants_current_now(uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.access_grants_current_now(uuid,uuid,uuid) TO cp_api;
+
 -- Alvos do sujeito: cada direito ativo, por passagem comissionada com vínculo ativo cujo sentido leva à área do
 -- direito, em cada equipamento que atende esse sentido: o controlador e o leitor (de entrada ou de saída) cujo sentido no
 -- mapa comissionado (direction_map, V042; padrão FROM_TO para o de entrada e TO_FROM para o de saída) é o de quem entra
 -- na área. issue: motivo de ficar fora do documento (null = representável). Sentido UNKNOWN nunca é alvo.
 CREATE FUNCTION cp.rights_targets(target_tenant uuid,target_subject uuid)
 RETURNS TABLE(grant_id uuid,area_id uuid,point_id uuid,binding_id uuid,binding_revision integer,channel_id uuid,direction text,device_id uuid,
- device_role text,generation bigint,valid_from timestamptz,valid_until timestamptz,issue text)
+ device_role text,generation bigint,valid_from timestamptz,valid_until timestamptz,issue text,is_current boolean)
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
-AS $$ SELECT g.id,g.area_id,p.id,b.id,b.binding_revision,b.actuator_channel_id,s.direction,r.device_id,r.device_role,g.generation,g.valid_from,g.valid_until,
-   coalesce(cp.rights_policy_issue(v.document),cp.rights_destination_issue(v.document,h.status,h.review_due_at,h.approved_capabilities,d.status))
-  FROM cp.access_grants g
-  JOIN cp.access_points p ON p.tenant_id=g.tenant_id AND p.status='COMMISSIONED'
-  JOIN cp.point_bindings b ON b.tenant_id=p.tenant_id AND b.point_id=p.id AND b.status='ACTIVE'
-  LEFT JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id
-  LEFT JOIN platform.access_homologations h ON h.id=b.homologation_id
-  CROSS JOIN LATERAL (SELECT 'FROM_TO'::text direction WHERE p.to_area_id=g.area_id AND p.flow_direction IN ('FROM_TO','BOTH')
-   UNION ALL SELECT 'TO_FROM' WHERE p.from_area_id=g.area_id AND p.flow_direction IN ('TO_FROM','BOTH')) s
-  CROSS JOIN LATERAL (SELECT b.controller_device_id device_id,'CONTROLLER'::text device_role
-   UNION ALL SELECT b.entry_reader_device_id,'ENTRY_READER' WHERE b.entry_reader_device_id IS NOT NULL
-    AND coalesce(b.direction_map->>'entryReader','FROM_TO')=s.direction
-   UNION ALL SELECT b.exit_reader_device_id,'EXIT_READER' WHERE b.exit_reader_device_id IS NOT NULL
-    AND coalesce(b.direction_map->>'exitReader','TO_FROM')=s.direction) r
-  LEFT JOIN cp.access_devices d ON d.tenant_id=g.tenant_id AND d.id=r.device_id
-  WHERE g.tenant_id=target_tenant AND g.subject_id=target_subject AND g.status='ACTIVE' $$;
+-- Conjunto primeiro, motivos por revisão da regra e por destino (poucas linhas), nunca uma chamada por direito.
+AS $$ WITH cur AS MATERIALIZED (SELECT c.id FROM cp.access_grants_current_now(target_tenant,target_subject,NULL) c(id)),
+  t AS MATERIALIZED (
+   SELECT g.id grant_id,g.area_id,g.policy_version_id,g.generation,g.valid_from,g.valid_until,p.id point_id,b.id binding_id,b.binding_revision,
+    b.actuator_channel_id channel_id,b.homologation_id,s.direction,r.device_id,r.device_role
+   FROM cp.access_grants g
+   JOIN cp.access_points p ON p.tenant_id=g.tenant_id AND p.status='COMMISSIONED'
+   JOIN cp.point_bindings b ON b.tenant_id=p.tenant_id AND b.point_id=p.id AND b.status='ACTIVE'
+   CROSS JOIN LATERAL (SELECT 'FROM_TO'::text direction WHERE p.to_area_id=g.area_id AND p.flow_direction IN ('FROM_TO','BOTH')
+    UNION ALL SELECT 'TO_FROM' WHERE p.from_area_id=g.area_id AND p.flow_direction IN ('TO_FROM','BOTH')) s
+   CROSS JOIN LATERAL (SELECT b.controller_device_id device_id,'CONTROLLER'::text device_role
+    UNION ALL SELECT b.entry_reader_device_id,'ENTRY_READER' WHERE b.entry_reader_device_id IS NOT NULL
+     AND coalesce(b.direction_map->>'entryReader','FROM_TO')=s.direction
+    UNION ALL SELECT b.exit_reader_device_id,'EXIT_READER' WHERE b.exit_reader_device_id IS NOT NULL
+     AND coalesce(b.direction_map->>'exitReader','TO_FROM')=s.direction) r
+   WHERE g.tenant_id=target_tenant AND g.subject_id=target_subject AND g.status='ACTIVE'),
+  dest AS MATERIALIZED (
+   SELECT k.policy_version_id,k.homologation_id,k.device_id,
+    coalesce(cp.rights_policy_issue(v.document),cp.rights_destination_issue(v.document,h.status,h.review_due_at,h.approved_capabilities,d.status)) issue
+   FROM (SELECT DISTINCT policy_version_id,homologation_id,device_id FROM t) k
+   LEFT JOIN cp.access_policy_versions v ON v.tenant_id=target_tenant AND v.id=k.policy_version_id
+   LEFT JOIN platform.access_homologations h ON h.id=k.homologation_id
+   LEFT JOIN cp.access_devices d ON d.tenant_id=target_tenant AND d.id=k.device_id)
+  SELECT t.grant_id,t.area_id,t.point_id,t.binding_id,t.binding_revision,t.channel_id,t.direction,t.device_id,t.device_role,t.generation,t.valid_from,
+   t.valid_until,dest.issue,EXISTS(SELECT 1 FROM cur WHERE cur.id=t.grant_id)
+  FROM t JOIN dest ON dest.policy_version_id=t.policy_version_id AND dest.homologation_id=t.homologation_id
+   AND dest.device_id IS NOT DISTINCT FROM t.device_id $$;
 REVOKE ALL ON FUNCTION cp.rights_targets(uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_targets(uuid,uuid) TO cp_api;
 
@@ -154,8 +201,7 @@ AS $$ SELECT coalesce(jsonb_agg(jsonb_build_object('grantId',x.grant_id,'areaId'
    'validUntil',to_char(x.valid_until AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))
    ORDER BY x.grant_id,x.point_id,x.direction,x.device_role),'[]'::jsonb)
   FROM cp.rights_targets(target_tenant,target_subject) x
-  WHERE x.device_id=target_device AND x.issue IS NULL AND x.valid_until>clock_timestamp()
-   AND cp.access_grant_current(target_tenant,x.grant_id,greatest(clock_timestamp(),x.valid_from)) $$;
+  WHERE x.device_id=target_device AND x.issue IS NULL AND x.is_current $$;
 REVOKE ALL ON FUNCTION cp.rights_entries(uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_entries(uuid,uuid,uuid) TO cp_api;
 

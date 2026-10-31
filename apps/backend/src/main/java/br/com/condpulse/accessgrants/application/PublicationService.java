@@ -72,10 +72,9 @@ public class PublicationService {
   for(UUID subject:subjects) {
    // Direito que o documento não representa ou destino sem aprovação vigente fica fora (nunca acesso autônomo indevido):
    // o compilado retira o publicado e o motivo é registrado por destino.
-   for(var x:store.excluded(tenant,subject))
-    failures.add(new PublicationModels.Failure(subject,x.deviceId(),x.issue()));
-   for(UUID device:store.oversized(tenant,subject))
-    failures.add(new PublicationModels.Failure(subject,device,"DOCUMENT_TOO_LARGE"));
+   var review=store.review(tenant,subject);
+   for(var x:review.excluded()) failures.add(new PublicationModels.Failure(subject,x.deviceId(),x.issue()));
+   for(UUID device:review.oversized()) failures.add(new PublicationModels.Failure(subject,device,"DOCUMENT_TOO_LARGE"));
    List<UUID> devices=store.changedDevices(tenant,subject);
    // Cada destino num savepoint: a recusa do banco fica registrada por sujeito × destino sem desfazer os demais.
    for(UUID device:devices) {

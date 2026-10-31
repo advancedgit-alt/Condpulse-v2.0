@@ -4287,6 +4287,12 @@ def grant_checks():
     expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G3}'") == "REVOKED:ORIGIN_CHANGED",
            "varredura grava a marca do direito que deixou de valer")
     expect(error(both + scan + guest.replace(G3, G4), "23514", **as_mgr), "convite cancelado nao gera direito novo")
+    expect(value(both + scan + f"select count(*) from cp.access_grants g where g.tenant_id='{TA}' and cp.access_grant_current(g.tenant_id,g.id,"
+                 f"greatest(clock_timestamp(),g.valid_from)) <> (g.id in (select cp.access_grants_current_now('{TA}',null,null)))", **as_mgr) == "0"
+           and value(both + scan + f"select count(*) from cp.access_grants g where g.tenant_id='{TA}' and g.subject_id='{SV}' and "
+                 f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
+                 f"(select cp.access_grants_current_now('{TA}','{SV}',null)))", **as_mgr) == "0",
+           "V046: conjunto vigente igual a cp.access_grant_current para todos os direitos (convites, reservas, bloqueios, marcas)")
     # Corrida cartao x bloqueio (mesmo lock por condominio): nenhuma ordem deixa cartao ativo para sujeito bloqueado.
     def card(identifier):
         return (mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
@@ -4502,6 +4508,9 @@ def publication_checks():
     query(both + grant(G5, functional=CF6, version=V0), **as_mgr)
     expect(value(both + f"select issue from cp.rights_targets('{TA}','{SRS}') where grant_id='{G5}' limit 1", **as_mgr) == "SCHEDULE_NOT_REPRESENTABLE",
            "regra com horario fica fora do documento com o motivo")
+    expect(value(both + f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.access_grants g where g.tenant_id='{TA}' and "
+                 f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
+                 f"(select cp.access_grants_current_now('{TA}',null,'{AR}')))", **as_mgr) == "0", "conjunto vigente por area igual ao predicado por direito")
     # Bloqueio: REVOKE_ALL supera a retirada pendente (um so trabalho em aberto por destino).
     query(mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
     expect(value(latest.format("action||':'||priority||':'||array_to_string(array(select jsonb_array_elements_text(document->'coveredMethods')),',')"))
