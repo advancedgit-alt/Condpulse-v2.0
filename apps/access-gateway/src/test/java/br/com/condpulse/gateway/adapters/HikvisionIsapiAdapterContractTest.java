@@ -79,12 +79,15 @@ class HikvisionIsapiAdapterContractTest {
    assertFalse(record.containsKey("doorRight"),"cadastro sem direito");
    assertEquals("format=json",fake.requests("/ISAPI/AccessControl/UserInfo/Record").getLast().query());
 
-   var rights=new RightsSpec("ref-1",List.of(new Right("c1","sempre"),new Right("c3","comercial"),new Right("c3","sempre")),null,null);
+   var rights=new RightsSpec("ref-1",List.of(new Right("c1","sempre"),new Right("c3","comercial"),new Right("c3","sempre")),
+    Instant.parse("2030-01-01T03:00:00Z"),Instant.parse("2031-01-01T03:00:00Z"));
    assertEquals(OperationState.ACK,a.applyRights(rights).state());
    var modify=Json.map(Json.object(fake.requests("/ISAPI/AccessControl/UserInfo/Modify").getLast().text()).get("UserInfo"));
    assertEquals("1,3",modify.get("doorRight"));
    assertEquals(List.of(Map.of("doorNo",1L,"planTemplateNo","1"),Map.of("doorNo",3L,"planTemplateNo","1,3")),modify.get("RightPlan"));
+   assertEquals("2031-01-01T00:00:00-03:00",Json.map(modify.get("Valid")).get("endTime"),"validade vai junto com os direitos");
    assertEquals(a.rightKeys(rights).orElseThrow(),a.readState("ref-1").rightKeys());
+   assertTrue(a.readState("ref-1").rightKeys().contains("valid:1893466800/1925002800"));
    assertTrue(fake.requests().stream().filter(r->r.authorization()!=null).allMatch(r->r.authorization().startsWith("Digest ")));
   }
  }
@@ -153,5 +156,50 @@ class HikvisionIsapiAdapterContractTest {
   assertEquals(List.of(),supported);
   assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.upsertPerson(new PersonSpec("r","n",null,null)).state());
   assertEquals(Set.of(),Set.copyOf(supported));
+ }
+
+ // ----- achados de revisão (#131) -----
+
+ @Test void validadeParcialNaoERepresentavelEERecusadaSemEnviar() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   a.upsertPerson(new PersonSpec("ref-6","Morador 6",null,null));
+   int before=fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size();
+   var r=a.applyRights(new RightsSpec("ref-6",List.of(new Right("c1","sempre")),null,Instant.parse("2031-01-01T03:00:00Z")));
+   assertEquals("VALIDITY_NOT_REPRESENTABLE",r.reasonCode());
+   assertEquals(before,fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size());
+   assertTrue(a.rightKeys(new RightsSpec("ref-6",List.of(new Right("c1","sempre")),Instant.parse("2030-01-01T03:00:00Z"),null)).isEmpty());
+  }
+ }
+
+ @Test void validadeDiferenteNoEquipamentoNaoConfirma() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   a.upsertPerson(new PersonSpec("ref-7","Morador 7",null,null));
+   var desired=new RightsSpec("ref-7",List.of(new Right("c1","sempre")),Instant.parse("2030-01-01T03:00:00Z"),Instant.parse("2031-01-01T03:00:00Z"));
+   a.applyRights(desired);
+   store.users.get("ref-7").put("Valid",Map.of("enable",true,"beginTime","2030-01-01T00:00:00-03:00","endTime","2035-01-01T00:00:00-03:00","timeType","local"));
+   assertNotEquals(a.rightKeys(desired).orElseThrow(),a.readState("ref-7").rightKeys());
+  }
+ }
+
+ @Test void rightPlanAusenteOuDoorRightVazioNaoProvaAusenciaDeAcesso() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   a.upsertPerson(new PersonSpec("ref-8","Morador 8",null,null));
+   assertNull(a.readState("ref-8").rightKeys(),"sem doorRight: desconhecido");
+   store.users.get("ref-8").put("doorRight","1");
+   assertNull(a.readState("ref-8").rightKeys(),"porta com direito e RightPlan ausente: desconhecido, nunca vazio");
+   store.users.get("ref-8").put("doorRight","");
+   store.users.get("ref-8").put("RightPlan",List.of());
+   assertNull(a.readState("ref-8").rightKeys(),"doorRight vazio não é prova de revogação");
+   a.removePerson("ref-8");
+   var gone=a.readState("ref-8");
+   assertEquals(Boolean.FALSE,gone.personPresent());
+   assertEquals(Set.of(),gone.rightKeys());
+  }
  }
 }
