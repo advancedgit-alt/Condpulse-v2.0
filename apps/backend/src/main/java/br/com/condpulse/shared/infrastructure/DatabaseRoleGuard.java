@@ -265,6 +265,13 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
        where c.attrelid=to_regclass('cp.access_policies') and c.attname in ('status','current_published_version_id','envelope_acceptance_id',
         'envelope_hash','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.access_grants'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.rights_publications'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.rights_publications') and c.attname in ('document','document_hash','grant_ids','desired_version','action',
+        'priority','subject_id','device_id','origin','revocation_marker_id','requested_by','reported_at','confirmed_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.rights_publications') and c.attname in ('document','document_hash','grant_ids','desired_version','action',
+        'state','confirmation_level','observed_hash','reported_at','confirmed_at','superseded_by','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.revocation_markers'),'DELETE,TRUNCATE'),false)
      or coalesce(has_any_column_privilege(current_user,to_regclass('cp.revocation_markers'),'UPDATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c

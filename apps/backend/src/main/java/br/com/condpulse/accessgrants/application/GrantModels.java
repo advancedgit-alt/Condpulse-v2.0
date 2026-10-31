@@ -18,9 +18,12 @@ public final class GrantModels {
  public record GrantPage(List<Grant> grants,boolean truncated) {}
  public record DeriveRequest(UUID policyVersionId) {}
  public record Skip(UUID contextId,String reason) {}
- /** Resumo da derivação: contagens por motivo e amostra (até 50) de contextos não atendidos; nada truncado em silêncio. */
+ /**
+ * Resumo da derivação: contagens por motivo e amostra (até 50) de contextos não atendidos; nada truncado em silêncio.
+ * publication: trabalhos por destino criados na mesma transação (V045), nunca sucesso físico.
+ */
  public record Derivation(UUID policyVersionId,int created,int unchanged,int superseded,int expired,int revoked,Map<String,Integer> skippedByReason,
-   List<Skip> skippedSample) {}
+   List<Skip> skippedSample,PublicationModels.Plan publication) {}
  public record RevokeGrant(String reason,Long expectedVersion) {}
  public record Marker(UUID markerId,String targetKind,UUID subjectId,UUID contextId,UUID grantId,List<String> coveredMethods,long revokedThroughGeneration,
    long subjectRestrictionEpoch,Instant effectiveAt,String reasonCode,long journalSequence,String externalDurabilityStatus) {}

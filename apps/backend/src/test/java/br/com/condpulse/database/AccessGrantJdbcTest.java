@@ -9,7 +9,10 @@ import br.com.condpulse.accessage.application.BirthDateCipher;
 import br.com.condpulse.accessage.infrastructure.AgeStore;
 import br.com.condpulse.accessgrants.application.GrantModels;
 import br.com.condpulse.accessgrants.application.GrantService;
+import br.com.condpulse.accessgrants.application.PublicationModels;
+import br.com.condpulse.accessgrants.application.PublicationService;
 import br.com.condpulse.accessgrants.infrastructure.GrantStore;
+import br.com.condpulse.accessgrants.infrastructure.PublicationStore;
 import br.com.condpulse.accesspolicy.application.PolicyModels;
 import br.com.condpulse.accesspolicy.application.PolicyService;
 import br.com.condpulse.accesspolicy.infrastructure.PolicyStore;
@@ -41,6 +44,7 @@ class AccessGrantJdbcTest {
  private static JdbcDisposableDatabase db;
  private static PolicyService policies;
  private static GrantService grants;
+ private static PublicationService publications;
  private static SubjectService subjects;
  private static FacialInstallationFixture fixture;
 
@@ -49,7 +53,9 @@ class AccessGrantJdbcTest {
   var tenants=new TenantTransactionExecutor(db.jdbc,db.manager);
   var audit=new AuditRecorder(db.jdbc);
   var policyStore=new PolicyStore(db.jdbc);
-  grants=new GrantService(tenants,new GrantStore(db.jdbc),policyStore,new AgeStore(db.jdbc),BirthDateCipher.fromBase64("","v1"),audit);
+  var grantStore=new GrantStore(db.jdbc);
+  publications=new PublicationService(tenants,new PublicationStore(db.jdbc),grantStore,audit);
+  grants=new GrantService(tenants,grantStore,policyStore,new AgeStore(db.jdbc),BirthDateCipher.fromBase64("","v1"),audit,publications);
   policies=new PolicyService(tenants,policyStore,audit,grants);
   subjects=new SubjectService(tenants,new SubjectStore(db.jdbc),audit);
   fixture=new FacialInstallationFixture(db);
@@ -173,6 +179,43 @@ class AccessGrantJdbcTest {
  }
  private static UUID policyOf(UUID version) throws Exception {
   return UUID.fromString(db.adminString("select policy_id::text from cp.access_policy_versions where id=?",version));
+ }
+
+ /**
+  * V045: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
+  * geram trabalho novo; bloqueio publica REVOKE_ALL com prioridade e supera a aplicação pendente.
+  */
+ @Test void publicationIsAJobPerDestinationAndRevocationGoesFirst() throws Exception {
+  var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.5.1");
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  UUID version=approvedPolicy(inst.area(),rule(zone,inst.area()));
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
+  assertEquals(2,derived.created(),derived.toString());
+  assertEquals(2,derived.publication().created(),derived.publication().toString());
+  var page=publications.publications(MANAGER,db.tenantA,AAL2,derived.publication().operationId(),null,null);
+  assertEquals(2,page.summary().byState().get("PENDING")); assertFalse(page.summary().allConfirmed(),"Pendente não é sucesso");
+  for(var p:page.publications()) {
+   assertEquals("APPLY_RIGHTS",p.action()); assertEquals(1,p.priority()); assertEquals(inst.device(),p.deviceId()); assertEquals(1,p.entries());
+   assertEquals("NONE",p.confirmationLevel());
+  }
+  assertEquals(0,publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(null)).created(),"Mesmo documento não gera trabalho");
+  assertEquals("STAFF_ACCESS_DENIED",code(()->publications.plan(db.accountA,db.tenantA,AAL2,new PublicationModels.PlanRequest(null))),"Morador não publica");
+  assertEquals("MFA_REQUIRED",code(()->publications.plan(MANAGER,db.tenantA,AAL1,new PublicationModels.PlanRequest(null))));
+  assertEquals("ACCESS_SUBJECT_NOT_FOUND",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of(UUID.randomUUID())))));
+  assertEquals("PUBLICATION_SUBJECTS_INVALID",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of())));
+
+  var a=subjectOf(db.accountA);
+  subjects.block(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.Block("Ordem ficticia da gestao",a.version()));
+  var rows=publications.publications(MANAGER,db.tenantA,AAL2,null,a.subjectId(),null).publications();
+  assertEquals(2,rows.size());
+  assertEquals("REVOKE_ALL",rows.getFirst().action()); assertEquals("REVOCATION",rows.getFirst().origin()); assertEquals(0,rows.getFirst().priority());
+  assertTrue(rows.getFirst().desiredVersion()>rows.get(1).desiredVersion());
+  assertEquals("SUPERSEDED",rows.get(1).state(),"Aplicação pendente superada pela revogação");
+  assertEquals(rows.getFirst().publicationId(),rows.get(1).supersededBy());
+  assertEquals("TENANT_ACCESS_DENIED",code(()->publications.publications(MANAGER,db.tenantB,AAL2,null,null,null)),"HAC-007");
+  assertTrue(Integer.parseInt(db.adminString("select count(*)::text from cp.audit_log where tenant_id=? and action='RIGHTS_PUBLICATION_PLANNED'",db.tenantA))>=1);
+  db.assertEmptyContext();
  }
 
  /** Visitante de convite vigente: o gatilho confere o convite com a conferência ligada; derivação não aborta. */

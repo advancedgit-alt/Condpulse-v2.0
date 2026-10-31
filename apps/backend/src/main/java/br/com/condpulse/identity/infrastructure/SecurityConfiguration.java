@@ -161,6 +161,9 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-grants","/v1/tenants/*/management/access-subjects/*/revocation-markers").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-policies/*/grants/derive",
       "/v1/tenants/*/management/access-grants/*/revoke").authenticated()
+    // Publicação por destino (AC-012/AC-013, V045): mesma gestão; trabalho, nunca sucesso físico.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-publications").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-publications/plan").authenticated()
     // Instalação física (AC-004 parte 2, V042): MASTER de implantação (installation.*, AAL2); gestão assina as regras.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/technical/access-devices","/v1/tenants/*/technical/device-channels",
       "/v1/tenants/*/technical/point-bindings","/v1/tenants/*/technical/installation-acceptances",
