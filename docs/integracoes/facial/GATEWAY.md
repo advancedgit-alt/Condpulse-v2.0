@@ -164,7 +164,7 @@ documentada (`REVOGACAO_SEM_DOCUMENTACAO`), **NS** `NAO_SUPORTADO_SEM_DOCUMENTAC
 | Cadastrar face | I — `user_set_image_list.fcgi` | NS (FaceDataRecord truncado; FDSetUp só `faceURL`) | I\* — `FaceInfoManager.cgi?action=add` | NS (página recusada por robots) |
 | Remover face | I — `user_destroy_image.fcgi` (só `user_id`) | NS | NS | NS |
 | Cartão: gravar / retirar | I / I — `cards` | I / I — CardInfo Record/Delete (§21, §23) | I\* / NS — `recordUpdater.cgi insert AccessControlCard` | NS / NS |
-| PIN: gravar / retirar | I / I — `pins` | NS / NS | NS / NS | NS / NS |
+| PIN: gravar / retirar | I / I — `pins` (substituição por `modify_objects`, `user_id` único) | NS / NS | NS / NS | NS / NS |
 | QR: gravar / retirar | I / I — `qrcodes` (só modo alfanumérico) | NS / NS | NS / NS | NS / NS |
 | Aplicar direitos por ponto e horário | I — `user_access_rules` (regras comissionadas) | I — `doorRight` + `RightPlan` (§15) | NS | NS |
 | Retirar direitos | I — `destroy_objects user_access_rules/user_groups` | I — via exclusão da pessoa (§16) | NS | NS |

@@ -46,9 +46,10 @@ interface ControlIdTransport {
    "destroy_objects","user_set_image_list","user_destroy_image","execute_actions");
   private final DeviceHttpClient http;
   private final DeviceCredential credential;
+  private final Clock clock;
   private volatile String session;
 
-  Lan(DeviceHttpClient http,DeviceCredential credential) { this.http=http; this.credential=credential; }
+  Lan(DeviceHttpClient http,DeviceCredential credential,Clock clock) { this.http=http; this.credential=credential; this.clock=clock; }
 
   static Set<String> paths() {
    var out=new java.util.HashSet<String>();
@@ -59,15 +60,23 @@ interface ControlIdTransport {
   @Override public Map<String,Object> call(String endpoint,Map<String,Object> body,boolean actuation,Instant notAfter) throws DeviceCallException {
    if(!ENDPOINTS.contains(endpoint)) throw new IllegalArgumentException("Endpoint fora da lista.");
    String s=session==null?login():session;
+   requireNotExpired(notAfter);
    var response=post(endpoint,s,body,actuation);
    if(response.status()==401 || response.status()==403) {
-    // Sessão expirada: o pedido foi recusado sem execução; nova sessão e um único envio.
+    // Sessão expirada: o pedido foi recusado sem execução; nova sessão e um único envio, se ainda no prazo.
     session=null;
-    response=post(endpoint,login(),body,actuation);
+    String renewed=login();
+    requireNotExpired(notAfter);
+    response=post(endpoint,renewed,body,actuation);
    }
    if(!response.ok()) throw new ControlIdHttpError(response.status());
    String text=response.text().trim();
    return text.isEmpty()?Map.of():Json.object(text);
+  }
+
+  /** Prazo revalidado imediatamente antes de cada envio (inclusive após login ou renovação de sessão). */
+  private void requireNotExpired(Instant notAfter) throws DeviceCallException {
+   if(notAfter!=null && !clock.instant().isBefore(notAfter)) throw new DeviceCallException(Failure.NOT_SENT,"EXPIRED_BEFORE_SEND");
   }
 
   private DeviceHttpClient.Response post(String endpoint,String s,Map<String,Object> body,boolean actuation) throws DeviceCallException {
@@ -115,6 +124,12 @@ interface ControlIdTransport {
   private record Pending(String endpoint,Map<String,Object> body,Instant notAfter,CompletableFuture<Map<String,Object>> result,
       CompletableFuture<Boolean> picked) {}
 
+  /** Comandos entregues aguardando /result (para diagnóstico e testes de vazamento). */
+  public synchronized int awaitingResults() { return delivered.size(); }
+
+  /** Espera terminou sem resultado: esquece o comando entregue (resultado tardio é ignorado; nada é reenviado). */
+  private synchronized void forget(Pending pending) { delivered.values().removeIf(p->p==pending); }
+
   private final Clock clock;
   private final Duration pickupTimeout,resultTimeout;
   private final String nativeDeviceId;
@@ -151,8 +166,10 @@ interface ControlIdTransport {
    try {
     return pending.result().get(resultTimeout.toMillis(),TimeUnit.MILLISECONDS);
    } catch(TimeoutException e) {
+    forget(pending);
     throw new DeviceCallException(Failure.AMBIGUOUS,"PUSH_RESULT_NOT_RECEIVED");
    } catch(InterruptedException e) {
+    forget(pending);
     Thread.currentThread().interrupt();
     throw new DeviceCallException(Failure.AMBIGUOUS,"INTERRUPTED");
    } catch(ExecutionException e) {
