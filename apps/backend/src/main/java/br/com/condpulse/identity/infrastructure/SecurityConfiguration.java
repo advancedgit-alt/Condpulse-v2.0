@@ -136,6 +136,11 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/access-subjects/*/block","/v1/tenants/*/management/access-subjects/*/unblock",
       "/v1/tenants/*/management/access-subjects/*/functional-authorizations","/v1/tenants/*/management/subject-contexts/*/revoke",
       "/v1/tenants/*/management/subject-contexts/*/reauthorize").authenticated()
+    // Parâmetros do acesso facial e evidência de idade (AC-006, V039): gestão (memberships.manage, AAL2).
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/facial-settings","/v1/tenants/*/management/access-subjects/*/age-evidence",
+      "/v1/tenants/*/management/access-subjects/*/age-check").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/facial-settings").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-subjects/*/age-evidence","/v1/tenants/*/management/age-evidence/*/revoke").authenticated()
     // Proprietário × inquilino (V034): gestão (AAL2) ou vínculo OWNER com locação em vigor, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/rentals","/v1/tenants/*/units/*/rental").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/units/*/rental","/v1/tenants/*/management/units/*/rental/end",

@@ -140,7 +140,7 @@ public class SubjectService {
  public void addFunctional(UUID actor,UUID tenant,AssuranceLevel assurance,UUID subject,SubjectModels.FunctionalAuthorization request) {
   if(subject==null) throw notFound();
   if(request==null || request.contextId()==null) throw new BusinessProblem("ACCESS_SUBJECT_CONTEXT_ID_REQUIRED",400,"Informe o identificador do contexto.");
-  if(!FUNCTIONAL_KINDS.contains(request.contextKind()))
+  if(request.contextKind()==null || !FUNCTIONAL_KINDS.contains(request.contextKind()))
    throw new BusinessProblem("ACCESS_SUBJECT_CONTEXT_KIND_INVALID",400,"Tipo inválido: EMPLOYEE, SERVICE_PROVIDER ou EMERGENCY_RESPONDER.");
   if(request.reference()==null || !request.reference().matches("[A-Za-z0-9._:-]{8,120}"))
    throw new BusinessProblem("ACCESS_SUBJECT_REFERENCE_INVALID",400,"Referência da autorização: 8 a 120 caracteres sem espaço.");

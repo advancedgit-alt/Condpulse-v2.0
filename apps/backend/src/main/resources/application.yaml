@@ -63,6 +63,9 @@ condpulse:
     enabled: ${CP_FACIAL_ACCESS_ENABLED:false}
     # Validade máxima da concessão técnica emitida pelo painel da plataforma (1 a 90 dias).
     technical-grant-max-days: ${CP_TECHNICAL_GRANT_MAX_DAYS:30}
+    # Chave AES-256 (base64) da data de nascimento protegida; opcional (sem ela só a atestação funciona). Só no servidor.
+    age-evidence-key: ${CP_AGE_EVIDENCE_KEY:}
+    age-evidence-key-version: ${CP_AGE_EVIDENCE_KEY_VERSION:v1}
   realtime:
     enabled: ${CP_REALTIME_ENABLED:false}
     tick-seconds: ${CP_REALTIME_TICK_SECONDS:5}

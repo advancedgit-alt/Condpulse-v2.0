@@ -15110,6 +15110,473 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/facial-settings": {
+      "get": {
+        "operationId": "managementGetFacialSettings",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Parâmetros do acesso facial do condomínio (memberships.manage, AAL2). Sem gravação, valem os padrões provisórios (versão 0): 29/02 completa em 01/03, cadastro facial de menores desligado e evidência válida por 365 dias.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacialSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), AGE_EVIDENCE_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "AGE_EVIDENCE_UNAVAILABLE"
+          }
+        }
+      },
+      "put": {
+        "operationId": "managementUpdateFacialSettings",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Altera os parâmetros pela versão lida (0 na primeira gravação), com motivo auditado.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFacialSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacialSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), AGE_EVIDENCE_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "AGE_EVIDENCE_UNAVAILABLE"
+          },
+          "400": {
+            "description": "FACIAL_SETTINGS_VERSION_REQUIRED, FACIAL_SETTINGS_LEAP_RULE_INVALID, FACIAL_SETTINGS_MINORS_REQUIRED, FACIAL_SETTINGS_VALIDITY_INVALID ou AUDIT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "FACIAL_SETTINGS_STALE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/{subjectId}/age-evidence": {
+      "get": {
+        "operationId": "managementListAgeEvidence",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Histórico das evidências de idade do sujeito: método, situação e validade. Nunca devolve data de nascimento nem documento.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgeEvidence"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), AGE_EVIDENCE_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "AGE_EVIDENCE_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "managementRecordAgeEvidence",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Registra atestação verificada ou data de nascimento protegida (cifrada no servidor com CP_AGE_EVIDENCE_KEY; sem a chave responde 503). A evidência válida anterior é substituída (correção cadastral). evidenceId do cliente: o mesmo pedido inteiro é repetição; qualquer diferença é conflito. Idade nunca é estimada pela imagem.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordAgeEvidence"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgeEvidence"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), AGE_EVIDENCE_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "AGE_EVIDENCE_KEY_UNAVAILABLE ou AGE_EVIDENCE_UNAVAILABLE"
+          },
+          "400": {
+            "description": "AGE_EVIDENCE_ID_REQUIRED, AGE_EVIDENCE_METHOD_INVALID, AGE_EVIDENCE_VERIFICATION_INVALID, AGE_EVIDENCE_SOURCE_INVALID ou AGE_EVIDENCE_SHAPE_INVALID"
+          },
+          "409": {
+            "description": "AGE_EVIDENCE_ID_CONFLICT"
+          },
+          "422": {
+            "description": "AGE_EVIDENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/{subjectId}/age-check": {
+      "get": {
+        "operationId": "managementCheckAge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Predicado 'minimumAge anos ou mais' hoje, na data civil do fuso do condomínio e com o critério de 29/02 do condomínio: MEETS, DOES_NOT_MEET ou UNKNOWN (sem evidência válida no prazo; nunca presume maioridade).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "minimumAge",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 130
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgeCheck"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), AGE_EVIDENCE_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "AGE_EVIDENCE_KEY_UNAVAILABLE ou AGE_EVIDENCE_UNAVAILABLE"
+          },
+          "400": {
+            "description": "AGE_MINIMUM_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/age-evidence/{evidenceId}/revoke": {
+      "post": {
+        "operationId": "managementRevokeAgeEvidence",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Revoga a evidência válida pela versão lida, com motivo; depois disso o predicado volta a UNKNOWN.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeAgeEvidence"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alteração aplicada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), AGE_EVIDENCE_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "AGE_EVIDENCE_UNAVAILABLE"
+          },
+          "400": {
+            "description": "AGE_EVIDENCE_VERSION_REQUIRED ou AUDIT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "AGE_EVIDENCE_STALE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -24302,6 +24769,277 @@
             "type": "string",
             "minLength": 3,
             "maxLength": 300
+          }
+        }
+      },
+      "FacialSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leapDayRule",
+          "minorFaceEnrollmentEnabled",
+          "ageEvidenceValidityDays",
+          "version"
+        ],
+        "properties": {
+          "leapDayRule": {
+            "type": "string",
+            "enum": [
+              "MARCH_1",
+              "FEBRUARY_28"
+            ]
+          },
+          "minorFaceEnrollmentEnabled": {
+            "type": "boolean"
+          },
+          "ageEvidenceValidityDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3660
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "UpdateFacialSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leapDayRule",
+          "minorFaceEnrollmentEnabled",
+          "ageEvidenceValidityDays",
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "leapDayRule": {
+            "type": "string",
+            "enum": [
+              "MARCH_1",
+              "FEBRUARY_28"
+            ]
+          },
+          "minorFaceEnrollmentEnabled": {
+            "type": "boolean"
+          },
+          "ageEvidenceValidityDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3660
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "RecordAgeEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "method",
+          "verificationMethod",
+          "sourceEvidenceRef"
+        ],
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "AGE_PREDICATE_ATTESTATION",
+              "ENCRYPTED_BIRTH_DATE"
+            ]
+          },
+          "birthDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Só para ENCRYPTED_BIRTH_DATE; entra cifrada e nunca é devolvida."
+          },
+          "minimumAge": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 130
+          },
+          "maximumAge": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 130
+          },
+          "predicateResult": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "verificationMethod": {
+            "type": "string",
+            "enum": [
+              "DOCUMENT_REVIEW",
+              "TRUSTED_EXISTING_RECORD"
+            ]
+          },
+          "sourceEvidenceRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,120}$",
+            "description": "Referência opaca da prova; nunca o número do documento."
+          }
+        }
+      },
+      "AgeEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "subjectId",
+          "method",
+          "verificationMethod",
+          "status",
+          "verifiedAt",
+          "validUntil",
+          "supersedesEvidenceId",
+          "version"
+        ],
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "AGE_PREDICATE_ATTESTATION",
+              "ENCRYPTED_BIRTH_DATE"
+            ]
+          },
+          "verificationMethod": {
+            "type": "string",
+            "enum": [
+              "DOCUMENT_REVIEW",
+              "TRUSTED_EXISTING_RECORD"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "VALID",
+              "REVOKED",
+              "SUPERSEDED"
+            ]
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supersedesEvidenceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "RevokeAgeEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AgeCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjectId",
+          "minimumAge",
+          "outcome",
+          "assessedOn",
+          "timeZone",
+          "evidenceId",
+          "validUntil"
+        ],
+        "properties": {
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minimumAge": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 130
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "MEETS",
+              "DOES_NOT_MEET",
+              "UNKNOWN"
+            ]
+          },
+          "assessedOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "evidenceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }
