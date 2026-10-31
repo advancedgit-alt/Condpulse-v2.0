@@ -3521,6 +3521,80 @@ def subject_checks():
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{CO}','{RS}','{DP}','{X}'); "
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{CO}','{RS}','{DP}','{X}')")
 
+def age_checks():
+    """V039 (AC-006): evidencia de idade minimizada e parametros por condominio. Casos HAC-033 (sem estimativa, sem
+    presuncao), HAC-034 (correcao cadastral substitui) e HAC-085 (portaria e worker nao leem a evidencia)."""
+    MG, CO, RS = "10000000-0000-4000-8000-0000000039a1", "10000000-0000-4000-8000-0000000039a2", "10000000-0000-4000-8000-0000000039a3"
+    S1, S2 = "39000000-0000-4000-8000-000000000001", "39000000-0000-4000-8000-000000000002"
+    E1, E2, E3, EB = ("39100000-0000-4000-8000-000000000001", "39100000-0000-4000-8000-000000000002", "39100000-0000-4000-8000-000000000003",
+                      "39100000-0000-4000-8000-000000000004")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{CO}','ACTIVE'),('{RS}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          ('{TA}','{MG}',NULL,'GESTAO IDADE','MANAGER','ACTIVE'),('{TA}','{CO}',NULL,'PORTARIA IDADE','CONCIERGE','ACTIVE'),
+          ('{TA}','{RS}','{UA}','MORADOR IDADE','RESIDENT','ACTIVE');
+        INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{S1}','{TA}','ACCOUNT','{RS}'),('{S2}','{TB}','ACCOUNT','{RS}');
+    """)
+    mgr = "SET LOCAL app.capabilities='memberships.manage'; "
+    as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
+    def att(identifier, subject=S1, minimum=18, result="true", by=MG, extra_cols="", extra_vals="", tenant=TA):
+        return (f"INSERT INTO cp.age_evidence(id,tenant_id,subject_id,method,minimum_age,predicate_result,verification_method,source_evidence_ref,"
+                f"verified_by_account_id,valid_until{extra_cols}) VALUES('{identifier}','{tenant}','{subject}','AGE_PREDICATE_ATTESTATION',{minimum},"
+                f"{result},'DOCUMENT_REVIEW','ref:conferencia-0001','{by}',now()+interval '365 days'{extra_vals})")
+    expect(error(att(E1), "42501", tenant=TA, actor=CO, role="cp_api"), "HAC-085: portaria nao registra evidencia de idade")
+    expect(error("SET LOCAL app.capabilities='concierge.operate'; " + att(E1, by=CO), "42501", tenant=TA, actor=CO, role="cp_api"),
+           "portaria com capacidade de turno tambem nao registra")
+    expect(error(mgr + att(E1, by=RS), "42501", **as_mgr), "verificador e a propria conta")
+    expect(error(mgr + att(E1).replace("now()+interval '365 days'", "now()+interval '4000 days'"), "23514", **as_mgr), "validade longa demais")
+    cipher_mixed = att(E1, extra_cols=",birth_date_ciphertext,encryption_key_ref,encryption_key_version",
+                       extra_vals=",decode(repeat('ab',40),'hex'),'env:CP_AGE_EVIDENCE_KEY','v1'")
+    expect(error(mgr + cipher_mixed, "23514", **as_mgr), "atestacao nao carrega data cifrada na mesma linha")
+    plain = (f"INSERT INTO cp.age_evidence(id,tenant_id,subject_id,method,verification_method,source_evidence_ref,verified_by_account_id,valid_until) "
+             f"VALUES('{E1}','{TA}','{S1}','ENCRYPTED_BIRTH_DATE','DOCUMENT_REVIEW','ref:conferencia-0001','{MG}',now()+interval '1 day')")
+    expect(error(mgr + plain, "23514", **as_mgr), "data protegida exige envelope cifrado e chave")
+    expect(value("select count(*) from information_schema.columns where table_schema='cp' and table_name='age_evidence' "
+                 "and (column_name like '%birth%' and data_type<>'bytea')") == "0", "HAC-085: nenhuma coluna de data de nascimento em claro")
+    query(mgr + att(E1), **as_mgr)
+    expect(value(f"select status||':'||version||':'||(verified_at<=now()) from cp.age_evidence where id='{E1}'") == "VALID:0:true",
+           "evidencia nasce valida na versao 0 com horario do banco")
+    expect(error(mgr + att(E2), "23505", **as_mgr), "uma evidencia valida por sujeito")
+    expect(error(mgr + f"UPDATE cp.age_evidence SET minimum_age=21,status='REVOKED',status_reason='Ajuste',status_changed_by='{MG}',version=1 WHERE id='{E1}'",
+                 "42501", **as_mgr), "conteudo da evidencia nao muda")
+    expect(error(mgr + att(E2, extra_cols=",supersedes_evidence_id", extra_vals=f",'{E1}'"), "23514", **as_mgr),
+           "substituicao exige encerrar a anterior antes")
+    # HAC-034: correcao cadastral substitui na mesma transacao.
+    query(mgr + f"UPDATE cp.age_evidence SET status='SUPERSEDED',status_reason='Correcao cadastral',status_changed_by='{MG}',version=1 WHERE id='{E1}'; "
+          + att(E2, minimum=18, result="false", extra_cols=",supersedes_evidence_id", extra_vals=f",'{E1}'"), **as_mgr)
+    expect(value(f"select string_agg(status,',' order by created_at) from cp.age_evidence where subject_id='{S1}'") == "SUPERSEDED,VALID",
+           "HAC-034: correcao substitui a evidencia anterior, que nao volta")
+    expect(error(mgr + f"UPDATE cp.age_evidence SET status='VALID',status_reason=NULL,status_changed_by=NULL,version=2 WHERE id='{E1}'", "23514", **as_mgr),
+           "evidencia substituida nao volta a valer")
+    expect(error(mgr + att(EB, subject=S2, tenant=TB), "42501", **as_mgr), "HAC-029: evidencia de outro condominio e recusada pela fronteira")
+    expect(error(mgr + att(EB, subject=S2), "23503", **as_mgr), "sujeito de outro condominio nao completa associacao")
+    expect(value("select count(*) from cp.age_evidence", tenant=TA, actor=CO, role="cp_api") == "0", "portaria nao le evidencia de idade")
+    expect(value("select count(*) from cp.age_evidence", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le a propria evidencia bruta")
+    expect(error("select count(*) from cp.age_evidence", "42501", tenant=TA, role="cp_worker"), "HAC-085: worker nao le evidencia de idade")
+    expect(error(mgr + f"DELETE FROM cp.age_evidence WHERE id='{E2}'", "42501", **as_mgr), "evidencia nao e apagada")
+    # Parametros por condominio.
+    settings = (f"INSERT INTO cp.facial_access_settings(tenant_id,leap_day_rule,minor_face_enrollment_enabled,age_evidence_validity_days,updated_by,version) "
+                f"VALUES('{TA}','FEBRUARY_28',false,365,'{MG}',1)")
+    expect(error(settings, "42501", tenant=TA, actor=CO, role="cp_api"), "portaria nao altera parametros")
+    expect(error(mgr + settings.replace("'FEBRUARY_28'", "'JANUARY_1'"), "23514", **as_mgr), "criterio de 29/02 de lista fechada")
+    query(mgr + settings, **as_mgr)
+    expect(error(mgr + f"UPDATE cp.facial_access_settings SET minor_face_enrollment_enabled=true,updated_by='{MG}',version=5 WHERE tenant_id='{TA}'",
+                 "23514", **as_mgr), "parametros mudam pela versao lida")
+    query(mgr + f"UPDATE cp.facial_access_settings SET minor_face_enrollment_enabled=true,updated_by='{MG}',version=2 WHERE tenant_id='{TA}'", **as_mgr)
+    expect(value(f"select leap_day_rule||':'||minor_face_enrollment_enabled||':'||version from cp.facial_access_settings where tenant_id='{TA}'")
+           == "FEBRUARY_28:true:2", "parametros por condominio com versao")
+    expect(value("select count(*) from cp.facial_access_settings", tenant=TB, actor=MG, role="cp_api") == "0", "parametros nao atravessam condominio")
+    expect(value("select leap_day_rule from cp.facial_access_settings", tenant=TA, role="cp_worker") == "FEBRUARY_28", "worker le os parametros")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' "
+                 "and c.relname in ('age_evidence','facial_access_settings') and c.relrowsecurity and c.relforcerowsecurity") == "2",
+           "evidencia e parametros com RLS FORCE")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.age_evidence WHERE tenant_id in ('{TA}','{TB}'); "
+          f"DELETE FROM cp.facial_access_settings WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_subjects WHERE id in ('{S1}','{S2}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{CO}','{RS}'); DELETE FROM platform.accounts WHERE id in ('{MG}','{CO}','{RS}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -3647,6 +3721,7 @@ def main():
     finance_checks()
     technical_grant_checks()
     subject_checks()
+    age_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

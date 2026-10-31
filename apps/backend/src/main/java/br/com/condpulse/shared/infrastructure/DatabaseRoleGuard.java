@@ -31,7 +31,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // autoria, nomes e horários vêm do banco. Locações (V034): nunca apagadas; só o encerramento muda. Financeiro condominial (V036):
   // nada apagado; evento do webhook nunca muda; pagador, taxa e cobrança só mudam pelas colunas de transição. Concessões
   // técnicas (V037): nunca apagadas; só a revogação muda; estado inicial, identidade do banco e horários vêm do banco.
-  // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem. Outbox (V032): a operação da plataforma só devolve
+  // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem.
+  // Evidência de idade (V039): nunca apagada nem editada; só revogada/substituída; o worker nunca lê a data cifrada. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
@@ -205,6 +206,14 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.access_subjects') and c.attname in ('status','restriction_epoch','external_ref','blocked_at',
         'identity_verified_at','created_at','updated_at','version')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.age_evidence'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.facial_access_settings'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.age_evidence') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('status','status_reason','status_changed_by','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.age_evidence') and c.attname in ('status','verified_at','status_changed_at','created_at','version')),false)
+     or coalesce(has_column_privilege(current_user,to_regclass('cp.age_evidence'),'birth_date_ciphertext','SELECT') and pg_has_role(current_user,'cp_worker','USAGE'),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

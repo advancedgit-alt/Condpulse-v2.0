@@ -28,16 +28,19 @@ aplicado em banco, Fly ou Vercel; a aplicação fica com o executor protegido.
 |---|---|---|---|
 | P1 | Validade máxima da concessão técnica pelo painel | 30 dias (teto rígido do banco: 90) | `CP_TECHNICAL_GRANT_MAX_DAYS` |
 | P2 | Escopos padrão do MASTER de implantação | instalação (ler, cadastrar, vincular canal, comissionar), rotação de segredo, gateway e pedido de homologação; **sem** `person.review`, `access.request_open` e `audit.export` (só por pedido específico) | `TechnicalScope.implantationDefaults()` e o roteiro operacional |
-| P3 | Prova de idade | data de nascimento cifrada/protegida; projeção só de "maior de N" para o gestor | Fatia V039 |
-| P4 | Nascidos em 29/02 | completam anos em 01/03 em ano não bissexto; critério é **parâmetro do condomínio** | Fatia V039 |
-| P5 | Cadastro facial de menores | desligado por padrão, parâmetro do condomínio | Fatia V049 |
+| P3 | Prova de idade | data de nascimento cifrada no serviço (AES-256-GCM, chave `CP_AGE_EVIDENCE_KEY` fora do banco, ligada a condomínio/sujeito/evidência) **ou** atestação verificada; a gestão só vê "atende / não atende / desconhecido" para N anos. Sem a chave, só a atestação funciona (data protegida responde 503). Quem verifica: gestão (`memberships.manage`) ou `person.review` técnico delegado | V039 (`cp.age_evidence`) |
+| P4 | Nascidos em 29/02 | completam anos em 01/03 em ano não bissexto (`MARCH_1`); alternativa `FEBRUARY_28`; **parâmetro do condomínio** | `cp.facial_access_settings.leap_day_rule` (V039) |
+| P5 | Cadastro facial de menores | desligado por padrão, parâmetro do condomínio (gravado na V039; aplicado no cadastro facial da V049) | `cp.facial_access_settings.minor_face_enrollment_enabled` |
 | P6 | Cartão, QR e PIN | mesmas regras de área que a face | Fatias V043/V044 |
 | P8 | Proprietário (`OWNER`) como contexto de acesso | `RESIDENT` quando a unidade não está alugada; `OWNER_NONRESIDENT` com locação em vigor (V034). A troca de situação invalida o contexto materializado até a próxima materialização | `cp.membership_context_kind` (V038) |
 | P9 | Quem materializa sujeitos | Gestão para contas com vínculo físico (morador, responsável, dependente, proprietário, portaria); portaria para visitantes de convites vigentes (a gestão não lê convites). `MANAGER` e `SUPPORT` não geram contexto físico | `POST .../management/access-subjects/materialize` e `.../concierge/access-subjects/materialize` |
 | P10 | Revogação de contexto | Vale até reautorização explícita da gestão (`/subject-contexts/{id}/reauthorize`); a materialização nunca a desfaz. Contexto de convite revogado não volta: novo convite é nova origem | V038 (gatilho e `reauthorizes_context_id`) |
+| P11 | Validade da evidência de idade | 365 dias (1 a 3660), parâmetro do condomínio | `cp.facial_access_settings.age_evidence_validity_days` |
 | P7 | Gestor (MANAGER) | sem herança de escopo técnico; capacidades de regra (`area.manage`, `policy.edit`, `policy.publish`, `person.review`) entram nas fatias que as usam (V041/V043) | `StaffCapability` |
 
 ## Perguntas ainda abertas
+
+0. Chave `CP_AGE_EVIDENCE_KEY` (32 bytes, base64) para a data protegida: precisa ser gerada e cadastrada pelo executor protegido (nenhuma foi criada).
 
 1. Cofre de segredos das credenciais de fabricante (serviço e custo) — sem isso, `connector.rotate_secret` só registra referência.
 2. Acesso de parceiro à documentação licenciada (Hikvision TPP, SDK Dahua).
