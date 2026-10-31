@@ -1,0 +1,20 @@
+/* Acesso facial na central: perfis, dossiês e formulários. Só tokens --cp-*; legível em 360 px. */
+.facial-detail{display:grid;gap:16px}
+.facial-detail .panel h4{margin:0 0 12px;font-size:1rem}
+.facial-json{display:grid;gap:6px;margin:0}
+.facial-json>div{display:grid;grid-template-columns:minmax(120px,220px) minmax(0,1fr);gap:12px;padding:6px 0;border-bottom:1px solid var(--cp-color-border-decorative);font-size:var(--cp-font-size-metadata)}
+.facial-json>div:last-child{border-bottom:0}
+.facial-json dt{color:var(--cp-color-text-secondary);overflow-wrap:anywhere}
+.facial-json dd{margin:0;color:var(--cp-color-text-primary);overflow-wrap:anywhere}
+.facial-json .facial-json>div{grid-template-columns:minmax(90px,160px) minmax(0,1fr)}
+.facial-table{width:100%;border-collapse:collapse;font-size:var(--cp-font-size-metadata)}
+.facial-table caption{text-align:left;margin-bottom:8px}
+.facial-table th,.facial-table td{padding:8px 6px;border-bottom:1px solid var(--cp-color-border-decorative);text-align:left}
+.facial-table thead th{color:var(--cp-color-text-secondary);font-weight:var(--cp-font-weight-strong)}
+.facial-capabilities{display:grid;gap:10px}
+.facial-capability{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:end}
+.facial-capability>span{font-size:.85rem;font-weight:var(--cp-font-weight-strong)}
+.facial-capability label,.facial-limits label{display:grid;gap:4px}
+.facial-limits{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:10px}
+.facial-form select,.facial-form input{min-height:48px}
+@media(max-width:640px){.facial-json>div,.facial-json .facial-json>div{grid-template-columns:minmax(0,1fr);gap:2px}.facial-capability{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.facial-capability>span{grid-column:1/-1}.facial-table{display:block;overflow-x:auto}}

@@ -171,7 +171,7 @@ function Shell() {
   const sectionItems: NavItem[] = installing && tenantId
     ? installNavigation.items.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/implantacao/${item.id}`, current: item.id === installNavigation.current }))
     : mastering ? [...masterNavigation.items.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: centralPath(item.id), current: item.id === masterNavigation.current })),
-      ...upcomingCentralSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: null, current: false }))]
+      ...upcomingCentralSections.filter((item) => !masterNavigation.items.some((visible) => visible.id === item.id)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: null, current: false }))]
     : managed ? managementSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/gestao/${item.id}`, current: item.id === (section || 'pendencias') }))
     : portaria ? conciergeSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/portaria/${item.id}`, current: item.id === (section || 'encomendas') }))
     : contextSelected ? residentItems.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `${residence}/${item.id}`, current: item.id === residentSection }))
