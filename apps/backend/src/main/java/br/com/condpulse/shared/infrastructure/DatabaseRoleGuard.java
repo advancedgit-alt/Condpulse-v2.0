@@ -32,7 +32,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // nada apagado; evento do webhook nunca muda; pagador, taxa e cobrança só mudam pelas colunas de transição. Concessões
   // técnicas (V037): nunca apagadas; só a revogação muda; estado inicial, identidade do banco e horários vêm do banco.
   // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem.
-  // Evidência de idade (V039): nunca apagada nem editada; só revogada/substituída; o worker nunca lê a data cifrada. Outbox (V032): a operação da plataforma só devolve
+  // Evidência de idade (V039): nunca apagada nem editada; só revogada/substituída; o worker nunca lê a data cifrada.
+  // Catálogo e homologação (V040): perfil só por migration; homologação só muda de estado por decisão; decisão nunca muda. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
@@ -214,6 +215,13 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.age_evidence') and c.attname in ('status','verified_at','status_changed_at','created_at','version')),false)
      or coalesce(has_column_privilege(current_user,to_regclass('cp.age_evidence'),'birth_date_ciphertext','SELECT') and pg_has_role(current_user,'cp_worker','USAGE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.access_model_profiles'),'INSERT,UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.access_model_profiles'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.access_homologations'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.access_homologation_decisions'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.access_homologation_decisions'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('platform.access_homologations') and c.attnum>0 and not c.attisdropped and c.attname not in ('status','version')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))
@@ -223,7 +231,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
     where c.relkind='r' and(not c.relrowsecurity or not c.relforcerowsecurity)
      and(n.nspname='cp' or c.oid in(to_regclass('platform.platform_roles'),to_regclass('platform.platform_audit_log'),
       to_regclass('platform.platform_role_events'),to_regclass('platform.billing_plans'),
-      to_regclass('platform.billing_subscriptions'),to_regclass('platform.billing_charges'),to_regclass('platform.billing_payments')))
+      to_regclass('platform.billing_subscriptions'),to_regclass('platform.billing_charges'),to_regclass('platform.billing_payments'),
+      to_regclass('platform.access_model_profiles'),to_regclass('platform.access_homologations'),to_regclass('platform.access_homologation_decisions')))
     """,Integer.class);
   if(unprotected==null || unprotected>0)
    throw new IllegalStateException("Schema de negócio sem proteção RLS completa.");
