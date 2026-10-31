@@ -72,6 +72,7 @@ public final class LocalCommandQueue implements AutoCloseable {
  private final Map<String,String> byKey=new HashMap<>();
  private final Map<String,Long> revokedVersion=new HashMap<>();
  private long sequence;
+ private final List<String> lastSuperseded=new ArrayList<>();
 
  public LocalCommandQueue(Path dir,Clock clock,int softLimit,int hardLimit) {
   this.clock=clock; this.softLimit=softLimit; this.hardLimit=hardLimit;
@@ -95,15 +96,8 @@ public final class LocalCommandQueue implements AutoCloseable {
   journal.append(record);
   apply(record);
   var entry=byId.get(command.commandId());
-  var superseded=new ArrayList<String>();
-  if(entry.status()==Status.PENDING && command.type().revocation()) {
-   for(var other:List.copyOf(byId.values())) {
-    var oc=other.command();
-    if(!active(other) || oc.type().revocation() || !oc.deviceId().equals(command.deviceId()) || !oc.subjectRef().equals(command.subjectRef())) continue;
-    if(oc.desiredVersion()>command.desiredVersion()) continue;
-    if(covers(command,oc)) { mark(oc.commandId(),Status.SUPERSEDED,null,"SUPERSEDED_BY_REVOCATION"); superseded.add(oc.commandId()); }
-   }
-  }
+  // A supersessão decorre do próprio registro da revogação (apply), igual no envio e na releitura do diário.
+  var superseded=new ArrayList<String>(lastSuperseded);
   entry=byId.get(command.commandId());
   return new EnqueueResult(entry.status()==Status.REJECTED_STALE?EnqueueOutcome.REJECTED_STALE:EnqueueOutcome.ACCEPTED,entry,superseded);
  }
@@ -178,6 +172,17 @@ public final class LocalCommandQueue implements AutoCloseable {
    }
    byId.put(command.commandId(),new Entry(command,seq,status,null,reason,0,at,null,false));
    byKey.put(command.idempotencyKey(),command.commandId());
+   lastSuperseded.clear();
+   if(command.type().revocation()) {
+    for(var other:List.copyOf(byId.values())) {
+     var oc=other.command();
+     if(!active(other) || oc.type().revocation() || !oc.deviceId().equals(command.deviceId()) || !oc.subjectRef().equals(command.subjectRef())) continue;
+     if(oc.desiredVersion()>command.desiredVersion() || !covers(command,oc)) continue;
+     byId.put(oc.commandId(),new Entry(oc,other.sequence(),Status.SUPERSEDED,other.lastState(),"SUPERSEDED_BY_REVOCATION",other.attempts(),
+      other.enqueuedAt(),other.lastAttemptAt(),false));
+     lastSuperseded.add(oc.commandId());
+    }
+   }
   } else if("mark".equals(t)) {
    var e=byId.get(Json.string(record,"id"));
    if(e==null) return;

@@ -147,10 +147,16 @@ class GatewayServiceTest {
    @Override public DeviceIdentity identify() { return new DeviceIdentity(OperationState.CONFIRMED,null,"SKU-TESTE","FW-OUTRO","serie"); }
   };
   var registry=new CapabilityRegistry(config.profiles());
-  service=new GatewayService(config,registry,Map.of("d1",mismatched),queue,new OpenDispatcher(dir,clock,config,registry,id->Optional.of(mismatched)),
+  var opens=new OpenDispatcher(dir.resolve("q"),clock,config,registry,id->Optional.of(mismatched));
+  service=new GatewayService(config,registry,Map.of("d1",mismatched),queue,opens,
    outbox,decisions,decisionOutbox,central,clock);
   service.checkHealth();
   assertTrue(service.status("d1").orElseThrow().quarantined());
+  var now=clock.instant();
+  var open=opens.dispatch(new OpenDispatcher.OpenCommand("o1","n1","d1","c1","ponto-c1",1,1,now,now.plusSeconds(5),
+   br.com.condpulse.gateway.config.GatewayConfig.OpenOrigin.PORTARIA_LOCAL,"a",null));
+  assertEquals("DEVICE_IDENTITY_MISMATCH",open.reasonCode(),"quarentena bloqueia abertura antes do compromisso");
+  assertTrue(mismatched.calls.stream().noneMatch("OPEN"::equals));
   service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,1,RIGHTS));
   service.processQueues(10);
   assertEquals("DEVICE_IDENTITY_MISMATCH",queue.get("r").orElseThrow().lastReason());
@@ -303,5 +309,26 @@ class GatewayServiceTest {
   seen.clear();
   try(var j=new br.com.condpulse.gateway.journal.Journal(file)) { j.replay(seen::add); }
   assertEquals(List.of(Map.of("a",1L),Map.of("d",4L)),seen,"última linha inválida também é cortada");
+ }
+
+ @Test void coletaComFilaCheiaNaoImpedeDrenarOGravado() {
+  outbox.close();
+  outbox=new EventOutbox(dir.resolve("cheia"),clock,1);
+  var registry=new CapabilityRegistry(config.profiles());
+  var fetching=new ScriptedAdapter(TestSupport.context(config.devices().getFirst(),clock),ScriptedAdapter.all()) {
+   @Override public EventPage fetchEvents(String cursor,int limit) {
+    var ev=new Evidence(EvidenceLevel.DEVICE_REPORTED,EvidenceSource.DEVICE_EVENT,"X",null,null);
+    return new EventPage(OperationState.CONFIRMED,null,List.of(
+     new EdgeEvent(null,"d1","prov-d1","epoca-1","1","conector-teste",null,EventKind.ACCESS_ALLOWED,null,Direction.UNKNOWN,TimeQuality.UNKNOWN,ev,null,"1"),
+     new EdgeEvent(null,"d1","prov-d1","epoca-1","2","conector-teste",null,EventKind.ACCESS_ALLOWED,null,Direction.UNKNOWN,TimeQuality.UNKNOWN,ev,null,"1")),"c2",0);
+   }
+  };
+  outbox.add("d1",List.of(new EdgeEvent(null,"d1","prov-d1","epoca-1","0","conector-teste",null,EventKind.ACCESS_ALLOWED,null,Direction.UNKNOWN,
+   TimeQuality.UNKNOWN,new Evidence(EvidenceLevel.DEVICE_REPORTED,EvidenceSource.DEVICE_EVENT,"X",null,null),null,"1")),"c1");
+  service=new GatewayService(config,registry,Map.of("d1",fetching),queue,new OpenDispatcher(dir.resolve("o2"),clock,config,registry,id->Optional.of(fetching)),
+   outbox,decisions,decisionOutbox,central,clock);
+  service.pollEvents(); // fila cheia: não lança e não avança o cursor
+  assertEquals("c1",outbox.cursor("d1").orElseThrow());
+  assertEquals(1,service.forwardEvents());
  }
 }

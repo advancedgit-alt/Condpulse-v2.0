@@ -61,6 +61,10 @@ public final class OpenDispatcher implements AutoCloseable {
  private final Function<String,Optional<AccessProviderAdapter>> adapters;
  private final Map<String,Receipt> receipts=new HashMap<>();
  private final Set<String> nonces=new HashSet<>();
+ private volatile java.util.function.Predicate<String> quarantined=id->false;
+
+ /** Equipamentos em quarentena (identidade real divergente do perfil) nunca recebem abertura. */
+ public void quarantineCheck(java.util.function.Predicate<String> check) { this.quarantined=check; }
 
  public OpenDispatcher(Path dir,Clock clock,GatewayConfig config,CapabilityRegistry registry,Function<String,Optional<AccessProviderAdapter>> adapters) {
   this.clock=clock; this.config=config; this.registry=registry; this.adapters=adapters;
@@ -91,6 +95,7 @@ public final class OpenDispatcher implements AutoCloseable {
    if(channel==null || !channel.pointId().equals(command.pointId())) return reject(command,"NOT_COMMISSIONED");
    if(channel.bindingRevision()!=command.bindingRevision()) return reject(command,"STALE_BINDING");
    if(device.installationRevision()!=command.installationRevision()) return reject(command,"STALE_INSTALLATION");
+   if(quarantined.test(device.deviceId())) return reject(command,"DEVICE_IDENTITY_MISMATCH");
    String originRejection=originRejection(command,device);
    if(originRejection!=null) return reject(command,originRejection);
    adapter=adapters.apply(device.deviceId()).orElse(null);

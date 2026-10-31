@@ -75,4 +75,25 @@ class LocalCommandQueueTest {
    assertEquals("GATEWAY_RESTARTED_IN_FLIGHT",e.lastReason());
   }
  }
+
+ @Test void supersessaoDecorreDaRevogacaoTambemAoRelerODiario() {
+  var dir=TestSupport.tempDir();
+  var clock=new TestSupport.TestClock();
+  try(var q=new LocalCommandQueue(dir,clock,10,20)) { q.enqueue(command("ap","d1","p1",CommandType.APPLY_RIGHTS,1,RIGHTS)); }
+  // Queda logo depois de gravar a revogação: o diário não tem nenhum registro de supersessão.
+  try(var j=new br.com.condpulse.gateway.journal.Journal(dir.resolve("sync-queue.jsonl"))) {
+   var rec=new java.util.LinkedHashMap<String,Object>();
+   var cmd=new java.util.LinkedHashMap<String,Object>();
+   cmd.put("commandId","rv"); cmd.put("idempotencyKey","idem-rv"); cmd.put("deviceId","d1"); cmd.put("subjectRef","p1");
+   cmd.put("type","REVOKE_ALL"); cmd.put("desiredVersion",2L); cmd.put("payload",Map.of()); cmd.put("issuedAt",TestSupport.START.toString());
+   rec.put("t","enq"); rec.put("cmd",cmd); rec.put("at",clock.instant().toString());
+   j.append(rec);
+  }
+  try(var q=new LocalCommandQueue(dir,clock,10,20)) {
+   assertEquals(Status.SUPERSEDED,q.get("ap").orElseThrow().status());
+   assertEquals("rv",q.next("d1").orElseThrow().command().commandId());
+   q.mark("rv",Status.DONE,OperationState.CONFIRMED,null);
+   assertTrue(q.next("d1").isEmpty(),"aplicação antiga não volta depois da revogação");
+  }
+ }
 }
