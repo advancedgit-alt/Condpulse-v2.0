@@ -113,15 +113,18 @@ devolve só contagens e o nome/situação/início dos gestores, mas o banco não
 fechadas (contadores mantidos por gatilho ou função `SECURITY DEFINER` com dono sem acesso de escrita) ficam para
 decisão própria.
 
-## Tela web (`/master`)
+## Tela web (`/central`, antes `/master`)
 
-Sem link na escolha de contexto: a administração acessa `/master` diretamente. A tela consulta
+A central administradora fica em `/central` (`/master/...` redireciona, preservando parâmetros; `/master/fila` virou
+`/central/operacao`). Depois do login, conta só de plataforma vai direto à central; conta com plataforma e condomínio vê
+o atalho da central no seletor `/entrada`. Seções futuras (módulos por condomínio, contas e acessos, chaves e
+integrações, acesso facial) aparecem desabilitadas, sem rota, até o backend existir. A tela consulta
 `/v1/platform/session`; conta sem papel vê "Área restrita" sem nenhum dado da plataforma; flag desligada mostra
 "Painel indisponível"; sem AAL2 a tela cadastra/verifica o autenticador antes de qualquer outra rota. Seções:
 Condomínios (lista com estado, fuso, versão, origem, recibo do onboarding, uso agregado e assinatura; "Novo
 condomínio"; "Abrir ficha"; alterar nome ou estado com motivo, pela versão lida ao abrir, com aviso e recarga quando
 outra pessoa mudou o condomínio) e Auditoria (por cursor, horários em America/Sao_Paulo). A ficha
-(`/master/condominios/{id}`) mostra dados, uso, assinatura, gestores, convites (emitir/revogar) e eventos recentes, e
+(`/central/condominios/{id}`) mostra dados, uso, assinatura, gestores, convites (emitir/revogar) e eventos recentes, e
 permite suspender ou reativar com motivo.
 
 - **Novo condomínio**: a chave de operação nasce com o formulário. Resultado incerto (rede ou 5xx depois do envio)

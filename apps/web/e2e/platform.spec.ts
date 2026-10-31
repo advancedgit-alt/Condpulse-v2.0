@@ -92,7 +92,7 @@ test('conta sem papel de plataforma vê área restrita sem dados da plataforma',
   const management = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const platform = await installPlatformApi(page, management, false);
   await signIn(page);
-  await page.goto('/master');
+  await page.goto('/central');
   await expect(page.getByRole('heading', { name: 'Área restrita' })).toBeVisible();
   await expect(page.getByText('Condomínio Sintético B')).toHaveCount(0);
   expect(platform.requests).toEqual(['GET /v1/platform/session']);
@@ -103,7 +103,7 @@ test('administrador confirma o segundo fator, suspende com motivo e a repetiçã
   const management = await installManagementApi(page, { assurance: 'AAL1', verifiedFactor: false });
   const platform = await installPlatformApi(page, management);
   await signIn(page);
-  await page.goto('/master');
+  await page.goto('/central');
   await page.getByRole('button', { name: 'Cadastrar autenticador' }).click();
   await page.getByLabel('Código de 6 dígitos').fill('123456');
   await page.getByRole('button', { name: 'Verificar código' }).click();
@@ -138,7 +138,7 @@ test('busca encontra condomínio por trecho do nome e limpa de volta para o cat�
   const management = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const platform = await installPlatformApi(page, management);
   await signIn(page);
-  await page.goto('/master/condominios');
+  await page.goto('/central/condominios');
   await expect(page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' })).toBeVisible();
   const search = page.getByRole('search', { name: 'Buscar condomínio' });
   await search.getByLabel('Buscar por trecho do nome ou id').fill('  sintético\u00a0b ');
@@ -158,7 +158,7 @@ test('versão alterada por outra pessoa recusa a gravação e pede recarga antes
   const management = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const platform = await installPlatformApi(page, management);
   await signIn(page);
-  await page.goto('/master/condominios');
+  await page.goto('/central/condominios');
   const row = page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' });
   await row.getByRole('button', { name: 'Alterar nome ou estado' }).click();
   // Mudança concorrente no servidor depois de o formulário abrir.
@@ -186,7 +186,7 @@ test('administrador cria condomínio pelo painel, recebe o link do convite uma v
   const management = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const platform = await installPlatformApi(page, management);
   await signIn(page);
-  await page.goto('/master/condominios');
+  await page.goto('/central/condominios');
   await page.getByRole('button', { name: 'Novo condomínio' }).click();
   const form = page.getByRole('form', { name: 'Novo condomínio' });
   await form.getByLabel('Nome do condomínio').fill('Condomínio Sintético C');

@@ -76,7 +76,7 @@ test('gestão define o pagador, cria cobrança com chave de operação e cancela
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installFinanceApi(page);
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/financeiro`);
+  await page.goto(`/c/${TENANT_A}/gestao/financeiro`);
   await expect(page.getByRole('heading', { name: 'Financeiro do condomínio' })).toBeVisible();
   await expect(page.getByText('Nenhuma cobrança nesta situação.')).toBeVisible();
   await page.getByRole('button', { name: 'Pagadores' }).click();
@@ -120,7 +120,7 @@ test('morador vê as cobranças da unidade e copia a linha digitável da segunda
   await installSyntheticApi(page);
   const state = await installFinanceApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/financeiro`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/financeiro`);
   await expect(page.getByRole('heading', { name: 'Cobranças da unidade' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Financeiro' })).toBeVisible();
   const open = page.getByRole('list', { name: 'Cobranças em aberto' });

@@ -8,6 +8,7 @@ import { amenityInput, cents } from '../management/Setup';
 import { Empty, ErrorState, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen, money } from '../dateTime';
 import { PLATFORM_ZONE, isUncertain, platformKey, react, useAccessGuard, usePlatform, type Outcome } from './shared';
+import { centralPath, installationPath } from '../shell/paths';
 import { billingText, originText, parseUnitLines, usageText, validTimeZone } from './tenants';
 
 const weekDayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -200,7 +201,7 @@ export function TenantDetailView({ tenantId, editor, describe }: { tenantId: str
   const [revoking, setRevoking] = useState<string | null>(null);
   if (useAccessGuard(detail.error)) return null;
   const manage = scope.session.capabilities.includes('tenants.manage');
-  const back = <Link className="button button-secondary button-compact" to="/master/condominios">Voltar para a lista</Link>;
+  const back = <Link className="button button-secondary button-compact" to={centralPath()}>Voltar para a lista</Link>;
   if (detail.isPending) return <div className="panel"><Loading label="Consultando o condomínio…" /></div>;
   if (detail.isError && !detail.data) return <section className="management-section">{back}<ErrorState error={detail.error} retry={() => void detail.refetch()} /></section>;
   const { tenant, managers, managerInvitations, recentEvents } = detail.data!;
@@ -219,9 +220,9 @@ export function TenantDetailView({ tenantId, editor, describe }: { tenantId: str
         {billing ? <li>{billing}</li> : null}
         <li>Código <code>{tenant.tenantId}</code></li>
       </ul>
-      <div className="button-row"><Link className="button button-secondary button-compact" to={`/implantacao/${tenant.tenantId}/roteiro`}>Abrir implantação técnica</Link>
+      <div className="button-row"><Link className="button button-secondary button-compact" to={installationPath(tenant.tenantId)}>Abrir implantação técnica</Link>
         {scope.session.capabilities.includes('technical_grants.manage') ? <Link className="button button-secondary button-compact"
-          to={`/master/concessoes?condominio=${tenant.tenantId}`}>Concessões técnicas</Link> : null}</div>
+          to={`${centralPath('concessoes')}?condominio=${tenant.tenantId}`}>Concessões técnicas</Link> : null}</div>
       <p className="field-help">A implantação exige concessão técnica vigente desta conta no condomínio, além do papel de plataforma.</p>
       {!tenant.active ? <Notice tone="warning">Suspenso: moradores, portaria e gestão local não acessam o condomínio. Nenhum dado foi apagado.</Notice> : null}
       {manage && !editing ? <div className="button-row"><button className="button button-secondary button-compact" type="button"

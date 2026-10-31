@@ -40,7 +40,7 @@ test('convidados da reserva: adicionar com chave, repetir incerto sem duplicar, 
     await json(request, 200, permit);
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/reservas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/reservas`);
   const card = page.locator('article.reservation-card').first();
   await card.getByRole('button', { name: 'Convidados' }).click();
   await expect(card.getByText('Nenhum convidado.')).toBeVisible();
@@ -79,7 +79,7 @@ test('recusa do servidor aparece e libera nova tentativa', async ({ page }) => {
     await request.fulfill({ status: 409, contentType: 'application/problem+json', body: JSON.stringify({ code: 'RESERVATION_NOT_CONFIRMED' }) });
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/reservas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/reservas`);
   const card = page.locator('article.reservation-card').first();
   await card.getByRole('button', { name: 'Convidados' }).click();
   await card.getByLabel('Nome do convidado').fill('Convidado Atrasado');
@@ -99,7 +99,7 @@ test('capacidade da área atingida esconde o formulário', async ({ page }) => {
   await page.route(`**/v1/tenants/${TENANT_A}/reservations/${reservation.reservationId}/guests`, (request) =>
     json(request, 200, { permits: Array.from({ length: 12 }, (_, index) => guest(index + 1)), truncated: false }));
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/reservas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/reservas`);
   const card = page.locator('article.reservation-card').first();
   await card.getByRole('button', { name: 'Convidados' }).click();
   await expect(card.getByText('A área permite até 12 convidados nesta reserva.')).toBeVisible();

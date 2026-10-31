@@ -117,8 +117,9 @@ async function openConcierge(page: Page) {
 
 test('portaria registra recebimento uma única vez e entrega à pessoa escolhida com documento conferido', async ({ page }) => {
   const state = await openConcierge(page);
-  await page.goto('/contextos');
-  await page.getByRole('link', { name: 'Abrir portaria · Condomínio Sintético A' }).click();
+  await page.goto('/entrada');
+  // Conta só da portaria de um condomínio: a entrada abre direto a área da portaria, sem seletor.
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/encomendas$`));
   await expect(page.getByRole('heading', { name: 'Receber encomenda' })).toBeVisible();
   await scanAccessibility(page, 'portaria/encomendas');
   const form = page.getByRole('form', { name: 'Receber encomenda' });
@@ -152,7 +153,7 @@ test('segunda retirada recebe "já retirada" sem sucesso falso e a lista mostra 
   const state = await openConcierge(page);
   state.parcels.push(waiting());
   state.deliveredElsewhere = true;
-  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/portaria/encomendas`);
   const row = page.getByRole('list', { name: 'Encomendas' }).getByRole('listitem').filter({ hasText: 'Armário 3' });
   await row.getByRole('button', { name: 'Registrar retirada' }).click();
   await page.getByRole('radio', { name: 'Pessoa Fictícia · Morador(a)' }).check();
@@ -166,7 +167,7 @@ test('segunda retirada recebe "já retirada" sem sucesso falso e a lista mostra 
 
 test('duplicidade suspeita pede confirmação explícita e resultado incerto trava o formulário na mesma chave', async ({ page }) => {
   const state = await openConcierge(page);
-  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/portaria/encomendas`);
   const form = page.getByRole('form', { name: 'Receber encomenda' });
   await form.getByLabel('Unidade', { exact: true }).selectOption(UNIT_A);
   await form.getByLabel('Local de guarda').fill('Armário 7');
@@ -197,7 +198,7 @@ test('duplicidade suspeita pede confirmação explícita e resultado incerto tra
 
 test('repetir um recebimento incerto confirmado como outra encomenda mantém a confirmação e a chave', async ({ page }) => {
   const state = await openConcierge(page);
-  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/portaria/encomendas`);
   const form = page.getByRole('form', { name: 'Receber encomenda' });
   await form.getByLabel('Unidade', { exact: true }).selectOption(UNIT_A);
   await form.getByLabel('Local de guarda').fill('Armário 9');
@@ -220,7 +221,7 @@ test('repetir um recebimento incerto confirmado como outra encomenda mantém a c
 test('atualização que falha mantém a fila na tela, mas avisa que ela pode estar desatualizada', async ({ page }) => {
   const state = await openConcierge(page);
   state.parcels.push(waiting());
-  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/portaria/encomendas`);
   const queue = page.getByRole('list', { name: 'Encomendas' });
   await expect(queue.getByText('Armário 3', { exact: false })).toBeVisible();
   await expect(page.getByText('O que aparece pode estar desatualizado', { exact: false })).toHaveCount(0);
@@ -236,7 +237,7 @@ test('atualização que falha mantém a fila na tela, mas avisa que ela pode est
 test('registro indevido é anulado com motivo e a fila filtra por unidade', async ({ page }) => {
   const state = await openConcierge(page);
   state.parcels.push(waiting());
-  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/portaria/encomendas`);
   await page.getByRole('search', { name: 'Filtrar encomendas' }).getByLabel('Unidade').selectOption(UNIT_A);
   await expect.poll(() => state.lists.some((search) => search.includes(`unitId=${UNIT_A}`))).toBe(true);
   const row = page.getByRole('list', { name: 'Encomendas' }).getByRole('listitem').filter({ hasText: 'Armário 3' });
@@ -262,7 +263,7 @@ test('morador consulta encomendas da unidade com local e retirada', async ({ pag
     waiting({ parcelId: '40000000-0000-4000-8000-0000000000e3', storageLocation: 'Armário anulado', status: 'VOIDED', version: 1,
       voidReason: 'Unidade errada', voidedAt: '2030-01-01T13:00:00.000Z' }));
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/encomendas`);
   await expect(page.getByRole('heading', { name: 'Encomendas da unidade' })).toBeVisible();
   const list = page.getByRole('list', { name: 'Encomendas a retirar' });
   await expect(list.getByText('guardada em Prateleira B', { exact: false })).toBeVisible();

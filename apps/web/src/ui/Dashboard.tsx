@@ -11,6 +11,7 @@ import { UnitInbox } from './Inbox';
 import { UnitAnnouncements } from './Announcements';
 import { UnitRequests } from './Requests';
 import { UnitMoves } from './Moves';
+import { residentPath, residentRoot } from './shell/paths';
 import './Dashboard.css';
 
 const residentialRoles = new Set<Membership['role']>(['RESIDENT', 'RESPONSIBLE', 'DEPENDENT']);
@@ -33,7 +34,7 @@ export function DashboardPage() {
   const { identity } = useAuth();
   const { tenantId = '', unitId = '' } = useParams();
   const membership = identity?.memberships.find(item => item.tenantId === tenantId && item.unitId === unitId && residentialRoles.has(item.role));
-  if (!identity || !membership) return <div className="panel"><Empty title="Unidade indisponível">Selecione uma unidade com vínculo residencial para consultar seu resumo.</Empty><Link className="button button-secondary" to="/contextos">Selecionar unidade</Link></div>;
+  if (!identity || !membership) return <div className="panel"><Empty title="Unidade indisponível">Selecione uma unidade com vínculo residencial para consultar seu resumo.</Empty><Link className="button button-secondary" to={residentRoot(tenantId)}>Selecionar unidade</Link></div>;
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido pela gestão antes de consultar o resumo.</Notice>; }
   return <DashboardContext key={`${identity.accountId}:${tenantId}:${unitId}:${membership.timeZone}`} accountId={identity.accountId} membership={membership} unitId={unitId} />;
@@ -41,8 +42,8 @@ export function DashboardPage() {
 
 function DashboardContext({ accountId, membership, unitId }: { accountId: string; membership: Membership; unitId: string }) {
   const tenantId = membership.tenantId;
-  const route = `/morador/${tenantId}/${unitId}/inicio`;
-  const agenda = `/morador/${tenantId}/${unitId}/reservas`;
+  const route = residentPath(tenantId, unitId);
+  const agenda = residentPath(tenantId, unitId, 'reservas');
   const queries = useQueryClient();
   const scope = useMemo<Scope>(() => ({ accountId, tenantId, unitId, route }), [accountId, tenantId, unitId, route]);
   const [now, setNow] = useState(Date.now);
@@ -96,10 +97,10 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
     try { upcoming = upcomingReservations(reservations.data.reservations, unitId, now); }
     catch (error) { incompatible = error; }
   }
-  if (privateDenied || denial) return <div className="panel"><Notice tone="error">Este contexto deixou de estar disponível. Os dados anteriores foram removidos. Selecione uma unidade disponível para continuar.</Notice><Link className="button button-secondary dashboard-context-link" to="/contextos">Selecionar unidade</Link></div>;
+  if (privateDenied || denial) return <div className="panel"><Notice tone="error">Este contexto deixou de estar disponível. Os dados anteriores foram removidos. Selecione uma unidade disponível para continuar.</Notice><Link className="button button-secondary dashboard-context-link" to={residentRoot(tenantId)}>Selecionar unidade</Link></div>;
   if (units.isPending) return <Loading label="Conferindo sua unidade." />;
   if (units.isError) return <ErrorState error={units.error} retry={() => void units.refetch()} />;
-  if (!unit) return <div className="panel"><Empty title="Unidade indisponível">Seu vínculo ou a situação da unidade mudou. Selecione outro contexto para continuar.</Empty><Link className="button button-secondary" to="/contextos">Selecionar unidade</Link></div>;
+  if (!unit) return <div className="panel"><Empty title="Unidade indisponível">Seu vínculo ou a situação da unidade mudou. Selecione outro contexto para continuar.</Empty><Link className="button button-secondary" to={residentRoot(tenantId)}>Selecionar unidade</Link></div>;
   const unitLabel = unit.blockName ? `${unit.blockName} · ${unit.label}` : unit.label;
   const areaNames = new Map(areas.data?.map(area => [area.amenityId, area.name]));
   const displayed = upcoming.slice(0, 3);
@@ -107,7 +108,7 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
   return <div className="dashboard-page">
     <div className="residence-heading"><div><span className="eyebrow">SEU DIA A DIA</span><h1>Sua unidade, em dia.</h1><p>Confira suas próximas reservas e encontre o caminho para organizar sua rotina.</p></div><div className="context-badge"><Icon name="home" /><div><strong>{unitLabel}</strong><span>{membership.tenantName}</span></div></div></div>
     <div className="dashboard-grid">
-      <section className="panel dashboard-welcome" aria-labelledby="dashboard-shortcuts"><span className="section-index">SEU CONTEXTO</span><h2 id="dashboard-shortcuts">Um espaço para a sua rotina.</h2><p>Você está consultando a unidade <strong>{unitLabel}</strong>. O acesso é conferido pelo servidor em cada consulta.</p><Link className="button" to={agenda}><Icon name="calendar" />Abrir reservas<Icon name="arrow" /></Link>{membership.role !== 'DEPENDENT' ? <Link className="text-button" to={`/morador/${tenantId}/${unitId}/financeiro`}>Ver cobranças da unidade<Icon name="arrow" /></Link> : null}<p className="dashboard-context-note">Horários do condomínio: <strong>{membership.timeZone}</strong></p></section>
+      <section className="panel dashboard-welcome" aria-labelledby="dashboard-shortcuts"><span className="section-index">SEU CONTEXTO</span><h2 id="dashboard-shortcuts">Um espaço para a sua rotina.</h2><p>Você está consultando a unidade <strong>{unitLabel}</strong>. O acesso é conferido pelo servidor em cada consulta.</p><Link className="button" to={agenda}><Icon name="calendar" />Abrir reservas<Icon name="arrow" /></Link>{membership.role !== 'DEPENDENT' ? <Link className="text-button" to={residentPath(tenantId, unitId, 'financeiro')}>Ver cobranças da unidade<Icon name="arrow" /></Link> : null}<p className="dashboard-context-note">Horários do condomínio: <strong>{membership.timeZone}</strong></p></section>
       <aside className="panel dashboard-guide" aria-label="Sobre este resumo"><span className="round-icon"><Icon name="shield" /></span><h2>Apenas o seu contexto.</h2><p>Este resumo reúne solicitações da unidade selecionada. A agenda de outras unidades não aparece aqui.</p><p>A confirmação de uma nova reserva depende das regras e da disponibilidade conferidas no envio.</p></aside>
     </div>
     <UnitInbox scope={scope} timeZone={membership.timeZone} />

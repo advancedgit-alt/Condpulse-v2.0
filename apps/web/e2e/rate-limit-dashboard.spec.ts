@@ -17,7 +17,7 @@ test('login limitado espera o prazo, não repete e permite nova tentativa explí
   expect(state.loginRequests).toBe(1);
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC_PASSWORD');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page).toHaveURL(/\/contextos/);
+  await expect(page).toHaveURL(/\/entrada/);
   expect(state.loginRequests).toBe(2);
 });
 
@@ -51,11 +51,11 @@ test('painel móvel mostra próximas reservas próprias e navegação preserva o
   await page.getByRole('navigation', { name: 'Navegação da unidade' }).getByRole('link', { name: 'Reservas', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reservas da unidade', exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: 'Navegação da unidade' }).getByRole('link', { name: 'Início', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/.*/inicio`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/.*/inicio`));
   await expect(page.getByRole('heading', { name: 'Sua unidade, em dia.', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Trocar unidade', exact: true }).click();
+  await page.getByRole('button', { name: 'Trocar condomínio', exact: true }).click();
   await chooseContext(page, 'B', 'inicio');
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_B}/${UNIT_B}/inicio`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_B}/morador/${UNIT_B}/inicio`));
   await expect(page.getByRole('heading', { name: 'Área Sintética A', exact: true })).toHaveCount(0);
 });
 

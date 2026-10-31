@@ -38,7 +38,7 @@ test('aviso novo aparece sozinho: o canal só diz o assunto e a tela consulta a 
     await sse(route, stream(['ready', { topics: ['notifications'] }], ['changed', { topics: ['notifications'] }]));
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect(page.getByText('Encomenda recebida na portaria')).toBeVisible();
   expect(inbox.lists).toBeGreaterThan(1);
   expect(opened[0]).toContain('text/event-stream');
@@ -55,7 +55,7 @@ test('reconectar consulta o estado de novo, sem esperar um evento de mudança', 
     await sse(route, stream(['ready', { topics: [] }], ['end', { reason: 'timeout' }]), connections === 1 ? 300 : 600_000);
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect.poll(() => connections).toBe(2);
   await expect(page.getByText('Encomenda recebida na portaria')).toBeVisible();
 });
@@ -73,7 +73,7 @@ test('acesso revogado encerra o canal e confere a identidade de novo, sem recone
     await sse(route, stream(['ready', { topics: [] }], ['end', { reason: 'revoked' }]), 300);
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect.poll(() => connections).toBe(1);
   await expect.poll(() => identity).toBeGreaterThan(atEnd);
   await page.waitForTimeout(1500);
@@ -89,7 +89,7 @@ test('função desligada (404) não mostra erro nem insiste: uma tentativa e esp
     await route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ code: 'SYNTHETIC_TEST_ROUTE_NOT_FOUND' }) });
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect(page.getByRole('heading', { name: /Caixa da unidade/ })).toBeVisible();
   await page.waitForTimeout(2000);
   expect(connections).toBe(1);
@@ -102,8 +102,8 @@ test('fora da unidade (gestão, troca de contexto) o canal não é aberto', asyn
   let connections = 0;
   await page.route('**/events', async (route) => { connections += 1; await route.fallback(); });
   await signIn(page);
-  await page.goto('/contextos');
-  await expect(page.getByRole('heading', { name: 'Escolha seu espaço.' })).toBeVisible();
+  await page.goto('/entrada');
+  await expect(page.getByRole('heading', { name: 'Escolha o condomínio.' })).toBeVisible();
   await page.waitForTimeout(1000);
   expect(connections).toBe(0);
 });

@@ -21,7 +21,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await expect(page.getByLabel('E-mail', { exact: true })).toBeVisible();
     await scan(page, 'entrar');
     await signIn(page);
-    await scan(page, 'contextos');
+    await scan(page, 'entrada');
   });
 
   test(`acessibilidade: unidade — início e reservas (${size})`, async ({ page }) => {
@@ -41,7 +41,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
     await signIn(page);
     for (const section of ['pendencias', 'pessoas']) {
-      await page.goto(`/gestao/${TENANT_A}/${section}`);
+      await page.goto(`/c/${TENANT_A}/gestao/${section}`);
       await page.waitForLoadState('networkidle');
       await scan(page, `gestão/${section}`);
     }

@@ -6,6 +6,7 @@ import { scopeKey, type Scope } from './Operations';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from './primitives';
 import { formatWhen } from './dateTime';
 import { codeOf, uncertain } from './operationIntent';
+import { residentPath } from './shell/paths';
 import './management/Management.css';
 
 const kindText: Record<InboxNotification['kind'], string> = {
@@ -77,17 +78,19 @@ export function UnitInbox({ scope, timeZone }: { scope: Scope; timeZone: string 
     if (opening) return;
     setOpening(item.notificationId); setFailure(null); setOutcome(null);
     const origin = `${scope.tenantId}:${scope.unitId}`;
+    // O endereço muda antes de a tela nova terminar de renderizar (navegação em transição): sair da página conta já.
+    const page = window.location.pathname;
     try {
       await notifications.open(scope.tenantId, item.notificationId);
       await queries.invalidateQueries({ queryKey: key });
-      if (!active.current.mounted || active.current.scope !== origin) return;
+      if (!active.current.mounted || active.current.scope !== origin || window.location.pathname !== page) return;
       const local = here[item.kind];
       if (local) {
         for (const part of localRefresh(item.kind, item.resourceId)) void queries.invalidateQueries({ queryKey: [...scopeKey(scope), ...part] });
         setOutcome(local);
         return;
       }
-      navigate(`/morador/${scope.tenantId}/${scope.unitId}/${destination[item.kind][0]}`);
+      navigate(residentPath(scope.tenantId, scope.unitId, destination[item.kind][0] ?? 'inicio'));
     } catch (error) {
       setFailure(error);
       void queries.invalidateQueries({ queryKey: key });
