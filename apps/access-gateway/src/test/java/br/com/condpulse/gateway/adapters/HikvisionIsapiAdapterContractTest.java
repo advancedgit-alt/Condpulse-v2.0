@@ -43,6 +43,9 @@ class HikvisionIsapiAdapterContractTest {
    });
    fake.on("PUT","/ISAPI/AccessControl/UserInfo/Modify",r->{
     var info=Json.map(Json.object(r.text()).get("UserInfo"));
+    // HK12 §15.2: employeeNo e userType são obrigatórios no Modify; sem eles o equipamento recusa.
+    if(Json.string(info,"employeeNo")==null || Json.string(info,"userType")==null)
+     return new Reply(400,"application/json","{\"statusCode\":6,\"statusString\":\"Invalid Content\",\"subStatusCode\":\"badJsonContent\"}",Map.of(),0);
     users.get(Json.string(info,"employeeNo")).putAll(info);
     return Reply.json(OK);
    });
@@ -89,6 +92,31 @@ class HikvisionIsapiAdapterContractTest {
    assertEquals(a.rightKeys(rights).orElseThrow(),a.readState("ref-1").rightKeys());
    assertTrue(a.readState("ref-1").rightKeys().contains("valid:1893466800/1925002800"));
    assertTrue(fake.requests().stream().filter(r->r.authorization()!=null).allMatch(r->r.authorization().startsWith("Digest ")));
+  }
+ }
+
+ @Test void modificacaoLevaUserTypeObrigatorioPreservandoAClassificacaoAtual() throws Exception {
+  try(var fake=new FakeDeviceServer().requireDigest("hik-sintetico")) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   var visitor=new LinkedHashMap<String,Object>(); visitor.put("employeeNo","ref-v"); visitor.put("name","Visitante"); visitor.put("userType","visitor");
+   store.users.put("ref-v",visitor);
+   var rights=new RightsSpec("ref-v",List.of(new Right("c1","sempre")),null,null);
+   assertEquals(OperationState.ACK,a.applyRights(rights).state(),"Modify com userType é aceito pelo servidor que exige o campo");
+   var modify=Json.map(Json.object(fake.requests("/ISAPI/AccessControl/UserInfo/Modify").getLast().text()).get("UserInfo"));
+   assertEquals("visitor",modify.get("userType"),"classificação lida na busca é preservada");
+   assertEquals(OperationState.ACK,a.upsertPerson(new PersonSpec("ref-v","Visitante 2",null,null)).state());
+   modify=Json.map(Json.object(fake.requests("/ISAPI/AccessControl/UserInfo/Modify").getLast().text()).get("UserInfo"));
+   assertEquals("visitor",modify.get("userType"),"atualização de nome não reclassifica");
+
+   var noType=new LinkedHashMap<String,Object>(); noType.put("employeeNo","ref-x"); noType.put("name","Sem tipo");
+   store.users.put("ref-x",noType);
+   int before=fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size();
+   var refused=a.applyRights(new RightsSpec("ref-x",List.of(new Right("c1","sempre")),null,null));
+   assertEquals(OperationState.FAILED,refused.state());
+   assertEquals("USER_TYPE_UNREADABLE",refused.reasonCode());
+   assertEquals(OperationState.FAILED,a.upsertPerson(new PersonSpec("ref-x","Sem tipo",null,null)).state());
+   assertEquals(before,fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size(),"tipo ilegível: nada é enviado");
   }
  }
 

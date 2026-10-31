@@ -111,7 +111,11 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    var previous=Json.map(existing.get().get("Valid"));
    if(person.validFrom()==null && previous!=null && Boolean.TRUE.equals(Json.bool(previous,"enable")))
     return OperationResult.of(OperationState.FAILED,"VALIDITY_CLEAR_NOT_DOCUMENTED");
+   String userType=existingUserType(existing.get());
+   if(userType==null) return OperationResult.of(OperationState.FAILED,"USER_TYPE_UNREADABLE");
    var info=userInfo(person);
+   // userType é obrigatório no Modify (§15.2); preserva a classificação atual em vez de reclassificar.
+   info.put("userType",userType);
    // Modificação preserva direitos atuais: só nome e validade mudam aqui.
    return status(send("PUT",P_MODIFY,Map.of("UserInfo",info)));
   } catch(DeviceCallException e) { return failure(e); }
@@ -223,6 +227,9 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    var previous=Json.map(existing.get().get("Valid"));
    if(rights.validFrom()==null && previous!=null && Boolean.TRUE.equals(Json.bool(previous,"enable")))
     return OperationResult.of(OperationState.FAILED,"VALIDITY_CLEAR_NOT_DOCUMENTED");
+   // userType é obrigatório no Modify (§15.2): usa o lido na busca; ilegível, nada é enviado.
+   String userType=existingUserType(existing.get());
+   if(userType==null) return OperationResult.of(OperationState.FAILED,"USER_TYPE_UNREADABLE");
    var plans=new TreeMap<Integer,TreeSet<Integer>>();
    for(String k:keys.get()) {
     if(!k.startsWith("door:")) continue;
@@ -231,6 +238,7 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    }
    var info=new LinkedHashMap<String,Object>();
    info.put("employeeNo",rights.subjectRef());
+   info.put("userType",userType);
    if(rights.validFrom()!=null) info.put("Valid",valid(rights.validFrom(),rights.validUntil()));
    info.put("doorRight",String.join(",",plans.keySet().stream().map(String::valueOf).toList()));
    var rightPlan=new ArrayList<Object>();
@@ -243,6 +251,13 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    info.put("RightPlan",rightPlan);
    return status(send("PUT",P_MODIFY,Map.of("UserInfo",info)));
   } catch(DeviceCallException e) { return failure(e); }
+ }
+
+ /** userType lido na busca (obrigatório no Modify, §15.2); ausente ou fora do formato devolve null. */
+ static String existingUserType(Map<String,Object> user) {
+  String type;
+  try { type=Json.string(user,"userType"); } catch(Json.JsonException e) { return null; }
+  return type!=null && type.matches("[A-Za-z]{1,32}")?type:null;
  }
 
  private Map<String,Object> valid(Instant begin,Instant end) {
