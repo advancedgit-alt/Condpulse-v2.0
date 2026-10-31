@@ -89,7 +89,7 @@ test('morador autoriza terceiro: código aparece uma vez, repetição incerta n�
   const state = await installApi(page, api, false);
   state.loseNextCreate = true;
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/encomendas`);
   const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
   await row.getByRole('button', { name: 'Autorizar retirada por terceiro' }).click();
   const form = row.getByRole('form', { name: 'Autorizar retirada por terceiro' });
@@ -135,7 +135,7 @@ test('vínculo sem permissão de retirada vê a recusa do servidor ao autorizar'
   const state = await installApi(page, api, false);
   state.createFailure = 'DELEGATION_NOT_ALLOWED';
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/encomendas`);
   const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
   await row.getByRole('button', { name: 'Autorizar retirada por terceiro' }).click();
   await row.getByLabel('Nome de quem vai retirar').fill('Terceiro');
@@ -151,8 +151,9 @@ test('portaria confere o código: errado conta tentativa, certo registra a retir
   const state = await installApi(page, api, true);
   state.delegation = delegationFixture();
   await signIn(page);
-  await page.goto('/contextos');
-  await page.getByRole('link', { name: 'Abrir portaria · Condomínio Sintético A' }).click();
+  await page.goto('/entrada');
+  // Conta só da portaria de um condomínio: a entrada abre direto a área da portaria, sem seletor.
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/encomendas$`));
   const queue = page.getByRole('list', { name: 'Encomendas' });
   await queue.getByRole('button', { name: 'Retirada por código' }).click();
   const form = page.getByRole('form', { name: 'Retirada por código de Bloco 1 · 101 — Sintética A' });
@@ -181,8 +182,9 @@ test('portaria: autorização bloqueada na quinta tentativa e encomenda sem auto
   const state = await installApi(page, api, true);
   state.delegation = delegationFixture({ attempts: 4, attemptsLeft: 1, version: 4 });
   await signIn(page);
-  await page.goto('/contextos');
-  await page.getByRole('link', { name: 'Abrir portaria · Condomínio Sintético A' }).click();
+  await page.goto('/entrada');
+  // Conta só da portaria de um condomínio: a entrada abre direto a área da portaria, sem seletor.
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/encomendas$`));
   await page.getByRole('list', { name: 'Encomendas' }).getByRole('button', { name: 'Retirada por código' }).click();
   const form = page.getByRole('form', { name: 'Retirada por código de Bloco 1 · 101 — Sintética A' });
   await form.getByLabel('Código informado pela pessoa').fill('00000000');
@@ -202,7 +204,7 @@ test('repetição incerta perto da validade mínima continua possível com o mes
   const api = await installSyntheticApi(page);
   const state = await installApi(page, api, false);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/encomendas`);
   const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
   await row.getByRole('button', { name: 'Autorizar retirada por terceiro' }).click();
   const form = row.getByRole('form', { name: 'Autorizar retirada por terceiro' });
@@ -233,7 +235,7 @@ test('confirmação de cancelamento vale para a autorização que estava aberta,
   const state = await installApi(page, api, false);
   state.delegation = delegationFixture({ delegationId: '41000000-0000-4000-8000-0000000000a1', delegateName: 'Primeira Pessoa' });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/encomendas`);
   const row = page.getByRole('list', { name: 'Encomendas a retirar' }).getByRole('listitem');
   await expect(row.getByText('Autorização em vigor: Primeira Pessoa', { exact: false })).toBeVisible();
   await row.getByRole('button', { name: 'Cancelar autorização' }).click();

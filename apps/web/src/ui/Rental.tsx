@@ -9,6 +9,7 @@ import { Empty, ErrorState, Loading, Notice, errorMessage } from './primitives';
 import { formatWhen } from './dateTime';
 import { invitationLink } from './management/People';
 import { ReasonForm, membershipStatusLabels, roleLabels, statusTone } from './management/shared';
+import { residentRoot } from './shell/paths';
 import './management/Management.css';
 
 export const rentalKey = (accountId: string, tenantId: string, unitId: string) =>
@@ -134,7 +135,7 @@ export function OwnerRentalPage() {
   const key = rentalKey(identity?.accountId ?? '', tenantId, unitId);
   const view = useQuery({ queryKey: key, queryFn: ({ signal }) => rental.view(tenantId, unitId, signal), enabled: Boolean(membership) });
   if (!identity || !membership) return <div className="panel"><Empty title="Unidade indisponível">Esta área é do proprietário da unidade.</Empty>
-    <Link className="button button-secondary" to="/contextos">Selecionar unidade</Link></div>;
+    <Link className="button button-secondary" to={residentRoot(tenantId)}>Selecionar unidade</Link></div>;
   const refresh = async () => { await queries.invalidateQueries({ queryKey: key }); };
   return <section className="management-section" aria-labelledby="rental-title">
     <div className="section-heading"><div><span className="section-index">PROPRIETÁRIO</span>

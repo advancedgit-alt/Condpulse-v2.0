@@ -95,7 +95,7 @@ public class GrantStore {
   */
  public record Sweep(GrantModels.Grant grant,boolean originValid) {}
  public List<Sweep> activeInArea(UUID tenant,UUID area) {
-  // Validade na origem avaliada de uma vez para a área (cp.access_grants_current_now, V046, mesmo predicado de
+  // Validade na origem avaliada de uma vez para a área (cp.access_grants_current_now, V047, mesmo predicado de
   // cp.access_grant_current): uma chamada por direito replanejava a função e estourava o prazo da transação com centenas.
   return scan(()->jdbc.query("""
    with cur as materialized (select c.id from cp.access_grants_current_now(?,null,?) c(id))

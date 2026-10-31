@@ -310,6 +310,13 @@ const messages: Record<string, string> = {
   AUDIT_LIMIT_INVALID: 'Use um limite entre 1 e 100.',
   AUDIT_DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar a auditoria. Tente novamente.',
   PLATFORM_ACCESS_DENIED: 'Esta área é exclusiva da administração da plataforma.',
+  TENANT_MODULE_CHANGED: 'O módulo foi alterado por outra pessoa depois da leitura. Recarregue e confira antes de repetir.',
+  TENANT_MODULE_INVALID: 'Os dados da alteração do módulo não atendem às regras.',
+  TENANT_MODULE_UNAVAILABLE: 'Não foi possível consultar ou alterar os módulos agora. Tente novamente.',
+  MODULE_DISABLED: 'Este módulo não está liberado para o condomínio.',
+  TENANT_MODULE_FORBIDDEN: 'Operação não permitida para este acesso.',
+  TENANT_MODULE_STATE_REQUIRED: 'Informe se o módulo fica liberado ou suspenso.',
+  TENANT_MODULE_VERSION_REQUIRED: 'Recarregue o módulo antes de alterar.',
   PLATFORM_INPUT_INVALID: 'Os dados informados não atendem às regras do cadastro.',
   PLATFORM_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação. Tente novamente.',
   PARCEL_UNIT_REQUIRED: 'Informe a unidade da encomenda.',
@@ -627,19 +634,24 @@ function invitationFirstAccess(value: unknown, expected: InvitationAccepted['sta
     expiresAt: value.expiresAt as string | null };
 }
 
-function membership(value: unknown): Membership {
+const MEMBERSHIP_ROLES = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER', 'SUPPORT'] as const;
+
+/** Vínculo válido; null quando o papel é novo e esta versão da web ainda não o conhece (fica de fora, sem derrubar os demais). */
+function membership(value: unknown): Membership | null {
   if (!record(value) || !isUUID(value.membershipId) || !isUUID(value.tenantId)
       || !isString(value.tenantName) || !isString(value.timeZone)
       || !(value.unitId === null || isUUID(value.unitId))
-      || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MANAGER', 'SUPPORT']))
+      || typeof value.role !== 'string' || !/^[A-Z][A-Z_]{1,39}$/.test(value.role))
     throw invalidResponse();
+  if (!oneOf(value.role, MEMBERSHIP_ROLES)) return null;
   return { membershipId: value.membershipId, tenantId: value.tenantId, tenantName: value.tenantName,
     timeZone: value.timeZone, unitId: value.unitId, role: value.role };
 }
 
 function identity(value: unknown): CurrentIdentity {
   if (!record(value) || !isUUID(value.accountId) || !Array.isArray(value.memberships)) throw invalidResponse();
-  return { accountId: value.accountId, memberships: value.memberships.map(membership) };
+  return { accountId: value.accountId,
+    memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null) };
 }
 
 function unit(value: unknown): Unit {

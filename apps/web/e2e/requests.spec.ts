@@ -145,7 +145,7 @@ test('unidade abre pedido com chave pendente, conversa no próprio pedido e não
   await installSyntheticApi(page);
   const state = await installRequestsApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect(page.getByRole('heading', { name: 'Pedidos', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Abrir pedido' }).click();
   const form = page.getByRole('form', { name: 'Abrir pedido' });
@@ -180,7 +180,7 @@ test('pedido com resultado incerto não fica pendente para a próxima conta depo
   await installSyntheticApi(page);
   const state = await installRequestsApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await page.getByRole('button', { name: 'Abrir pedido' }).click();
   const form = page.getByRole('form', { name: 'Abrir pedido' });
   await form.getByLabel('Título').fill('Portão travado');
@@ -193,7 +193,7 @@ test('pedido com resultado incerto não fica pendente para a próxima conta depo
   await page.getByLabel('E-mail', { exact: true }).fill('morador-sintetico@example.invalid');
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
   await page.getByLabel('Senha', { exact: true }).press('Enter');
-  await expect(page).toHaveURL(/\/contextos/);
+  await expect(page).toHaveURL(/\/entrada/);
   await chooseContext(page, 'A', 'inicio');
   await page.getByRole('button', { name: 'Abrir pedido' }).click();
   const reopened = page.getByRole('form', { name: 'Abrir pedido' });
@@ -216,7 +216,7 @@ test('conversa reaberta durante o envio não grava a mesma mensagem de novo depo
   let release!: () => void;
   state.holdMessage = new Promise<void>((resolve) => { release = resolve; });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const row = page.getByRole('list', { name: 'Pedidos da unidade' }).getByRole('listitem').filter({ hasText: 'Barulho fictício' });
   await row.getByRole('button', { name: 'Ver conversa' }).click();
   await row.getByLabel('Mensagem para a gestão').fill('Continua o barulho.');
@@ -244,7 +244,7 @@ test('gestão registra comentário interno, define responsável e prazo e conclu
     state: 'OPEN', assigneeMembershipId: null, dueOn: null, resolution: null, requesterName: 'PESSOA FICTÍCIA', createdAt: minutes(-30),
     updatedAt: minutes(-30), resolvedAt: null, closedAt: null, version: 0, messages: [] });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pedidos`);
+  await page.goto(`/c/${TENANT_A}/gestao/pedidos`);
   await expect(page.getByRole('heading', { name: 'Pedidos das unidades' })).toBeVisible();
   const row = page.getByRole('list', { name: 'Pedidos das unidades' }).getByRole('listitem').filter({ hasText: 'Barulho fictício' });
   await expect(row).toBeVisible();
@@ -273,7 +273,7 @@ test('gestão registra comentário interno, define responsável e prazo e conclu
 test('pedidos desligados no ambiente não aparecem para a unidade nem mostram erro técnico', async ({ page }) => {
   await installSyntheticApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect(page.getByRole('heading', { name: 'Um espaço para a sua rotina.' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Pedidos/ })).toHaveCount(0);
   await expect(page.getByText('Esta função ainda não está disponível', { exact: false })).toHaveCount(0);
@@ -295,7 +295,7 @@ test('conversa longa: a unidade carrega mensagens anteriores, sem comentário in
   try {
     state.items.push(longRequest());
     await signIn(page);
-    await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+    await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
     await page.getByRole('button', { name: 'Ver conversa' }).click();
     const conversation = page.getByRole('list', { name: 'Conversa do pedido' });
     await expect(conversation.getByRole('listitem')).toHaveCount(2);
@@ -327,7 +327,7 @@ test('conversa longa na gestão: histórico completo, inclusive o comentário in
   try {
     state.items.push(longRequest());
     await signIn(page);
-    await page.goto(`/gestao/${TENANT_A}/pedidos`);
+    await page.goto(`/c/${TENANT_A}/gestao/pedidos`);
     const row = page.getByRole('list', { name: 'Pedidos das unidades' }).getByRole('listitem').filter({ hasText: 'Vazamento antigo' });
     await row.getByRole('button', { name: 'Abrir pedido' }).click();
     const conversation = row.getByRole('list', { name: 'Conversa do pedido' });

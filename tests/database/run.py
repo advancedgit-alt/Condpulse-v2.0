@@ -4292,7 +4292,7 @@ def grant_checks():
            and value(both + scan + f"select count(*) from cp.access_grants g where g.tenant_id='{TA}' and g.subject_id='{SV}' and "
                  f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
                  f"(select cp.access_grants_current_now('{TA}','{SV}',null)))", **as_mgr) == "0",
-           "V046: conjunto vigente igual a cp.access_grant_current para todos os direitos (convites, reservas, bloqueios, marcas)")
+           "V047: conjunto vigente igual a cp.access_grant_current para todos os direitos (convites, reservas, bloqueios, marcas)")
     # Corrida cartao x bloqueio (mesmo lock por condominio): nenhuma ordem deixa cartao ativo para sujeito bloqueado.
     def card(identifier):
         return (mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
@@ -4346,7 +4346,7 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
 def publication_checks():
-    """V046 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
+    """V047 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
     estados so por relatorio do executor; revogacao publicada na mesma transacao da marca e antes de ampliacao."""
     caps = ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"]
     ids = facial_installation(7, caps, readers=("TO_FROM", "FROM_TO"))
@@ -4532,6 +4532,70 @@ def publication_checks():
           f"DELETE FROM cp.subject_contexts WHERE subject_id='{SRS}'; DELETE FROM cp.access_subjects WHERE id='{SRS}'; "
           f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
     facial_cleanup(ids)
+def maintenance_checks():
+    """V046: zelador (MAINTENANCE) com maintenance.operate le e registra andamento so dos pedidos atribuidos ao proprio
+    vinculo; nao muda responsavel nem prazo, nao encerra e nao le cadastro."""
+    MG, ZL, Z2, RS = ("10000000-0000-4000-8000-0000000046a1", "10000000-0000-4000-8000-0000000046a2",
+                      "10000000-0000-4000-8000-0000000046a3", "10000000-0000-4000-8000-0000000046a4")
+    MZ, MZ2 = "46000000-0000-4000-8000-000000000001", "46000000-0000-4000-8000-000000000002"
+    R1, R2 = "46000000-0000-4000-8000-000000000011", "46000000-0000-4000-8000-000000000012"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{ZL}','ACTIVE'),('{Z2}','ACTIVE'),('{RS}','ACTIVE');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          (gen_random_uuid(),'{TA}','{MG}',NULL,'GESTAO ZELADORIA','MANAGER','ACTIVE'),
+          ('{MZ}','{TA}','{ZL}',NULL,'ZELADOR FICTICIO','MAINTENANCE','ACTIVE'),
+          ('{MZ2}','{TA}','{Z2}',NULL,'OUTRO ZELADOR','MAINTENANCE','ACTIVE'),
+          (gen_random_uuid(),'{TA}','{RS}','{UA}','RESPONSAVEL ZELADORIA','RESPONSIBLE','ACTIVE');
+    """)
+    expect(error(f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) "
+                 f"VALUES('{TA}','{Z2}','{UA}','ZELADOR COM UNIDADE','MAINTENANCE','PENDING')", "23514"), "zelador nunca tem unidade")
+    for rid, title in ((R1, "Lampada do hall"), (R2, "Portao da garagem")):
+        query(f"INSERT INTO cp.service_requests(id,tenant_id,unit_id,requester_id,category,title,description) "
+              f"VALUES('{rid}','{TA}','{UA}','{RS}','MAINTENANCE','{title}','Descricao ficticia')", tenant=TA, actor=RS, role="cp_api")
+    mgr = "SET LOCAL app.capabilities='requests.manage'; "
+    query(mgr + f"UPDATE cp.service_requests SET state='TRIAGED',assignee_membership_id='{MZ}',version=version+1 WHERE id='{R1}'",
+          tenant=TA, actor=MG, role="cp_api")
+    zl = "SET LOCAL app.capabilities='maintenance.operate'; "
+    expect(value(zl + "select count(*) from cp.service_requests", tenant=TA, actor=ZL, role="cp_api") == "1",
+           "zelador ve somente o pedido atribuido")
+    expect(value("select count(*) from cp.service_requests", tenant=TA, actor=ZL, role="cp_api") == "0",
+           "sem capacidade publicada (AAL1) o zelador nao ve pedidos")
+    expect(value(zl + "select count(*) from cp.service_requests", tenant=TA, actor=Z2, role="cp_api") == "0",
+           "outro zelador nao ve pedido alheio")
+    expect(value(zl + "select count(*) from cp.memberships", tenant=TA, actor=ZL, role="cp_api") == "1",
+           "zelador nao le cadastro de vinculos")
+    expect(error(zl + f"UPDATE cp.service_requests SET state='IN_PROGRESS',assignee_membership_id=NULL,version=version+1 WHERE id='{R1}'",
+                 "42501", tenant=TA, actor=ZL, role="cp_api"), "zelador nao muda responsavel")
+    expect(error(zl + f"UPDATE cp.service_requests SET state='IN_PROGRESS',due_on=current_date,version=version+1 WHERE id='{R1}'",
+                 "42501", tenant=TA, actor=ZL, role="cp_api"), "zelador nao muda prazo")
+    expect(error(zl + f"UPDATE cp.service_requests SET state='CLOSED',version=version+1 WHERE id='{R1}'",
+                 "42501", tenant=TA, actor=ZL, role="cp_api"), "zelador nao encerra")
+    expect(query(zl + f"UPDATE cp.service_requests SET state='IN_PROGRESS',version=version+1 WHERE id='{R2}' RETURNING id",
+                 tenant=TA, actor=ZL, role="cp_api").stdout.strip() == "", "zelador nao alcanca pedido nao atribuido")
+    query(zl + f"UPDATE cp.service_requests SET state='IN_PROGRESS',version=version+1 WHERE id='{R1}'", tenant=TA, actor=ZL, role="cp_api")
+    expect(value(f"select state||':'||version from cp.service_requests where id='{R1}'") == "IN_PROGRESS:2", "zelador registra o andamento")
+    query(zl + f"INSERT INTO cp.request_messages(tenant_id,request_id,author_id,author_role,body,visibility) "
+          f"VALUES('{TA}','{R1}','{ZL}','STAFF','Troca agendada','RESIDENT')", tenant=TA, actor=ZL, role="cp_api")
+    expect(value(f"select author_name from cp.request_messages where request_id='{R1}'") == "ZELADOR FICTICIO", "nome do zelador na conversa")
+    expect(error(zl + f"INSERT INTO cp.request_messages(tenant_id,request_id,author_id,author_role,body,visibility) "
+                 f"VALUES('{TA}','{R2}','{ZL}','STAFF','Fora','RESIDENT')", "42501", tenant=TA, actor=ZL, role="cp_api"),
+           "zelador nao escreve em pedido nao atribuido")
+    expect(value(zl + "select count(*) from cp.request_messages", tenant=TA, actor=ZL, role="cp_api") == "1", "zelador le a conversa do atribuido")
+    expect(value(zl + f"select count(*) from cp.request_messages where request_id='{R1}'", tenant=TA, actor=Z2, role="cp_api") == "0",
+           "outro zelador nao le nem pagina a conversa do pedido alheio")
+    # A trava da zeladoria vale so para maintenance.operate sem requests.manage: gestao e manutencao do dono seguem a V017.
+    query(mgr + f"UPDATE cp.service_requests SET state='TRIAGED',assignee_membership_id='{MZ2}',due_on=current_date,version=version+1 "
+          f"WHERE id='{R2}'", tenant=TA, actor=MG, role="cp_api")
+    query(mgr + f"UPDATE cp.service_requests SET state='CLOSED',version=version+1 WHERE id='{R2}'", tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select state||':'||version from cp.service_requests where id='{R2}'") == "CLOSED:2",
+           "gestao segue atribuindo, dando prazo e encerrando pedido com a trava da zeladoria")
+    query(f"UPDATE cp.service_requests SET state='CLOSED',closed_at=clock_timestamp(),version=version+1 WHERE id='{R1}'")
+    expect(value(f"select state from cp.service_requests where id='{R1}'") == "CLOSED",
+           "dono do schema sem capacidade publicada encerra pedido (trava da zeladoria nao se aplica)")
+    query(f"DELETE FROM cp.request_messages WHERE request_id in ('{R1}','{R2}'); DELETE FROM cp.service_requests WHERE id in ('{R1}','{R2}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{ZL}','{Z2}','{RS}'); "
+          f"DELETE FROM platform.accounts WHERE id in ('{MG}','{ZL}','{Z2}','{RS}')")
+
 def tenant_module_checks():
     """V045: modulos por condominio. Central (tenant_modules.manage) grava pela versao com o proprio ator e trilha exigida
     no COMMIT; runtime le no contexto do condominio, nos condominios dos proprios vinculos e pelo link publico."""
@@ -4712,6 +4776,7 @@ def main():
     policy_checks()
     grant_checks()
     publication_checks()
+    maintenance_checks()
     tenant_module_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")

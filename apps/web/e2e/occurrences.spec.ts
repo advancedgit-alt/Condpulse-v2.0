@@ -77,7 +77,7 @@ test('portaria registra ocorrência, repete o envio incerto sem duplicar e encer
   await asConcierge(page, api);
   const state = await installOccurrences(page);
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/ocorrencias`);
+  await page.goto(`/c/${TENANT_A}/portaria/ocorrencias`);
   await expect(page.getByRole('heading', { name: 'Ocorrências · 1 em aberto' })).toBeVisible();
   const list = page.getByRole('list', { name: 'Ocorrências' });
   await expect(list.getByText('Portão da garagem')).toBeVisible();
@@ -126,7 +126,7 @@ test('versão alterada é explicada; falha da lista oferece nova tentativa', asy
   const state = await installOccurrences(page);
   state.listError = true;
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/ocorrencias`);
+  await page.goto(`/c/${TENANT_A}/portaria/ocorrencias`);
   await expect(page.getByRole('button', { name: 'Tentar novamente' })).toBeVisible({ timeout: 15000 });
   state.listError = false;
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
@@ -143,7 +143,7 @@ test('gestão vê e encerra ocorrências pela aba própria, sem escolher unidade
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installOccurrences(page);
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/ocorrencias`);
+  await page.goto(`/c/${TENANT_A}/gestao/ocorrencias`);
   await expect(page.getByRole('heading', { name: 'Ocorrências · 1 em aberto' })).toBeVisible();
   await page.getByRole('button', { name: 'Registrar ocorrência' }).click();
   await expect(page.getByLabel('Unidade (opcional)')).toHaveCount(0);

@@ -98,7 +98,7 @@ export function ReasonForm({ id, label, required, submit, cancel, pending, confi
 
 export const roleLabels: Record<string, string> = {
   RESIDENT: 'Morador', RESPONSIBLE: 'Responsável', DEPENDENT: 'Dependente', OWNER: 'Proprietário',
-  CONCIERGE: 'Portaria', MANAGER: 'Gestão', SUPPORT: 'Suporte',
+  CONCIERGE: 'Portaria', MAINTENANCE: 'Zeladoria', MANAGER: 'Gestão', SUPPORT: 'Suporte',
 };
 export const membershipStatusLabels: Record<string, string> = { PENDING: 'Pendente', ACTIVE: 'Ativo', SUSPENDED: 'Suspenso', REVOKED: 'Revogado' };
 export const reservationStatusLabels: Record<string, string> = {

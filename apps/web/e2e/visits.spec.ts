@@ -248,7 +248,7 @@ test('morador responde a chegada uma vez, convida com chave de operação e revo
   state.permits.push(permitFixture({ permitId: SCHEDULED, visitorName: 'Visita Agendada', documentLast4: null, purpose: null,
     validFrom: minutes(180), validUntil: minutes(300), state: 'SCHEDULED', createdByMe: true }));
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await expect(page.getByRole('heading', { name: 'Acessos da unidade' })).toBeVisible();
   await scanAccessibility(page, 'unidade/acessos');
   const waiting = page.getByRole('list', { name: 'Chegadas aguardando resposta' });
@@ -294,7 +294,7 @@ test.describe('fonte larga', () => {
     const api = await installSyntheticApi(page);
     await installVisitsApi(page, api, false);
     await signIn(page);
-    await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+    await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
     await expect(page.getByRole('heading', { name: 'Acessos da unidade' })).toBeVisible();
     // Fonte de fallback larga (como no runner do CI): o pior caso para "Encomendas".
     await page.addStyleTag({ content: '*{font-family:"DejaVu Sans",sans-serif!important}' });
@@ -320,17 +320,18 @@ test.describe('fonte larga', () => {
 test('acessos indisponíveis no ambiente não mostram dados nem erro técnico', async ({ page }) => {
   await installSyntheticApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await expect(page.getByText('Os acessos ainda não estão ativos neste ambiente.')).toBeVisible();
   await expect(page.getByText('SYNTHETIC_TEST_ROUTE_NOT_FOUND')).toHaveCount(0);
 });
 
 test('portaria registra chegada uma vez, sem ação de entrada, e anota a confirmação assistida depois do prazo', async ({ page }) => {
   const state = await openConcierge(page);
-  await page.goto('/contextos');
-  await page.getByRole('link', { name: 'Abrir portaria · Condomínio Sintético A' }).click();
+  await page.goto('/entrada');
+  // Conta só da portaria de um condomínio: a entrada abre direto a área da portaria, sem seletor.
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/encomendas$`));
   await page.getByRole('navigation', { name: 'Seções da portaria' }).getByRole('link', { name: 'Visitas' }).click();
-  await expect(page).toHaveURL(new RegExp(`/portaria/${TENANT_A}/visitas$`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/visitas$`));
   await expect(page.getByRole('heading', { name: 'Registrar chegada' })).toBeVisible();
   await scanAccessibility(page, 'portaria/visitas');
   const form = page.getByRole('form', { name: 'Registrar chegada' });
@@ -370,7 +371,7 @@ test('portaria registra chegada uma vez, sem ação de entrada, e anota a confir
 
 test('resultado incerto trava o registro na mesma chave; decisão concorrente não vira sucesso; encerramento com motivo', async ({ page }) => {
   const state = await openConcierge(page);
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const form = page.getByRole('form', { name: 'Registrar chegada' });
   await form.getByLabel('Unidade de destino', { exact: true }).selectOption(UNIT_A);
   await form.getByLabel('Nome informado pela pessoa').fill('Entregador Fictício');
@@ -419,7 +420,7 @@ test('visitas previstas mostram a vigência do servidor e pedem confirmação vi
   const state = await openConcierge(page);
   state.permits.push(permitFixture(), permitFixture({ permitId: SCHEDULED, visitorName: 'Visita Adiantada', documentLast4: null, purpose: null,
     validFrom: minutes(180), validUntil: minutes(300), state: 'SCHEDULED' }));
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const expected = page.getByRole('list', { name: 'Visitas previstas' });
   const current = expected.getByRole('listitem').filter({ hasText: 'Visita Prevista' });
   await expect(current.getByText('Vale agora')).toBeVisible();
@@ -445,7 +446,7 @@ test('portaria registra entrada só de quem está autorizado e corrige a saída 
   const state = await openConcierge(page);
   state.arrivals.push(arrivalFixture({ visitorName: 'Pessoa Autorizada', state: 'APPROVED', decidedAt: minutes(-1), decisionSource: 'APP', version: 1 }),
     arrivalFixture({ arrivalId: OTHER_ARRIVAL, visitorName: 'Pessoa Aguardando', createdAt: minutes(-2) }));
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const queue = page.getByRole('list', { name: 'Chegadas' });
   const waitingRow = queue.getByRole('listitem').filter({ hasText: 'Pessoa Aguardando' });
   await expect(waitingRow.getByText('Aguardando a unidade')).toBeVisible();
@@ -487,7 +488,7 @@ test('convite em vigor permite registrar entrada; agendado não; recusa do servi
   const state = await openConcierge(page);
   state.permits.push(permitFixture(), permitFixture({ permitId: SCHEDULED, visitorName: 'Visita Adiantada', documentLast4: null, purpose: null,
     validFrom: minutes(180), validUntil: minutes(300), state: 'SCHEDULED' }));
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const expected = page.getByRole('list', { name: 'Visitas previstas' });
   const early = expected.getByRole('listitem').filter({ hasText: 'Visita Adiantada' });
   await expect(early.getByRole('button', { name: 'Pedir confirmação à unidade' })).toBeVisible();
@@ -520,7 +521,7 @@ test('entrada pelo convite com resposta perdida continua travada ao fechar e rea
     visitorName: 'Visita Prevista', documentLast4: '12AB', arrivalId: OTHER_ARRIVAL, permitId: null, linkedPermitId: PERMIT, eventType: 'MANUAL_IN',
     source: 'CONCIERGE', evidence: 'DOCUMENT_CHECKED', note: null, enteredAt: minutes(-60), recordedByMe: false, correction: null,
     exit: { eventId: '91000000-0000-4000-8000-0000000000d1', exitedAt: minutes(-40), note: null, recordedByMe: false, correction: null } });
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const current = page.getByRole('list', { name: 'Visitas previstas' }).getByRole('listitem').filter({ hasText: 'Visita Prevista' });
   await expect(current.getByText('Última entrada registrada em', { exact: false })).toContainText('saída em');
   state.loseNextEntry = true;
@@ -563,7 +564,7 @@ test('morador vê o histórico registrado pela portaria, com saída e correção
       correction: { eventId: '92000000-0000-4000-8000-0000000000c2', correctedAt: minutes(-20), reason: 'Pessoa não entrou', recordedByMe: false }, exit: null },
     { ...base, entryId: '90000000-0000-4000-8000-0000000000c3', visitorName: 'Visita sem Saída', arrivalId: OTHER_ARRIVAL, enteredAt: minutes(-10), correction: null, exit: null });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   const history = page.getByRole('list', { name: 'Entradas e saídas registradas' });
   await expect(history.getByRole('listitem').filter({ hasText: 'Visita com Saída' }).getByText('Saída registrada', { exact: true })).toBeVisible();
   await expect(history.getByRole('listitem').filter({ hasText: 'Visita com Saída' }).getByText('Saída registrada pela portaria em', { exact: false })).toBeVisible();
@@ -577,7 +578,7 @@ test('convite com resposta perdida trava na mesma chave e destrava quando a repe
   const api = await installSyntheticApi(page);
   const state = await installVisitsApi(page, api, false);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await page.getByRole('button', { name: 'Convidar visitante' }).click();
   const form = page.getByRole('form', { name: 'Convidar visitante' });
   await form.getByLabel('Nome do visitante').fill('Visita Incerta');
@@ -610,7 +611,7 @@ test('convite revogado no servidor não vincula chegada e a portaria vê o motiv
   const state = await openConcierge(page);
   state.permits.push(permitFixture());
   state.refuseLinked = 'VISIT_PERMIT_REVOKED';
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const row = page.getByRole('list', { name: 'Visitas previstas' }).getByRole('listitem').filter({ hasText: 'Visita Prevista' });
   await row.getByRole('button', { name: 'Pedir confirmação à unidade' }).click();
   await page.getByRole('form', { name: 'Pedir confirmação para Visita Prevista' }).getByRole('button', { name: 'Registrar chegada e pedir confirmação' }).click();
@@ -625,7 +626,7 @@ test('morador compartilha o link do convite: token só no fragmento, copiar, ger
   const state = await installVisitsApi(page, api, false);
   state.permits.push(permitFixture({ visitorName: 'Visita Link', createdByMe: true }));
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   const share = page.getByLabel('Link do convite de Visita Link');
   await share.getByRole('button', { name: 'Compartilhar link' }).click();
   await expect.poll(() => state.tokens.length).toBe(1);
@@ -656,7 +657,7 @@ test('convite encerrado não oferece link', async ({ page }) => {
   const state = await installVisitsApi(page, api, false);
   state.permits.push(permitFixture({ visitorName: 'Visita Antiga', state: 'EXPIRED', validFrom: minutes(-300), validUntil: minutes(-60) }));
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await expect(page.getByRole('list', { name: 'Convites encerrados' }).getByText('Visita Antiga')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Compartilhar link' })).toHaveCount(0);
 });

@@ -148,9 +148,9 @@ transacional, por isso o aceite de CP-023 continua pendente); retenções `HELD`
 prazo de decisão configurável; worker de expiração (hoje a expiração acontece na
 criação seguinte e na decisão tardia); notificações.
 
-## Telas web (`/gestao/{condomínio}`)
+## Telas web (`/c/{condomínio}/gestao`, antes `/gestao/{condomínio}`)
 
-O acesso aparece na escolha de contexto apenas para vínculo `MANAGER` vigente. A
+A área Gestão aparece na casca do condomínio apenas para vínculo `MANAGER` vigente (`/gestao/...` redireciona). A
 porta da gestão consulta `GET /auth/mfa`: sem sessão AAL2 nenhuma rota de gestão é
 chamada; a pessoa cadastra o autenticador (chave e QR exibidos uma única vez, só no
 estado da tela) e verifica o código. A verificação troca a sessão e o CSRF. Uma
@@ -213,3 +213,28 @@ público desligado; criação pela operação) e o e-mail do token é usado sem 
 opções de confirmação e troca segura de e-mail e a normalização do e-mail pelo
 provedor. Resposta idempotente para convite já aceito pela mesma conta (hoje `404`
 neutro) é melhoria registrada. Ensaio com Auth real pendente.
+
+## Zeladoria — papel MAINTENANCE (V046)
+
+Fatia 3 do desenho `docs/ESTRUTURA_CENTRAL_E_CONDOMINIO.md`. Zelador é **equipe**: vínculo sem unidade (o banco recusa
+`MAINTENANCE` com unidade, no vínculo e no convite), convidado pela gestão (`memberships.manage`) como a portaria,
+aceito pelo próprio e-mail e aprovado pela gestão. Capacidade própria `maintenance.operate`, publicada só com vínculo
+vigente e AAL2; nenhuma política existente aceita essa capacidade, então não há financeiro, cadastro (só o próprio
+vínculo é legível), encomendas, visitas, acesso ou portaria.
+
+| Rota | Capacidade | Observação |
+| --- | --- | --- |
+| `GET .../maintenance/requests` | `maintenance.operate` | Pedidos não encerrados atribuídos ao próprio vínculo; sem nome de quem abriu |
+| `GET .../maintenance/requests/{id}` | `maintenance.operate` | Detalhe e conversa (inclui comentário interno); outro pedido é 404 |
+| `GET .../maintenance/requests/{id}/messages?before=` | `maintenance.operate` | Até 200 mensagens anteriores do pedido atribuído (mesmos limites da gestão); outro pedido ou referência alheia é 404 |
+| `POST .../maintenance/requests/{id}/state` | `maintenance.operate` | Versão lida; triagem/execução/aguardando → execução, aguardando a unidade ou concluído com resolução |
+| `POST .../maintenance/requests/{id}/messages` | `maintenance.operate` | `Idempotency-Key`; visível para a unidade ou interno |
+
+- A gestão atribui o pedido ao zelador pela tela de pedidos (a equipe listada passa a incluir `MAINTENANCE`).
+- O banco repete a regra: leitura, alteração e mensagens só em pedido com `assignee_membership_id` igual ao vínculo
+  `MAINTENANCE` vigente da própria conta e `maintenance.operate` publicada; sem `requests.manage`, o gatilho recusa
+  (42501) mudança de responsável ou prazo, encerramento e reabertura.
+- Revogar o vínculo pela gestão tira o acesso na próxima requisição.
+- Fora desta fatia: ocorrências da portaria (V033) não têm atribuição; mudanças e áreas comuns seguem com gestão/portaria.
+  Tela da zeladoria na web: fatia de web da central/condomínio.
+

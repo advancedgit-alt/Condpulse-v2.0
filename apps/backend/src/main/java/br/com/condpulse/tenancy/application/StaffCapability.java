@@ -22,8 +22,13 @@ public enum StaffCapability {
  MANAGE_AREAS("area.manage"),
  /** Acesso facial (AC-007/AC-008, V043): cria revisões de regra, valida e simula, sem publicar. */
  EDIT_POLICIES("policy.edit"),
- /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V046). */
- PUBLISH_POLICIES("policy.publish");
+ /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V047). */
+ PUBLISH_POLICIES("policy.publish"),
+ /**
+  * Zeladoria (MAINTENANCE, V046): lê e registra o andamento somente dos pedidos atribuídos ao próprio vínculo; nenhum
+  * financeiro, cadastro, vínculo, encomenda, visita ou acesso.
+  */
+ OPERATE_MAINTENANCE("maintenance.operate");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -36,6 +41,7 @@ public enum StaffCapability {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
     MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
+   case "MAINTENANCE" -> EnumSet.of(OPERATE_MAINTENANCE);
    default -> EnumSet.noneOf(StaffCapability.class);
   };
  }

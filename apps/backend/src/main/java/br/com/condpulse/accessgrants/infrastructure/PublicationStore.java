@@ -13,7 +13,7 @@ import br.com.condpulse.accessgrants.application.PublicationModels;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * SQL da publicação por destino (V046). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
+ * SQL da publicação por destino (V047). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
  * destinos e se grava a intenção. A varredura de destinos (vínculos) e a de convites ficam ligadas só durante a compilação.
  */
 public class PublicationStore {

@@ -80,7 +80,7 @@ class AccessGrantJdbcTest {
  @AfterAll static void cleanup() throws Exception { try { if(workerDb!=null) workerDb.close(); } finally { if(db!=null) db.close(); } }
  private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
  private static PolicyModels.PolicyDocument rule(String zone,UUID area) { return rule(zone,area,List.of("RESIDENT"),"DENY","NOT_REQUIRED"); }
- /** Tempo integral: o documento por destino (V046) ainda não representa janelas semanais. */
+ /** Tempo integral: o documento por destino (V047) ainda não representa janelas semanais. */
  private static PolicyModels.PolicyDocument rule(String zone,UUID area,List<String> contexts,String visitors,String reservation) {
   return rule(zone,area,contexts,visitors,reservation,"00:00","24:00");
  }
@@ -194,7 +194,7 @@ class AccessGrantJdbcTest {
  }
 
  /**
-  * V046: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
+  * V047: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
   * geram trabalho novo; bloqueio publica REVOKE_ALL com prioridade e supera a aplicação pendente.
   */
  @Test void publicationIsAJobPerDestinationAndRevocationGoesFirst() throws Exception {

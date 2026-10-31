@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Publicação dos direitos por destino (AC-012/AC-013, V046). Cada trabalho é o documento compilado pelo banco para um
+ * Publicação dos direitos por destino (AC-012/AC-013, V047). Cada trabalho é o documento compilado pelo banco para um
  * sujeito num equipamento: desejo a aplicar, nunca sucesso físico. Só o executor (worker/gateway) relata ACK,
  * APPLIED_UNVERIFIED, CONFIRMED (leitura de volta igual), PARTIAL, FAILED ou UNKNOWN; o lote só está concluído quando
  * todos os destinos estão CONFIRMED.

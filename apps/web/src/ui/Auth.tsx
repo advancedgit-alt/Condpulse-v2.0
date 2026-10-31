@@ -168,8 +168,8 @@ export function LoginPage() {
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const remaining = useCooldown(failure ?? (auth.status === 'unavailable' ? auth.error : undefined));
-  if (auth.status === 'authenticated') return <Navigate to="/contextos" replace />;
-  if (auth.status !== 'anonymous' && auth.status !== 'unavailable') return <AuthBoundary><Navigate to="/contextos" replace /></AuthBoundary>;
+  if (auth.status === 'authenticated') return <Navigate to="/entrada" replace />;
+  if (auth.status !== 'anonymous' && auth.status !== 'unavailable') return <AuthBoundary><Navigate to="/entrada" replace /></AuthBoundary>;
   const unavailable = auth.status === 'unavailable';
   async function submit(event: FormEvent) {
     event.preventDefault(); if (inFlight.current || remaining > 0 || unavailable) return;

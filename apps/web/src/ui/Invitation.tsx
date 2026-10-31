@@ -48,7 +48,7 @@ export function InvitationPage({ kind = 'membership' }: { kind?: InvitationKind 
   if (accepted) return <SessionPage><span className="eyebrow">CONVITE ACEITO</span><h1>{manager ? 'Acesso de gestão liberado.' : 'Pedido de vínculo enviado.'}</h1>
     <p>{manager ? 'Você é o gestor do condomínio. A gestão aparece na escolha de acesso e as ações de gestão pedem o segundo fator de autenticação.'
       : 'A gestão do condomínio precisa aprovar o seu acesso. Depois da aprovação, o condomínio aparecerá na escolha de acesso.'}</p>
-    {accepted.sessionStarted ? <Link className="button" to="/contextos">Ir para meus acessos<Icon name="arrow" /></Link>
+    {accepted.sessionStarted ? <Link className="button" to="/entrada">Ir para meus acessos<Icon name="arrow" /></Link>
       : <><Notice tone="warning">O pedido foi registrado, mas a sessão não pôde ser iniciada agora. Entre com o seu e-mail e a sua senha para acompanhar.</Notice>
         <Link className="button" to="/entrar">Entrar<Icon name="arrow" /></Link></>}</SessionPage>;
   if (unconfirmed) return <SessionPage><span className="eyebrow">CONVITE</span><h1>Não foi possível confirmar o primeiro acesso.</h1>

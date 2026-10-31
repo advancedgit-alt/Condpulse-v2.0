@@ -9,7 +9,7 @@ async function openManagement(page: import('@playwright/test').Page, section: st
   await installSyntheticApi(page, { manager: true });
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/${section}`);
+  await page.goto(`/c/${TENANT_A}/gestao/${section}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Condomínio Sintético A' })).toBeVisible();
 }
 
@@ -50,7 +50,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1000, height: 700 
     await expect(toggle).toBeFocused();
     await toggle.click();
     await nav.getByRole('link', { name: 'Ocorrências' }).click();
-    await expect(page).toHaveURL(new RegExp(`/gestao/${TENANT_A}/ocorrencias$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/gestao/ocorrencias$`));
     await expect(nav).toBeHidden();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });

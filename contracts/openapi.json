@@ -18340,7 +18340,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V046).",
+        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V047).",
         "parameters": [
           {
             "name": "tenantId",
@@ -18785,7 +18785,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V046).",
+        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V047).",
         "parameters": [
           {
             "name": "tenantId",
@@ -19314,6 +19314,405 @@
         }
       }
     },
+    "/v1/tenants/{tenantId}/maintenance/requests": {
+      "get": {
+        "operationId": "maintenanceRequests",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "description": "Zeladoria (MAINTENANCE, maintenance.operate, AAL2): pedidos não encerrados atribuídos ao próprio vínculo, sem nome de quem abriu.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequestPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem vínculo de zeladoria) ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/maintenance/requests/{requestId}": {
+      "get": {
+        "operationId": "maintenanceRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "description": "Detalhe e conversa (inclui comentários internos) do pedido atribuído ao próprio vínculo de zeladoria.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem vínculo de zeladoria) ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido não atribuído ao próprio vínculo, mesmo com o ID conhecido"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/maintenance/requests/{requestId}/state": {
+      "post": {
+        "operationId": "maintenanceUpdateRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "description": "Andamento pela versão lida: em triagem, execução ou aguardando a unidade → em execução, aguardando a unidade ou concluído (com resolução, que entra na conversa visível). Não muda responsável nem prazo, não encerra e não reabre (o banco repete a regra).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequestUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_STATE_INVALID, SERVICE_REQUEST_VERSION_REQUIRED, SERVICE_REQUEST_RESOLUTION_REQUIRED, SERVICE_REQUEST_RESOLUTION_INVALID ou SERVICE_REQUEST_UNCHANGED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem vínculo de zeladoria) ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido não atribuído ao próprio vínculo, mesmo com o ID conhecido"
+          },
+          "409": {
+            "description": "SERVICE_REQUEST_CHANGED, SERVICE_REQUEST_CLOSED ou SERVICE_REQUEST_TRANSITION_INVALID"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/maintenance/requests/{requestId}/messages": {
+      "get": {
+        "operationId": "listMaintenanceRequestOlderMessages",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": true,
+            "description": "Identificador da mensagem mais antiga já exibida.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Até 200 mensagens anteriores (inclusive comentários internos) do pedido atribuído ao próprio vínculo de zeladoria, com maintenance.operate e AAL2.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem vínculo de zeladoria) ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido não atribuído ao próprio vínculo ou mensagem de referência inexistente ou de outro pedido"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "maintenanceRequestMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestStaffMessage"
+              }
+            }
+          }
+        },
+        "description": "Mensagem da zeladoria no pedido atribuído ao próprio vínculo (visível para a unidade ou comentário interno), com chave de operação.",
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SERVICE_REQUEST_MESSAGE_INVALID, SERVICE_REQUEST_VISIBILITY_INVALID ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem vínculo de zeladoria) ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido não atribuído ao próprio vínculo, mesmo com o ID conhecido"
+          },
+          "409": {
+            "description": "SERVICE_REQUEST_CLOSED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_EXPIRED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
     "/v1/platform/tenants/{tenantId}/modules": {
       "get": {
         "operationId": "platformTenantModules",
@@ -19725,6 +20124,7 @@
               "DEPENDENT",
               "OWNER",
               "CONCIERGE",
+              "MAINTENANCE",
               "MANAGER",
               "SUPPORT"
             ]
@@ -20677,6 +21077,7 @@
               "DEPENDENT",
               "OWNER",
               "CONCIERGE",
+              "MAINTENANCE",
               "MANAGER",
               "SUPPORT"
             ]
@@ -20797,7 +21198,8 @@
               "RESPONSIBLE",
               "DEPENDENT",
               "OWNER",
-              "CONCIERGE"
+              "CONCIERGE",
+              "MAINTENANCE"
             ]
           },
           "displayName": {
@@ -23959,7 +24361,8 @@
             "type": "string",
             "enum": [
               "MANAGER",
-              "CONCIERGE"
+              "CONCIERGE",
+              "MAINTENANCE"
             ]
           }
         }
@@ -33134,6 +33537,190 @@
           },
           "module": {
             "$ref": "#/components/schemas/TenantModuleState"
+          }
+        }
+      },
+      "MaintenanceRequestSummary": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "unitId",
+          "unitLabel",
+          "category",
+          "title",
+          "state",
+          "dueOn",
+          "updatedAt",
+          "version"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "MaintenanceRequestPage": {
+        "type": "object",
+        "required": [
+          "requests",
+          "truncated"
+        ],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceRequestSummary"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MaintenanceRequest": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "unitId",
+          "unitLabel",
+          "category",
+          "title",
+          "description",
+          "state",
+          "dueOn",
+          "resolution",
+          "createdAt",
+          "updatedAt",
+          "resolvedAt",
+          "version",
+          "messages",
+          "messagesTruncated"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "dueOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestMessage"
+            }
+          },
+          "messagesTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MaintenanceRequestUpdate": {
+        "type": "object",
+        "required": [
+          "state",
+          "expectedVersion"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "IN_PROGRESS",
+              "WAITING_RESIDENT",
+              "RESOLVED"
+            ]
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },

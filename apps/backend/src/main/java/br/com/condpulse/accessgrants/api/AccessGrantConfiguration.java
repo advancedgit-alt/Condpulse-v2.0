@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Direitos derivados, revogações e publicação por destino (AC-009/AC-012/AC-013/AC-015, V044/V046) atrás de CP_FACIAL_ACCESS_ENABLED=false. Também atende a simulação com sujeito real. */
+/** Direitos derivados, revogações e publicação por destino (AC-009/AC-012/AC-013/AC-015, V044/V047) atrás de CP_FACIAL_ACCESS_ENABLED=false. Também atende a simulação com sujeito real. */
 @Configuration @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
 public class AccessGrantConfiguration {

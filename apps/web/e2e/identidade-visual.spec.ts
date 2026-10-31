@@ -67,7 +67,7 @@ test('portaria: encomendas', async ({ page }) => {
   await page.route(`**/v1/tenants/${TENANT_A}/concierge/units`, (route) => json(route, 200, [{ unitId: UNIT_A, label: '101 — Sintética A', blockName: 'Bloco 1' }]));
   await page.route((url) => url.pathname === `/v1/tenants/${TENANT_A}/parcels`, (route) => json(route, 200, { parcels: [], truncated: false }));
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/encomendas`);
+  await page.goto(`/c/${TENANT_A}/portaria/encomendas`);
   await capture(page, 'portaria', async () => { await expect(page.getByRole('heading', { name: 'Receber encomenda' })).toBeVisible(); });
 });
 
@@ -75,7 +75,7 @@ test('gestão: pendências', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  await page.goto(`/c/${TENANT_A}/gestao/pendencias`);
   await capture(page, 'gestao', async () => { await expect(page.getByRole('heading', { level: 1, name: 'Condomínio Sintético A' })).toBeVisible(); });
 });
 
@@ -94,7 +94,7 @@ test('master: condomínios da plataforma', async ({ page }) => {
     await json(route, 404, { type: 'urn:condpulse:problem:SYNTHETIC_TEST_ROUTE_NOT_FOUND', status: 404, code: 'SYNTHETIC_TEST_ROUTE_NOT_FOUND', traceId: '60000000-0000-4000-8000-000000000009' });
   });
   await signIn(page);
-  await page.goto('/master');
+  await page.goto('/central');
   await capture(page, 'master', async () => { await expect(page.getByRole('heading', { name: 'Condomínios da plataforma' })).toBeVisible(); });
 });
 
@@ -103,7 +103,7 @@ test('preferência manual de tema vence o sistema e fica salva no navegador', as
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await page.emulateMedia({ colorScheme: 'light' });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  await page.goto(`/c/${TENANT_A}/gestao/pendencias`);
   const html = page.locator('html');
   await expect(html).toHaveAttribute('data-cp-theme', 'light');
   await page.getByRole('button', { name: 'Tema: Sistema. Mudar para Claro' }).click();

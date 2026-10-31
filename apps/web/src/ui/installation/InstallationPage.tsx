@@ -12,6 +12,7 @@ import { AreaPhysicalSection, ChannelSection, DeviceSection, PointSection } from
 import { AcceptanceSection, BindingSection } from './Commissioning';
 import { INSTALL_ZONE, InstallationContext, OutcomeContext, can, installationKey, useAccessGuard, useInstallation } from './shared';
 import '../management/Management.css';
+import { ENTRY_PATH, installationPath } from '../shell/paths';
 import './Installation.css';
 
 /**
@@ -47,7 +48,7 @@ export function InstallationPage() {
   const { identity } = useAuth();
   const { tenantId = '', section = 'roteiro' } = useParams();
   if (!identity) return null;
-  if (!isUUID(tenantId)) return <div className="panel"><Empty icon="shield" title="Condomínio inválido">Abra a implantação pelo painel master ou pelo link recebido.</Empty></div>;
+  if (!isUUID(tenantId)) return <div className="panel"><Empty icon="shield" title="Condomínio inválido">Abra a implantação pela central administradora ou pelo link recebido.</Empty></div>;
   return <InstallationGate key={`${identity.accountId}:${tenantId}`} accountId={identity.accountId} tenantId={tenantId} section={section} />;
 }
 
@@ -72,7 +73,7 @@ function InstallationGate({ accountId, tenantId, section }: { accountId: string;
   const revoked = session.data !== undefined && session.error instanceof ApiError && session.error.code === 'TENANT_ACCESS_DENIED';
   useEffect(() => { if (revoked) deny(session.error); }, [revoked, deny, session.error]);
   if (denied) return <div className="panel"><Notice tone="error">A concessão técnica deste condomínio não está mais vigente para esta conta. Os dados exibidos foram removidos.</Notice>
-    <Link className="button button-secondary" to="/contextos">Voltar para meus acessos</Link></div>;
+    <Link className="button button-secondary" to={ENTRY_PATH}>Voltar para meus acessos</Link></div>;
   if (status.isPending) return <div className="panel"><Loading label="Conferindo o segundo fator…" /></div>;
   if (status.isError && !status.data) return <ErrorState error={status.error} retry={() => void status.refetch()} />;
   if (!aal2 || demanded || (session.error instanceof ApiError && session.error.code === 'MFA_REQUIRED')) {
@@ -97,7 +98,7 @@ function InstallationGate({ accountId, tenantId, section }: { accountId: string;
 function InstallationConsole({ section }: { section: string }) {
   const scope = useInstallation();
   const visible = visibleInstallationSections(scope.session);
-  const base = `/implantacao/${scope.tenantId}`;
+  const base = `/c/${scope.tenantId}/implantacao`;
   const current = visible.find((item) => item.id === section)?.id ?? 'roteiro';
   const [outcome, setOutcome] = useState<{ section: string; text: string } | null>(null);
   const announce = useCallback((text: string) => setOutcome(text ? { section: current, text } : null), [current]);
@@ -170,7 +171,7 @@ function Guide() {
     <ol className="install-steps">{steps.map((step, index) => <li key={step.id} className="management-row">
       <div><strong>{index + 1}. {step.title}</strong><span className={`status-pill ${step.done ? 'status-ready' : 'status-pending'}`}>{step.done ? 'Concluída' : 'Pendente'}</span>
         {step.lines.map((line) => <span key={line}>{line}</span>)}</div>
-      {visible.has(step.id) ? <div className="button-row"><Link className="button button-secondary button-compact" to={`/implantacao/${scope.tenantId}/${step.id}`}>Abrir {step.title.toLowerCase()}</Link></div>
+      {visible.has(step.id) ? <div className="button-row"><Link className="button button-secondary button-compact" to={installationPath(scope.tenantId, step.id)}>Abrir {step.title.toLowerCase()}</Link></div>
         : <p className="field-help">Sua concessão não inclui esta etapa.</p>}
     </li>)}</ol>
     <div className="panel"><h3>Escopos desta concessão</h3>
