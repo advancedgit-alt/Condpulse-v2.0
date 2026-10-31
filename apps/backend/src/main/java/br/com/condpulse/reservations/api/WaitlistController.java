@@ -1,5 +1,7 @@
 package br.com.condpulse.reservations.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.reservations.application.WaitlistModels;
 import br.com.condpulse.reservations.application.WaitlistService;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Fila de espera de reservas (CP-040), atrás da mesma flag das reservas. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.reservations.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.RESERVATIONS)
 public class WaitlistController {
  private final WaitlistService service;
  public WaitlistController(WaitlistService service) { this.service=service; }

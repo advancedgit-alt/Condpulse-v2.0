@@ -1,5 +1,7 @@
 package br.com.condpulse.accesscredentials.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accesscredentials.application.CredentialModels;
 import br.com.condpulse.accesscredentials.application.CredentialService;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Credenciais de acesso com revogação prioritária (CP-046), atrás de CP_ACCESS_CREDENTIALS_ENABLED. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.access-credentials.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.ACCESS_CREDENTIALS)
 public class CredentialController {
  private final CredentialService service;
  public CredentialController(CredentialService service) { this.service=service; }

@@ -1,5 +1,7 @@
 package br.com.condpulse.announcements.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.announcements.application.AnnouncementModels;
 import br.com.condpulse.announcements.application.AnnouncementService;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Avisos (CP-032) atrás de CP_ANNOUNCEMENTS_ENABLED=false. Capacidade, público e vínculo conferidos no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.announcements.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.ANNOUNCEMENTS)
 public class AnnouncementController {
  private final AnnouncementService service;
  public AnnouncementController(AnnouncementService service) { this.service=service; }

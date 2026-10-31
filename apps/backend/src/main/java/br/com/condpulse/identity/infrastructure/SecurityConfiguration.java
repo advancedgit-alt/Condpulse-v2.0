@@ -161,7 +161,7 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-grants","/v1/tenants/*/management/access-subjects/*/revocation-markers").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-policies/*/grants/derive",
       "/v1/tenants/*/management/access-grants/*/revoke").authenticated()
-    // Publicação por destino (AC-012/AC-013, V045): mesma gestão; trabalho, nunca sucesso físico.
+    // Publicação por destino (AC-012/AC-013, V046): mesma gestão; trabalho, nunca sucesso físico.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-publications").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-publications/plan").authenticated()
     // Instalação física (AC-004 parte 2, V042): MASTER de implantação (installation.*, AAL2); gestão assina as regras.
@@ -206,6 +206,9 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/platform/outbox/tasks/*/replay").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*").authenticated()
+    // Módulos por condomínio (V046): tenants.read para ler, tenant_modules.manage para alterar (no serviço e no banco).
+    .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*/modules").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*/modules").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/tenants","/v1/platform/tenants/*/manager-invitations",
       "/v1/platform/tenants/*/manager-invitations/*/revoke","/v1/manager-invitations/accept").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",

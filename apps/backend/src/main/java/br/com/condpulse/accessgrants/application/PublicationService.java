@@ -19,7 +19,7 @@ import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import org.springframework.dao.DataAccessException;
 
 /**
- * Publicação dos direitos por destino (AC-012/AC-013, V045). A gestão com vínculos e publicação (AAL2) compila, sob o lock
+ * Publicação dos direitos por destino (AC-012/AC-013, V046). A gestão com vínculos e publicação (AAL2) compila, sob o lock
  * por condomínio, o documento de cada sujeito em cada equipamento; o banco grava só o que mudou, com versão monotônica, e
  * supera o trabalho anterior em aberto. Revogações são publicadas pelo banco na mesma transação da marca. Nenhum
  * estado de aplicação sai daqui: ACK, aplicado sem comprovação, confirmado, parcial, falha e desconhecido vêm só do
@@ -70,9 +70,10 @@ public class PublicationService {
   int created=0;
   var failures=new ArrayList<PublicationModels.Failure>();
   for(UUID subject:subjects) {
-   // Direito de regra com horário fica fora do documento (nunca acesso contínuo): registrado por destino.
-   for(UUID device:store.scheduleExcluded(tenant,subject))
-    failures.add(new PublicationModels.Failure(subject,device,"SCHEDULE_NOT_REPRESENTABLE"));
+   // Direito que o documento não representa ou destino sem aprovação vigente fica fora (nunca acesso autônomo indevido):
+   // o compilado retira o publicado e o motivo é registrado por destino.
+   for(var x:store.excluded(tenant,subject))
+    failures.add(new PublicationModels.Failure(subject,x.deviceId(),x.issue()));
    for(UUID device:store.oversized(tenant,subject))
     failures.add(new PublicationModels.Failure(subject,device,"DOCUMENT_TOO_LARGE"));
    List<UUID> devices=store.changedDevices(tenant,subject);

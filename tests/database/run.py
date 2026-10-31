@@ -4340,7 +4340,7 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
 def publication_checks():
-    """V045 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
+    """V046 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
     estados so por relatorio do executor; revogacao publicada na mesma transacao da marca e antes de ampliacao."""
     caps = ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"]
     ids = facial_installation(7, caps, readers=("TO_FROM", "FROM_TO"))
@@ -4465,13 +4465,43 @@ def publication_checks():
     query(both + plan(), **as_mgr)
     J4 = value(latest.format("id"))
     expect(value(f"select priority from cp.rights_publications where id='{J4}'") == "1", "ampliacao pura sobre o confirmado e prioridade 1")
-    # Direitos de tempo integral substituidos por direito de regra com horario (Codex P1): o documento compilado retira o
-    # publicado (REVOKE_RIGHTS, prioridade 0) e o novo direito nao entra.
-    query(both + grant(G5, functional=CF6, version=V0) + "; " + " ".join(
-          f"UPDATE cp.access_grants SET status='SUPERSEDED',status_reason_code='POLICY_REDERIVED',version=version+1 WHERE id='{g}';" for g in (G2, G3, G4)), **as_mgr)
+    # Destino sem aprovacao vigente (combinacao suspensa pela plataforma, fluxo real): o direito fica fora e o publicado e
+    # retirado com prioridade 0.
+    plat = "SET LOCAL app.platform_capabilities='access_catalog.manage,homologation.approve'; "
+    query(plat + f"INSERT INTO platform.platform_audit_log(actor_id,action,reason,details) VALUES('{ids['PL']}','HOMOLOGATION_SUSPEND','Ensaio ficticio',"
+          f"'{{\"homologationId\":\"{ids['HO']}\"}}'); INSERT INTO platform.access_homologation_decisions(homologation_id,decision,reason,evidence_refs,"
+          f"approved_capabilities,decided_by) VALUES('{ids['HO']}','SUSPEND','Suspensao ficticia','{{}}'::uuid[],'{{}}'::text[],'{ids['PL']}'); "
+          f"UPDATE platform.access_homologations SET status=platform.homologation_next(status,'SUSPEND'),version=version+1 WHERE id='{ids['HO']}'",
+          actor=ids['PL'], role="cp_api")
+    expect(value(both + f"select string_agg(distinct issue,',') from cp.rights_targets('{TA}','{SRS}')", **as_mgr) == "HOMOLOGATION_NOT_APPROVED",
+           "combinacao suspensa: alvo fora do documento com o motivo")
     query(both + plan(), **as_mgr)
     expect(value(latest.format("action||':'||priority||':'||jsonb_array_length(document->'entries')")) == "REVOKE_RIGHTS:0:0",
-           "regra com horario retira o acesso continuo ja publicado")
+           "combinacao sem aprovacao vigente retira o publicado")
+    # Paridade com PolicyEngine: cada condicao que o motor nega ou nao representa fica fora do documento, com motivo.
+    full = policy_doc("00:00", "24:00")
+    def issue(extra):
+        return value(f"select coalesce(cp.rights_policy_issue(('{full}'::jsonb)||'{extra}'::jsonb),'OK')")
+    for extra, expected in (('{}', 'OK'), ('{"maximumAgeYears":60}', 'UNSUPPORTED_RESTRICTION'), ('{"antiPassbackMode":"HARD"}', 'UNSUPPORTED_RESTRICTION'),
+                            ('{"maximumOccupancy":10}', 'UNSUPPORTED_RESTRICTION'), ('{"holidayCalendarIds":["45900000-0000-4000-8000-000000000001"]}', 'UNSUPPORTED_RESTRICTION'),
+                            ('{"companion":{"mode":"VERIFIED_PHYSICAL_COMPANION","maximumPairingSeconds":30}}', 'COMPANION_NOT_VERIFIED'),
+                            ('{"companion":{"mode":"ASSISTED_BY_STAFF","maximumPairingSeconds":0}}', 'ASSISTANCE_REQUIRED'),
+                            (policy_doc("06:00", "22:00"), 'SCHEDULE_NOT_REPRESENTABLE')):
+        expect(issue(extra) == expected, f"paridade da regra: {expected}")
+    caps_ok = "ARRAY['faceEnrollment','faceDeletion','perDoorRights','secureTransport','offlineRestriction','localValidity']"
+    def dest(status, due, caps, device="ACTIVE", extra='{}'):
+        return value(f"select coalesce(cp.rights_destination_issue(('{full}'::jsonb)||'{extra}'::jsonb,'{status}',{due},{caps},'{device}'),'OK')")
+    expect(dest("APROVADO_PILOTO", "now()+interval '1 day'", caps_ok) == "OK", "paridade do destino: aprovado")
+    expect(dest("HOMOLOGADO", "NULL", caps_ok) == "OK", "paridade do destino: homologado sem revisao")
+    expect(dest("EM_ENSAIO", "NULL", caps_ok) == "HOMOLOGATION_NOT_APPROVED", "paridade do destino: em ensaio")
+    expect(dest("HOMOLOGADO", "now()-interval '1 second'", caps_ok) == "HOMOLOGATION_NOT_APPROVED", "paridade do destino: revisao vencida")
+    expect(dest("HOMOLOGADO", "NULL", "ARRAY['faceEnrollment','faceDeletion','perDoorRights','secureTransport','offlineRestriction']",
+                extra='{"eligibleContexts":["RESIDENT","VISITOR"]}') == "CAPABILITY_MISSING", "paridade do destino: capacidade exigida nao aprovada")
+    expect(dest("HOMOLOGADO", "NULL", caps_ok, device="RETIRED") == "DEVICE_INACTIVE", "paridade do destino: equipamento retirado")
+    # Direito de regra com horario: o motivo da regra vem antes do destino e nunca entra no documento.
+    query(both + grant(G5, functional=CF6, version=V0), **as_mgr)
+    expect(value(both + f"select issue from cp.rights_targets('{TA}','{SRS}') where grant_id='{G5}' limit 1", **as_mgr) == "SCHEDULE_NOT_REPRESENTABLE",
+           "regra com horario fica fora do documento com o motivo")
     # Bloqueio: REVOKE_ALL supera a retirada pendente (um so trabalho em aberto por destino).
     query(mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
     expect(value(latest.format("action||':'||priority||':'||array_to_string(array(select jsonb_array_elements_text(document->'coveredMethods')),',')"))
@@ -4493,6 +4523,52 @@ def publication_checks():
           f"DELETE FROM cp.subject_contexts WHERE subject_id='{SRS}'; DELETE FROM cp.access_subjects WHERE id='{SRS}'; "
           f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
     facial_cleanup(ids)
+def tenant_module_checks():
+    """V045: modulos por condominio. Central (tenant_modules.manage) grava pela versao com o proprio ator e trilha exigida
+    no COMMIT; runtime le no contexto do condominio, nos condominios dos proprios vinculos e pelo link publico."""
+    PL = "10000000-0000-4000-8000-0000000044a1"
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{PL}','ACTIVE')")
+    plat = "SET LOCAL app.platform_capabilities='tenant_modules.manage,tenants.read'; "
+    def audit(action="TENANT_MODULE_DISABLED", module="parcels", version=1, by=PL, tenant=TA):
+        return (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) VALUES('{by}','{action}','{tenant}',"
+                f"'Ajuste ficticio','{{\"module\":\"{module}\",\"version\":\"{version}\"}}'); ")
+    insert = (f"INSERT INTO platform.tenant_modules(tenant_id,module,enabled,version,reason,updated_by) "
+              f"VALUES('{TA}','parcels',false,1,'Ajuste ficticio','{PL}')")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='platform' "
+                 "and c.relname='tenant_modules' and c.relrowsecurity and c.relforcerowsecurity") == "1", "modulos com RLS FORCE")
+    expect(value(f"select platform.tenant_module_enabled('{TA}','parcels')", tenant=TA, role="cp_api") == "t",
+           "sem linha o condominio segue liberado")
+    expect(error("SET LOCAL app.platform_capabilities='tenants.read,tenants.manage'; " + audit() + insert, "42501", actor=PL, role="cp_api"),
+           "tenants.manage sozinha nao grava evento nem modulo")
+    expect(error(plat + insert, "23514", actor=PL, role="cp_api"), "modulo sem evento da trilha nao conclui")
+    expect(error(plat + audit(version=2) + insert, "23514", actor=PL, role="cp_api"), "evento de outra versao nao serve")
+    expect(error(plat + audit(action="TENANT_MODULE_ENABLED") + insert, "23514", actor=PL, role="cp_api"), "evento de outro estado nao serve")
+    expect(error(plat + audit() + insert.replace(f"'{PL}')", f"'{AA}')"), "42501", actor=PL, role="cp_api"), "autor diferente do ator e recusado")
+    expect(error(plat + audit() + insert.replace("false,1", "false,2"), "23514", actor=PL, role="cp_api"), "primeira gravacao nasce na versao 1")
+    expect(error(plat + audit(module="facial") + insert.replace("'parcels'", "'facial'"), "23514", actor=PL, role="cp_api"),
+           "modulo fora da lista fechada e recusado")
+    query(plat + audit() + insert, actor=PL, role="cp_api")
+    expect(value(f"select platform.tenant_module_enabled('{TA}','parcels')", tenant=TA, role="cp_api") == "f",
+           "contexto do condominio le o modulo desligado")
+    expect(value(f"select platform.tenant_module_enabled('{TA}','visits')", tenant=TA, role="cp_api") == "t", "outro modulo segue liberado")
+    expect(value("select count(*) from platform.tenant_modules", actor=AA, role="cp_api") == "1", "membro ativo le o proprio condominio (/v1/me)")
+    expect(value("select count(*) from platform.tenant_modules", actor=AB, role="cp_api") == "0", "membro de outro condominio nao le")
+    expect(value("select count(*) from platform.tenant_modules", tenant=TB, actor=AB, role="cp_api") == "0", "contexto de outro condominio nao le")
+    expect(error(plat + audit(action="TENANT_MODULE_ENABLED", version=3) +
+                 f"UPDATE platform.tenant_modules SET enabled=true,version=3,updated_by='{PL}' WHERE tenant_id='{TA}'", "23514", actor=PL, role="cp_api"),
+           "mudanca so pela versao seguinte")
+    expect(query(f"UPDATE platform.tenant_modules SET enabled=true,version=2,updated_by='{PL}' WHERE tenant_id='{TA}' RETURNING 1",
+                 actor=PL, role="cp_api").stdout.strip() == "", "sem capacidade nao alcanca a linha")
+    expect(error(plat + f"DELETE FROM platform.tenant_modules WHERE tenant_id='{TA}'", "42501", actor=PL, role="cp_api"), "modulo nao e apagado")
+    query(plat + audit(action="TENANT_MODULE_ENABLED", version=2) +
+          f"UPDATE platform.tenant_modules SET enabled=true,version=2,reason='Religado ficticio',updated_by='{PL}' WHERE tenant_id='{TA}'",
+          actor=PL, role="cp_api")
+    expect(value(f"select enabled||':'||version from platform.tenant_modules where tenant_id='{TA}'") == "true:2", "religado na versao 2")
+    expect(query("SET LOCAL app.platform_capabilities='tenants.manage'; "
+                 f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) VALUES('{PL}','TENANT_RENAMED','{TA}','Ficticio')",
+                 actor=PL, role="cp_api", check=False).returncode == 0, "tenants.manage continua gravando TENANT_*")
+    query(f"DELETE FROM platform.tenant_modules WHERE tenant_id='{TA}'; DELETE FROM platform.platform_audit_log WHERE actor_id='{PL}'; "
+          f"DELETE FROM platform.accounts WHERE id='{PL}'")
 
 def main():
     guard()
@@ -4627,6 +4703,7 @@ def main():
     policy_checks()
     grant_checks()
     publication_checks()
+    tenant_module_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

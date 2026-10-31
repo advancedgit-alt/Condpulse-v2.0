@@ -1,5 +1,7 @@
 package br.com.condpulse.accessmap.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accessmap.application.MapModels;
 import br.com.condpulse.accessmap.application.MapService;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Áreas (gestão) e pontos físicos (MASTER de implantação) — AC-004, V041. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessMapController {
  private final MapService map;
  public AccessMapController(MapService map) { this.map=map; }

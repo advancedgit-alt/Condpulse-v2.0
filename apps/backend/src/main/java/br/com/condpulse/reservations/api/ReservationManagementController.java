@@ -1,5 +1,7 @@
 package br.com.condpulse.reservations.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.time.Instant;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Pedidos, decisões e bloqueios de manutenção pela gestão local (CP-023), atrás de CP_MANAGEMENT_ENABLED. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.management.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.RESERVATIONS)
 public class ReservationManagementController {
  private final ReservationManagementService service;
  public ReservationManagementController(ReservationManagementService service) { this.service=service; }

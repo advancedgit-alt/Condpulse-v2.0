@@ -1,5 +1,7 @@
 package br.com.condpulse.accessage.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.List;
 import java.util.UUID;
 import br.com.condpulse.accessage.application.AgeModels;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Parâmetros do acesso facial e evidência de idade (AC-006, V039), só pela gestão com AAL2. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessAgeController {
  private final AgeService ages;
  public AccessAgeController(AgeService ages) { this.ages=ages; }

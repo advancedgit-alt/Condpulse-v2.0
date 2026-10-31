@@ -13,7 +13,7 @@ import br.com.condpulse.accessgrants.application.PublicationModels;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * SQL da publicação por destino (V045). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
+ * SQL da publicação por destino (V046). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
  * destinos e se grava a intenção. A varredura de destinos (vínculos) e a de convites ficam ligadas só durante a compilação.
  */
 public class PublicationStore {
@@ -80,19 +80,18 @@ public class PublicationStore {
    order by d.device
    """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject,tenant,subject));
  }
+ /** Direito vigente que ficou fora do documento de um destino, com o motivo do predicado único (cp.rights_targets). */
+ public record Excluded(UUID deviceId,String issue) {}
  /**
-  * Destinos onde um direito vigente do sujeito ficou fora do documento porque a regra tem horário que o documento ainda
-  * não representa (falha fechada: o compilado não dá acesso contínuo e retira o que estava publicado).
+  * Destinos onde um direito vigente do sujeito ficou fora do documento (falha fechada: o compilado não o concede e retira o
+  * que estava publicado), um motivo por destino e motivo.
   */
- public List<UUID> scheduleExcluded(UUID tenant,UUID subject) {
+ public List<Excluded> excluded(UUID tenant,UUID subject) {
   return scan(()->jdbc.query("""
-   select distinct x.device_id from cp.rights_targets(?,?) x
-    join cp.access_grants g on g.tenant_id=? and g.id=x.grant_id
-    left join cp.access_policy_versions v on v.tenant_id=g.tenant_id and v.id=g.policy_version_id
-   where not coalesce(cp.policy_full_time(v.document),false) and x.valid_until>clock_timestamp()
-    and cp.access_grant_current(?,x.grant_id,greatest(clock_timestamp(),x.valid_from))
-   order by 1
-   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,tenant));
+   select distinct x.device_id,x.issue from cp.rights_targets(?,?) x
+   where x.issue is not null and x.valid_until>clock_timestamp() and cp.access_grant_current(?,x.grant_id,greatest(clock_timestamp(),x.valid_from))
+   order by 1,2
+   """,(r,n)->new Excluded(r.getObject(1,UUID.class),r.getString(2)),tenant,subject,tenant));
  }
  /** Destinos cujo documento passaria de 512 entradas (o compilado retira tudo do destino: falha fechada). */
  public List<UUID> oversized(UUID tenant,UUID subject) {

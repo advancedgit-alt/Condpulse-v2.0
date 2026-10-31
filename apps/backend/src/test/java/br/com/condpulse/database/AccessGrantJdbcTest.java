@@ -80,7 +80,7 @@ class AccessGrantJdbcTest {
  @AfterAll static void cleanup() throws Exception { try { if(workerDb!=null) workerDb.close(); } finally { if(db!=null) db.close(); } }
  private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
  private static PolicyModels.PolicyDocument rule(String zone,UUID area) { return rule(zone,area,List.of("RESIDENT"),"DENY","NOT_REQUIRED"); }
- /** Tempo integral: o documento por destino (V045) ainda não representa janelas semanais. */
+ /** Tempo integral: o documento por destino (V046) ainda não representa janelas semanais. */
  private static PolicyModels.PolicyDocument rule(String zone,UUID area,List<String> contexts,String visitors,String reservation) {
   return rule(zone,area,contexts,visitors,reservation,"00:00","24:00");
  }
@@ -194,7 +194,7 @@ class AccessGrantJdbcTest {
  }
 
  /**
-  * V045: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
+  * V046: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
   * geram trabalho novo; bloqueio publica REVOKE_ALL com prioridade e supera a aplicação pendente.
   */
  @Test void publicationIsAJobPerDestinationAndRevocationGoesFirst() throws Exception {
@@ -261,7 +261,10 @@ class AccessGrantJdbcTest {
   var a=subjectOf(db.accountA);
   var c=subjectOf(db.accountC);
   var first=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
-  assertEquals(2,first.publication().created(),first.publication().toString());
+  // A e C (RESIDENT) e a portaria da base (EMPLOYEE, elegível nesta regra): um trabalho por sujeito, nada fora do documento.
+  assertEquals(3,first.created(),first.toString());
+  assertEquals(3,first.publication().created(),first.publication().toString());
+  assertEquals(Map.of(),first.publication().failedByReason());
   Instant until=Instant.now().plus(java.time.Duration.ofDays(10));
   for(int i=0;i<512;i++)
    subjects.addFunctional(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.FunctionalAuthorization(UUID.randomUUID(),"EMPLOYEE","func-jdbc-"+i,until));
@@ -271,7 +274,9 @@ class AccessGrantJdbcTest {
   assertEquals(Map.of("DOCUMENT_TOO_LARGE",1),published.failedByReason());
   assertEquals(a.subjectId(),published.failedSample().getFirst().subjectId());
   assertEquals(inst.device(),published.failedSample().getFirst().deviceId());
-  assertEquals(1,published.created(),"Só a retirada segura de A; C sem mudança");
+  // Contrato: a retirada segura conta como trabalho criado (created) e a impossibilidade de publicar o documento completo
+  // fica em failedByReason; os dois são conferidos.
+  assertEquals(1,published.created(),"Só a retirada segura de A; C e a portaria sem mudança");
   var retract=publications.publications(MANAGER,db.tenantA,AAL2,published.operationId(),a.subjectId(),null).publications().getFirst();
   assertEquals("REVOKE_RIGHTS",retract.action()); assertEquals(0,retract.priority()); assertEquals(0,retract.entries());
   assertEquals(1,publications.publications(MANAGER,db.tenantA,AAL2,null,c.subjectId(),null).publications().size(),"Os demais seguem publicados");

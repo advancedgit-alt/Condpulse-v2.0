@@ -65,33 +65,16 @@ CREATE INDEX rights_publications_destination ON cp.rights_publications(tenant_id
 CREATE INDEX rights_publications_operation ON cp.rights_publications(tenant_id,operation_id,state);
 CREATE INDEX rights_publications_marker ON cp.rights_publications(tenant_id,revocation_marker_id) WHERE revocation_marker_id IS NOT NULL;
 
--- 2. Compilação. Alvos do sujeito: cada direito ativo, por passagem comissionada com vínculo ativo cujo sentido leva à
--- área do direito, em cada equipamento que atende esse sentido: o controlador do vínculo e o leitor (de entrada ou de
--- saída) cujo sentido no mapa comissionado (direction_map, V042; padrão FROM_TO para o de entrada e TO_FROM para o de
--- saída) é o de quem entra na área. Falha fechada: sentido UNKNOWN, ponto não comissionado ou o que não for visível nega.
-CREATE FUNCTION cp.rights_targets(target_tenant uuid,target_subject uuid)
-RETURNS TABLE(grant_id uuid,area_id uuid,point_id uuid,binding_id uuid,binding_revision integer,channel_id uuid,direction text,device_id uuid,
- device_role text,generation bigint,valid_from timestamptz,valid_until timestamptz)
-LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
-AS $$ SELECT g.id,g.area_id,p.id,b.id,b.binding_revision,b.actuator_channel_id,s.direction,r.device_id,r.device_role,g.generation,g.valid_from,g.valid_until
-  FROM cp.access_grants g
-  JOIN cp.access_points p ON p.tenant_id=g.tenant_id AND p.status='COMMISSIONED'
-  JOIN cp.point_bindings b ON b.tenant_id=p.tenant_id AND b.point_id=p.id AND b.status='ACTIVE'
-  CROSS JOIN LATERAL (SELECT 'FROM_TO'::text direction WHERE p.to_area_id=g.area_id AND p.flow_direction IN ('FROM_TO','BOTH')
-   UNION ALL SELECT 'TO_FROM' WHERE p.from_area_id=g.area_id AND p.flow_direction IN ('TO_FROM','BOTH')) s
-  CROSS JOIN LATERAL (SELECT b.controller_device_id device_id,'CONTROLLER'::text device_role
-   UNION ALL SELECT b.entry_reader_device_id,'ENTRY_READER' WHERE b.entry_reader_device_id IS NOT NULL
-    AND coalesce(b.direction_map->>'entryReader','FROM_TO')=s.direction
-   UNION ALL SELECT b.exit_reader_device_id,'EXIT_READER' WHERE b.exit_reader_device_id IS NOT NULL
-    AND coalesce(b.direction_map->>'exitReader','TO_FROM')=s.direction) r
-  WHERE g.tenant_id=target_tenant AND g.subject_id=target_subject AND g.status='ACTIVE' $$;
-REVOKE ALL ON FUNCTION cp.rights_targets(uuid,uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION cp.rights_targets(uuid,uuid) TO cp_api;
-
--- Horário: o documento ainda não representa janelas semanais nem fuso (o contrato do gateway vem na fatia seguinte).
--- Só direito de regra de tempo integral (uma janela de 7 dias, 00:00-24:00, sem virada) entra no documento; o de regra
--- com horário fica fora (falha fechada: nunca vira acesso contínuo) e o documento compilado retira o que estava
--- publicado. O planejador relata a exclusão (SCHEDULE_NOT_REPRESENTABLE). Mesmo critério de PolicyEngine.fullTime.
+-- 2. Compilação: um só predicado decide o que entra no documento ("representável e vigente agora"). Falha fechada: só
+-- entra o que o contrato do documento representa hoje; o resto fica fora com um motivo, o documento compilado retira o
+-- que estava publicado (prioridade 0) e o planejador relata o motivo por sujeito × destino. Paridade com PolicyEngine:
+--  - regra (cp.rights_policy_issue): restrição não suportada (idade máxima, antirretorno, lotação, feriados) →
+--    UNSUPPORTED_RESTRICTION; acompanhamento físico → COMPANION_NOT_VERIFIED; atendimento da equipe →
+--    ASSISTANCE_REQUIRED; horário que não é tempo integral (janela semanal e fuso ainda não representados) →
+--    SCHEDULE_NOT_REPRESENTABLE (mesmo critério de PolicyEngine.fullTime);
+--  - destino (cp.rights_destination_issue): combinação do vínculo sem APROVADO_PILOTO/HOMOLOGADO vigente →
+--    HOMOLOGATION_NOT_APPROVED; capacidade exigida pela regra não aprovada → CAPABILITY_MISSING
+--    (mesmas regras de PolicyEngine.approved/requiredCapabilities); equipamento retirado → DEVICE_INACTIVE.
 CREATE FUNCTION cp.policy_full_time(doc jsonb) RETURNS boolean
 LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog
 AS $$ SELECT coalesce(jsonb_typeof(doc->'weeklyWindows')='array' AND EXISTS(SELECT 1 FROM jsonb_array_elements(doc->'weeklyWindows') w
@@ -101,8 +84,68 @@ AS $$ SELECT coalesce(jsonb_typeof(doc->'weeklyWindows')='array' AND EXISTS(SELE
 REVOKE ALL ON FUNCTION cp.policy_full_time(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.policy_full_time(jsonb) TO cp_api;
 
+CREATE FUNCTION cp.rights_policy_issue(doc jsonb) RETURNS text
+LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT CASE
+   WHEN doc IS NULL THEN 'UNSUPPORTED_RESTRICTION'
+   WHEN coalesce(jsonb_typeof(doc->'maximumAgeYears'),'null')<>'null' OR coalesce(doc->>'antiPassbackMode','OFF')<>'OFF'
+    OR coalesce(jsonb_typeof(doc->'maximumOccupancy'),'null')<>'null'
+    OR (jsonb_typeof(doc->'holidayCalendarIds')='array' AND jsonb_array_length(doc->'holidayCalendarIds')>0) THEN 'UNSUPPORTED_RESTRICTION'
+   WHEN doc#>>'{companion,mode}'='VERIFIED_PHYSICAL_COMPANION' THEN 'COMPANION_NOT_VERIFIED'
+   WHEN coalesce(doc#>>'{companion,mode}','NONE')<>'NONE' THEN 'ASSISTANCE_REQUIRED'
+   WHEN NOT cp.policy_full_time(doc) THEN 'SCHEDULE_NOT_REPRESENTABLE' END $$;
+REVOKE ALL ON FUNCTION cp.rights_policy_issue(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.rights_policy_issue(jsonb) TO cp_api;
 
--- Entradas do documento de um equipamento: alvos dele cujo direito vale na origem (no início da janela, quando futura).
+-- Capacidades exigidas pela regra (espelho de PolicyEngine.requiredCapabilities).
+CREATE FUNCTION cp.rights_required_capabilities(doc jsonb) RETURNS text[]
+LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT ARRAY['faceEnrollment','faceDeletion','perDoorRights','secureTransport','offlineRestriction']
+  ||CASE WHEN NOT cp.policy_full_time(doc) OR coalesce(doc->'eligibleContexts' ? 'VISITOR',false)
+    OR coalesce(doc#>>'{reservation,mode}','')<>'NOT_REQUIRED' OR doc#>>'{offline,mode}'='SAFE_LOCAL_SUBSET' THEN ARRAY['localValidity'] ELSE '{}'::text[] END
+  ||CASE WHEN coalesce(doc#>>'{companion,mode}','NONE')<>'NONE' THEN ARRAY['passageEvents'] ELSE '{}'::text[] END $$;
+REVOKE ALL ON FUNCTION cp.rights_required_capabilities(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.rights_required_capabilities(jsonb) TO cp_api;
+
+CREATE FUNCTION cp.rights_destination_issue(doc jsonb,homologation_status text,review_due timestamptz,approved text[],device_status text) RETURNS text
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT CASE
+   WHEN coalesce(device_status,'')<>'ACTIVE' THEN 'DEVICE_INACTIVE'
+   WHEN coalesce(homologation_status,'') NOT IN ('APROVADO_PILOTO','HOMOLOGADO') OR (review_due IS NOT NULL AND review_due<=clock_timestamp())
+    OR approved IS NULL THEN 'HOMOLOGATION_NOT_APPROVED'
+   WHEN NOT (cp.rights_required_capabilities(doc)<@approved) THEN 'CAPABILITY_MISSING' END $$;
+REVOKE ALL ON FUNCTION cp.rights_destination_issue(jsonb,text,timestamptz,text[],text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.rights_destination_issue(jsonb,text,timestamptz,text[],text) TO cp_api;
+
+-- Alvos do sujeito: cada direito ativo, por passagem comissionada com vínculo ativo cujo sentido leva à área do
+-- direito, em cada equipamento que atende esse sentido: o controlador e o leitor (de entrada ou de saída) cujo sentido no
+-- mapa comissionado (direction_map, V042; padrão FROM_TO para o de entrada e TO_FROM para o de saída) é o de quem entra
+-- na área. issue: motivo de ficar fora do documento (null = representável). Sentido UNKNOWN nunca é alvo.
+CREATE FUNCTION cp.rights_targets(target_tenant uuid,target_subject uuid)
+RETURNS TABLE(grant_id uuid,area_id uuid,point_id uuid,binding_id uuid,binding_revision integer,channel_id uuid,direction text,device_id uuid,
+ device_role text,generation bigint,valid_from timestamptz,valid_until timestamptz,issue text)
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT g.id,g.area_id,p.id,b.id,b.binding_revision,b.actuator_channel_id,s.direction,r.device_id,r.device_role,g.generation,g.valid_from,g.valid_until,
+   coalesce(cp.rights_policy_issue(v.document),cp.rights_destination_issue(v.document,h.status,h.review_due_at,h.approved_capabilities,d.status))
+  FROM cp.access_grants g
+  JOIN cp.access_points p ON p.tenant_id=g.tenant_id AND p.status='COMMISSIONED'
+  JOIN cp.point_bindings b ON b.tenant_id=p.tenant_id AND b.point_id=p.id AND b.status='ACTIVE'
+  LEFT JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id
+  LEFT JOIN platform.access_homologations h ON h.id=b.homologation_id
+  CROSS JOIN LATERAL (SELECT 'FROM_TO'::text direction WHERE p.to_area_id=g.area_id AND p.flow_direction IN ('FROM_TO','BOTH')
+   UNION ALL SELECT 'TO_FROM' WHERE p.from_area_id=g.area_id AND p.flow_direction IN ('TO_FROM','BOTH')) s
+  CROSS JOIN LATERAL (SELECT b.controller_device_id device_id,'CONTROLLER'::text device_role
+   UNION ALL SELECT b.entry_reader_device_id,'ENTRY_READER' WHERE b.entry_reader_device_id IS NOT NULL
+    AND coalesce(b.direction_map->>'entryReader','FROM_TO')=s.direction
+   UNION ALL SELECT b.exit_reader_device_id,'EXIT_READER' WHERE b.exit_reader_device_id IS NOT NULL
+    AND coalesce(b.direction_map->>'exitReader','TO_FROM')=s.direction) r
+  LEFT JOIN cp.access_devices d ON d.tenant_id=g.tenant_id AND d.id=r.device_id
+  WHERE g.tenant_id=target_tenant AND g.subject_id=target_subject AND g.status='ACTIVE' $$;
+REVOKE ALL ON FUNCTION cp.rights_targets(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.rights_targets(uuid,uuid) TO cp_api;
+
+-- Entradas do documento de um equipamento: alvos representáveis (issue null) cujo direito vale na origem (no início da
+-- janela, quando futura).
 CREATE FUNCTION cp.rights_entries(target_tenant uuid,target_subject uuid,target_device uuid) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
 AS $$ SELECT coalesce(jsonb_agg(jsonb_build_object('grantId',x.grant_id,'areaId',x.area_id,'pointId',x.point_id,'bindingId',x.binding_id,
@@ -111,10 +154,7 @@ AS $$ SELECT coalesce(jsonb_agg(jsonb_build_object('grantId',x.grant_id,'areaId'
    'validUntil',to_char(x.valid_until AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))
    ORDER BY x.grant_id,x.point_id,x.direction,x.device_role),'[]'::jsonb)
   FROM cp.rights_targets(target_tenant,target_subject) x
-  JOIN cp.access_devices d ON d.tenant_id=target_tenant AND d.id=x.device_id AND d.status='ACTIVE'
-  JOIN cp.access_grants g ON g.tenant_id=target_tenant AND g.id=x.grant_id
-  JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id AND cp.policy_full_time(v.document)
-  WHERE x.device_id=target_device AND x.valid_until>clock_timestamp()
+  WHERE x.device_id=target_device AND x.issue IS NULL AND x.valid_until>clock_timestamp()
    AND cp.access_grant_current(target_tenant,x.grant_id,greatest(clock_timestamp(),x.valid_from)) $$;
 REVOKE ALL ON FUNCTION cp.rights_entries(uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_entries(uuid,uuid,uuid) TO cp_api;
