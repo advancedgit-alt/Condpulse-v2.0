@@ -1,9 +1,9 @@
 import type {
   Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, InvitationFirstAccess, Membership,
-  MfaStatus, MutationResult, RecoveryCompleted, RecoveryVerified, Reservation, ReservationPage, ReservationPolicy, Session,
-  TenantModules, TotpEnrollment, Unit,
+  MfaStatus, MutationResult, PartnerContext, PartnerPanel, PartnerRole, RecoveryCompleted, RecoveryVerified, Reservation, ReservationPage,
+  ReservationPolicy, Session, TenantModules, TotpEnrollment, Unit,
 } from './types';
-import { tenantModuleIds } from './types';
+import { partnerCapabilities, partnerRoles, tenantModuleIds } from './types';
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 import { instantMicros } from './instant';
 
@@ -552,6 +552,37 @@ const messages: Record<string, string> = {
   FINANCE_ASAAS_UNAVAILABLE: 'O Asaas não respondeu. Atualize e confira antes de repetir.',
   FINANCE_RULE_VIOLATION: 'A operação não atende às regras do financeiro. Atualize e confira.',
   FINANCE_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação financeira. Atualize e confira antes de repetir.',
+  // Hierarquia de parceiro (V049, ADR-0011). Código conhecido evita que um 404 do parceiro pareça rota desligada.
+  PARTNER_ACCESS_DENIED: 'Esta ação não está disponível para o seu papel no parceiro.',
+  PARTNER_FORBIDDEN: 'Operação não permitida para este acesso.',
+  PARTNER_NOT_FOUND: 'Parceiro não disponível para este acesso.',
+  PARTNER_MEMBER_NOT_FOUND: 'Papel não encontrado neste parceiro. Atualize a lista.',
+  PARTNER_SCHEDULE_NOT_FOUND: 'Escala não encontrada neste parceiro. Atualize a lista.',
+  PARTNER_SELF_CHANGE_DENIED: 'O gestor não altera o próprio papel; peça à plataforma.',
+  PARTNER_MEMBER_REVOKED: 'O papel já foi revogado.',
+  PARTNER_SCHEDULE_CANCELLED: 'A escala já foi cancelada.',
+  PARTNER_CONTRACT_ENDED: 'O contrato já foi encerrado.',
+  PARTNER_CHANGED: 'O registro mudou desde a leitura. Atualize e tente de novo.',
+  PARTNER_DUPLICATE: 'Já existe um registro igual ativo.',
+  PARTNER_PERIOD_CONFLICT: 'O período conflita com outro registro ativo (escala sobreposta ou fora do contrato).',
+  PARTNER_REFERENCE_INVALID: 'Conta, condomínio ou papel inexistente.',
+  PARTNER_RULE_VIOLATED: 'A mudança não atende às regras do parceiro (parceiro ou condomínio inativo, escala fora do contrato ou do papel).',
+  PARTNER_MEMBER_INVALID: 'Informe a conta (UUID), o papel e o nome de exibição com até 160 caracteres.',
+  PARTNER_ROLE_INVALID: 'Papel de parceiro inválido.',
+  PARTNER_SCHEDULE_INVALID: 'Informe o operador, o condomínio e o fim da escala, depois do início e em no máximo 31 dias.',
+  PARTNER_UNAVAILABLE: 'Não foi possível concluir agora. Atualize e confira antes de repetir.',
+  // Log de Segurança (V050, CPX-009/CPX-010).
+  SECURITY_LOG_LIMIT_INVALID: 'Use um limite entre 1 e 200 eventos.',
+  SECURITY_LOG_TYPE_INVALID: 'Tipo de evento inválido: use letras maiúsculas, números e _.',
+  SECURITY_LOG_SEVERITY_INVALID: 'Use severidade informativa, de atenção ou crítica.',
+  SECURITY_LOG_ACTOR_INVALID: 'Autor inválido.',
+  SECURITY_LOG_PERIOD_INVALID: 'Período inválido: o início deve ser anterior ao fim, com no máximo 366 dias.',
+  SECURITY_LOG_CURSOR_INVALID: 'Não foi possível carregar mais eventos. Refaça a busca.',
+  SECURITY_LOG_EXPORT_REASON_REQUIRED: 'Informe o motivo da exportação (10 a 500 caracteres).',
+  SECURITY_LOG_EXPORT_RANGE_INVALID: 'O intervalo pedido não existe no log deste condomínio.',
+  SECURITY_LOG_EXPORT_TOO_LARGE: 'Exporte no máximo 5.000 eventos por vez.',
+  SECURITY_LOG_CHAIN_BROKEN: 'A cadeia do log está quebrada neste intervalo. Verifique a integridade.',
+  SECURITY_LOG_DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar o log de segurança agora. Tente novamente.',
 };
 
 export class ApiError extends Error {
@@ -690,11 +721,44 @@ function tenantModuleList(value: unknown): TenantModules[] | null {
   });
 }
 
+/** Painel de destino de cada papel de parceiro (PartnerCapability.panel no servidor). */
+export const partnerRolePanels: Readonly<Record<PartnerRole, PartnerPanel>> = { PARTNER_ADMIN: 'gestao', SECURITY_LEAD: 'comando',
+  SECURITY_SUPERVISOR: 'turno', REMOTE_OPERATOR: 'console', TECHNICIAN: 'tecnico' };
+
+/**
+ * Contextos de parceiro (V049). Ausente (servidor anterior ou flag desligada): lista vazia. Papel novo que esta versão
+ * da web não conhece fica de fora, como o vínculo; capacidade nova é ignorada (só esconderia menu, a API confere).
+ * Painel diferente do papel, papel repetido ou valor malformado derrubam a resposta.
+ */
+function partnerContextList(value: unknown): PartnerContext[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 100) throw invalidResponse();
+  const seen = new Set<string>();
+  return value.flatMap((item): PartnerContext[] => {
+    if (!record(item) || !isUUID(item.memberId) || !isUUID(item.partnerId) || !isString(item.partnerName) || !item.partnerName.trim()
+        || typeof item.role !== 'string' || !/^[A-Z][A-Z_]{1,39}$/.test(item.role) || typeof item.panel !== 'string'
+        || !Array.isArray(item.capabilities) || !item.capabilities.every((capability) => typeof capability === 'string')
+        || !Array.isArray(item.tenants) || item.tenants.length > 1000 || seen.has(item.memberId.toLowerCase())) throw invalidResponse();
+    seen.add(item.memberId.toLowerCase());
+    const tenantIds = new Set<string>();
+    const tenants = item.tenants.map((tenant) => {
+      if (!record(tenant) || !isUUID(tenant.tenantId) || !isString(tenant.tenantName) || !isString(tenant.timeZone)
+          || tenantIds.has(tenant.tenantId.toLowerCase())) throw invalidResponse();
+      tenantIds.add(tenant.tenantId.toLowerCase());
+      return { tenantId: tenant.tenantId, tenantName: tenant.tenantName, timeZone: tenant.timeZone };
+    });
+    if (!oneOf(item.role, partnerRoles)) return [];
+    if (item.panel !== partnerRolePanels[item.role]) throw invalidResponse();
+    return [{ memberId: item.memberId, partnerId: item.partnerId, partnerName: item.partnerName, role: item.role, panel: partnerRolePanels[item.role],
+      capabilities: partnerCapabilities.filter((capability) => (item.capabilities as unknown[]).includes(capability)), tenants }];
+  });
+}
+
 function identity(value: unknown): CurrentIdentity {
   if (!record(value) || !isUUID(value.accountId) || !Array.isArray(value.memberships)) throw invalidResponse();
   return { accountId: value.accountId,
     memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null),
-    tenantModules: tenantModuleList(value.tenantModules) };
+    tenantModules: tenantModuleList(value.tenantModules), partnerContexts: partnerContextList(value.partnerContexts) };
 }
 
 /** Módulo desligado pela central para o condomínio (403 MODULE_DISABLED): não é perda de vínculo nem de sessão. */

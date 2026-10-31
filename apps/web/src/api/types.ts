@@ -28,6 +28,27 @@ export interface CurrentIdentity {
    * o servidor ainda não informa (versão anterior à V045): nada é escondido e cada tela trata o 403.
    */
   tenantModules: TenantModules[] | null;
+  /**
+   * Papéis ativos de parceiro (V049, ADR-0011) para a /entrada rotear. Vazio quando o servidor não informa ou está com
+   * CP_PARTNERS_ENABLED=false. Só decide o que aparece: a API e o banco conferem papel, contrato, escala e AAL2 de novo.
+   */
+  partnerContexts: PartnerContext[];
+}
+
+/** Papéis de parceiro (PRD complementar §4.1) e o painel de cada um em /p/{parceiro}/{painel}. */
+export const partnerRoles = ['PARTNER_ADMIN', 'SECURITY_LEAD', 'SECURITY_SUPERVISOR', 'REMOTE_OPERATOR', 'TECHNICIAN'] as const;
+export type PartnerRole = typeof partnerRoles[number];
+export const partnerPanels = ['gestao', 'comando', 'turno', 'console', 'tecnico'] as const;
+export type PartnerPanel = typeof partnerPanels[number];
+/** Capacidades publicadas pelo servidor (PartnerCapability, V049). */
+export const partnerCapabilities = ['partner.manage', 'partner.team.manage', 'security.command', 'security.log.read', 'security.log.read.shift',
+  'security.log.export', 'security.remote_open.review', 'security.policy.publish', 'security.blocklist.approve', 'ops.shift.supervise',
+  'ops.remote.operate', 'ops.remote.open', 'devices.commission'] as const;
+export type PartnerCapability = typeof partnerCapabilities[number];
+export interface PartnerTenant { tenantId: UUID; tenantName: string; timeZone: string }
+export interface PartnerContext {
+  memberId: UUID; partnerId: UUID; partnerName: string; role: PartnerRole; panel: PartnerPanel;
+  capabilities: PartnerCapability[]; tenants: PartnerTenant[];
 }
 
 export interface Session {

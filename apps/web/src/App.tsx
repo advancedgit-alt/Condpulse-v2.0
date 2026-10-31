@@ -21,9 +21,10 @@ import { UnitFinancePage, financeRoles } from './ui/Finance';
 import { rental } from './api/rental';
 import { EntryPage, usePlatformAccess } from './ui/shell/Entry';
 import { ConciergeIndex, CondoHome, CondoIndex, CondoModuleOff, ResidentUnitPicker, areaPath, useCondo, useTechnicalAccess } from './ui/shell/Condo';
-import { ENTRY_PATH, centralPath, condoAreas, condominiums, legacyTarget, maintenancePath, placeModules, placeOf, residentRoot, sectionEnabled,
-  type AreaId } from './ui/shell/paths';
+import { ENTRY_PATH, centralPath, condoAreas, condominiums, currentPartnerSection, legacyTarget, maintenancePath, partnerContextOf, partnerPanelLabels, partnerPath,
+  partnerSections, placeModules, placeOf, residentRoot, sectionEnabled, type AreaId } from './ui/shell/paths';
 import { MaintenancePage, maintenanceSections } from './ui/maintenance/MaintenancePage';
+import { PartnerPage } from './ui/partner/PartnerPage';
 import { Brand, Icon, Loading, OfflineNotice, type IconName } from './ui/primitives';
 import { BrandingProvider, ThemeProvider, ThemeToggle, useBrandingStyle } from './ui/theme/ThemeContext';
 import type { TenantBrandingConfig } from './ui/theme/branding';
@@ -67,6 +68,10 @@ export default function App() {
       <Route path="/central" element={<PlatformPage />} />
       <Route path="/central/:section" element={<PlatformPage />} />
       <Route path="/central/condominios/:tenantId" element={<PlatformPage />} />
+      {/* Painéis de parceiro (CPX-004/CPX-005): papel vindo de /v1/me; o servidor confere papel, contrato, escala e AAL2. */}
+      <Route path="/p/:partnerId" element={<Navigate to={ENTRY_PATH} replace />} />
+      <Route path="/p/:partnerId/:panel" element={<PartnerPage />} />
+      <Route path="/p/:partnerId/:panel/:section" element={<PartnerPage />} />
       {/* Rotas antigas (/contextos, /morador, /portaria, /gestao, /implantacao, /master) e desconhecidas. */}
       <Route path="*" element={<LegacyRedirect />} />
     </Route></Routes>
@@ -139,6 +144,15 @@ function Shell() {
   const maintaining = area === 'zeladoria' && memberships.some(membership => membership.tenantId === tenantId && membership.role === 'MAINTENANCE');
   const portaria = concierging ? memberships.find(membership => membership.tenantId === tenantId && membership.role === 'CONCIERGE') : undefined;
   const mastering = place.world === 'central';
+  const partnerContexts = auth.identity?.partnerContexts ?? [];
+  const partnerWorld = place.world === 'partner';
+  const partnerContext = place.world === 'partner' ? partnerContextOf(partnerContexts, place.partnerId, place.panel) : undefined;
+  // Seções do painel geradas pelas capacidades do papel (R4.5); as sem backend aparecem "em breve", sem link.
+  const partnerItems: NavItem[] = partnerContext ? partnerSections(partnerContext).map((item) => ({ id: item.id, label: item.label,
+    icon: item.id === 'log' ? 'list' as const : item.id === 'equipe' ? 'users' as const : item.id === 'escala' ? 'calendar' as const : item.id === 'carteira' ? 'building' as const : 'shield' as const,
+    to: item.ready ? partnerPath(partnerContext.partnerId, partnerContext.panel, item.id) : null,
+    current: item.ready && item.id === currentPartnerSection(partnerContext, section) })) : [];
+  const contextCount = condos.length + partnerContexts.length;
   const masterNavigation = usePlatformNavigation(mastering ? accountId : undefined, mastering ? section : 'condominios');
   const installNavigation = useInstallationNavigation(installing ? accountId : undefined, installing ? tenantId : undefined, section || 'roteiro');
   const managed = managing ? memberships.find(membership => membership.tenantId === tenantId && membership.role === 'MANAGER') : undefined;
@@ -194,16 +208,18 @@ function Shell() {
   // No início do condomínio (ou sem seções na área) as áreas ocupam a navegação principal; nas demais, ficam no seletor de área.
   const areasAsMain = condoWorld && sectionItems.length === 0;
   const navItems: NavItem[] = condoWorld ? (areasAsMain ? areaItems : sectionItems)
-    : mastering ? sectionItems : [{ id: 'entrada', label: 'Meus acessos', icon: 'home', to: ENTRY_PATH, current: true }];
+    : mastering ? sectionItems : partnerWorld ? partnerItems : [{ id: 'entrada', label: 'Meus acessos', icon: 'home', to: ENTRY_PATH, current: true }];
   const showAreaSwitch = condoWorld && !areasAsMain && areaItems.length > 1;
   const multiUnit = (condo?.unitIds.length ?? 0) > 1;
   const switchTarget = condoWorld && contextSelected && multiUnit && tenantId ? { label: 'Trocar unidade', to: residentRoot(tenantId) }
-    : condoWorld && (condos.length > 1 || platformAccess === 'yes' || !condo) ? { label: 'Trocar condomínio', to: ENTRY_PATH }
-      : mastering && condos.length > 0 ? { label: 'Meus condomínios', to: ENTRY_PATH } : null;
-  const sidebarLabel = mastering ? 'CENTRAL ADMINISTRADORA' : !condoWorld ? 'SEUS ACESSOS' : areasAsMain ? 'ÁREAS DO CONDOMÍNIO' : areaTitles[area].toUpperCase();
-  const breadcrumb = mastering ? 'Administração da plataforma' : condoWorld ? areaTitles[area] : 'Seus acessos';
-  const breadcrumbName = mastering ? 'Central administradora' : condoWorld ? (contextSelected ? tenant?.tenantName : condo?.tenantName ?? managed?.tenantName ?? portaria?.tenantName) ?? (installing ? 'Instalação física' : 'Condomínio') : 'Meus condomínios';
-  const footer = mastering ? 'Central administradora · Ações exigem segundo fator' : condoWorld ? areaFooters[area] : 'CondPulse · Seu acesso é pessoal';
+    : condoWorld && (contextCount > 1 || platformAccess === 'yes' || !condo) ? { label: partnerContexts.length > 0 ? 'Trocar acesso' : 'Trocar condomínio', to: ENTRY_PATH }
+      : partnerWorld && (contextCount > 1 || platformAccess === 'yes' || !partnerContext) ? { label: 'Trocar acesso', to: ENTRY_PATH }
+        : mastering && contextCount > 0 ? { label: partnerContexts.length > 0 ? 'Meus acessos' : 'Meus condomínios', to: ENTRY_PATH } : null;
+  const sidebarLabel = mastering ? 'CENTRAL ADMINISTRADORA' : partnerWorld ? (partnerContext ? partnerPanelLabels[partnerContext.panel].toUpperCase() : 'PARCEIRO')
+    : !condoWorld ? 'SEUS ACESSOS' : areasAsMain ? 'ÁREAS DO CONDOMÍNIO' : areaTitles[area].toUpperCase();
+  const breadcrumb = mastering ? 'Administração da plataforma' : condoWorld ? areaTitles[area] : partnerWorld ? (partnerContext ? partnerPanelLabels[partnerContext.panel] : 'Parceiro') : 'Seus acessos';
+  const breadcrumbName = mastering ? 'Central administradora' : partnerWorld ? partnerContext?.partnerName ?? 'Painel do parceiro' : condoWorld ? (contextSelected ? tenant?.tenantName : condo?.tenantName ?? managed?.tenantName ?? portaria?.tenantName) ?? (installing ? 'Instalação física' : 'Condomínio') : 'Meus condomínios';
+  const footer = mastering ? 'Central administradora · Ações exigem segundo fator' : partnerWorld ? 'Parceiro · Ações exigem segundo fator' : condoWorld ? areaFooters[area] : 'CondPulse · Seu acesso é pessoal';
   // White label (ADR-0010, fase 1): ainda sem fonte no servidor; com configuração, os tokens de ação/acento e o logo
   // do condomínio valem só dentro do shell, com fallback por contraste para o padrão CondPulse.
   const brandingConfig: TenantBrandingConfig | undefined = undefined;

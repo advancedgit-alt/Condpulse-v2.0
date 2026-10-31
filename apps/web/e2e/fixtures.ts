@@ -306,7 +306,7 @@ export async function signIn(page: Page) {
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
   await page.getByLabel('Senha', { exact: true }).press('Enter');
   // Entrada única: seletor (/entrada) ou, com um só destino, direto na área do papel principal ou na central.
-  await expect(page).toHaveURL(/\/(entrada|c\/[^/]+\/|central)/);
+  await expect(page).toHaveURL(/\/(entrada|c\/[^/]+\/|p\/[^/]+\/|central)/);
 }
 
 export async function chooseContext(page: Page, tenant: 'A' | 'B' = 'A', destination: 'reservas' | 'inicio' = 'reservas') {

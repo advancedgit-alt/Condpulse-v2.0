@@ -8,7 +8,7 @@ const tenant = '20000000-0000-4000-8000-000000000001';
 const unit = '30000000-0000-4000-8000-000000000001';
 const amenity = '40000000-0000-4000-8000-000000000001';
 const session: Session = { accountId: account, expiresAt: '2030-01-01T20:00:00Z' };
-const identity: CurrentIdentity = { accountId: account, memberships: [], tenantModules: [] };
+const identity: CurrentIdentity = { accountId: account, memberships: [], tenantModules: [], partnerContexts: [] };
 const create: CreateReservation = { unitId: unit, amenityId: amenity, startsAt: '2030-01-01T15:00:00Z',
   endsAt: '2030-01-01T16:00:00Z', acceptedPolicyVersion: 1 };
 const reservation: Reservation = { reservationId: '50000000-0000-4000-8000-000000000001', unitId: unit,
@@ -104,6 +104,22 @@ describe('cliente BFF same-origin', () => {
     for (const tenantModules of [{}, [{ tenantId: tenant, enabled: 'requests' }], [{ tenantId: 'x', enabled: [] }],
       [{ tenantId: tenant, enabled: [] }, { tenantId: tenant.toUpperCase(), enabled: [] }], [{ tenantId: tenant, enabled: ['Requests!'] }]]) {
       fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], tenantModules }));
+      await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
+    }
+  });
+
+  it('contextos de parceiro em /v1/me: ausentes viram lista vazia, papel novo fica de fora, painel trocado derruba', async () => {
+    const fetcher = mockFetch();
+    const context = { memberId: '60000000-0000-4000-8000-000000000001', partnerId: '30000000-0000-4000-8000-000000000001', partnerName: 'Parceiro Sintético',
+      role: 'SECURITY_LEAD', panel: 'comando', capabilities: ['security.log.read', 'future.capability'], tenants: [{ tenantId: tenant, tenantName: 'Condomínio', timeZone: 'America/Sao_Paulo' }] };
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [] }));
+    expect((await new CondPulseApi({ fetch: fetcher }).currentIdentity()).partnerContexts).toEqual([]);
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], partnerContexts: [context,
+      { ...context, memberId: '60000000-0000-4000-8000-000000000002', role: 'FUTURE_ROLE', panel: 'futuro' }] }));
+    expect((await new CondPulseApi({ fetch: fetcher }).currentIdentity()).partnerContexts).toEqual([{ ...context, capabilities: ['security.log.read'] }]);
+    for (const partnerContexts of [{}, [{ ...context, panel: 'gestao' }], [context, context], [{ ...context, partnerId: 'x' }],
+      [{ ...context, tenants: [{ tenantId: tenant }] }]]) {
+      fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], partnerContexts }));
       await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
     }
   });
