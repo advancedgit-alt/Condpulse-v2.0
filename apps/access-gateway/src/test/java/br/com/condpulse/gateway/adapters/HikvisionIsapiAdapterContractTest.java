@@ -100,7 +100,9 @@ class HikvisionIsapiAdapterContractTest {
    var r=a.revokeRights("ref-2");
    assertEquals(OperationState.CONFIRMED,r.state());
    assertEquals(Boolean.FALSE,a.readState("ref-2").personPresent());
-   assertEquals("PERSON_ABSENT",a.removeCredential("ref-2",CredentialKind.CARD).reasonCode());
+   int deletes=fake.requests("/ISAPI/AccessControl/CardInfo/Delete").size();
+   assertEquals(OperationState.ACK,a.removeCredential("ref-2",CredentialKind.CARD).state(),"pessoa ausente não prova ausência de cartão");
+   assertEquals(deletes+1,fake.requests("/ISAPI/AccessControl/CardInfo/Delete").size());
   }
  }
 

@@ -61,6 +61,7 @@ public final class GatewayService {
  private final Clock clock;
  private final Map<String,DeviceStatus> status=new ConcurrentHashMap<>();
  private final java.util.concurrent.atomic.AtomicLong rejectedRevocations=new java.util.concurrent.atomic.AtomicLong();
+ private final Map<String,String> eventGaps=new ConcurrentHashMap<>();
 
  public GatewayService(GatewayConfig config,CapabilityRegistry registry,Map<String,AccessProviderAdapter> adapters,LocalCommandQueue queue,
      OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,DecisionOutbox decisionOutbox,CentralApiClient central,Clock clock) {
@@ -314,6 +315,9 @@ public final class GatewayService {
   if(s==null || s.state()==OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO) return Verdict.NOT_SUPPORTED;
   if(s.state()!=OperationState.CONFIRMED) return Verdict.UNAVAILABLE;
   boolean absentPerson=Boolean.FALSE.equals(s.personPresent());
+  // Pessoa ausente só prova retirada do que a fonte declara removido junto (cascata); o resto precisa ser lido.
+  boolean absentCoversRights=absentPerson && adapter.removePersonCoversRights();
+  boolean absentCoversCredentials=absentPerson && adapter.removePersonCoversCredentials();
   return switch(c.type()) {
    case UPSERT_PERSON -> {
     if(s.personPresent()==null) yield Verdict.UNPROVEN;
@@ -324,28 +328,32 @@ public final class GatewayService {
     yield s.personAttributes().entrySet().containsAll(expected.get().entrySet())?Verdict.MATCH:Verdict.ABSENT;
    }
    case REVOKE_ALL -> {
-    if(absentPerson) yield Verdict.MATCH;
+    if(absentCoversRights && absentCoversCredentials) yield Verdict.MATCH;
     boolean anyLeft=(s.rightKeys()!=null && !s.rightKeys().isEmpty()) || Boolean.TRUE.equals(s.facePresent())
      || (s.credentialCounts()!=null && s.credentialCounts().values().stream().anyMatch(n->n>0));
     if(anyLeft) yield Verdict.ABSENT;
-    boolean allObserved=s.rightKeys()!=null && s.credentialCounts()!=null && s.credentialCounts().size()==CredentialKind.values().length
-     && Boolean.FALSE.equals(s.facePresent());
-    yield allObserved?Verdict.MATCH:Verdict.UNPROVEN;
+    boolean rightsGone=absentCoversRights || (s.rightKeys()!=null && s.rightKeys().isEmpty());
+    boolean credentialsGone=absentCoversCredentials || (s.credentialCounts()!=null && s.credentialCounts().size()==CredentialKind.values().length
+     && Boolean.FALSE.equals(s.facePresent()));
+    yield rightsGone && credentialsGone?Verdict.MATCH:Verdict.UNPROVEN;
    }
-   case REVOKE_RIGHTS -> absentPerson?Verdict.MATCH:s.rightKeys()==null?Verdict.UNPROVEN:s.rightKeys().isEmpty()?Verdict.MATCH:Verdict.ABSENT;
+   case REVOKE_RIGHTS -> absentCoversRights?Verdict.MATCH:s.rightKeys()==null?Verdict.UNPROVEN:s.rightKeys().isEmpty()?Verdict.MATCH:Verdict.ABSENT;
    case APPLY_RIGHTS -> {
-    var expected=adapter.rightKeys(rights(c));
+    var spec=rights(c);
+    // Prazo sem prova de prazo aplicado: não confirma (validade antiga poderia continuar liberando).
+    if((spec.validFrom()!=null || spec.validUntil()!=null) && !adapter.rightKeysIncludeValidity()) yield Verdict.UNPROVEN;
+    var expected=adapter.rightKeys(spec);
     if(expected.isEmpty() || s.rightKeys()==null) yield Verdict.UNPROVEN;
     yield s.rightKeys().equals(expected.get())?Verdict.MATCH:Verdict.ABSENT;
    }
    case REMOVE_CREDENTIAL -> {
-    if(absentPerson) yield Verdict.MATCH;
+    if(absentCoversCredentials) yield Verdict.MATCH;
     Integer n=s.credentialCounts()==null?null:s.credentialCounts().get(kind(c));
     yield n==null?Verdict.UNPROVEN:n==0?Verdict.MATCH:Verdict.ABSENT;
    }
    // Presença de face não prova que a foto nova foi aplicada (substituição); só a ausência é observável.
    case ENROLL_FACE -> Boolean.FALSE.equals(s.facePresent()) || absentPerson?Verdict.ABSENT:Verdict.UNPROVEN;
-   case REMOVE_FACE -> absentPerson || Boolean.FALSE.equals(s.facePresent())?Verdict.MATCH:Boolean.TRUE.equals(s.facePresent())?Verdict.ABSENT:Verdict.UNPROVEN;
+   case REMOVE_FACE -> absentCoversCredentials || Boolean.FALSE.equals(s.facePresent())?Verdict.MATCH:Boolean.TRUE.equals(s.facePresent())?Verdict.ABSENT:Verdict.UNPROVEN;
    case SET_CREDENTIAL -> Verdict.UNPROVEN;
   };
  }
@@ -404,6 +412,11 @@ public final class GatewayService {
    EventPage page;
    try { page=adapter.fetchEvents(outbox.cursor(d.deviceId()).orElse(null),100); }
    catch(RuntimeException e) { LOG.log(System.Logger.Level.WARNING,"Eventos adiados: {0}",e.getClass().getSimpleName()); continue; }
+   if(page.reasonCode()!=null) {
+    // Lacuna/perda sinalizada pelo adaptador (ex.: STREAM_GAP, BUFFER_OVERFLOW): visível na saúde.
+    eventGaps.put(d.deviceId(),page.reasonCode()+"@"+clock.instant());
+    LOG.log(System.Logger.Level.WARNING,"Eventos do equipamento {0}: {1}",d.deviceId(),page.reasonCode());
+   }
    if(page.state()!=OperationState.CONFIRMED && page.state()!=OperationState.ACK) continue;
    // Fila cheia ou falha de gravação: o cursor não avança e a mesma página volta na próxima passada.
    try { outbox.add(d.deviceId(),page.events(),page.nextCursor()); }
@@ -522,6 +535,7 @@ public final class GatewayService {
    m.put("identity",s==null?IdentityCheck.UNVERIFIED.name():s.identity().name());
    m.put("quarantined",s!=null && s.quarantined());
    m.put("identityPending",s==null || s.identityPending());
+   m.put("lastEventGap",eventGaps.get(d.deviceId()));
    m.put("pendingHuman",queue.pending(d.deviceId()).stream().filter(e->e.status()==Status.HELD).count());
    m.put("lastHeartbeatAt",s==null || s.lastHeartbeatAt()==null?null:s.lastHeartbeatAt().toString());
    var pending=queue.pending(d.deviceId());

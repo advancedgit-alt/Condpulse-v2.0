@@ -92,6 +92,12 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
 
  private boolean local() { return http!=null; }
 
+ /** HK12 §16 "配置人员信息及权限删除": exclusão da pessoa e das permissões dela. Cartões e face não são declarados. */
+ @Override public boolean removePersonCoversRights() { return local(); }
+
+ /** As chaves de direito incluem {@code valid:<início>/<fim>} lido de Valid. */
+ @Override public boolean rightKeysIncludeValidity() { return true; }
+
  // ----- pessoa -----
 
  @Override public OperationResult upsertPerson(PersonSpec person) {
@@ -172,7 +178,7 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
  @Override public OperationResult removeCredential(String subjectRef,CredentialKind kind) {
   if(!local() || kind!=CredentialKind.CARD) return super.removeCredential(subjectRef,kind);
   try {
-   if(search(subjectRef).isEmpty()) return OperationResult.of(OperationState.CONFIRMED,"PERSON_ABSENT");
+   // Pessoa ausente não prova ausência de cartão (cascata não documentada): a exclusão por employeeNo é enviada sempre.
    return status(send("PUT",P_CARD_DELETE,Map.of("CardInfoDelCond",Map.of("EmployeeNoList",List.of(Map.of("employeeNo",subjectRef))))));
   } catch(DeviceCallException e) { return failure(e); }
  }
