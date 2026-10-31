@@ -108,7 +108,8 @@ public final class DeviceHttpClient {
  public Response stream(String path,Map<String,String> query,Duration window,int maxBytes) throws DeviceCallException {
   URI uri=uri(path,query);
   try {
-   var builder=HttpRequest.newBuilder(uri).GET();
+   // timeout da requisição vale até os cabeçalhos; o corpo é limitado pela janela abaixo.
+   var builder=HttpRequest.newBuilder(uri).timeout(timeout).GET();
    if(digest!=null) builder.header("Authorization",authorization("GET",uri));
    var response=shared.send(builder.build(),HttpResponse.BodyHandlers.ofInputStream());
    if(response.statusCode()==401 && credential!=null) {
@@ -116,7 +117,7 @@ public final class DeviceHttpClient {
     var challenge=DigestAuth.fromChallenge(response.headers().firstValue("WWW-Authenticate").orElse(null));
     if(challenge==null) return new Response(401,null,new byte[0]);
     digest=challenge;
-    response=shared.send(HttpRequest.newBuilder(uri).GET().header("Authorization",authorization("GET",uri)).build(),HttpResponse.BodyHandlers.ofInputStream());
+    response=shared.send(HttpRequest.newBuilder(uri).timeout(timeout).GET().header("Authorization",authorization("GET",uri)).build(),HttpResponse.BodyHandlers.ofInputStream());
    }
    InputStream in=response.body();
    var closer=STREAM_CLOSER.schedule(()->{ try { in.close(); } catch(IOException ignored) {} },window.toMillis(),TimeUnit.MILLISECONDS);
@@ -142,16 +143,19 @@ public final class DeviceHttpClient {
   }
  }
 
- /** Fluxo contínuo aberto (assinatura de eventos). Quem chama lê e fecha; nada é executado no equipamento. */
+ /** Fluxo contínuo aberto (assinatura de eventos). Quem chama lê, vigia (watchdog) e fecha. */
  public record OpenStream(int status,InputStream body) implements AutoCloseable {
   @Override public void close() { try { body.close(); } catch(IOException ignored) {} }
  }
 
- /** Abre um fluxo de leitura sem prazo de resposta (assinatura contínua), com Digest. */
+ /**
+  * Abre um fluxo de leitura contínuo com Digest. Os cabeçalhos têm o prazo da chamada; o corpo não tem prazo
+  * próprio — quem lê precisa de watchdog (ex.: heartbeat) para fechar fluxo parado.
+  */
  public OpenStream openStream(String path,Map<String,String> query) throws DeviceCallException {
   URI uri=uri(path,query);
   try {
-   var builder=HttpRequest.newBuilder(uri).GET();
+   var builder=HttpRequest.newBuilder(uri).timeout(timeout).GET();
    if(digest!=null) builder.header("Authorization",authorization("GET",uri));
    var response=shared.send(builder.build(),HttpResponse.BodyHandlers.ofInputStream());
    if(response.statusCode()==401 && credential!=null) {
@@ -159,7 +163,7 @@ public final class DeviceHttpClient {
     var challenge=DigestAuth.fromChallenge(response.headers().firstValue("WWW-Authenticate").orElse(null));
     if(challenge==null) return new OpenStream(401,InputStream.nullInputStream());
     digest=challenge;
-    response=shared.send(HttpRequest.newBuilder(uri).GET().header("Authorization",authorization("GET",uri)).build(),HttpResponse.BodyHandlers.ofInputStream());
+    response=shared.send(HttpRequest.newBuilder(uri).timeout(timeout).GET().header("Authorization",authorization("GET",uri)).build(),HttpResponse.BodyHandlers.ofInputStream());
    }
    return new OpenStream(response.statusCode(),response.body());
   } catch(HttpConnectTimeoutException|ConnectException|UnresolvedAddressException e) {
@@ -181,11 +185,17 @@ public final class DeviceHttpClient {
   return client.send(builder.build(),HttpResponse.BodyHandlers.ofInputStream());
  }
 
- private static Response read(HttpResponse<InputStream> response) throws IOException {
-  try(InputStream in=response.body()) {
+ /** Lê o corpo com o mesmo prazo da chamada: corpo que para no meio é cortado e vira falha ambígua. */
+ private Response read(HttpResponse<InputStream> response) throws IOException {
+  InputStream in=response.body();
+  var closer=STREAM_CLOSER.schedule(()->{ try { in.close(); } catch(IOException ignored) {} },timeout.toMillis(),TimeUnit.MILLISECONDS);
+  try(in) {
    byte[] bytes=in.readNBytes(MAX_RESPONSE_BYTES+1);
+   if(closer.isDone()) throw new IOException("Prazo de leitura do corpo esgotado.");
    if(bytes.length>MAX_RESPONSE_BYTES) throw new IOException("Resposta acima do limite.");
    return new Response(response.statusCode(),response.headers().firstValue("Content-Type").orElse(null),bytes);
+  } finally {
+   closer.cancel(false);
   }
  }
 

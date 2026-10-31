@@ -69,7 +69,7 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    return new Manifest(Brand.HIKVISION,ADAPTER_VERSION,device().connectionMode(),ops,caps);
   }
   ops.put(Operation.UPSERT_PERSON,OperationSupport.implemented(Operation.UPSERT_PERSON,List.of(SEARCH,RECORD,MODIFY),
-   "Validade local (Valid.beginTime/endTime, timeType local) no fuso do condomínio.","Pessoa criada sem doorRight/RightPlan."));
+   "Validade local (Valid.beginTime/endTime, timeType local) no fuso do condomínio; validade parcial recusada.","Pessoa criada sem doorRight/RightPlan."));
   ops.put(Operation.REMOVE_PERSON,OperationSupport.implemented(Operation.REMOVE_PERSON,List.of(DELETE,PROCESS,SEARCH),
    "Exclusão assíncrona: consulta o progresso e confirma por busca NO MATCH."));
   ops.put(Operation.SET_CARD,OperationSupport.implemented(Operation.SET_CARD,List.of(CARD_RECORD),"cardType normalCard."));
@@ -96,6 +96,8 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
 
  @Override public OperationResult upsertPerson(PersonSpec person) {
   if(!local()) return OperationResult.notSupported(Operation.UPSERT_PERSON);
+  // Validade parcial (só início ou só fim) não é representável em Valid: recusada sem envio.
+  if((person.validFrom()==null)!=(person.validUntil()==null)) return OperationResult.of(OperationState.FAILED,"VALIDITY_NOT_REPRESENTABLE");
   try {
    var existing=search(person.subjectRef());
    if(existing.isEmpty()) return status(send("POST",P_RECORD,Map.of("UserInfo",userInfo(person))));
@@ -110,16 +112,17 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   info.put("employeeNo",person.subjectRef());
   info.put("name",person.displayName());
   info.put("userType","normal");
-  if(person.validFrom()!=null || person.validUntil()!=null) {
-   var valid=new LinkedHashMap<String,Object>();
-   valid.put("enable",true);
-   valid.put("beginTime",LOCAL.format((person.validFrom()==null?context.clock().instant():person.validFrom()).truncatedTo(ChronoUnit.SECONDS).atZone(context.zone())));
-   if(person.validUntil()==null) return info; // sem fim documentado não grava validade parcial
-   valid.put("endTime",LOCAL.format(person.validUntil().truncatedTo(ChronoUnit.SECONDS).atZone(context.zone())));
-   valid.put("timeType","local");
-   info.put("Valid",valid);
-  }
+  if(person.validFrom()!=null && person.validUntil()!=null) info.put("Valid",valid(person.validFrom(),person.validUntil()));
   return info;
+ }
+
+ /** Campos gravados por upsertPerson: nome e, quando houver, validade (início/fim). */
+ @Override public Optional<Map<String,String>> personAttributes(PersonSpec person) {
+  if((person.validFrom()==null)!=(person.validUntil()==null)) return Optional.empty();
+  var out=new java.util.HashMap<String,String>();
+  out.put("name",person.displayName());
+  if(person.validFrom()!=null) out.put("valid",validKey(person.validFrom(),person.validUntil()));
+  return Optional.of(out);
  }
 
  @Override public OperationResult removePerson(String subjectRef) {
@@ -205,6 +208,10 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   try {
    var existing=search(rights.subjectRef());
    if(existing.isEmpty()) return OperationResult.of(OperationState.FAILED,"PERSON_NOT_ON_DEVICE");
+   // Sem prazo pedido, um Valid anterior continuaria valendo; a fonte não documenta como removê-lo: recusa.
+   var previous=Json.map(existing.get().get("Valid"));
+   if(rights.validFrom()==null && previous!=null && Boolean.TRUE.equals(Json.bool(previous,"enable")))
+    return OperationResult.of(OperationState.FAILED,"VALIDITY_CLEAR_NOT_DOCUMENTED");
    var plans=new TreeMap<Integer,TreeSet<Integer>>();
    for(String k:keys.get()) {
     if(!k.startsWith("door:")) continue;
@@ -246,7 +253,16 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   try {
    var found=search(subjectRef);
    if(found.isEmpty()) return new AppliedState(OperationState.CONFIRMED,null,false,Set.of(),null,null);
-   return new AppliedState(OperationState.CONFIRMED,null,true,observedKeys(found.get()),null,null);
+   var user=found.get();
+   var attributes=new java.util.HashMap<String,String>();
+   if(Json.string(user,"name")!=null) attributes.put("name",Json.string(user,"name"));
+   var valid=Json.map(user.get("Valid"));
+   if(valid!=null && Boolean.TRUE.equals(Json.bool(valid,"enable"))) {
+    try { attributes.put("valid",validKey(parseValid(Json.string(valid,"beginTime"),Json.string(valid,"timeType")),
+     parseValid(Json.string(valid,"endTime"),Json.string(valid,"timeType")))); }
+    catch(RuntimeException e) { attributes=null; }
+   }
+   return new AppliedState(OperationState.CONFIRMED,null,true,observedKeys(user),null,null,attributes);
   } catch(DeviceCallException e) {
    return AppliedState.unavailable(e.failure()==DeviceHttpClient.Failure.NOT_SENT?OperationState.FAILED:OperationState.UNKNOWN,e.getMessage());
   } catch(Json.JsonException e) { return AppliedState.unavailable(OperationState.FAILED,"INVALID_RESPONSE"); }

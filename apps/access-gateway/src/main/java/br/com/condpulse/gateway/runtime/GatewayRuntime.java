@@ -72,9 +72,11 @@ public final class GatewayRuntime implements AutoCloseable {
   LOG.log(System.Logger.Level.INFO,"Gateway iniciado.");
  }
 
- private static Runnable steps(Runnable... steps) { return ()->{ for(Runnable r:steps) r.run(); }; }
+ /** Etapas de um ciclo, em ordem; cada uma deve vir protegida por {@link #guard}. */
+ public static Runnable steps(Runnable... steps) { return ()->{ for(Runnable r:steps) r.run(); }; }
 
- private static Runnable guard(String name,Runnable task) {
+ /** Isola a falha de uma etapa: registra e segue para a próxima. */
+ public static Runnable guard(String name,Runnable task) {
   return ()->{
    try { task.run(); }
    catch(RuntimeException e) { LOG.log(System.Logger.Level.ERROR,"Ciclo {0} falhou: {1}",name,e.getClass().getSimpleName()); }

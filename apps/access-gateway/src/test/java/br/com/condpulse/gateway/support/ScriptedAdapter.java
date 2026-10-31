@@ -23,6 +23,7 @@ public class ScriptedAdapter extends BaseAdapter {
  public final Deque<OpenResult> openResults=new ArrayDeque<>();
  public final Deque<AppliedState> readStates=new ArrayDeque<>();
  public boolean personPresent;
+ public String personName;
  public Set<String> rights=new HashSet<>();
  public boolean coversCredentials;
  /** Resposta de credentialPresent (vazio = só sabe contar). */
@@ -58,7 +59,12 @@ public class ScriptedAdapter extends BaseAdapter {
  }
  @Override public boolean removePersonCoversCredentials() { return coversCredentials; }
 
- @Override public OperationResult upsertPerson(PersonSpec p) { var r=next(Operation.UPSERT_PERSON,OperationResult.of(OperationState.APPLIED_UNVERIFIED,null)); if(r.state()!=OperationState.FAILED && r.state()!=OperationState.UNKNOWN) personPresent=true; return r; }
+ @Override public OperationResult upsertPerson(PersonSpec p) {
+  var r=next(Operation.UPSERT_PERSON,OperationResult.of(OperationState.APPLIED_UNVERIFIED,null));
+  if(r.state()!=OperationState.FAILED && r.state()!=OperationState.UNKNOWN) { personPresent=true; personName=p.displayName(); }
+  return r;
+ }
+ @Override public Optional<Map<String,String>> personAttributes(PersonSpec p) { return Optional.of(Map.of("name",p.displayName())); }
  @Override public OperationResult removePerson(String s) { var r=next(Operation.REMOVE_PERSON,OperationResult.of(OperationState.APPLIED_UNVERIFIED,null)); personPresent=false; rights.clear(); return r; }
  @Override public OperationResult enrollFace(FaceSpec f) { return next(Operation.ENROLL_FACE,OperationResult.of(OperationState.APPLIED_UNVERIFIED,null)); }
  @Override public OperationResult removeFace(String s) { return next(Operation.REMOVE_FACE,OperationResult.of(OperationState.APPLIED_UNVERIFIED,null)); }
@@ -80,7 +86,8 @@ public class ScriptedAdapter extends BaseAdapter {
   calls.add("READ_STATE");
   if(readStateThrows) throw new IllegalStateException("leitura indisponível");
   if(!readStates.isEmpty()) return readStates.poll();
-  return new AppliedState(OperationState.CONFIRMED,null,personPresent,Set.copyOf(rights),Map.of(CredentialKind.CARD,0,CredentialKind.PIN,0,CredentialKind.QR,0),false);
+  return new AppliedState(OperationState.CONFIRMED,null,personPresent,Set.copyOf(rights),Map.of(CredentialKind.CARD,0,CredentialKind.PIN,0,CredentialKind.QR,0),false,
+   personName==null?null:Map.of("name",personName));
  }
  @Override public OpenResult open(OpenAction a) {
   calls.add("OPEN");

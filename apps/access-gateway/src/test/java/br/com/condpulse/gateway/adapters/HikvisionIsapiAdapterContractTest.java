@@ -216,4 +216,30 @@ class HikvisionIsapiAdapterContractTest {
    assertNull(a.readState("ref-9").rightKeys(),"timeType não local sem offset não é interpretado");
   }
  }
+
+ // ----- terceira rodada (#131) -----
+
+ @Test void pessoaComValidadeParcialERecusadaSemEnviar() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   var r=a.upsertPerson(new PersonSpec("ref-10","Morador 10",null,Instant.parse("2031-01-01T03:00:00Z")));
+   assertEquals("VALIDITY_NOT_REPRESENTABLE",r.reasonCode());
+   assertEquals(0,fake.requests().size());
+  }
+ }
+
+ @Test void direitosSemPrazoNaoDeixamValidAnteriorValendoEmSilencio() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   var person=new PersonSpec("ref-11","Morador 11",Instant.parse("2030-01-01T03:00:00Z"),Instant.parse("2031-01-01T03:00:00Z"));
+   a.upsertPerson(person);
+   assertEquals(a.personAttributes(person).orElseThrow(),a.readState("ref-11").personAttributes(),"nome e validade lidos de volta");
+   int before=fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size();
+   var r=a.applyRights(new RightsSpec("ref-11",List.of(new Right("c1","sempre")),null,null));
+   assertEquals("VALIDITY_CLEAR_NOT_DOCUMENTED",r.reasonCode());
+   assertEquals(before,fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size());
+  }
+ }
 }
