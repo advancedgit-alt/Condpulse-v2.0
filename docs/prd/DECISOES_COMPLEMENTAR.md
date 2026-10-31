@@ -1,6 +1,6 @@
 # Decisões do PRD Complementar — Segurança, Acesso e Portaria
 
-Aprovação do responsável em 31/10/2026 (16:22, America/Sao_Paulo): executar o PRD complementar
+Aprovação do responsável em 31/10/2026 (16:22, America/Sao_Paulo; formalizada na ADR-0011): executar o PRD complementar
 (`CondPulse_PRD_Complementar_Seguranca_v1.0.md`). Este arquivo registra o que foi adotado e o que continua pendente
 (seção 15 do PRD). Nada aqui inventa fato: item sem decisão fica PENDENTE e o código não depende dele.
 
