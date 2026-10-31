@@ -40,18 +40,28 @@ export function TechnicalGrantSection() {
   const tenants = useQuery({ queryKey: tenantListKey(scope.accountId, null), queryFn: ({ signal }) => platform.tenants(null, signal) });
   const chosen = params.get('condominio') ?? '';
   const tenantId = isUUID(chosen) ? chosen.toLowerCase() : '';
+  // O condomínio escolhido vem do próprio cadastro, não da lista do seletor (limitada pelo servidor): a ficha e o link
+  // `?condominio=` funcionam para qualquer condomínio.
+  const detail = useQuery({ queryKey: platformKey(scope.accountId, 'tenant', tenantId), queryFn: ({ signal }) => platform.tenant(tenantId, signal),
+    enabled: tenantId !== '' });
   const failed = queryFailure([tenants]);
-  if (useAccessGuard(failed)) return null;
-  const tenant = tenants.data?.tenants.find((item) => item.tenantId === tenantId);
+  const detailFailed = tenantId ? queryFailure([detail]) : null;
+  const guarded = useAccessGuard(failed ?? detailFailed);
+  if (guarded) return null;
+  const tenant = detail.data?.tenant;
+  const listed = tenants.data?.tenants ?? [];
+  const options = tenant && !listed.some((item) => item.tenantId === tenant.tenantId) ? [tenant, ...listed] : listed;
   return <section className="management-section" aria-labelledby="grants-title">
     <div className="section-heading"><div><span className="section-index">CONCESSÕES TÉCNICAS</span><h2 id="grants-title">MASTER de implantação por condomínio</h2></div></div>
     <p className="field-help">A concessão dá à conta, por prazo curto, os escopos técnicos de implantação física em um condomínio. Não dá acesso aos dados dos moradores nem ao uso físico das áreas. Toda emissão e revogação fica na auditoria da plataforma.</p>
     {tenants.isPending ? <div className="panel"><Loading label="Consultando condomínios…" /></div> : failed || !tenants.data ? <ErrorState error={failed} retry={() => void tenants.refetch()} />
       : <div className="panel"><label htmlFor="grant-tenant">Condomínio</label>
         <select id="grant-tenant" value={tenantId} onChange={(event) => setParams(event.target.value ? { condominio: event.target.value } : {}, { replace: true })}>
-          <option value="">Escolha…</option>{tenants.data.tenants.map((item) => <option key={item.tenantId} value={item.tenantId}>{item.name}{item.active ? '' : ' (suspenso)'}</option>)}</select>
-        {tenants.data.truncated ? <p className="field-help">A lista foi limitada pelo servidor; busque o condomínio em Condomínios e abra a concessão pela ficha.</p> : null}</div>}
-    {tenant ? <TenantGrants key={tenant.tenantId} tenantId={tenant.tenantId} tenantName={tenant.name} active={tenant.active} /> : null}
+          <option value="">Escolha…</option>{options.map((item) => <option key={item.tenantId} value={item.tenantId}>{item.name}{item.active ? '' : ' (suspenso)'}</option>)}</select>
+        {tenants.data.truncated ? <p className="field-help">A lista foi limitada pelo servidor; para outro condomínio, busque-o em Condomínios e use "Concessões técnicas" na ficha.</p> : null}</div>}
+    {tenantId && detail.isPending ? <div className="panel"><Loading label="Consultando o condomínio…" /></div> : null}
+    {tenantId && detailFailed ? <ErrorState error={detailFailed} retry={() => void detail.refetch()} /> : null}
+    {tenant && !detailFailed ? <TenantGrants key={tenant.tenantId} tenantId={tenant.tenantId} tenantName={tenant.name} active={tenant.active} /> : null}
   </section>;
 }
 

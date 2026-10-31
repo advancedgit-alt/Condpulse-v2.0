@@ -9,6 +9,7 @@ test.use({ timezoneId: 'UTC' });
 const OTHER = '10000000-0000-4000-8000-0000000000b2';
 const GRANT = '78000000-0000-4000-8000-000000000001';
 const created = '2030-01-01T12:00:00.000Z';
+const TENANT_C = '00000000-0000-4000-8000-0000000000c9';
 
 async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) });
@@ -36,12 +37,23 @@ async function openGrants(page: Page, initial: Partial<State> = {}, path = '/mas
         capabilities: ['platform.audit.read', 'tenants.manage', 'tenants.read', ...(state.capability ? ['technical_grants.manage'] : [])] });
       return;
     }
+    const detail = /^\/v1\/platform\/tenants\/([0-9a-f-]{36})$/.exec(url.pathname);
+    if (detail) {
+      const names: Record<string, string> = { [TENANT_A]: 'Condomínio Sintético A', [TENANT_B]: 'Condomínio Sintético B', [TENANT_C]: 'Condomínio Sintético Fora da Lista' };
+      if (!names[detail[1]!]) { await problem(route, 404, 'TENANT_NOT_FOUND'); return; }
+      await json(route, 200, { tenant: { tenantId: detail[1], name: names[detail[1]!], timeZone: 'America/Sao_Paulo', active: true, version: 0, createdAt: created,
+        updatedAt: created, onboarding: null }, managers: [], managerInvitations: [], recentEvents: [] });
+      return;
+    }
     if (url.pathname === '/v1/platform/tenants') {
-      await json(route, 200, { truncated: false, tenants: [TENANT_A, TENANT_B].map((tenantId, index) => ({ tenantId, name: `Condomínio Sintético ${index ? 'B' : 'A'}`,
+      // Lista limitada: o condomínio C (fora da primeira página) não vem aqui.
+      await json(route, 200, { truncated: true, tenants: [TENANT_A, TENANT_B].map((tenantId, index) => ({ tenantId, name: `Condomínio Sintético ${index ? 'B' : 'A'}`,
         timeZone: 'America/Sao_Paulo', active: true, version: 0, createdAt: created, updatedAt: created, onboarding: null })) });
       return;
     }
-    const base = `/v1/platform/tenants/${TENANT_A}/technical-grants`;
+    const owner = /^\/v1\/platform\/tenants\/([0-9a-f-]{36})\/technical-grants/.exec(url.pathname)?.[1];
+    const base = `/v1/platform/tenants/${owner}/technical-grants`;
+    if (owner && owner !== TENANT_A && request.method() === 'GET') { await json(route, 200, { grants: [] }); return; }
     if (!url.pathname.startsWith(base)) { await problem(route, 404, 'SYNTHETIC_TEST_ROUTE_NOT_FOUND'); return; }
     if (!state.facial) { await problem(route, 404, 'SYNTHETIC_TEST_ROUTE_NOT_FOUND'); return; }
     if (request.method() === 'GET') { await json(route, 200, { grants: state.grants }); return; }
@@ -119,4 +131,14 @@ test('sem a capacidade a seção não aparece; com o acesso facial desligado a t
   await page.goto('/master/concessoes');
   await expect(page.getByRole('heading', { name: 'Condomínios da plataforma' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Concessões técnicas' })).toHaveCount(0);
+});
+
+test('condomínio fora da lista limitada abre pela ficha e pelo link com as concessões dele', async ({ page }) => {
+  await openGrants(page, {}, `/master/condominios/${TENANT_C}`);
+  await page.getByRole('region', { name: 'Condomínio Sintético Fora da Lista' }).getByRole('link', { name: 'Concessões técnicas' }).click();
+  await expect(page).toHaveURL(new RegExp(`/master/concessoes\\?condominio=${TENANT_C}$`));
+  await expect(page.getByLabel('Condomínio', { exact: true })).toHaveValue(TENANT_C);
+  await expect(page.getByRole('heading', { name: 'Concessões em Condomínio Sintético Fora da Lista' })).toBeVisible();
+  await expect(page.getByText('Este condomínio ainda não tem MASTER de implantação.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nova concessão' })).toBeEnabled();
 });
