@@ -111,7 +111,10 @@ class AccessPolicyJdbcTest {
   assertEquals("BLOCKED",blocked.status());
   assertEquals(List.of(POINT),blocked.affectedPointIds());
   assertTrue(blocked.issues().stream().anyMatch(i->"CAPABILITY_MISSING".equals(i.code()) && "localValidity".equals(i.capability())));
-  long draftVersion=policies.versions(MANAGER,db.tenantA,AAL2,policyId).versions().getFirst().version();
+  var afterBlocked=policies.versions(MANAGER,db.tenantA,AAL2,policyId).versions().getFirst();
+  assertEquals("DRAFT",afterBlocked.state(),"Validação bloqueada mantém a revisão em DRAFT");
+  assertEquals(blocked.validationId(),afterBlocked.validationId(),"Impeditivos ficam registrados");
+  long draftVersion=afterBlocked.version();
   assertEquals("POLICY_STALE",code(()->policies.approve(MANAGER,db.tenantA,AAL2,policyId,versionId,new PolicyModels.VersionAction(draftVersion))));
   db.adminUpdateWithoutTriggers("update platform.access_homologations set approved_capabilities=array['faceEnrollment','faceDeletion','perDoorRights',"
    +"'secureTransport','offlineRestriction','localValidity'] where id=?",HOMOLOGATION);

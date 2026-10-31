@@ -141,6 +141,8 @@ public final class PolicyEngine {
    issues.add(issue("HOLIDAY_CALENDAR_UNKNOWN","/holidayCalendarIds","Calendários de feriado ainda não existem neste condomínio.","BLOCKER",null,null));
   if(!"OFF".equals(d.antiPassbackMode()))
    issues.add(issue("ANTIPASSBACK_UNSUPPORTED","/antiPassbackMode","Antirretorno ainda não é suportado.","BLOCKER",null,null));
+  if(d.maximumAgeYears()!=null)
+   issues.add(issue("AGE_MAXIMUM_UNSUPPORTED","/maximumAgeYears","Idade máxima ainda não tem evidência própria; não pode ser publicada.","BLOCKER",null,null));
   if(d.maximumOccupancy()!=null)
    issues.add(issue("OCCUPANCY_UNSUPPORTED","/maximumOccupancy","Lotação máxima ainda não é suportada.","BLOCKER",null,null));
   if("VERIFIED_PHYSICAL_COMPANION".equals(d.companion().mode()))
@@ -197,8 +199,10 @@ public final class PolicyEngine {
   else if(!d.eligibleContexts().contains(context)) deny.add("NO_ELIGIBLE_CONTEXT");
   else if("VISITOR".equals(context) && !s.permitActive()) deny.add("PERMIT_EXPIRED");
   if(d.minimumAgeYears()!=null || d.maximumAgeYears()!=null) {
-   if("UNKNOWN".equals(s.ageEvidence())) (("ASSISTED_VERIFICATION".equals(d.failure().onMissingAttribute()))?assist:deny).add("AGE_NOT_VERIFIED");
-   else if("VERIFIED_BELOW_MINIMUM".equals(s.ageEvidence()) && d.minimumAgeYears()!=null) deny.add("AGE_BELOW_MINIMUM");
+   // A evidência sintética só fala do mínimo: com idade máxima, a idade é tratada como não verificada (falha fechada).
+   if("UNKNOWN".equals(s.ageEvidence()) || d.maximumAgeYears()!=null)
+    (("ASSISTED_VERIFICATION".equals(d.failure().onMissingAttribute()))?assist:deny).add("AGE_NOT_VERIFIED");
+   if("VERIFIED_BELOW_MINIMUM".equals(s.ageEvidence()) && d.minimumAgeYears()!=null) deny.add("AGE_BELOW_MINIMUM");
   }
   if(!"NOT_REQUIRED".equals(d.reservation().mode()) && !s.reservationActive()) deny.add("RESERVATION_REQUIRED");
   if("VERIFIED_PHYSICAL_COMPANION".equals(d.companion().mode()) && !s.physicalCompanionVerified()) deny.add("COMPANION_NOT_VERIFIED");

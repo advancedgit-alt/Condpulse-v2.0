@@ -116,7 +116,8 @@ public class PolicyService {
    UUID id=UUID.randomUUID();
    store.insertValidation(tenant,id,v,revision,status,issues,destinations.stream().map(PolicyModels.Destination::pointId).toList(),
     PolicyEngine.requiredCapabilities(v.document()),actor);
-   if(!store.recordValidation(tenant,v.versionId(),id,status,v.version())) throw stale();
+   // A revisão fica DRAFT quando a validação é BLOCKED; o resultado BLOCKED segue no ValidationResult.
+   if(!store.recordValidation(tenant,v.versionId(),id,"VALIDATED".equals(status)?"VALIDATED":"DRAFT",v.version())) throw stale();
    audit.record(tenant,actor,"POLICY_VERSION_VALIDATED","ACCESS_POLICY_VERSION",v.versionId(),status);
    return store.validation(tenant,id);
   }));
