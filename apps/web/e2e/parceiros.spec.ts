@@ -19,7 +19,7 @@ async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) });
 }
 
-interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean; deniedOnCursor?: boolean }
+interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean; deniedOnCursor?: boolean; refuseMutations?: boolean }
 async function installPartner(page: Page, api: ApiState, options: Options) {
   const requests: string[] = [];
   await page.route('**/auth/mfa', async (route) => { await json(route, 200, { assuranceLevel: 'AAL2', factors: [] }); });
@@ -33,6 +33,10 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
       requests.push(path);
       // Flag desligada: a rota não existe no servidor.
       if (!options.partnersOn) { await json(route, 404, { status: 404, error: 'Not Found' }); return; }
+      // Papel revogado entre a leitura e a ação: o servidor recusa a mutação.
+      if (options.refuseMutations && route.request().method() === 'POST') {
+        await json(route, 403, { status: 403, code: 'PARTNER_ACCESS_DENIED', detail: 'Esta ação não está disponível para o seu papel no parceiro.' }); return;
+      }
       if (path.endsWith('/team')) {
         await json(route, 200, { partnerId: PARTNER, members: [{ id: OPERATOR, partnerId: PARTNER, accountId: '10000000-0000-4000-8000-0000000000b3',
           role: 'REMOTE_OPERATOR', displayName: 'Operador Sintético', status: 'ACTIVE', version: 0, createdAt: '2026-10-30T12:00:00Z', revokedAt: null, revokeReason: null }] });
@@ -43,6 +47,9 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
       requests.push(path);
       if (!options.securityLogOn) { await json(route, 404, { status: 404, error: 'Not Found' }); return; }
       // Contrato encerrado entre uma página e outra: o servidor passa a recusar o condomínio.
+      if (options.refuseMutations && route.request().method() === 'POST') {
+        await json(route, 404, { status: 404, code: 'TENANT_ACCESS_DENIED', detail: 'Condomínio não disponível para este acesso.' }); return;
+      }
       if (options.deniedOnCursor && url.searchParams.has('beforeSeq')) {
         await json(route, 404, { status: 404, code: 'TENANT_ACCESS_DENIED', detail: 'Condomínio não disponível para este acesso.' }); return;
       }
@@ -121,4 +128,25 @@ test('condomínio recusado na página seguinte tira os eventos já carregados da
   await page.getByRole('button', { name: 'Carregar eventos anteriores' }).click();
   await expect(page.getByRole('heading', { name: 'Acesso não disponível' })).toBeVisible();
   await expect(page.getByText('#1 · ACCESS_ENTRY')).toHaveCount(0);
+});
+
+test('recusa numa exportação tira o log da tela; recusa numa ação de equipe derruba o painel', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  await installPartner(page, api, { contexts: [admin, lead], partnersOn: true, securityLogOn: true, refuseMutations: true });
+  await signIn(page);
+  await page.goto(`/p/${PARTNER}/comando/log`);
+  await page.getByRole('button', { name: 'Consultar log' }).click();
+  await expect(page.getByText('#1 · ACCESS_ENTRY')).toBeVisible();
+  await page.getByLabel('Motivo da exportação').fill('Pedido formal do condomínio');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Acesso não disponível' })).toBeVisible();
+  await expect(page.getByText('#1 · ACCESS_ENTRY')).toHaveCount(0);
+
+  await page.goto(`/p/${PARTNER}/gestao/equipe`);
+  await expect(page.getByText('Operador Sintético')).toBeVisible();
+  await page.getByRole('button', { name: 'Revogar papel de Operador Sintético' }).click();
+  await page.getByLabel('Motivo da revogação').fill('Saiu da equipe');
+  await page.getByRole('button', { name: 'Confirmar revogação' }).click();
+  await expect(page.getByText('Os dados exibidos foram removidos.')).toBeVisible();
+  await expect(page.getByText('Operador Sintético')).toHaveCount(0);
 });

@@ -27,6 +27,38 @@ export function failureKind(error: unknown): FailureKind {
   return 'other';
 }
 
+/**
+ * Tratador único de recusa de autorização das telas de parceiro (consultas e mutações). MFA_REQUIRED abre o segundo
+ * fator; recusa do parceiro (papel revogado, parceiro suspenso) derruba o painel inteiro; recusa de um condomínio
+ * (contrato encerrado, fora da escala) derruba só os dados daquele condomínio. Pedido sem condomínio recusado por
+ * motivo de condomínio também derruba o painel: na dúvida, nada sensível fica na tela.
+ */
+export type Refusal = { kind: 'mfa' } | { kind: 'partner' } | { kind: 'tenant'; tenantId: string };
+export function refusalOf(error: unknown, tenantId?: string): Refusal | null {
+  const kind = failureKind(error);
+  if (kind === 'mfa') return { kind: 'mfa' };
+  if (kind !== 'denied') return null;
+  const code = (error as ApiError).code;
+  if (!code.startsWith('PARTNER_') && tenantId) return { kind: 'tenant', tenantId: tenantId.toLowerCase() };
+  return { kind: 'partner' };
+}
+
+/** Estado da porta do painel diante de recusas: segundo fator, painel derrubado ou condomínios derrubados. */
+export interface RefusalState { mfa: boolean; partnerDenied: unknown; deniedTenants: ReadonlyMap<string, unknown> }
+export const initialRefusalState = (): RefusalState => ({ mfa: false, partnerDenied: null, deniedTenants: new Map() });
+/**
+ * Efeito de uma recusa: novo estado da porta e prefixos de cache a apagar. MFA e recusa do parceiro apagam todos os
+ * dados do painel (parceiro e log de cada condomínio alcançado); recusa de condomínio apaga só o log dele.
+ */
+export function applyRefusal(state: RefusalState, refusal: Refusal, scope: { accountId: string; partnerId: string; tenantIds: readonly string[] },
+  error: unknown): { state: RefusalState; forget: (readonly unknown[])[] } {
+  const all = [partnerKey(scope.accountId, scope.partnerId), ...scope.tenantIds.map((tenantId) => securityLogKey(scope.accountId, tenantId))];
+  if (refusal.kind === 'mfa') return { state: { ...state, mfa: true }, forget: all };
+  if (refusal.kind === 'partner') return { state: { ...state, partnerDenied: error }, forget: all };
+  return { state: { ...state, deniedTenants: new Map(state.deniedTenants).set(refusal.tenantId, error) },
+    forget: [securityLogKey(scope.accountId, refusal.tenantId)] };
+}
+
 export const memberStatusLabels: Record<string, string> = { ACTIVE: 'Ativo', REVOKED: 'Revogado' };
 export const scheduleStatusLabels: Record<string, string> = { ACTIVE: 'Ativa', CANCELLED: 'Cancelada' };
 export const contractStatusLabels: Record<string, string> = { ACTIVE: 'Ativo', ENDED: 'Encerrado' };

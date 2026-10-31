@@ -1,12 +1,15 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { ApiError } from '../../api/client';
+import { ApiError, CondPulseApi } from '../../api/client';
+import { createPartnersApi } from '../../api/partners';
+import { createSecurityLogApi } from '../../api/securityLog';
 import type { PartnerContext } from '../../api/types';
 import { FailureState, PartnerConsole, PartnerScopeProvider } from './PartnerPage';
-import { exportBody, failureKind, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, scheduleBody } from './model';
+import { applyRefusal, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, refusalOf,
+  scheduleBody, securityLogKey } from './model';
 
 const own = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -19,7 +22,7 @@ const context = (role: PartnerContext['role'], panel: PartnerContext['panel'], c
 function render(value: PartnerContext, section = '') {
   const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToStaticMarkup(<QueryClientProvider client={queries}><MemoryRouter>
-    <PartnerScopeProvider value={{ accountId: own, context: value, requireMfa: () => undefined, denied: () => undefined }}>
+    <PartnerScopeProvider value={{ accountId: own, context: value, refuse: () => false, deniedTenant: () => null }}>
       <PartnerConsole section={section} /></PartnerScopeProvider></MemoryRouter></QueryClientProvider>);
 }
 
@@ -118,5 +121,60 @@ describe('regras locais dos painéis', () => {
     expect(exportBody({ reason: 'Pedido formal do condomínio', fromSeq: '1', toSeq: '6000' })).toMatch(/5.000/);
     expect(exportBody({ reason: 'Pedido formal do condomínio', fromSeq: 'a', toSeq: '' })).toMatch(/inteiros/);
     expect(exportBody({ reason: 'Pedido formal do condomínio', fromSeq: '', toSeq: '' })).toEqual({ reason: 'Pedido formal do condomínio' });
+  });
+});
+
+describe('tratador único de recusa: todos os pedidos das telas de parceiro', () => {
+  const partnerId = '30000000-0000-4000-8000-000000000001';
+  const scheduleId = '80000000-0000-4000-8000-000000000001';
+  const scope = { accountId: own, partnerId, tenantIds: [tenant, '20000000-0000-4000-8000-000000000002'] };
+  const respond = (status: number, code: string) => vi.fn<typeof globalThis.fetch>(async (input) => String(input) === '/auth/csrf'
+    ? new Response(JSON.stringify({ headerName: 'X-CSRF-Token', token: 'synthetic-csrf' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    : new Response(JSON.stringify({ code, status }), { status, headers: { 'Content-Type': 'application/json' } }));
+  // Cada pedido com o condomínio que a tela entrega ao tratador (as telas de equipe/escala/carteira não têm condomínio)
+  // e as chaves de cache com os dados que a tela mostra.
+  type Client = { partners: ReturnType<typeof createPartnersApi>; log: ReturnType<typeof createSecurityLogApi> };
+  const requests: { name: string; tenantId?: string; keys: (readonly unknown[])[]; run(client: Client): Promise<unknown> }[] = [
+    { name: 'equipe', keys: [partnerKey(own, partnerId, 'team')], run: (c) => c.partners.team(partnerId) },
+    { name: 'adicionar papel', keys: [partnerKey(own, partnerId, 'team')],
+      run: (c) => c.partners.addMember(partnerId, { accountId: other, role: 'REMOTE_OPERATOR', displayName: 'Operador Sintético', reason: 'Novo turno' }) },
+    { name: 'revogar papel', keys: [partnerKey(own, partnerId, 'team')], run: (c) => c.partners.revokeMember(partnerId, memberId, 'Saiu da equipe') },
+    { name: 'escala', keys: [partnerKey(own, partnerId, 'schedules')], run: (c) => c.partners.schedules(partnerId) },
+    { name: 'criar escala', keys: [partnerKey(own, partnerId, 'schedules')],
+      run: (c) => c.partners.createSchedule(partnerId, { memberId, tenantId: tenant, endsAt: '2026-11-01T21:00:00Z', reason: 'Turno' }) },
+    { name: 'cancelar escala', keys: [partnerKey(own, partnerId, 'schedules')], run: (c) => c.partners.cancelSchedule(partnerId, scheduleId, 'Troca') },
+    { name: 'carteira', keys: [partnerKey(own, partnerId, 'portfolio')], run: (c) => c.partners.portfolio(partnerId) },
+    { name: 'log', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.page(tenant) },
+    { name: 'integridade', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.integrity(tenant) },
+    { name: 'exportação', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')],
+      run: (c) => c.log.export(tenant, { reason: 'Pedido formal do condomínio' }) },
+  ];
+  const refusals: [number, string][] = [[403, 'MFA_REQUIRED'], [403, 'PARTNER_ACCESS_DENIED'], [404, 'PARTNER_NOT_FOUND'], [403, 'PARTNER_FORBIDDEN'],
+    [404, 'TENANT_ACCESS_DENIED'], [403, 'STAFF_ACCESS_DENIED']];
+  const covered = (key: readonly unknown[], prefixes: (readonly unknown[])[]) => prefixes.some((prefix) => prefix.every((part, index) => part === key[index]));
+
+  it('toda recusa vira estado de acesso negado (ou segundo fator) e apaga do cache os dados da tela', async () => {
+    for (const request of requests) for (const [status, code] of refusals) {
+      const client = new CondPulseApi({ fetch: respond(status, code) });
+      const error = await request.run({ partners: createPartnersApi(client), log: createSecurityLogApi(client) }).then(() => null, (failure: unknown) => failure);
+      const refusal = refusalOf(error, request.tenantId);
+      expect(refusal, `${request.name} / ${code}`).not.toBeNull();
+      const { state, forget } = applyRefusal(initialRefusalState(), refusal!, scope, error);
+      for (const key of request.keys) expect(covered(key, forget), `${request.name} / ${code}: cache ${String(key)}`).toBe(true);
+      if (code === 'MFA_REQUIRED') expect(state.mfa).toBe(true);
+      else if (request.tenantId && !code.startsWith('PARTNER_')) {
+        expect(state.deniedTenants.get(tenant)).toBe(error);
+        expect(forget).toEqual([securityLogKey(own, tenant)]);
+      } else expect(state.partnerDenied, `${request.name} / ${code}`).toBe(error);
+    }
+  });
+  it('MFA e recusa do parceiro apagam o log de todos os condomínios; falha transitória ou de regra não é recusa', async () => {
+    const all = applyRefusal(initialRefusalState(), { kind: 'partner' }, scope, null).forget;
+    for (const tenantId of scope.tenantIds) expect(covered(securityLogKey(own, tenantId, 'integrity'), all)).toBe(true);
+    for (const [status, code] of [[503, 'PARTNER_UNAVAILABLE'], [503, 'SECURITY_LOG_DEPENDENCY_UNAVAILABLE'], [403, 'PARTNER_SELF_CHANGE_DENIED'],
+      [404, 'NOT_FOUND']] as [number, string][]) {
+      const error = await createPartnersApi(new CondPulseApi({ fetch: respond(status, code) })).team(partnerId).then(() => null, (failure: unknown) => failure);
+      expect(refusalOf(error, tenant), code).toBeNull();
+    }
   });
 });

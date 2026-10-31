@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { securityLog, securitySeverities, type SecurityLogExport, type SecurityLogFilter, type SecuritySeverity } from '../../api/securityLog';
 import { Empty, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import { FailureState, usePartnerAccessGuard, usePartnerScope } from './PartnerPage';
-import { exportBody, exportFileName, failureKind, integrityProblems, logAccessFailure, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
+import { exportBody, exportFileName, integrityProblems, logAccessFailure, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
 
 const OFF_TEXT = 'O Log de Segurança está desligado no servidor deste ambiente (CP_SECURITY_LOG_ENABLED). Quando for ligado, esta seção passa a funcionar sem mudança na tela.';
 const severityTone: Record<SecuritySeverity, string> = { INFO: 'status-neutral', ATTENTION: 'status-pending', CRITICAL: 'status-overdue' };
@@ -30,7 +30,8 @@ export function SecurityLogSection() {
 }
 
 function TenantLog({ tenantId, tenantName, timeZone, canExport }: { tenantId: string; tenantName: string; timeZone: string; canExport: boolean }) {
-  const { accountId } = usePartnerScope();
+  const scope = usePartnerScope();
+  const { accountId } = scope;
   const [draft, setDraft] = useState<LogFilterDraft>({ type: '', severity: '' });
   const [request, setRequest] = useState<LogRequest | null>(null);
   const filter: SecurityLogFilter | null = request?.filter ?? null;
@@ -41,21 +42,13 @@ function TenantLog({ tenantId, tenantName, timeZone, canExport }: { tenantId: st
     getNextPageParam: (last) => last.nextBeforeSeq ?? undefined, refetchOnWindowFocus: false });
   const integrity = useQuery({ queryKey: securityLogKey(accountId, tenantId, 'integrity'), enabled: checking, refetchOnWindowFocus: false,
     queryFn: ({ signal }) => securityLog.integrity(tenantId, signal) });
-  const queries = useQueryClient();
-  const [lost, setLost] = useState<unknown>(null);
+  // Recusa (consulta pedida nesta tela) vai ao tratador único: o cache do condomínio sai e a lista dá lugar ao estado
+  // de acesso negado, mesmo com páginas já carregadas.
   const access = logAccessFailure({ pages: request !== null, integrity: checking }, pages.error, integrity.error);
-  // Condomínio recusado (contrato encerrado, fora da escala): as páginas já carregadas saem da tela e do cache.
-  const deniedNow = failureKind(access) === 'denied' ? access : null;
-  useEffect(() => {
-    if (!deniedNow) return;
-    setLost(deniedNow); setRequest(null); setChecking(false);
-    const prefix = securityLogKey(accountId, tenantId);
-    void queries.cancelQueries({ queryKey: prefix }); queries.removeQueries({ queryKey: prefix });
-  }, [deniedNow, queries, accountId, tenantId]);
-  const guarded = usePartnerAccessGuard(access);
+  const guarded = usePartnerAccessGuard(access, tenantId);
+  const refused = scope.deniedTenant(tenantId);
+  if (refused) return <FailureState error={refused} retry={() => undefined} off={OFF_TEXT} subject="Log de Segurança" />;
   if (guarded) return null;
-  const refused = lost ?? deniedNow;
-  if (refused) return <FailureState error={refused} retry={() => setLost(null)} off={OFF_TEXT} subject="Log de Segurança" />;
   function search(event: FormEvent) {
     event.preventDefault();
     const next = logFilter(draft);
@@ -124,8 +117,8 @@ function ExportForm({ tenantId, timeZone }: { tenantId: string; timeZone: string
       const result = await securityLog.export(tenantId, body);
       setDone(result); download(result);
     } catch (error) {
-      setFailure(error);
-      if ((error as { code?: string }).code === 'MFA_REQUIRED') scope.requireMfa();
+      // Recusa de autorização vai ao tratador único: o log do condomínio sai da tela e do cache.
+      if (!scope.refuse(error, tenantId)) setFailure(error);
     } finally { setPending(false); }
   }
   return <form className="panel management-form stack-form" onSubmit={(event) => void submit(event)} aria-labelledby={`security-export-${tenantId}`}>

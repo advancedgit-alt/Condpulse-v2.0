@@ -28,10 +28,8 @@ function useRun() {
       setState({ pending: false, error: null, done: done(result) });
       return true;
     } catch (error) {
-      setState({ pending: false, error, done: null });
-      const code = (error as { code?: string }).code;
-      if (code === 'MFA_REQUIRED') scope.requireMfa();
-      else if (code === 'PARTNER_ACCESS_DENIED' || code === 'PARTNER_NOT_FOUND') scope.denied(error);
+      // Recusa de autorização vai ao tratador único (a tela é trocada); o resto fica na mensagem da ação.
+      setState({ pending: false, error: scope.refuse(error) ? null : error, done: null });
       return false;
     }
   }
