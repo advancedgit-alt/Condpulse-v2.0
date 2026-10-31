@@ -1,0 +1,161 @@
+/*
+ * Tokens semânticos CondPulse (ADR-0010). Base: docs/identidade/kit-v1.0/handoff/tokens.css, ampliada com os
+ * papéis que a interface atual usa (superfícies sutis, bordas de estado, sombras, superfície inversa da barra
+ * lateral e marca). Componentes consomem estes nomes; HEX fixo fora deste arquivo é exceção.
+ * O tema é resolvido em ui/theme/theme.ts e gravado em data-cp-theme ("light" ou "dark") no elemento raiz.
+ * A marca de um condomínio só sobrescreve os tokens de ação/acento, com fallback por contraste (branding.ts).
+ */
+:root, [data-cp-theme="light"] {
+  color-scheme: light;
+  --cp-color-surface-canvas: #F4F7FA;
+  --cp-color-surface-panel: #FFFFFF;
+  --cp-color-surface-alternate: #F4F7FA;
+  --cp-color-surface-muted: #EAF1F5;
+  --cp-color-surface-disabled: #EEF2F6;
+  --cp-color-surface-accent-subtle: #E8F4F3;
+  --cp-color-surface-inverse: #102A43;
+  --cp-color-text-primary: #102A43;
+  --cp-color-text-secondary: #52667A;
+  --cp-color-text-link: #00666D;
+  --cp-color-text-inverse: #FFFFFF;
+  --cp-color-text-inverse-secondary: #B4C2D1;
+  --cp-color-text-inverse-link: #5DD6C7;
+  --cp-color-icon-accent: #007F86;
+  --cp-color-border-decorative: #DCE5EC;
+  --cp-color-border-control: #7B8C9C;
+  --cp-color-border-accent: #007F86;
+  --cp-color-border-inverse: #FFFFFF1A;
+  --cp-color-inverse-hover: #FFFFFF0F;
+  --cp-color-inverse-active: #FFFFFF14;
+  --cp-color-inverse-scrollbar: #FFFFFF40;
+  --cp-color-inverse-decorative: #38576C;
+  --cp-color-action-primary-background: #007F86;
+  --cp-color-action-primary-hover: #00666D;
+  --cp-color-action-primary-foreground: #FFFFFF;
+  --cp-color-action-danger-background: #B42318;
+  --cp-color-action-danger-hover: #8F1C13;
+  --cp-color-action-danger-foreground: #FFFFFF;
+  --cp-color-focus-ring: #005FCC;
+  --cp-color-focus-inverse: #8EBDFF;
+  --cp-color-status-success-foreground: #17633D;
+  --cp-color-status-success-background: #EAF5EE;
+  --cp-color-status-success-border: #B9DBC0;
+  --cp-color-status-warning-foreground: #8A4B08;
+  --cp-color-status-warning-background: #FFF4DF;
+  --cp-color-status-warning-border: #E4D2A4;
+  --cp-color-status-danger-foreground: #B42318;
+  --cp-color-status-danger-background: #FFF0EE;
+  --cp-color-status-danger-border: #E9BEB8;
+  --cp-color-status-info-foreground: #2459A6;
+  --cp-color-status-info-background: #EDF3FF;
+  --cp-color-status-info-border: #B9CCEB;
+  --cp-color-status-neutral-foreground: #52667A;
+  --cp-color-status-neutral-background: #EEF2F6;
+  --cp-color-overlay: #0B1F3366;
+  --cp-color-shadow: #0B1F3340;
+  --cp-color-shadow-soft: #102A4308;
+  --cp-color-scroll-shadow: #102A432E;
+  /* Marca: positiva sobre superfície clara; negativa sobre superfície inversa (sidebar, login). */
+  --cp-brand-ink: #102A43;
+  --cp-brand-accent: #007F86;
+  --cp-brand-inverse-ink: #FFFFFF;
+  --cp-brand-inverse-accent: #5DD6C7;
+}
+
+[data-cp-theme="dark"] {
+  color-scheme: dark;
+  --cp-color-surface-canvas: #0D1724;
+  --cp-color-surface-panel: #152334;
+  --cp-color-surface-alternate: #1A2B3F;
+  --cp-color-surface-muted: #1A2B3F;
+  --cp-color-surface-disabled: #101C2A;
+  --cp-color-surface-accent-subtle: #163A42;
+  --cp-color-surface-inverse: #0A1320;
+  --cp-color-text-primary: #F2F6FB;
+  --cp-color-text-secondary: #B4C2D1;
+  --cp-color-text-link: #5DD6C7;
+  --cp-color-text-inverse: #F2F6FB;
+  --cp-color-text-inverse-secondary: #B4C2D1;
+  --cp-color-text-inverse-link: #5DD6C7;
+  --cp-color-icon-accent: #5DD6C7;
+  --cp-color-border-decorative: #34485E;
+  --cp-color-border-control: #7891AC;
+  --cp-color-border-accent: #5DD6C7;
+  --cp-color-border-inverse: #FFFFFF1A;
+  --cp-color-inverse-hover: #FFFFFF0F;
+  --cp-color-inverse-active: #FFFFFF14;
+  --cp-color-inverse-scrollbar: #FFFFFF40;
+  --cp-color-inverse-decorative: #2A3F55;
+  --cp-color-action-primary-background: #5DD6C7;
+  --cp-color-action-primary-hover: #7FE0D4;
+  --cp-color-action-primary-foreground: #0D1724;
+  --cp-color-action-danger-background: #FFB4AD;
+  --cp-color-action-danger-hover: #FFC9C4;
+  --cp-color-action-danger-foreground: #0D1724;
+  --cp-color-focus-ring: #8EBDFF;
+  --cp-color-focus-inverse: #8EBDFF;
+  --cp-color-status-success-foreground: #8FDDB2;
+  --cp-color-status-success-background: #1C392D;
+  --cp-color-status-success-border: #2E5A45;
+  --cp-color-status-warning-foreground: #FFD18A;
+  --cp-color-status-warning-background: #43321C;
+  --cp-color-status-warning-border: #6B5230;
+  --cp-color-status-danger-foreground: #FFB4AD;
+  --cp-color-status-danger-background: #42272C;
+  --cp-color-status-danger-border: #6E3A40;
+  --cp-color-status-info-foreground: #A8C8FF;
+  --cp-color-status-info-background: #213653;
+  --cp-color-status-info-border: #34507A;
+  --cp-color-status-neutral-foreground: #B4C2D1;
+  --cp-color-status-neutral-background: #1A2B3F;
+  --cp-color-overlay: #00000099;
+  --cp-color-shadow: #00000066;
+  --cp-color-shadow-soft: #0000001F;
+  --cp-color-scroll-shadow: #0000008C;
+  --cp-brand-ink: #FFFFFF;
+  --cp-brand-accent: #5DD6C7;
+  --cp-brand-inverse-ink: #FFFFFF;
+  --cp-brand-inverse-accent: #5DD6C7;
+}
+
+:root {
+  --cp-font-family: Lato, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cp-font-weight-regular: 400;
+  --cp-font-weight-strong: 700;
+  --cp-font-size-body: 1rem;
+  --cp-font-size-label: 0.875rem;
+  --cp-font-size-caption: 0.875rem;
+  --cp-font-size-metadata: 0.75rem;
+  --cp-font-size-section: 1.25rem;
+  --cp-font-size-page: 1.75rem;
+  --cp-font-size-metric: 2rem;
+  --cp-line-height-body: 1.5;
+  --cp-line-height-heading: 1.25;
+  --cp-space-1: 0.25rem;
+  --cp-space-2: 0.5rem;
+  --cp-space-3: 0.75rem;
+  --cp-space-4: 1rem;
+  --cp-space-5: 1.25rem;
+  --cp-space-6: 1.5rem;
+  --cp-space-8: 2rem;
+  --cp-space-10: 2.5rem;
+  --cp-space-12: 3rem;
+  --cp-radius-control: 10px;
+  --cp-radius-card: 16px;
+  --cp-radius-dialog: 16px;
+  --cp-radius-badge: 999px;
+  --cp-control-height: 48px;
+  --cp-table-row-height: 52px;
+  --cp-touch-target: 48px;
+  --cp-icon-size: 24px;
+  --cp-focus-width: 3px;
+  --cp-focus-offset: 3px;
+  --cp-sidebar-width: 244px;
+  --cp-content-max: 1550px;
+  --cp-motion-fast: 150ms;
+  --cp-motion-normal: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --cp-motion-fast: 0ms; --cp-motion-normal: 0ms; }
+}

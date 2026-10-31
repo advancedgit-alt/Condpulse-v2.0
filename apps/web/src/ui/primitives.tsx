@@ -2,11 +2,29 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useCooldown } from './cooldown';
+import { BRAND_BUILDINGS, BRAND_SYMBOL_STROKE, BRAND_SYMBOL_VIEWBOX, BRAND_VIEWBOX, BRAND_WORD_ACCENT, BRAND_WORD_INK } from './brandLogo';
+import { useBranding, useTheme } from './theme/ThemeContext';
 
-export function Brand({ light = false }: { light?: boolean }) {
-  return <span className={`brand${light ? ' brand-light' : ''}`} aria-label="CondPulse">
-    <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
-    <span>Cond<span className="brand-accent">Pulse</span></span>
+/**
+ * Marca canônica CondPulse (ADR-0010). `light` = superfície inversa (barra lateral, login): versão negativa.
+ * `compact` = só o símbolo, para espaços menores que o mínimo do horizontal (160 px). Dentro do shell, um
+ * condomínio com logo próprio validado (white label) aparece no lugar, com o nome como texto alternativo.
+ */
+export function Brand({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
+  const branding = useBranding();
+  const { theme } = useTheme();
+  const tenantLogo = light || theme === 'dark' ? branding?.logo.dark : branding?.logo.light;
+  const className = `brand${light ? ' brand-light' : ''}${compact ? ' brand-compact' : ''}`;
+  if (tenantLogo) return <span className={className}><img className="brand-tenant" src={tenantLogo} alt={branding?.displayName ?? 'Logo do condomínio'} /></span>;
+  return <span className={className}>
+    <svg className="brand-logo" viewBox={compact ? BRAND_SYMBOL_VIEWBOX : BRAND_VIEWBOX} role="img" aria-label="CondPulse" focusable="false">
+      <path className="brand-stroke" d={BRAND_SYMBOL_STROKE} strokeWidth="25" strokeLinecap="round" />
+      <path className="brand-fill-accent" d={BRAND_BUILDINGS} />
+      {compact ? null : <>
+        {BRAND_WORD_INK.map(([x, d]) => <path key={x} className="brand-ink" d={d} transform={`translate(${x},146) scale(0.051,-0.051)`} />)}
+        {BRAND_WORD_ACCENT.map(([x, d]) => <path key={x} className="brand-fill-accent" d={d} transform={`translate(${x},146) scale(0.051,-0.051)`} />)}
+      </>}
+    </svg>
   </span>;
 }
 

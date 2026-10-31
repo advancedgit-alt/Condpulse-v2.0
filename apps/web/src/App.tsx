@@ -19,6 +19,8 @@ import { OwnerRentalPage, rentalKey } from './ui/Rental';
 import { UnitFinancePage, financeRoles } from './ui/Finance';
 import { rental } from './api/rental';
 import { Brand, Icon, Loading, OfflineNotice, type IconName } from './ui/primitives';
+import { BrandingProvider, ThemeProvider, ThemeToggle, useBrandingStyle } from './ui/theme/ThemeContext';
+import type { TenantBrandingConfig } from './ui/theme/branding';
 import './styles.css';
 
 export default function App() {
@@ -26,7 +28,7 @@ export default function App() {
     queries: { retry: false, staleTime: 0, gcTime: 0, refetchOnWindowFocus: true },
     mutations: { retry: false },
   } }));
-  return <QueryClientProvider client={queries}><BrowserRouter><AuthProvider>
+  return <ThemeProvider><QueryClientProvider client={queries}><BrowserRouter><AuthProvider>
     <a href="#main-content" className="skip-link">Ir para o conteúdo</a><OfflineNotice />
     <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route path="/convite-gestor" element={<InvitationPage key="manager" kind="manager" />} /><Route path="/recuperar-acesso" element={<RecoveryPage />} /><Route path="/visita" element={<PermitLinkPage />} /><Route element={<ProtectedShell />}>
       <Route path="/contextos" element={<ContextPage />} />
@@ -47,7 +49,7 @@ export default function App() {
       <Route path="/master/condominios/:tenantId" element={<PlatformPage />} />
       <Route path="*" element={<Navigate to="/contextos" replace />} />
     </Route></Routes>
-  </AuthProvider></BrowserRouter></QueryClientProvider>;
+  </AuthProvider></BrowserRouter></QueryClientProvider></ThemeProvider>;
 }
 
 function ProtectedShell() {
@@ -131,12 +133,16 @@ function Shell() {
     : portaria ? conciergeSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/portaria/${tenantId}/${item.id}`, current: item.id === conciergeSection }))
     : contextSelected ? residentItems.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `${residence}/${item.id}`, current: item.id === residentSection }))
     : [{ id: 'contextos', label: 'Seu contexto', icon: 'home', to: '/contextos', current: true }];
-  return <div className={`app-frame${menuOpen ? ' menu-open' : ''}`}>
+  // White label (ADR-0010, fase 1): ainda sem fonte no servidor; com configuração, os tokens de ação/acento e o logo
+  // do condomínio valem só dentro do shell, com fallback por contraste para o padrão CondPulse.
+  const brandingConfig: TenantBrandingConfig | undefined = undefined;
+  const { branding, style: brandingStyle } = useBrandingStyle(brandingConfig);
+  return <BrandingProvider value={branding}><div className={`app-frame${menuOpen ? ' menu-open' : ''}`} style={brandingStyle}>
     <aside className="sidebar" id="app-sidebar"><div className="sidebar-top"><Link className="brand-link" to="/contextos" aria-label="CondPulse, selecionar unidade"><Brand light /></Link>
       <button ref={menuClose} type="button" className="menu-close" onClick={closeMenu} aria-label="Fechar menu"><Icon name="close" /></button></div>
       <div className="sidebar-label">{managing ? 'GESTÃO DO CONDOMÍNIO' : mastering ? 'ADMINISTRAÇÃO DA PLATAFORMA' : concierging ? 'PORTARIA' : 'PORTAL DO MORADOR'}</div>
       <nav className="sidebar-nav" aria-label="Navegação principal">{navItems.map((item) => <Link key={item.id} className={`nav-item${item.current ? ' active' : ''}`} aria-current={item.current ? 'page' : undefined} to={item.to}><Icon name={item.icon} /><span>{item.label}</span>{item.current ? <span className="nav-dot" /> : null}</Link>)}</nav>
       <div className="sidebar-bottom"><div className="sidebar-line" /><span className="sidebar-caption">Um condomínio.<br />Muitas boas conexões.</span><p>CondPulse · Vida em comunidade</p></div></aside>
     <div className="sidebar-backdrop" aria-hidden="true" onClick={closeMenu} />
-    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand /></div><span className="header-breadcrumb">{managing ? 'Gestão do condomínio' : mastering ? 'Administração da plataforma' : concierging ? 'Portaria' : 'Portal do morador'}<span aria-hidden="true"> / </span><strong>{mastering ? 'Painel master' : (managing ? managed?.tenantName : concierging ? portaria?.tenantName : tenant?.tenantName) ?? 'Seu acesso'}</strong></span></div><div className="header-actions">{contextSelected || managing || mastering || concierging ? <button className="button button-secondary button-compact" onClick={() => void changeContext()} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : managing || mastering || concierging ? 'Trocar acesso' : 'Trocar unidade'}</span></button> : null}<button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.filter((item) => item.id !== 'financeiro' || residentSection === 'financeiro').map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && auth.identity && tenantId && unitId ? <UnitEvents accountId={auth.identity.accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice />{contextSelected && owner && ownerRental.isPending ? <Loading label="Conferindo a locação da unidade…" /> : rented && residentSection !== 'inquilinos' ? <Navigate to={`${residence}/inquilinos`} replace /> : <Outlet />}</main><footer className="app-footer"><span>CondPulse</span><span>{managing ? 'Gestão do condomínio · Ações exigem segundo fator' : mastering ? 'Administração da plataforma · Ações exigem segundo fator' : concierging ? 'Portaria · Ações exigem segundo fator' : 'Portal do morador · Seu acesso é pessoal'}</span></footer></div></div>;
+    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand compact /></div><span className="header-breadcrumb">{managing ? 'Gestão do condomínio' : mastering ? 'Administração da plataforma' : concierging ? 'Portaria' : 'Portal do morador'}<span aria-hidden="true"> / </span><strong>{mastering ? 'Painel master' : (managing ? managed?.tenantName : concierging ? portaria?.tenantName : tenant?.tenantName) ?? 'Seu acesso'}</strong></span></div><div className="header-actions">{contextSelected || managing || mastering || concierging ? <button className="button button-secondary button-compact" onClick={() => void changeContext()} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : managing || mastering || concierging ? 'Trocar acesso' : 'Trocar unidade'}</span></button> : null}<ThemeToggle /><button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.filter((item) => item.id !== 'financeiro' || residentSection === 'financeiro').map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && auth.identity && tenantId && unitId ? <UnitEvents accountId={auth.identity.accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice />{contextSelected && owner && ownerRental.isPending ? <Loading label="Conferindo a locação da unidade…" /> : rented && residentSection !== 'inquilinos' ? <Navigate to={`${residence}/inquilinos`} replace /> : <Outlet />}</main><footer className="app-footer"><span>CondPulse</span><span>{managing ? 'Gestão do condomínio · Ações exigem segundo fator' : mastering ? 'Administração da plataforma · Ações exigem segundo fator' : concierging ? 'Portaria · Ações exigem segundo fator' : 'Portal do morador · Seu acesso é pessoal'}</span></footer></div></div></BrandingProvider>;
 }

@@ -1,0 +1,14 @@
+{
+  "name": "CondPulse",
+  "short_name": "CondPulse",
+  "description": "CondPulse — sua rotina no condomínio, com clareza e segurança.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#F4F7FA",
+  "theme_color": "#102A43",
+  "icons": [
+    { "src": "/condpulse-favicon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/condpulse-favicon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
