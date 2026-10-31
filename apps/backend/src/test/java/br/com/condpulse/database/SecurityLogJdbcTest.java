@@ -93,7 +93,9 @@ class SecurityLogJdbcTest {
   assertTrue(log.page(manager,db.tenantA,AAL2,SecurityLogModels.Filter.of(null,null,null,Instant.parse("2001-01-01T00:00:00Z"),
    Instant.parse("2001-01-02T00:00:00Z"),null,10)).events().isEmpty());
   // Isolamento: os eventos do condomínio B não aparecem para a gestão do A.
-  assertTrue(page.events().stream().noneMatch(e->e.hash().equals(db.adminString("select hash from cp.security_log where tenant_id=? order by seq limit 1",db.tenantB))));
+  String firstOfB=db.adminString("select hash from cp.security_log where tenant_id=? order by seq limit 1",db.tenantB);
+  assertNotNull(firstOfB);
+  assertTrue(page.events().stream().noneMatch(e->e.hash().equals(firstOfB)));
  }
 
  @Test void onlyStaffWithCapabilityAndSecondFactorReads() throws Exception {
