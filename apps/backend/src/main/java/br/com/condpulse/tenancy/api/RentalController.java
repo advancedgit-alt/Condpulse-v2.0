@@ -1,5 +1,6 @@
 package br.com.condpulse.tenancy.api;
 
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import java.util.List;
 import java.util.UUID;
 import br.com.condpulse.tenancy.application.MembershipModels;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Proprietário × inquilino (V034), atrás da mesma flag da gestão de vínculos (CP_MANAGEMENT_ENABLED). */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.management.enabled",havingValue="true")
+@TenantModuleExempt("Locação da unidade: cadastro base do condomínio.")
 public class RentalController {
  private final RentalService rentals;
  public RentalController(RentalService rentals) { this.rentals=rentals; }

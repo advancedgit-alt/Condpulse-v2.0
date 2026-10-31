@@ -1,5 +1,7 @@
 package br.com.condpulse.parcels.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.List;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Encomendas (CP-029/CP-030/CP-031), atrás de CP_PARCELS_ENABLED=false. Capacidade e vínculo conferidos no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.parcels.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.PARCELS)
 public class ParcelController {
  private final ParcelService service;
  public ParcelController(ParcelService service) { this.service=service; }

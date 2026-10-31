@@ -1,5 +1,7 @@
 package br.com.condpulse.accessinstall.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accessinstall.application.InstallModels;
 import br.com.condpulse.accessinstall.application.InstallService;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Equipamentos, canais, vínculos e aceite (MASTER de implantação) e assinatura das regras (gestão) — AC-004 parte 2, V042. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessInstallController {
  private final InstallService install;
  public AccessInstallController(InstallService install) { this.install=install; }

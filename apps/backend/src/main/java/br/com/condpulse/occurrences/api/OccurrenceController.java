@@ -1,5 +1,7 @@
 package br.com.condpulse.occurrences.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.occurrences.application.OccurrenceModels;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Ocorrências da portaria (CP-027), na mesma flag das visitas e acessos (CP_VISITS_ENABLED). AAL2 e capacidade no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.visits.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.VISITS)
 public class OccurrenceController {
  private final OccurrenceService service;
  public OccurrenceController(OccurrenceService service) { this.service=service; }

@@ -203,6 +203,9 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/platform/outbox/tasks/*/replay").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*").authenticated()
+    // Módulos por condomínio (V045): tenants.read para ler, tenant_modules.manage para alterar (no serviço e no banco).
+    .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*/modules").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*/modules").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/tenants","/v1/platform/tenants/*/manager-invitations",
       "/v1/platform/tenants/*/manager-invitations/*/revoke","/v1/manager-invitations/accept").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",

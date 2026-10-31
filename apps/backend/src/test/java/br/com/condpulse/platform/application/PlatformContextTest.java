@@ -15,7 +15,9 @@ class PlatformContextTest {
   var aal2=new PlatformContext(ACCOUNT,"PLATFORM_ADMIN",AssuranceLevel.AAL2);
   assertEquals(Set.of(PlatformCapability.READ_TENANTS,PlatformCapability.MANAGE_TENANTS,PlatformCapability.READ_AUDIT,
    PlatformCapability.READ_BILLING,PlatformCapability.MANAGE_BILLING,PlatformCapability.OPERATE_OUTBOX,
-   PlatformCapability.MANAGE_TECHNICAL_GRANTS,PlatformCapability.MANAGE_ACCESS_CATALOG,PlatformCapability.APPROVE_HOMOLOGATION),aal2.effectiveCapabilities());
+   PlatformCapability.MANAGE_TECHNICAL_GRANTS,PlatformCapability.MANAGE_ACCESS_CATALOG,PlatformCapability.APPROVE_HOMOLOGATION,
+   PlatformCapability.MANAGE_TENANT_MODULES),aal2.effectiveCapabilities());
+  assertEquals("tenant_modules.manage",PlatformCapability.MANAGE_TENANT_MODULES.key());
   assertEquals("outbox.operate",PlatformCapability.OPERATE_OUTBOX.key());
   assertTrue(new PlatformContext(ACCOUNT,"PLATFORM_ADMIN",AssuranceLevel.AAL1).effectiveCapabilities().isEmpty());
   assertTrue(new PlatformContext(ACCOUNT,"MANAGER",AssuranceLevel.AAL2).effectiveCapabilities().isEmpty());

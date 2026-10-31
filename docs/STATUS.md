@@ -59,6 +59,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - Continuidade autônoma: [PROMPT_CONTINUIDADE.md](PROMPT_CONTINUIDADE.md) define o backlog e o ciclo de entrega.
 - OK do responsável para integrar a produção dado em 30/10/2026; execução em andamento conforme [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
 
+- Central administradora, fatia 2 — módulos por condomínio (V045, branch `feat/central-modules`, PR aberto, **não aplicado** em banco remoto, nada exercitado com login real): `platform.tenant_modules` (sem linha = liberado, estado atual de todo condomínio), capacidade de plataforma `tenant_modules.manage`, `GET/PUT /v1/platform/tenants/{id}/modules` pela versão lida com motivo e evento `TENANT_MODULE_ENABLED/DISABLED` exigido no COMMIT; rotas de reservas, encomendas, visitas, avisos, pedidos, financeiro, credenciais e acesso facial respondem `403 MODULE_DISABLED` quando o condomínio está suspenso no módulo (conferido pelos executores do condomínio e técnico na mesma transação, depois do vínculo); link público de visita fecha com a resposta neutra; `/v1/me` traz `tenantModules` para o menu. Flag global continua mandando. Evidência local: suíte PostgreSQL (`tests/database/run.py`, PostgreSQL 16 descartável) 1353 verificações verdes com as novas (base com V044 de direitos faciais); compilação, unitários e JDBC (`TenantModuleJdbcTest`, caso novo em `PermitLinkJdbcTest`) só no CI do PR (Maven Central inacessível nesta sessão). Pendências: worker/outbox e sincronização facial não consultam o módulo (notificações já enfileiradas seguem); tela da central (fatia 6).
+
 ## Acessibilidade automática — CP-007/CP-053
 
 - Merge `2749b42` (PR #88, CI 41022714090 verde).
