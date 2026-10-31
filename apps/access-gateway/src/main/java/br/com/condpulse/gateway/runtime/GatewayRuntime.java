@@ -61,10 +61,16 @@ public final class GatewayRuntime implements AutoCloseable {
 
  public void start() {
   if(inbound!=null) inbound.start();
-  scheduler.scheduleWithFixedDelay(guard("plataforma",()->{ service.pullFromCentral(); service.processQueues(20); service.publishPendingResults(); }),0,2,TimeUnit.SECONDS);
-  scheduler.scheduleWithFixedDelay(guard("eventos",()->{ service.pollEvents(); service.forwardEvents(); service.forwardDecisions(); service.checkHealth(); }),1,10,TimeUnit.SECONDS);
+  // Cada etapa isolada: falha na coleta não impede drenar o que já está gravado, nem a saúde.
+  scheduler.scheduleWithFixedDelay(steps(
+   guard("comandos",service::pullFromCentral),guard("fila",()->service.processQueues(20)),guard("resultados",service::publishPendingResults)),0,2,TimeUnit.SECONDS);
+  scheduler.scheduleWithFixedDelay(steps(
+   guard("coleta",service::pollEvents),guard("envio de eventos",service::forwardEvents),guard("telemetria",service::forwardDecisions),
+   guard("saúde",service::checkHealth)),1,10,TimeUnit.SECONDS);
   LOG.log(System.Logger.Level.INFO,"Gateway iniciado.");
  }
+
+ private static Runnable steps(Runnable... steps) { return ()->{ for(Runnable r:steps) r.run(); }; }
 
  private static Runnable guard(String name,Runnable task) {
   return ()->{
