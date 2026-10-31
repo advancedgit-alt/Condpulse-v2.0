@@ -57,8 +57,8 @@ class AccessAgeJdbcTest {
   db.adminUpdate("delete from cp.age_evidence where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.facial_access_settings where tenant_id in (?,?)",db.tenantA,db.tenantB);
   // Marcas de revogação (V044) citam sujeitos e contextos: saem antes (direitos e marcas na mesma instrução).
-  db.adminUpdate("with g as (delete from cp.access_grants where tenant_id in (?,?)) delete from cp.revocation_markers where tenant_id in (?,?)",
-   db.tenantA,db.tenantB,db.tenantA,db.tenantB);
+  db.adminUpdate("with p as (delete from cp.rights_publications where tenant_id in (?,?)),g as (delete from cp.access_grants where tenant_id in (?,?)) "
+   +"delete from cp.revocation_markers where tenant_id in (?,?)",db.tenantA,db.tenantB,db.tenantA,db.tenantB,db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_subjects where tenant_id in (?,?)",db.tenantA,db.tenantB);
  }
  @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }

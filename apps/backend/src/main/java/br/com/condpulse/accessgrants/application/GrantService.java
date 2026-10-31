@@ -40,8 +40,11 @@ public class GrantService implements SubjectFactsPort {
  private final AgeStore ages;
  private final BirthDateCipher cipher;
  private final AuditRecorder audit;
- public GrantService(TenantTransactionExecutor tenants,GrantStore store,PolicyStore policies,AgeStore ages,BirthDateCipher cipher,AuditRecorder audit) {
+ private final PublicationService publications;
+ public GrantService(TenantTransactionExecutor tenants,GrantStore store,PolicyStore policies,AgeStore ages,BirthDateCipher cipher,AuditRecorder audit,
+   PublicationService publications) {
   this.tenants=tenants; this.store=store; this.policies=policies; this.ages=ages; this.cipher=cipher; this.audit=audit;
+  this.publications=publications;
  }
  private static final int SAMPLE=50,PAGE=500;
 
@@ -70,12 +73,18 @@ public class GrantService implements SubjectFactsPort {
    // 1. Varredura dos ativos da área: vencido expira; o que deixou de valer na origem recebe marca; outra revisão é substituída.
    int expired=0,revoked=0,superseded=0;
    Instant now=Instant.now();
+   // Sujeitos cujo documento por destino pode mudar: publicados no fim da mesma transação (V047).
+   var touched=new java.util.LinkedHashSet<UUID>();
    // Direito com janela futura (reserva ainda por começar) não é "origem inválida": só a origem decide a marca.
+   // Ativos que sobrevivem à varredura, por contexto e origem (a mesma origem de outra derivação é substituída abaixo).
+   var surviving=new HashMap<String,GrantModels.Grant>();
    for(var sw:store.activeInArea(tenant,policy.areaId())) {
     var g=sw.grant();
+    touched.add(g.subjectId());
     if(!g.validUntil().isAfter(now)) { if(store.close(tenant,g.grantId(),g.version(),"EXPIRED","WINDOW_ENDED")) expired++; }
     else if(!sw.originValid()) { store.markGrant(tenant,g.subjectId(),g.grantId(),"ORIGIN_CHANGED"); revoked++; }
     else if(!g.policyVersionId().equals(version.versionId())) { if(store.close(tenant,g.grantId(),g.version(),"SUPERSEDED","POLICY_REDERIVED")) superseded++; }
+    else surviving.put(g.contextId()+"|"+g.originKind()+":"+g.originId(),g);
    }
    // 2. Candidatos: contextos ativos dos tipos elegíveis; acima do limite a derivação é recusada (nunca truncada).
    var kinds=List.copyOf(doc.eligibleContexts());
@@ -91,24 +100,42 @@ public class GrantService implements SubjectFactsPort {
    // 3. Gravação: mesma chave ativa não muda; chave revogada não volta; origem ativa de outra derivação é substituída.
    int created=0,unchanged=0;
    var skipped=new ArrayList<GrantModels.Skip>(plan.skipped());
-   for(var p:plan.grants()) {
+   // Chaves e estados de todas as derivações de uma vez (uma ida ao banco por direito estourava o prazo com centenas).
+   var keys=store.keys(policy.areaId(),version.versionId(),plan.grants());
+   var states=store.keyStates(tenant,keys);
+   for(int i=0;i<plan.grants().size();i++) {
+    var p=plan.grants().get(i);
     var c=p.candidate();
-    String key=store.key(c.subjectId(),c.contextId(),policy.areaId(),version.versionId(),p.originKind(),p.originId(),p.originVersion(),c.restrictionEpoch(),
-     p.ageEvidenceId());
-    String state=store.keyState(tenant,key);
+    touched.add(c.subjectId());
+    String state=states.get(keys.get(i));
     if("ACTIVE".equals(state)) { unchanged++; continue; }
     if("REVOKED".equals(state)) { skipped.add(new GrantModels.Skip(c.contextId(),"REVOKED_KEEPS")); continue; }
-    var same=store.activeSameOrigin(tenant,c.contextId(),policy.areaId(),p.originKind()+":"+p.originId());
-    if(same!=null) { if(!store.close(tenant,same.grantId(),same.version(),"SUPERSEDED","POLICY_REDERIVED")) throw stale(); superseded++; }
-    store.insert(tenant,UUID.randomUUID(),policyId,version.versionId(),policy.areaId(),p,actor);
-    created++;
+    // Cada direito num savepoint: a recusa do banco (origem, vigência ou revogação conferidas de novo) fica registrada por
+    // item e não desfaz os demais.
+    try {
+     int[] replaced={0};
+     publications.item(()->{
+      var same=surviving.get(c.contextId()+"|"+p.originKind()+":"+p.originId());
+      if(same!=null) { if(!store.close(tenant,same.grantId(),same.version(),"SUPERSEDED","POLICY_REDERIVED")) throw stale(); replaced[0]=1; }
+      store.insert(tenant,UUID.randomUUID(),policyId,version.versionId(),policy.areaId(),p,actor);
+      return null;
+     });
+     superseded+=replaced[0];
+     created++;
+    } catch(DataAccessException error) {
+     String sqlState=SqlStates.of(error);
+     if(!"23514".equals(sqlState) && !"23503".equals(sqlState)) throw error;
+     skipped.add(new GrantModels.Skip(c.contextId(),"DB_REFUSED"));
+    }
    }
+   var published=publications.planSubjects(tenant,UUID.randomUUID(),touched,actor);
    var byReason=new LinkedHashMap<String,Integer>();
    for(var s:skipped) byReason.merge(s.reason(),1,Integer::sum);
    var result=new GrantModels.Derivation(version.versionId(),created,unchanged,superseded,expired,revoked,Map.copyOf(byReason),
-    skipped.stream().limit(SAMPLE).toList());
+    skipped.stream().limit(SAMPLE).toList(),published);
    audit.record(tenant,actor,"RIGHTS_DERIVED","ACCESS_POLICY",policyId,"criados="+created+" mantidos="+unchanged+" substituidos="+superseded
-    +" expirados="+expired+" revogados="+revoked+" nao_atendidos="+skipped.size());
+    +" expirados="+expired+" revogados="+revoked+" nao_atendidos="+skipped.size()+" publicacoes="+published.created()
+    +" publicacao_recusada="+published.failedByReason().values().stream().mapToInt(Integer::intValue).sum());
    return result;
   }));
  }

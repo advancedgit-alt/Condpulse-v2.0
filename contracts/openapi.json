@@ -18340,7 +18340,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V045).",
+        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V047).",
         "parameters": [
           {
             "name": "tenantId",
@@ -18785,7 +18785,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V045).",
+        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V047).",
         "parameters": [
           {
             "name": "tenantId",
@@ -19851,6 +19851,174 @@
           },
           "503": {
             "description": "TENANT_MODULE_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-publications/plan": {
+      "post": {
+        "operationId": "managementPlanRightsPublications",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Compila os direitos vigentes por destino (memberships.manage + policy.publish, AAL2) e grava um trabalho pendente por equipamento cujo documento mudou. Trabalho não é sucesso físico; revogações já são publicadas pelo banco na transação da marca. Sujeito recusado pelo banco fica registrado sem desfazer os demais.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicationPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPlan"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), PUBLICATION_FORBIDDEN"
+          },
+          "503": {
+            "description": "PUBLICATION_UNAVAILABLE"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "400": {
+            "description": "PUBLICATION_SUBJECTS_INVALID"
+          },
+          "409": {
+            "description": "PUBLICATION_TOO_MANY_SUBJECTS ou PUBLICATION_CONFLICT"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-publications": {
+      "get": {
+        "operationId": "managementListRightsPublications",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Trabalhos de publicação por destino (memberships.manage, AAL2), filtráveis por operação, sujeito e equipamento; até 500, com resumo por estado sobre todas as linhas do filtro.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RightsPublicationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), PUBLICATION_FORBIDDEN"
+          },
+          "503": {
+            "description": "PUBLICATION_UNAVAILABLE"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
           }
         }
       }
@@ -33054,7 +33222,8 @@
           "expired",
           "revoked",
           "skippedByReason",
-          "skippedSample"
+          "skippedSample",
+          "publication"
         ],
         "properties": {
           "policyVersionId": {
@@ -33093,10 +33262,14 @@
                   "format": "uuid"
                 },
                 "reason": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Motivo; DB_REFUSED quando o banco recusou o direito (registrado por item)."
                 }
               }
             }
+          },
+          "publication": {
+            "$ref": "#/components/schemas/PublicationPlan"
           }
         }
       },
@@ -33548,6 +33721,286 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          }
+        }
+      },
+      "PublicationPlanRequest": {
+        "type": "object",
+        "properties": {
+          "subjectIds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "minItems": 1,
+            "maxItems": 500,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sujeitos a compilar; ausente compila todos com direito ativo ou algo já publicado (até 2000, acima disso 409)."
+          }
+        }
+      },
+      "PublicationPlan": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "subjects",
+          "created",
+          "failedByReason",
+          "failedSample"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjects": {
+            "type": "integer"
+          },
+          "created": {
+            "type": "integer",
+            "description": "Trabalhos pendentes gravados; não é aplicação no equipamento."
+          },
+          "failedByReason": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Contagem por motivo de direitos fora do documento ou trabalhos recusados, separada de created."
+          },
+          "failedSample": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "subjectId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "DB_REFUSED",
+                    "DB_CONFLICT",
+                    "DOCUMENT_TOO_LARGE",
+                    "SCHEDULE_NOT_REPRESENTABLE",
+                    "ASSISTANCE_REQUIRED",
+                    "COMPANION_NOT_VERIFIED",
+                    "UNSUPPORTED_RESTRICTION",
+                    "HOMOLOGATION_NOT_APPROVED",
+                    "CAPABILITY_MISSING",
+                    "DEVICE_INACTIVE"
+                  ],
+                  "description": "Motivo de o direito ficar fora do documento do destino (falha fechada: o compilado não o concede e retira o que estava publicado; a retirada conta em created) ou de o banco recusar o trabalho."
+                },
+                "deviceId": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RightsPublication": {
+        "type": "object",
+        "required": [
+          "publicationId",
+          "operationId",
+          "subjectId",
+          "deviceId",
+          "origin",
+          "action",
+          "priority",
+          "desiredVersion",
+          "state",
+          "confirmationLevel",
+          "version"
+        ],
+        "properties": {
+          "publicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "PLAN",
+              "REVOCATION"
+            ]
+          },
+          "revocationMarkerId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "APPLY_RIGHTS",
+              "REVOKE_RIGHTS",
+              "REVOKE_ALL"
+            ]
+          },
+          "priority": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ],
+            "description": "0 = revogação ou redução (sai antes de qualquer ampliação)."
+          },
+          "desiredVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rightsGeneration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectRestrictionEpoch": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "installationRevision": {
+            "type": "integer"
+          },
+          "entries": {
+            "type": "integer"
+          },
+          "documentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACK",
+              "APPLIED_UNVERIFIED",
+              "CONFIRMED",
+              "PARTIAL",
+              "FAILED",
+              "UNKNOWN",
+              "SUPERSEDED"
+            ],
+            "description": "Só o executor relata estados além de PENDING; CONFIRMED exige leitura de volta igual ao documento."
+          },
+          "confirmationLevel": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "TRANSPORT_ACK",
+              "STATE_READ"
+            ]
+          },
+          "resultCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "reportedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "confirmedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "supersededBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RightsPublicationPage": {
+        "type": "object",
+        "required": [
+          "publications",
+          "summary",
+          "truncated"
+        ],
+        "properties": {
+          "publications": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/RightsPublication"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "required": [
+              "byState",
+              "total",
+              "destinations",
+              "confirmedDestinations",
+              "allConfirmed"
+            ],
+            "properties": {
+              "byState": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "total": {
+                "type": "integer"
+              },
+              "allConfirmed": {
+                "type": "boolean",
+                "description": "Verdadeiro só quando o trabalho mais novo de cada destino tocado pelo filtro está CONFIRMED (superado nunca encerra o destino)."
+              },
+              "destinations": {
+                "type": "integer",
+                "description": "Destinos (sujeito × equipamento) tocados pelo filtro."
+              },
+              "confirmedDestinations": {
+                "type": "integer",
+                "description": "Destinos cujo trabalho mais novo (em qualquer operação, inclusive sucessor de superado) está CONFIRMED."
+              }
+            }
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       }

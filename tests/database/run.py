@@ -3797,14 +3797,15 @@ def facial_homologation(platform_actor, identifier, approved, firmware, pilot=Tr
               f"UPDATE platform.access_homologations SET status=platform.homologation_next(status,'{decision}'),version=version+1 WHERE id='{identifier}'",
               actor=platform_actor, role="cp_api")
 
-def facial_installation(n, approved, tenant=None):
+def facial_installation(n, approved, tenant=None, readers=None):
     """Monta pelos fluxos reais (gatilhos, trilhas e RLS ligados, sem replica) uma passagem comissionada no condominio A:
     combinacao homologada para piloto pela plataforma, areas pela gestao, ponto, equipamento, canal, vinculo e aceite
-    pelo MASTER de implantacao, assinatura das regras pela gestao. n distingue os identificadores (1 digito hex)."""
+    pelo MASTER de implantacao, assinatura das regras pela gestao. n distingue os identificadores (1 digito hex).
+    readers=(entrada, saida): leitores DE/DX no vinculo com esses sentidos no direction_map."""
     tenant = tenant or TA
     u = lambda kind, i=1: f"4{n}{kind}00000-0000-4000-8000-{i:012x}"
     ids = dict(PL=f"10000000-0000-4000-8000-00000000{n}0f1", MG=f"10000000-0000-4000-8000-00000000{n}0f2", MI=f"10000000-0000-4000-8000-00000000{n}0f3",
-               G=u("a"), HO=u("b"), HALL=u("c", 1), AREA=u("c", 2), PT=u("d"), KA=u("e"), DV=u("f"), CH=u("f", 2), BD=u("9"), IA=u("8"))
+               G=u("a"), HO=u("b"), HALL=u("c", 1), AREA=u("c", 2), PT=u("d"), KA=u("e"), DV=u("f"), CH=u("f", 2), DE=u("f", 3), DX=u("f", 4), BD=u("9"), IA=u("8"))
     query(f"""
         INSERT INTO platform.accounts(id,status) VALUES('{ids['PL']}','ACTIVE'),('{ids['MG']}','ACTIVE'),('{ids['MI']}','ACTIVE');
         INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{tenant}','{ids['MG']}',NULL,'GESTAO FICTICIA','MANAGER','ACTIVE');
@@ -3826,10 +3827,16 @@ def facial_installation(n, approved, tenant=None):
           f"VALUES('{ids['PT']}','{tenant}','P{n}','Porta ficticia','{ids['HALL']}','{ids['AREA']}','DOOR','FROM_TO','FREE_EGRESS','MAPPED','{ids['MI']}'); "
           f"INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label,device_role,homologation_id,registered_by) VALUES('{ids['DV']}',"
           f"'{tenant}','{ids['KA']}','ctrl-{n}','Controlador ficticio','CONTROLLER','{ids['HO']}','{ids['MI']}'); "
-          f"INSERT INTO cp.device_channels(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,status,created_by) VALUES('{ids['CH']}',"
+          + (f"INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label,device_role,homologation_id,registered_by) VALUES"
+             f"('{ids['DE']}','{tenant}','{ids['KA']}','leitor-e-{n}','Leitor ficticio','READER','{ids['HO']}','{ids['MI']}'),"
+             f"('{ids['DX']}','{tenant}','{ids['KA']}','leitor-s-{n}','Leitor ficticio','READER','{ids['HO']}','{ids['MI']}'); " if readers else "")
+          + f"INSERT INTO cp.device_channels(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,status,created_by) VALUES('{ids['CH']}',"
           f"'{tenant}','{ids['DV']}','relay','1','ACCESS_ACTUATOR','VERIFIED','{ids['MI']}'); "
-          f"INSERT INTO cp.point_bindings(id,tenant_id,point_id,actuator_channel_id,controller_device_id,homologation_id,direction_map,wiring_evidence_ref,created_by) "
-          f"VALUES('{ids['BD']}','{tenant}','{ids['PT']}','{ids['CH']}','{ids['DV']}','{ids['HO']}','{{}}','ligacao/ficticia','{ids['MI']}'); "
+          f"INSERT INTO cp.point_bindings(id,tenant_id,point_id,actuator_channel_id,controller_device_id,entry_reader_device_id,exit_reader_device_id,"
+          f"homologation_id,direction_map,wiring_evidence_ref,created_by) VALUES('{ids['BD']}','{tenant}','{ids['PT']}','{ids['CH']}','{ids['DV']}',"
+          + (f"'{ids['DE']}','{ids['DX']}','{ids['HO']}','{{\"entryReader\":\"{readers[0]}\",\"exitReader\":\"{readers[1]}\"}}'" if readers
+             else f"NULL,NULL,'{ids['HO']}','{{}}'")
+          + f",'ligacao/ficticia','{ids['MI']}'); "
           f"INSERT INTO cp.installation_acceptances(id,tenant_id,plant_ref,plant_hash,topology_manifest_ref,topology_hash,capability_envelope_hash,test_suite_version,"
           f"test_report_ref,critical_tests_pending,critical_tests_failed,emergency_test_ref,rollback_plan_ref,created_by) VALUES('{ids['IA']}','{tenant}',"
           f"'planta/ficticia','{'a'*64}','topologia/ficticia','{'b'*64}','{'c'*64}','hac-1.1','relatorio/ficticio',0,0,'emergencia/ficticia','rollback/ficticio','{ids['MI']}'); "
@@ -3847,7 +3854,8 @@ def facial_cleanup(ids, tenant=None):
     tenant = tenant or TA
     actors = "','".join([ids["PL"], ids["MG"], ids["MI"]])
     query(f"DELETE FROM cp.audit_log WHERE actor_id in ('{actors}'); "
-          f"WITH g AS (DELETE FROM cp.access_grants WHERE tenant_id='{tenant}') DELETE FROM cp.revocation_markers WHERE tenant_id='{tenant}'; "
+          f"WITH p AS (DELETE FROM cp.rights_publications WHERE tenant_id='{tenant}'), g AS (DELETE FROM cp.access_grants WHERE tenant_id='{tenant}') "
+          f"DELETE FROM cp.revocation_markers WHERE tenant_id='{tenant}'; "
           f"WITH v AS (DELETE FROM cp.access_policy_validations WHERE tenant_id='{tenant}') DELETE FROM cp.access_policy_versions WHERE tenant_id='{tenant}'; "
           f"DELETE FROM cp.access_policies WHERE tenant_id='{tenant}'; DELETE FROM cp.point_bindings WHERE tenant_id='{tenant}'; "
           f"DELETE FROM cp.installation_acceptances WHERE tenant_id='{tenant}'; DELETE FROM cp.device_channels WHERE tenant_id='{tenant}'; "
@@ -4279,6 +4287,12 @@ def grant_checks():
     expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G3}'") == "REVOKED:ORIGIN_CHANGED",
            "varredura grava a marca do direito que deixou de valer")
     expect(error(both + scan + guest.replace(G3, G4), "23514", **as_mgr), "convite cancelado nao gera direito novo")
+    expect(value(both + scan + f"select count(*) from cp.access_grants g where g.tenant_id='{TA}' and cp.access_grant_current(g.tenant_id,g.id,"
+                 f"greatest(clock_timestamp(),g.valid_from)) <> (g.id in (select cp.access_grants_current_now('{TA}',null,null)))", **as_mgr) == "0"
+           and value(both + scan + f"select count(*) from cp.access_grants g where g.tenant_id='{TA}' and g.subject_id='{SV}' and "
+                 f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
+                 f"(select cp.access_grants_current_now('{TA}','{SV}',null)))", **as_mgr) == "0",
+           "V047: conjunto vigente igual a cp.access_grant_current para todos os direitos (convites, reservas, bloqueios, marcas)")
     # Corrida cartao x bloqueio (mesmo lock por condominio): nenhuma ordem deixa cartao ativo para sujeito bloqueado.
     def card(identifier):
         return (mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
@@ -4312,7 +4326,8 @@ def grant_checks():
     expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname in "
                  "('access_grants','revocation_markers') and c.relrowsecurity and c.relforcerowsecurity") == "2", "direitos e marcas com RLS FORCE")
     query(f"DELETE FROM cp.outbox WHERE aggregate_id='{CR}'; DELETE FROM cp.credential_syncs WHERE credential_id='{CR}'; DELETE FROM cp.access_credentials WHERE id='{CR}'")
-    query(f"WITH g AS (DELETE FROM cp.access_grants WHERE tenant_id='{TA}') DELETE FROM cp.revocation_markers WHERE tenant_id='{TA}'; "
+    query(f"WITH p AS (DELETE FROM cp.rights_publications WHERE tenant_id='{TA}'), g AS (DELETE FROM cp.access_grants WHERE tenant_id='{TA}') "
+          f"DELETE FROM cp.revocation_markers WHERE tenant_id='{TA}'; "
           f"DELETE FROM cp.subject_contexts WHERE subject_id in ('{SRS}','{SV}'); DELETE FROM cp.access_subjects WHERE id in ('{SRS}','{SV}'); "
           f"DELETE FROM cp.visit_permits WHERE id='{PV}'; DELETE FROM cp.visitors WHERE id='{VV}'; "
           f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
@@ -4330,6 +4345,193 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
+def publication_checks():
+    """V047 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
+    estados so por relatorio do executor; revogacao publicada na mesma transacao da marca e antes de ampliacao."""
+    caps = ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"]
+    ids = facial_installation(7, caps, readers=("TO_FROM", "FROM_TO"))
+    MG, AR, DV, DE, DX = ids["MG"], ids["AREA"], ids["DV"], ids["DE"], ids["DX"]
+    RS = "10000000-0000-4000-8000-0000000007a1"
+    MRS, SRS, CRS = "45100000-0000-4000-8000-000000000001", "45200000-0000-4000-8000-000000000001", "45300000-0000-4000-8000-000000000001"
+    CF2, CF3, CF4 = (f"45300000-0000-4000-8000-00000000000{i}" for i in (2, 3, 4))
+    PO, V1, L1 = "45400000-0000-4000-8000-000000000001", "45500000-0000-4000-8000-000000000001", "45600000-0000-4000-8000-000000000001"
+    G1, G2, G3, G4 = (f"45700000-0000-4000-8000-00000000000{i}" for i in range(1, 5))
+    OP = "45800000-0000-4000-8000-000000000001"
+    both = "SET LOCAL app.capabilities='memberships.manage,policy.edit,policy.publish'; SET LOCAL app.policy_destination_scan='on'; "
+    noscan = "SET LOCAL app.capabilities='memberships.manage,policy.edit,policy.publish'; "
+    mm = "SET LOCAL app.capabilities='memberships.manage'; "
+    as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
+    worker = dict(tenant=TA, actor=None, role="cp_worker")
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{RS}','ACTIVE'); INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) "
+          f"VALUES('{MRS}','{TA}','{RS}','{UA}','MORADOR PUBLICACAO','RESIDENT','ACTIVE')")
+    days = '["MON","TUE","WED","THU","FRI","SAT","SUN"]'
+    def policy_doc(start, end):
+        return ('{"schemaVersion":"1.0","name":"Area","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT","EMPLOYEE"],'
+                '"visitorPolicy":"DENY","weeklyWindows":[{"weekdays":%s,"startLocalTime":"%s","endLocalTime":"%s","crossesMidnight":false}],'
+                '"reservation":{"mode":"NOT_REQUIRED","entryGraceBeforeSeconds":0,"entryGraceAfterSeconds":0}}' % (AR, days, start, end))
+    query(both + f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Area','{MG}')", **as_mgr)
+    rev = value(f"select cp.installation_current_revision('{TA}')")
+    def approve(version, validation, document):
+        query(both + f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
+              f"VALUES('{version}','{TA}','{PO}','1.0','{document}'::jsonb,'Regra ficticia de publicacao','{MG}')", **as_mgr)
+        h = value(f"select canonical_hash from cp.access_policy_versions where id='{version}'")
+        query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
+              f"affected_point_ids,required_capabilities,validated_by) VALUES('{validation}','{TA}','{PO}','{version}','{h}',{rev},'VALIDATED','[]'::jsonb,"
+              f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
+              f"UPDATE cp.access_policy_versions SET validation_id='{validation}',state='VALIDATED',version=1 WHERE id='{version}'; "
+              f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{version}'", **as_mgr)
+    V0, L0 = "45500000-0000-4000-8000-000000000000", "45600000-0000-4000-8000-000000000000"
+    approve(V0, L0, policy_doc("06:00", "22:00"))
+    query(mm + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{SRS}','{TA}','ACCOUNT','{RS}'); "
+          f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,created_by) "
+          f"VALUES('{CRS}','{TA}','{SRS}','RESIDENT','MEMBERSHIP','{MRS}','{MG}')", **as_mgr)
+    CF5, CF6, G0, G5 = ("45300000-0000-4000-8000-000000000005", "45300000-0000-4000-8000-000000000006",
+                        "45700000-0000-4000-8000-000000000000", "45700000-0000-4000-8000-000000000005")
+    for i, cf in enumerate((CF2, CF3, CF4, CF5, CF6)):
+        query(mm + f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,functional_authorization_ref,approved_by_account_id,"
+              f"valid_until,created_by) VALUES('{cf}','{TA}','{SRS}','EMPLOYEE','FUNCTIONAL_AUTHORIZATION','autorizacao-publicacao-{i}','{MG}',"
+              f"now()+interval '10 days','{MG}')", **as_mgr)
+    def grant(identifier, epoch=0, functional=None, version=V1):
+        if functional:
+            return (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,"
+                    f"origin_functional_context_id,origin_version,valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{identifier}',"
+                    f"'{TA}','{SRS}','{functional}','{AR}','{PO}','{version}','FUNCTIONAL_AUTHORIZATION','{functional}',0,now(),now()+interval '5 days',{epoch},"
+                    f"ARRAY['FUNCTIONAL_AUTHORIZATION'],'{MG}')")
+        ov = value(f"select version from cp.memberships where id='{MRS}'")
+        return (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_membership_id,"
+                f"origin_version,valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{identifier}','{TA}','{SRS}','{CRS}','{AR}',"
+                f"'{PO}','{V1}','MEMBERSHIP','{MRS}',{ov},now(),now()+interval '20 days',{epoch},ARRAY['ELIGIBLE_CONTEXT'],'{MG}')")
+    def plan(device=DV):
+        return (f"INSERT INTO cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) "
+                f"VALUES('{TA}','{OP}','{SRS}','{device}','PLAN','{MG}')")
+    # Horario que o documento nao representa (Codex P1): recusado ao aplicar, nunca publicado como acesso continuo.
+    expect(value(f"select cp.policy_full_time('{policy_doc('06:00','22:00')}'::jsonb)::text||cp.policy_full_time('{policy_doc('00:00','24:00')}'::jsonb)::text")
+           == "falsetrue", "so regra de tempo integral e representavel")
+    query(both + grant(G0, functional=CF5, version=V0), **as_mgr)
+    expect(value(both + f"select jsonb_array_length(cp.rights_entries('{TA}','{SRS}','{DV}'))", **as_mgr) == "0",
+           "direito de regra com janela semanal fica fora do documento (nunca acesso continuo)")
+    expect(error(both + plan(), "23514", **as_mgr), "regra com janela semanal nao vira APPLY_RIGHTS")
+    expect(value(f"select count(*) from cp.rights_publications where subject_id='{SRS}'") == "0", "nada publicado para a regra com horario")
+    query(both + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G0}','MANUAL_REVOCATION')",
+          **as_mgr)
+    approve(V1, L1, policy_doc("00:00", "24:00"))
+    latest = f"select {{}} from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}' order by desired_version desc limit 1"
+    query(both + grant(G1) + "; " + grant(G2, functional=CF2), **as_mgr)
+    # Mapa de sentidos comissionado: leitor de entrada virado para TO_FROM e de saida para FROM_TO (Codex P1).
+    expect(value(both + f"select string_agg(device_role||'@'||device_id::text,',' order by device_role) from (select distinct device_role,device_id "
+                 f"from cp.rights_targets('{TA}','{SRS}')) x", **as_mgr) == f"CONTROLLER@{DV},EXIT_READER@{DX}",
+           "leitor segue o direction_map: entrada invertida fica fora, saida virada para a area recebe")
+    expect(value(both + f"select string_agg(d::text,',' order by d) from cp.rights_destinations('{TA}','{SRS}') d", **as_mgr)
+           == ",".join(sorted([DV, DX])), "destinos seguem o mesmo mapa de sentidos")
+    expect(error(noscan + plan(), "42501", **as_mgr), "compilacao exige a varredura de destinos")
+    expect(error(mm + "SET LOCAL app.policy_destination_scan='on'; " + plan(), "42501", **as_mgr), "compilacao exige gestao com publicacao")
+    expect(error(both + plan().replace(f"'{MG}')", f"'{RS}')"), "42501", **as_mgr), "autoria da compilacao e o ator da sessao")
+    expect(error(both + plan(DE), "23514", **as_mgr), "leitor de sentido oposto nao recebe direito (nada a aplicar)")
+    query(both + plan(DX), **as_mgr)
+    expect(value(f"select string_agg(distinct e->>'deviceRole'||':'||(e->>'direction'),',') from cp.rights_publications, jsonb_array_elements(document->'entries') e "
+                 f"where device_id='{DX}'") == "EXIT_READER:FROM_TO", "leitor de saida recebe o sentido de quem entra na area")
+    query(both + plan(), **as_mgr)
+    row = value(latest.format("action||':'||priority||':'||state||':'||jsonb_array_length(document->'entries')||':'||(document->'entries'->0->>'deviceRole')"
+                f"||':'||(document->'entries'->0->>'pointId')||':'||(desired_version>rights_generation)::text||':'||(document_hash=cp.rights_document_hash(document))::text"))
+    expect(row == f"APPLY_RIGHTS:1:PENDING:2:CONTROLLER:{ids['PT']}:true:true", "AC-012: documento compilado pelo banco, pendente, versao acima da geracao")
+    expect(error(both + plan(), "23514", **as_mgr), "documento igual ao ultimo do destino nao gera trabalho")
+    J1 = value(latest.format("id"))
+    H1 = value(f"select document_hash from cp.rights_publications where id='{J1}'")
+    expect(error(both + f"UPDATE cp.rights_publications SET state='ACK',confirmation_level='TRANSPORT_ACK',version=1 WHERE id='{J1}'", "42501", **as_mgr),
+           "API nao relata resultado")
+    expect(error(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='TRANSPORT_ACK',version=1 WHERE id='{J1}'", "23514", **worker),
+           "ACK de transporte nao confirma")
+    expect(error(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash='{'0'*64}',version=1 WHERE id='{J1}'",
+                 "23514", **worker), "leitura de volta diferente nao confirma")
+    query(f"UPDATE cp.rights_publications SET state='ACK',confirmation_level='TRANSPORT_ACK',attempts=1,version=1 WHERE id='{J1}'", **worker)
+    query(f"UPDATE cp.rights_publications SET state='APPLIED_UNVERIFIED',confirmation_level='TRANSPORT_ACK',attempts=1,version=2 WHERE id='{J1}'", **worker)
+    expect(error(f"UPDATE cp.rights_publications SET state='PENDING',confirmation_level='NONE',version=3 WHERE id='{J1}'", "23514", **worker),
+           "resultado nao volta a pendente")
+    query(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash='{H1}',version=3 WHERE id='{J1}'", **worker)
+    expect(value(f"select state||':'||(confirmed_at is not null)::text||':'||(reported_at is not null)::text from cp.rights_publications where id='{J1}'")
+           == "CONFIRMED:true:true", "confirmacao com leitura igual e relogio do banco")
+    expect(error(f"UPDATE cp.rights_publications SET state='UNKNOWN',confirmation_level='NONE',version=4 WHERE id='{J1}'", "23514", **worker),
+           "trabalho confirmado nao recebe novo resultado")
+    expect(error(f"UPDATE cp.rights_publications SET document='{{}}'::jsonb,version=4 WHERE id='{J1}'", "42501", **worker), "executor nao altera o documento")
+    expect(error("select requested_by from cp.rights_publications", "42501", **worker), "executor nao le a autoria")
+    # Revogacao de G1 com G1+G2 confirmados: retirada publicada na mesma transacao, prioridade 0, versao maior, so G2.
+    query(both + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G1}','MANUAL_REVOCATION')",
+          **as_mgr)
+    row = value(latest.format(f"origin||':'||action||':'||priority||':'||state||':'||(document->'entries'->0->>'grantId')||':'||jsonb_array_length(document->'entries')"
+                f"||':'||(desired_version>(select revoked_through_generation from cp.revocation_markers where grant_id='{G1}'))::text"))
+    expect(row == f"REVOCATION:APPLY_RIGHTS:0:PENDING:{G2}:1:true", "AC-015: marca publica a retirada no mesmo commit, antes de ampliacao")
+    # Ampliacao antes da confirmacao da retirada (Codex P2): o sucessor ainda tira G1 do confirmado e continua prioridade 0.
+    query(both + grant(G3, functional=CF3), **as_mgr)
+    query(both + plan(), **as_mgr)
+    J3 = value(latest.format("id"))
+    expect(value(f"select priority||':'||jsonb_array_length(document->'entries') from cp.rights_publications where id='{J3}'") == "0:2",
+           "sucessor de retirada nao confirmada mantem prioridade 0")
+    query(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash=document_hash,version=version+1 WHERE id='{J3}'", **worker)
+    query(both + grant(G4, functional=CF4), **as_mgr)
+    query(both + plan(), **as_mgr)
+    J4 = value(latest.format("id"))
+    expect(value(f"select priority from cp.rights_publications where id='{J4}'") == "1", "ampliacao pura sobre o confirmado e prioridade 1")
+    # Destino sem aprovacao vigente (combinacao suspensa pela plataforma, fluxo real): o direito fica fora e o publicado e
+    # retirado com prioridade 0.
+    plat = "SET LOCAL app.platform_capabilities='access_catalog.manage,homologation.approve'; "
+    query(plat + f"INSERT INTO platform.platform_audit_log(actor_id,action,reason,details) VALUES('{ids['PL']}','HOMOLOGATION_SUSPEND','Ensaio ficticio',"
+          f"'{{\"homologationId\":\"{ids['HO']}\"}}'); INSERT INTO platform.access_homologation_decisions(homologation_id,decision,reason,evidence_refs,"
+          f"approved_capabilities,decided_by) VALUES('{ids['HO']}','SUSPEND','Suspensao ficticia','{{}}'::uuid[],'{{}}'::text[],'{ids['PL']}'); "
+          f"UPDATE platform.access_homologations SET status=platform.homologation_next(status,'SUSPEND'),version=version+1 WHERE id='{ids['HO']}'",
+          actor=ids['PL'], role="cp_api")
+    expect(value(both + f"select string_agg(distinct issue,',') from cp.rights_targets('{TA}','{SRS}')", **as_mgr) == "HOMOLOGATION_NOT_APPROVED",
+           "combinacao suspensa: alvo fora do documento com o motivo")
+    query(both + plan(), **as_mgr)
+    expect(value(latest.format("action||':'||priority||':'||jsonb_array_length(document->'entries')")) == "REVOKE_RIGHTS:0:0",
+           "combinacao sem aprovacao vigente retira o publicado")
+    # Paridade com PolicyEngine: cada condicao que o motor nega ou nao representa fica fora do documento, com motivo.
+    full = policy_doc("00:00", "24:00")
+    def issue(extra):
+        return value(f"select coalesce(cp.rights_policy_issue(('{full}'::jsonb)||'{extra}'::jsonb),'OK')")
+    for extra, expected in (('{}', 'OK'), ('{"maximumAgeYears":60}', 'UNSUPPORTED_RESTRICTION'), ('{"antiPassbackMode":"HARD"}', 'UNSUPPORTED_RESTRICTION'),
+                            ('{"maximumOccupancy":10}', 'UNSUPPORTED_RESTRICTION'), ('{"holidayCalendarIds":["45900000-0000-4000-8000-000000000001"]}', 'UNSUPPORTED_RESTRICTION'),
+                            ('{"companion":{"mode":"VERIFIED_PHYSICAL_COMPANION","maximumPairingSeconds":30}}', 'COMPANION_NOT_VERIFIED'),
+                            ('{"companion":{"mode":"ASSISTED_BY_STAFF","maximumPairingSeconds":0}}', 'ASSISTANCE_REQUIRED'),
+                            (policy_doc("06:00", "22:00"), 'SCHEDULE_NOT_REPRESENTABLE')):
+        expect(issue(extra) == expected, f"paridade da regra: {expected}")
+    caps_ok = "ARRAY['faceEnrollment','faceDeletion','perDoorRights','secureTransport','offlineRestriction','localValidity']"
+    def dest(status, due, caps, device="ACTIVE", extra='{}'):
+        return value(f"select coalesce(cp.rights_destination_issue(('{full}'::jsonb)||'{extra}'::jsonb,'{status}',{due},{caps},'{device}'),'OK')")
+    expect(dest("APROVADO_PILOTO", "now()+interval '1 day'", caps_ok) == "OK", "paridade do destino: aprovado")
+    expect(dest("HOMOLOGADO", "NULL", caps_ok) == "OK", "paridade do destino: homologado sem revisao")
+    expect(dest("EM_ENSAIO", "NULL", caps_ok) == "HOMOLOGATION_NOT_APPROVED", "paridade do destino: em ensaio")
+    expect(dest("HOMOLOGADO", "now()-interval '1 second'", caps_ok) == "HOMOLOGATION_NOT_APPROVED", "paridade do destino: revisao vencida")
+    expect(dest("HOMOLOGADO", "NULL", "ARRAY['faceEnrollment','faceDeletion','perDoorRights','secureTransport','offlineRestriction']",
+                extra='{"eligibleContexts":["RESIDENT","VISITOR"]}') == "CAPABILITY_MISSING", "paridade do destino: capacidade exigida nao aprovada")
+    expect(dest("HOMOLOGADO", "NULL", caps_ok, device="RETIRED") == "DEVICE_INACTIVE", "paridade do destino: equipamento retirado")
+    # Direito de regra com horario: o motivo da regra vem antes do destino e nunca entra no documento.
+    query(both + grant(G5, functional=CF6, version=V0), **as_mgr)
+    expect(value(both + f"select issue from cp.rights_targets('{TA}','{SRS}') where grant_id='{G5}' limit 1", **as_mgr) == "SCHEDULE_NOT_REPRESENTABLE",
+           "regra com horario fica fora do documento com o motivo")
+    expect(value(both + f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.access_grants g where g.tenant_id='{TA}' and "
+                 f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
+                 f"(select cp.access_grants_current_now('{TA}',null,'{AR}')))", **as_mgr) == "0", "conjunto vigente por area igual ao predicado por direito")
+    # Bloqueio: REVOKE_ALL supera a retirada pendente (um so trabalho em aberto por destino).
+    query(mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
+    expect(value(latest.format("action||':'||priority||':'||array_to_string(array(select jsonb_array_elements_text(document->'coveredMethods')),',')"))
+           == "REVOKE_ALL:0:FACE,CARD,PIN,QR,INTERMEDIARY_GRANT", "bloqueio publica REVOKE_ALL de todos os metodos")
+    expect(value(f"select count(*) filter (where state='SUPERSEDED')||':'||count(*) filter (where state not in ('CONFIRMED','SUPERSEDED')) "
+                 f"from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}'") == "3:1", "um so trabalho em aberto por destino")
+    expect(value(f"select count(*) from cp.rights_publications where subject_id='{SRS}' and device_id='{DX}' and action='REVOKE_ALL'") == "1",
+           "bloqueio alcanca todos os destinos publicados")
+    expect(error(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash=document_hash,version=version+1 WHERE id='{J4}'",
+                 "23514", **worker), "resultado de trabalho superado e recusado")
+    expect(error(both + plan(), "23514", **as_mgr), "sujeito bloqueado: compilacao igual ao REVOKE_ALL nao amplia")
+    expect(value("select count(*) from cp.rights_publications", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: publicacoes nao atravessam condominio")
+    expect(value(f"select count(*) from cp.rights_publications", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le publicacoes")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname='rights_publications' "
+                 "and c.relrowsecurity and c.relforcerowsecurity") == "1", "publicacoes com RLS FORCE")
+    expect(error(both + f"DELETE FROM cp.rights_publications WHERE subject_id='{SRS}'", "42501", **as_mgr), "publicacao nao e apagada")
+    query(f"WITH p AS (DELETE FROM cp.rights_publications WHERE tenant_id='{TA}'), g AS (DELETE FROM cp.access_grants WHERE tenant_id='{TA}') "
+          f"DELETE FROM cp.revocation_markers WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.subject_contexts WHERE subject_id='{SRS}'; DELETE FROM cp.access_subjects WHERE id='{SRS}'; "
+          f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
+    facial_cleanup(ids)
 def maintenance_checks():
     """V046: zelador (MAINTENANCE) com maintenance.operate le e registra andamento so dos pedidos atribuidos ao proprio
     vinculo; nao muda responsavel nem prazo, nao encerra e nao le cadastro."""
@@ -4573,6 +4775,7 @@ def main():
     binding_checks()
     policy_checks()
     grant_checks()
+    publication_checks()
     maintenance_checks()
     tenant_module_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")

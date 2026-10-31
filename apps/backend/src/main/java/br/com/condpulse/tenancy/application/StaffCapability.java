@@ -22,7 +22,7 @@ public enum StaffCapability {
  MANAGE_AREAS("area.manage"),
  /** Acesso facial (AC-007/AC-008, V043): cria revisões de regra, valida e simula, sem publicar. */
  EDIT_POLICIES("policy.edit"),
- /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V045). */
+ /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V047). */
  PUBLISH_POLICIES("policy.publish"),
  /**
   * Zeladoria (MAINTENANCE, V046): lê e registra o andamento somente dos pedidos atribuídos ao próprio vínculo; nenhum
