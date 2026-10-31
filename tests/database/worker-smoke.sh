@@ -35,7 +35,10 @@ cleanup() {
   wait "$pid" 2>/dev/null || true
   psql -X -q -c "delete from cp.notifications where tenant_id='$tenant'" -c "delete from cp.outbox where tenant_id='$tenant'" \
     -c "delete from cp.parcels where tenant_id='$tenant'" -c "delete from cp.memberships where tenant_id='$tenant'" \
-    -c "delete from cp.units where tenant_id='$tenant'" -c "delete from platform.tenants where id='$tenant'" \
+    -c "delete from cp.units where tenant_id='$tenant'" \
+    -c "set session_replication_role=replica" -c "delete from cp.security_log where tenant_id='$tenant'" \
+    -c "delete from cp.security_log_heads where tenant_id='$tenant'" -c "set session_replication_role=origin" \
+    -c "delete from platform.tenants where id='$tenant'" \
     -c "delete from platform.accounts where id='$resident'" >/dev/null || true
 }
 trap cleanup EXIT

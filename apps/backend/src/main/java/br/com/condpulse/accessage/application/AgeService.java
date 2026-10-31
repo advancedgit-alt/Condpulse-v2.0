@@ -10,6 +10,7 @@ import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.application.DisplayText;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
+import br.com.condpulse.shared.infrastructure.SensitiveViewRecorder;
 import br.com.condpulse.shared.infrastructure.SqlStates;
 import br.com.condpulse.tenancy.application.StaffCapability;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
@@ -27,8 +28,13 @@ public class AgeService {
  private final AgeStore store;
  private final BirthDateCipher cipher;
  private final AuditRecorder audit;
+ private final SensitiveViewRecorder views;
  public AgeService(TenantTransactionExecutor transactions,AgeStore store,BirthDateCipher cipher,AuditRecorder audit) {
+  this(transactions,store,cipher,audit,SensitiveViewRecorder.disabled());
+ }
+ public AgeService(TenantTransactionExecutor transactions,AgeStore store,BirthDateCipher cipher,AuditRecorder audit,SensitiveViewRecorder views) {
   this.transactions=transactions; this.store=store; this.cipher=Objects.requireNonNull(cipher); this.audit=audit;
+  this.views=Objects.requireNonNull(views);
  }
 
  public AgeModels.Settings settings(UUID actor,UUID tenant,AssuranceLevel assurance) {
@@ -123,7 +129,10 @@ public class AgeService {
   return mapped(()->transactions.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.MANAGE_MEMBERSHIPS);
    if(!store.subjectExists(tenant,subject)) throw notFound();
-   return store.history(tenant,subject).stream().map(AgeStore.Row::projection).toList();
+   var history=store.history(tenant,subject).stream().map(AgeStore.Row::projection).toList();
+   // Ficha da pessoa (evidência de idade) lida pela gestão (CPX-011): SENSITIVE_VIEWED na mesma transação.
+   views.record(tenant,"MANAGEMENT","PERSON_AGE_EVIDENCE","ACCESS_SUBJECT",subject,null,java.util.Map.of("count",history.size()));
+   return history;
   }));
  }
 

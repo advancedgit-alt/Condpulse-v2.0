@@ -21988,6 +21988,281 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/security-log": {
+      "get": {
+        "operationId": "securityLogPage",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_SECURITY_LOG_ENABLED",
+        "description": "Log de Segurança do condomínio (V050, CPX-009), mais recente primeiro (seq decrescente). Exige security.log.read.tenant (gestão local) ou security.log.read (PARTNER_ADMIN/SECURITY_LEAD com contrato ativo, V049) e AAL2. Toda consulta grava SENSITIVE_VIEWED na mesma transação. Para a gestão local, a conta da equipe do parceiro aparece só pelo papel (actorAccountId nulo).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]{2,39}$"
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INFO",
+                "ATTENTION",
+                "CRITICAL"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Início (inclusive) pelo horário de gravação, ISO-8601 UTC.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Fim (exclusive); período máximo de 366 dias.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "beforeSeq",
+            "in": "query",
+            "required": false,
+            "description": "Cursor: nextBeforeSeq da página anterior.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 2
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityLogPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SECURITY_LOG_*_INVALID"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem security.log.read.tenant nem security.log.read) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED (condomínio não disponível ao ator)"
+          },
+          "503": {
+            "description": "SECURITY_LOG_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/security-log/integrity": {
+      "get": {
+        "operationId": "securityLogIntegrity",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_SECURITY_LOG_ENABLED",
+        "description": "Recalcula no banco a cadeia SHA-256 do condomínio inteiro e confere as âncoras diárias e a cabeça (CPX-008): cadeia íntegra ou quebrada, com o primeiro ponto quebrado. Mesma autorização da busca; grava SENSITIVE_VIEWED.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityLogIntegrity"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem security.log.read.tenant nem security.log.read) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED (condomínio não disponível ao ator)"
+          },
+          "503": {
+            "description": "SECURITY_LOG_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/security-log/exports": {
+      "post": {
+        "operationId": "securityLogExport",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_SECURITY_LOG_ENABLED",
+        "description": "Exporta um intervalo contíguo de seq (até 5.000 eventos; padrão: os mais recentes) com manifesto (intervalo, hash anterior ao primeiro, hashes de início e fim, quem exportou, motivo) e grava LOG_EXPORTED na mesma transação (CPX-010, R5.7). Só com security.log.export (SECURITY_LEAD do parceiro com contrato ativo no condomínio, V049) e AAL2; a gestão local não exporta.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityLogExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityLogExport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SECURITY_LOG_EXPORT_REASON_REQUIRED, SECURITY_LOG_EXPORT_RANGE_INVALID ou SECURITY_LOG_EXPORT_TOO_LARGE"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem security.log.export) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "409": {
+            "description": "SECURITY_LOG_CHAIN_BROKEN (intervalo com buraco ou elo quebrado)"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED (condomínio não disponível ao ator)"
+          },
+          "503": {
+            "description": "SECURITY_LOG_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -37064,6 +37339,369 @@
                   "type": "string"
                 }
               }
+            }
+          }
+        }
+      },
+      "SecurityLogEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "seq",
+          "occurredAt",
+          "recordedAt",
+          "eventType",
+          "severity",
+          "source",
+          "details",
+          "prevHash",
+          "hash"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Relógio do banco; para equipamento, horário informado pelo equipamento (R5.5)."
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Gravação no servidor (clock_timestamp)."
+          },
+          "clockSkewMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "INFO",
+              "ATTENTION",
+              "CRITICAL"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "CONCIERGE",
+              "REMOTE_CENTRAL",
+              "RESIDENT_APP",
+              "FACIAL",
+              "QR",
+              "DEVICE",
+              "SYSTEM",
+              "PLATFORM",
+              "MANAGEMENT"
+            ]
+          },
+          "partnerId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "actorAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Nulo para equipamento/sistema e, para a gestão local, para a equipe do parceiro."
+          },
+          "actorRole": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subjectType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subjectId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "pointId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidenceRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "traceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "correctsId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "details": {
+            "type": "object",
+            "description": "Até 4 KB, só identificadores e códigos; nunca dado biométrico (R5.9)."
+          },
+          "prevHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "SecurityLogPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "events",
+          "nextBeforeSeq"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/SecurityLogEvent"
+            }
+          },
+          "nextBeforeSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SecurityLogIntegrity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "intact",
+          "checkedEvents",
+          "lastSeq",
+          "lastHash",
+          "brokenSeq",
+          "problem",
+          "anchorsChecked",
+          "checkedAt"
+        ],
+        "properties": {
+          "intact": {
+            "type": "boolean"
+          },
+          "checkedEvents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "brokenSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "problem": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "SEQ_GAP",
+              "PREV_HASH_MISMATCH",
+              "HASH_MISMATCH",
+              "ANCHOR_MISMATCH",
+              "HEAD_MISMATCH",
+              null
+            ]
+          },
+          "anchorsChecked": {
+            "type": "integer"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SecurityLogExportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          },
+          "fromSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "toSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "SecurityLogManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "fromSeq",
+          "toSeq",
+          "count",
+          "firstPrevHash",
+          "firstHash",
+          "lastHash",
+          "exportedBy",
+          "exportedAt",
+          "reason",
+          "exportEventId",
+          "canonicalization"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fromSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "toSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "count": {
+            "type": "integer",
+            "maximum": 5000
+          },
+          "firstPrevHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "firstHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "lastHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "exportedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "exportEventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id do evento LOG_EXPORTED gravado na mesma transação."
+          },
+          "canonicalization": {
+            "type": "string",
+            "const": "cpsl1",
+            "description": "hash = sha256('cpsl1|' + prevHash + '|' + array JSON canônico), docs/LOG_SEGURANCA.md."
+          }
+        }
+      },
+      "SecurityLogExport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "manifest",
+          "events"
+        ],
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/SecurityLogManifest"
+          },
+          "events": {
+            "type": "array",
+            "maxItems": 5000,
+            "items": {
+              "$ref": "#/components/schemas/SecurityLogEvent"
             }
           }
         }

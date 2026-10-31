@@ -34,6 +34,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem.
   // Evidência de idade (V039): nunca apagada nem editada; só revogada/substituída; o worker nunca lê a data cifrada.
   // Catálogo e homologação (V040): perfil só por migration; homologação só muda de estado por decisão; decisão nunca muda.
+  // Log de Segurança (V050, R5.1): só INSERT por coluna, sem seq, horário de gravação, autoria nem hash; cabeça da
+  // cadeia só avança (sem trocar condomínio nem apagar); âncora diária só acrescenta.
   // Parceiros (V049): parceiro, equipe, contrato e escala nunca apagados; só estado, encerramento e versão mudam; estado
   // inicial, versão, autoria do encerramento e horários vêm do banco.
   // Gateway (V048): identidade, entrega e relatório nunca apagados; relatório nunca muda; identidade, tentativa, prazos e
@@ -321,6 +323,17 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
        where c.attrelid in (to_regclass('platform.partners'),to_regclass('platform.partner_members'),
         to_regclass('platform.partner_tenant_contracts'),to_regclass('cp.operator_schedules'))
         and c.attname in ('status','version','created_at','updated_at','revoked_at','revoked_by','ended_at','ended_by','cancelled_at','cancelled_by')),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.security_log'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.security_log'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.security_log') and c.attname in ('seq','recorded_at','actor_account_id','actor_role','partner_id','prev_hash','hash')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.security_log_heads'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_column_privilege(current_user,to_regclass('cp.security_log_heads'),'tenant_id','UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.security_log_heads') and c.attname in ('last_seq','last_hash')),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.security_log_anchors'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'anchored_at','INSERT'),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))
@@ -332,7 +345,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
       to_regclass('platform.platform_role_events'),to_regclass('platform.billing_plans'),
       to_regclass('platform.billing_subscriptions'),to_regclass('platform.billing_charges'),to_regclass('platform.billing_payments'),
       to_regclass('platform.access_model_profiles'),to_regclass('platform.access_homologations'),to_regclass('platform.access_homologation_decisions'),
-      to_regclass('platform.partners'),to_regclass('platform.partner_members'),to_regclass('platform.partner_tenant_contracts')))
+      to_regclass('platform.partners'),to_regclass('platform.partner_members'),to_regclass('platform.partner_tenant_contracts'),
+      to_regclass('platform.security_log_anchors')))
     """,Integer.class);
   if(unprotected==null || unprotected>0)
    throw new IllegalStateException("Schema de negócio sem proteção RLS completa.");

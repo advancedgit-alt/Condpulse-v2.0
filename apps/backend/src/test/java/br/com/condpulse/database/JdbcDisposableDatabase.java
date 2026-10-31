@@ -97,6 +97,23 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("update cp.units set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
   adminUpdate("update platform.tenants set active=true where id in (?,?)",tenantA,tenantB);
  }
+ /**
+  * Log de Segurança (V050) só acrescenta: nem o dono apaga com gatilhos ligados. Só no banco descartável, antes de remover o
+  * condomínio da fixture, o log, a cabeça e as âncoras saem com os gatilhos desligados (session_replication_role=replica).
+  */
+ static void deleteSecurityLog(Connection connection,UUID...tenants) throws SQLException {
+  for(UUID tenant:tenants) {
+   update(connection,"set session_replication_role=replica");
+   try {
+    update(connection,"delete from cp.security_log where tenant_id=?",tenant);
+    update(connection,"delete from cp.security_log_heads where tenant_id=?",tenant);
+    update(connection,"delete from platform.security_log_anchors where tenant_id=?",tenant);
+   } finally { update(connection,"set session_replication_role=origin"); }
+  }
+ }
+ void adminDeleteSecurityLog(UUID...tenants) throws SQLException {
+  try(Connection connection=admin()) { deleteSecurityLog(connection,tenants); }
+ }
  void adminUpdate(String sql,Object...args) throws SQLException {
   try(Connection connection=admin()) { update(connection,sql,args); }
  }
@@ -143,6 +160,10 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  /** Parceiros (V049) criados pelas contas desta fixture ou ligados aos condomínios dela; ordem das chaves estrangeiras. */
  private void deletePartners(Connection connection) throws SQLException {
   String partners="(select id from platform.partners where created_by in (?,?,?))";
+  // Eventos do Log de Segurança (V050) referenciam o parceiro de quem agiu: saem antes, com os gatilhos desligados.
+  update(connection,"set session_replication_role=replica");
+  try { update(connection,"delete from cp.security_log where partner_id in "+partners,accountA,accountB,accountC); }
+  finally { update(connection,"set session_replication_role=origin"); }
   update(connection,"delete from cp.operator_schedules where tenant_id in (?,?) or partner_id in "+partners,tenantA,tenantB,accountA,accountB,accountC);
   update(connection,"delete from platform.partner_tenant_contracts where tenant_id in (?,?) or partner_id in "+partners,
    tenantA,tenantB,accountA,accountB,accountC);
@@ -231,6 +252,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
     +"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB);
    update(connection,"delete from cp.units where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.blocks where tenant_id in (?,?)",tenantA,tenantB);
+   deleteSecurityLog(connection,tenantA,tenantB);
    update(connection,"delete from platform.tenants where id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.accounts where id in (?,?,?)",accountA,accountB,accountC);
    for(UUID extra:extraAccounts) update(connection,"delete from platform.accounts where id=?",extra);
