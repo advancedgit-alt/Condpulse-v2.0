@@ -28,6 +28,9 @@ class FinanceRulesTest {
   assertEquals("CANCELLED",FinanceRules.target("OVERDUE",null,null,null,TODAY).state(),"Pagamento inexistente conta como excluído");
   assertEquals("PAID",FinanceRules.target("PAID",TODAY,15000L,payment("PENDING",true),TODAY).state(),"Pago não é cancelado pelo Asaas");
   assertEquals("REFUNDED",FinanceRules.target("PAID",TODAY,15000L,payment("REFUNDED",false),TODAY).state());
+  var stale=FinanceRules.target("PAID",TODAY,15000L,payment("PENDING",false),TODAY);
+  assertEquals("PAID",stale.state()); assertEquals(TODAY,stale.paidAt()); assertEquals(15000L,stale.paidCents(),"Leitura antiga não apaga o pagamento");
+  assertEquals("PAID",FinanceRules.target("PAID",TODAY,15000L,payment("OVERDUE",false),TODAY).state());
   assertEquals("OPEN",FinanceRules.target("OPEN",null,null,payment("REFUNDED",false),TODAY).state(),"Estorno de não pago não muda");
   var chargeback=FinanceRules.target("PAID",TODAY,15000L,payment("CHARGEBACK_REQUESTED",false),TODAY);
   assertEquals("PAID",chargeback.state()); assertEquals("CHARGEBACK_REQUESTED",chargeback.asaasStatus());

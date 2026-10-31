@@ -45,6 +45,8 @@ class FinanceJdbcTest {
   volatile boolean down;
   /** Executado uma vez na próxima busca por referência externa: simula outra requisição concorrente no meio da chamada. */
   volatile Runnable onFind;
+  /** Executado uma vez depois de ler um pagamento (a leitura já devolvida fica antiga). */
+  volatile Runnable onPayment;
   private void check() { if(down) throw new Unavailable(); }
   @Override public Optional<String> findCustomer(String reference) { check(); return Optional.ofNullable(customers.get(reference)); }
   @Override public String createCustomer(Customer customer) {
@@ -61,7 +63,11 @@ class FinanceJdbcTest {
     "https://sandbox.asaas.com/i/"+id.substring(4),"BOLETO".equals(request.billingType())?"https://sandbox.asaas.com/b/pdf/"+id.substring(4):null,false);
    payments.put(id,payment); return payment;
   }
-  @Override public Optional<Payment> payment(String id) { check(); return Optional.ofNullable(payments.get(id)); }
+  @Override public Optional<Payment> payment(String id) {
+   check(); var read=Optional.ofNullable(payments.get(id));
+   var hook=onPayment; onPayment=null; if(hook!=null) hook.run();
+   return read;
+  }
   @Override public void deletePayment(String id) {
    check(); var p=payments.get(id);
    if(p!=null && "RECEIVED".equals(p.status())) throw new Rejected("invalid_action");
@@ -92,7 +98,7 @@ class FinanceJdbcTest {
  @BeforeEach void reset() throws Exception {
   db.restoreActiveFixtures(); db.clearReservationFixtures();
   db.adminUpdate("delete from cp.unit_rentals where tenant_id=?",db.tenantA);
-  asaas.down=false; asaas.onFind=null; db.assertEmptyContext();
+  asaas.down=false; asaas.onFind=null; asaas.onPayment=null; db.assertEmptyContext();
  }
  @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }
 
@@ -209,8 +215,12 @@ class FinanceJdbcTest {
   assertEquals("CANCELLED",reconciled.state()); assertEquals("Excluída no Asaas (conciliação)",reconciled.cancelReason());
   assertEquals(MANAGER.toString(),db.adminString("select cancelled_by from cp.finance_charges where id=?",deleted.chargeId()));
   // Recorrente: gerar de novo a mesma competência não duplica.
-  finance.createRecurringFee(MANAGER,db.tenantA,AAL2,new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",45000L,28,"PIX",
+  var fee=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",45000L,28,"PIX",
    "Valor aprovado em assembleia fictícia"));
+  var ended=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,new FinanceModels.RecurringCreate(null,"OTHER","Fundo de obras",10000L,10,"PIX",
+   "Valor aprovado em assembleia fictícia"));
+  assertEquals("ENDED",finance.endRecurringFee(MANAGER,db.tenantA,AAL2,ended.feeId(),new FinanceModels.Reason("Obra concluída")).state());
+  assertEquals("ACTIVE",fee.state());
   String month=YearMonth.from(today()).toString();
   var first=finance.generate(MANAGER,db.tenantA,AAL2,new FinanceModels.Generate(month,"Competência do mês"));
   var again=finance.generate(MANAGER,db.tenantA,AAL2,new FinanceModels.Generate(month,"Competência do mês"));
@@ -251,6 +261,22 @@ class FinanceJdbcTest {
   assertEquals("FINANCE_ASAAS_UNAVAILABLE",code(()->finance.cancel(MANAGER,db.tenantA,AAL2,other.chargeId(),new FinanceModels.Cancel("Motivo",other.version()))));
   asaas.down=false;
   assertEquals("OPEN",finance.issue(MANAGER,db.tenantA,AAL2,other.chargeId()).state());
+  db.assertEmptyContext();
+ }
+
+ @Test void staleReconciliationNeverOverwritesAPaymentRecordedMeanwhile() throws Exception {
+  payer();
+  var issued=charge("BOLETO");
+  String payment=paymentId(issued.chargeId());
+  // A sincronização lê PENDING; antes de gravar, o webhook registra o pagamento.
+  asaas.onPayment=()->{ asaas.set(payment,"RECEIVED",today());
+   assertEquals(FinanceWebhookService.Outcome.PROCESSED,webhook.handle(TOKEN,event("evt_s1","PAYMENT_RECEIVED",payment))); };
+  assertEquals("FINANCE_CHANGED",code(()->finance.sync(MANAGER,db.tenantA,AAL2,issued.chargeId())));
+  assertEquals("PAID:15000",db.adminString("select state||':'||paid_cents from cp.finance_charges where id=?",issued.chargeId()));
+  // Mesmo uma leitura antiga aplicada à versão atual não desfaz o pagamento.
+  asaas.set(payment,"PENDING",null);
+  var synced=finance.sync(MANAGER,db.tenantA,AAL2,issued.chargeId());
+  assertEquals("PAID",synced.state()); assertEquals(15000L,synced.paidCents());
   db.assertEmptyContext();
  }
 }

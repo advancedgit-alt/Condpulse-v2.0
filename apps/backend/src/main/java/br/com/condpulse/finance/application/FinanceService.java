@@ -198,6 +198,8 @@ public class FinanceService {
    var row=store.charge(tenant,chargeId,true);
    if(row==null) throw notFound();
    var view=row.view();
+   // A leitura do Asaas vale só para a versão que existia antes dela: webhook ou outra ação no meio vence (sem regressão).
+   if(view.version()!=current.view().version()) throw changed();
    // Cancelada e estornada são finais (o banco recusa qualquer alteração): nada a sincronizar.
    if(FinanceRules.terminal(view.state())) return view;
    var target=FinanceRules.target(view.state(),view.paidAt(),view.paidCents(),payment,LocalDate.now(context.timeZone()));

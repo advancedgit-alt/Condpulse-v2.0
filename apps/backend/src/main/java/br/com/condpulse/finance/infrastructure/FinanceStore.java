@@ -186,16 +186,21 @@ public class FinanceStore {
 
  // Taxas recorrentes.
  public List<FinanceModels.RecurringFee> recurringFees(UUID tenant) {
-  return jdbc.query("""
-   select f.id,f.unit_id,u.label as unit_label,f.kind,f.description,f.amount_cents,f.due_day,f.billing_type,f.state,f.created_at,f.version
-   from cp.finance_recurring_fees f left join cp.units u on u.tenant_id=f.tenant_id and u.id=f.unit_id
-   where f.tenant_id=? order by f.state,f.created_at desc,f.id limit 500
-   """,(r,n)->new FinanceModels.RecurringFee(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("unit_label"),
-    r.getString("kind"),r.getString("description"),r.getLong("amount_cents"),r.getInt("due_day"),r.getString("billing_type"),r.getString("state"),
-    r.getTimestamp("created_at").toInstant(),r.getLong("version")),tenant);
+  return jdbc.query(FEE_SELECT+" where f.tenant_id=? order by f.state,f.created_at desc,f.id limit 500",(r,n)->fee(r),tenant);
  }
+ private static final String FEE_SELECT="""
+  select f.id,f.unit_id,u.label as unit_label,f.kind,f.description,f.amount_cents,f.due_day,f.billing_type,f.state,f.created_at,f.version
+  from cp.finance_recurring_fees f left join cp.units u on u.tenant_id=f.tenant_id and u.id=f.unit_id
+  """;
+ private static FinanceModels.RecurringFee fee(ResultSet r) throws SQLException {
+  return new FinanceModels.RecurringFee(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("unit_label"),
+   r.getString("kind"),r.getString("description"),r.getLong("amount_cents"),r.getInt("due_day"),r.getString("billing_type"),r.getString("state"),
+   r.getTimestamp("created_at").toInstant(),r.getLong("version"));
+ }
+ /** Taxa pelo identificador, sem depender do limite da listagem. */
  public FinanceModels.RecurringFee recurringFee(UUID tenant,UUID id) {
-  return recurringFees(tenant).stream().filter(f->f.feeId().equals(id)).findFirst().orElse(null);
+  var rows=jdbc.query(FEE_SELECT+" where f.tenant_id=? and f.id=?",(r,n)->fee(r),tenant,id);
+  return rows.isEmpty()?null:rows.getFirst();
  }
  public void insertRecurringFee(UUID id,UUID tenant,UUID unit,String kind,String description,long amount,int dueDay,String billing) {
   jdbc.update("""
