@@ -209,6 +209,26 @@ test('equipamento alterado por outra pessoa durante a edição exige recarregar 
   expect(state.technicalRequests.filter((item) => item.startsWith('PUT'))).toEqual([]);
 });
 
+test('suspender aceite aprovado confirma os pontos em vigor que voltam a mapeado', async ({ page }) => {
+  await openInstallation(page, {
+    acceptances: [acceptance({ status: 'APPROVED', technicalSignedAt: '2026-10-31T12:00:00Z', technicalApproverAccountId: '10000000-0000-4000-8000-0000000000ff',
+      rulesSignedAt: '2026-10-31T13:00:00Z', rulesApproverAccountId: '10000000-0000-4000-8000-0000000000fe', effectiveAt: '2026-10-31T14:00:00Z' })],
+    bindings: [{ bindingId: '77000000-0000-4000-8000-000000000001', pointId: POINT, bindingRevision: 1, actuatorChannelId: RELAY, controllerDeviceId: CONTROLLER,
+      entryReaderDeviceId: null, exitReaderDeviceId: null, doorContactChannelId: null, exitRequestChannelId: null, passageSensorChannelId: null,
+      homologationId: HOMOLOGATION, installationAcceptanceId: ACCEPTANCE, directions: { entryReader: null, exitReader: null }, status: 'ACTIVE',
+      validFrom: '2026-10-31T14:00:00Z', validUntil: null, wiringEvidenceRef: 'obra/ligacao-portaria', configurationHash: HASH, commissionedFingerprint: HASH, version: 1 }],
+  }, 'aceite');
+  await expect(page.getByRole('button', { name: 'Substituir' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Suspender' }).click();
+  const form = page.getByRole('form', { name: 'Suspender revisão 1' });
+  const context = form.getByRole('group', { name: 'Local e contexto da ação' });
+  await expect(context.getByText(/Revisão 1 \(vínculos em vigor são suspensos e os pontos voltam a mapeado\): Portaria social \(P-PORTARIA\) — Calçada \(EXTERIOR\) → Hall A \(HALL-A\)/)).toBeVisible();
+  await form.getByLabel(/Motivo/).fill('Porta com defeito no relé');
+  await expect(form.getByRole('button', { name: 'Suspender' })).toBeDisabled();
+  await context.getByLabel('Conferi no local o ponto físico e o condomínio acima').check();
+  await expect(form.getByRole('button', { name: 'Suspender' })).toBeEnabled();
+});
+
 test('sem concessão técnica ou com a função desligada a implantação não mostra dados', async ({ page }) => {
   const state = await openInstallation(page, { session: 'denied' });
   await expect(page.getByText('Sem concessão técnica')).toBeVisible();

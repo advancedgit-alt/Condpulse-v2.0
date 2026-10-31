@@ -136,3 +136,21 @@ describe('falha de consulta com cache', () => {
       timeZone: '', status: 'ACTIVE' }, null)).toMatchObject({ amenityId: null });
   });
 });
+
+describe('local afetado por ação do aceite', () => {
+  it('espelha o efeito do banco: enviados para assinar/aprovar/reprovar; em vigor para suspender/substituir', async () => {
+    const { affectedBindings, affectedPlace } = await import('../ui/installation/Commissioning');
+    const pending = pointBinding({ ...bindingRow, status: 'PENDING_COMMISSION', installationAcceptanceId: acceptanceId });
+    const active = pointBinding({ ...bindingRow, bindingId: '77000000-0000-4000-8000-000000000002', pointId: '72000000-0000-4000-8000-000000000002',
+      status: 'ACTIVE', installationAcceptanceId: acceptanceId, validFrom: '2026-10-31T12:00:00Z' });
+    const all = [pending, active];
+    for (const action of ['SIGN', 'TESTING', 'APPROVED', 'REJECTED'] as const) expect(affectedBindings(action, all)).toEqual([pending]);
+    for (const action of ['SUSPENDED', 'SUPERSEDED'] as const) expect(affectedBindings(action, all)).toEqual([active]);
+    expect(affectedBindings('DRAFT', all)).toEqual([]);
+    const points = [{ pointId: '72000000-0000-4000-8000-000000000002', code: 'P-GARAGEM', name: 'Portão da garagem', fromAreaId: areaA, toAreaId: areaB,
+      pointKind: 'VEHICLE_GATE' as const, flowDirection: 'BOTH' as const, egressClass: 'NOT_EGRESS' as const, accessibleRouteRef: null, emergencyDesignRef: null,
+      status: 'COMMISSIONED' as const, version: 1 }];
+    expect(affectedPlace('SUSPENDED', { installationRevision: 2 }, all, points, [])).toMatch(/^Revisão 2 \(vínculos em vigor são suspensos.*\): Portão da garagem \(P-GARAGEM\)/);
+    expect(affectedPlace('SUSPENDED', { installationRevision: 2 }, [pending], points, [])).toBe('Revisão 2: nenhum vínculo em vigor nesta revisão');
+  });
+});

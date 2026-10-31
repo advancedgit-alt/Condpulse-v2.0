@@ -228,15 +228,37 @@ export function AcceptanceSection() {
           points={data.points.data ?? []} areas={data.areas.data ?? []} commission={commission} />)}</ol>}
   </section>;
 }
+export type AcceptanceAction = 'SIGN' | AcceptanceStatus;
+/**
+ * Vínculos que cada ação sobre o aceite atinge, espelhando cp.installation_acceptances_effects (V042): assinatura técnica,
+ * início de ensaio, aprovação e reprovação tratam os vínculos enviados (pendentes de comissionamento); suspensão e
+ * substituição tratam os vínculos em vigor (a suspensão devolve os pontos a mapeado; a substituição é recusada enquanto houver).
+ */
+export function affectedBindings(action: AcceptanceAction, bindings: readonly PointBinding[]): PointBinding[] {
+  const status: PointBinding['status'] | null = action === 'SUSPENDED' || action === 'SUPERSEDED' ? 'ACTIVE' : action === 'DRAFT' ? null : 'PENDING_COMMISSION';
+  return status ? bindings.filter((item) => item.status === status) : [];
+}
+const effectLabels: Record<AcceptanceAction, string> = {
+  SIGN: 'conteúdo assinado', DRAFT: 'sem efeito físico', TESTING: 'em ensaio', APPROVED: 'entram em vigor e os pontos são comissionados',
+  REJECTED: 'vínculos enviados são descartados', SUSPENDED: 'vínculos em vigor são suspensos e os pontos voltam a mapeado',
+  SUPERSEDED: 'recusada enquanto houver vínculo em vigor',
+};
+/** Local real atingido pela ação, para a confirmação física. */
+export function affectedPlace(action: AcceptanceAction, acceptance: Pick<InstallationAcceptance, 'installationRevision'>,
+  bindings: readonly PointBinding[], points: readonly AccessPoint[], areas: readonly AccessArea[]): string {
+  const affected = affectedBindings(action, bindings);
+  const kind = action === 'SUSPENDED' || action === 'SUPERSEDED' ? 'vínculo em vigor' : 'vínculo enviado';
+  if (affected.length === 0) return `Revisão ${acceptance.installationRevision}: nenhum ${kind} nesta revisão`;
+  return `Revisão ${acceptance.installationRevision} (${effectLabels[action]}): ${affected.map((item) => placeOf(points.find((point) => point.pointId === item.pointId), areas)).join('; ')}`;
+}
 const hashText = (value: string) => `${value.slice(0, 12)}…`;
 function AcceptanceRow({ acceptance, bindings, points, areas, commission }: {
   acceptance: InstallationAcceptance; bindings: readonly PointBinding[]; points: readonly AccessPoint[]; areas: readonly AccessArea[]; commission: boolean;
 }) {
   const [mode, setMode] = useState<'results' | 'sign' | AcceptanceStatus | null>(null);
   const a = acceptance;
-  const pendingBindings = bindings.filter((item) => item.status === 'PENDING_COMMISSION');
-  const place = pendingBindings.length === 0 ? `Instalação do condomínio, revisão ${a.installationRevision} (sem vínculo enviado)`
-    : `Revisão ${a.installationRevision}: ${pendingBindings.map((item) => placeOf(points.find((point) => point.pointId === item.pointId), areas)).join('; ')}`;
+  const pendingBindings = affectedBindings('SIGN', bindings);
+  const placeFor = (action: AcceptanceAction) => affectedPlace(action, a, bindings, points, areas);
   const open = a.status === 'DRAFT' || a.status === 'TESTING';
   const approvable = a.technicalSignedAt !== null && a.rulesSignedAt !== null && a.criticalTestsPending === 0 && a.criticalTestsFailed === 0 && pendingBindings.length > 0;
   return <li className="management-row">
@@ -256,12 +278,12 @@ function AcceptanceRow({ acceptance, bindings, points, areas, commission }: {
       {open && a.technicalSignedAt === null ? <button className="button button-secondary button-compact" type="button" onClick={() => setMode('results')}>Registrar resultados dos ensaios</button> : null}
       {open && a.technicalSignedAt === null ? <button className="button button-secondary button-compact" type="button" onClick={() => setMode('sign')}>Assinar aceite técnico</button> : null}
       {acceptanceTransitions[a.status].map((next) => <button key={next} className={`button button-compact ${reasonRequired.includes(next) ? 'button-danger' : 'button-secondary'}`} type="button"
-        disabled={next === 'APPROVED' && !approvable} onClick={() => setMode(next)}>{transitionLabels[next]}</button>)}
+        disabled={(next === 'APPROVED' && !approvable) || (next === 'SUPERSEDED' && affectedBindings('SUPERSEDED', bindings).length > 0)} onClick={() => setMode(next)}>{transitionLabels[next]}</button>)}
     </div> : null}
     {commission && a.status === 'TESTING' && !approvable ? <p className="field-help">Aprovar exige aceite técnico, aceite local das regras, testes críticos zerados e ao menos um vínculo aguardando comissionamento.</p> : null}
     {mode === 'results' ? <ResultsForm acceptance={a} close={() => setMode(null)} /> : null}
-    {mode === 'sign' ? <SignTechnical acceptance={a} place={place} close={() => setMode(null)} /> : null}
-    {mode !== null && mode !== 'results' && mode !== 'sign' ? <TransitionForm acceptance={a} target={mode} place={place} close={() => setMode(null)} /> : null}
+    {mode === 'sign' ? <SignTechnical acceptance={a} place={placeFor('SIGN')} close={() => setMode(null)} /> : null}
+    {mode !== null && mode !== 'results' && mode !== 'sign' ? <TransitionForm acceptance={a} target={mode} place={placeFor(mode)} close={() => setMode(null)} /> : null}
   </li>;
 }
 const transitionLabels: Record<AcceptanceStatus, string> = {
@@ -393,7 +415,8 @@ function TransitionForm({ acceptance, target, place, close }: { acceptance: Inst
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const needsReason = reasonRequired.includes(target);
-  const physical = target === 'APPROVED' || target === 'SUSPENDED';
+  // Toda transição com efeito no banco (aprovar, suspender, reprovar, substituir) confirma o local afetado.
+  const physical = target !== 'TESTING' && target !== 'DRAFT';
   const normalized = displayText(reason, 300);
   const ready = (!needsReason || (normalized !== null && normalized.length >= 3)) && (!physical || confirmed);
   async function submit(event: FormEvent) {
