@@ -63,6 +63,13 @@ class InfrastructureTest {
   assertThrows(IllegalArgumentException.class,()->ConfigLoader.parse(base.formatted(local.replace("\"LOCAL\"","\"NUVEM\""),"")),"nuvem sem token e com baseUrl");
   assertThrows(IllegalArgumentException.class,()->ConfigLoader.parse(base.formatted(local,",\"openPolicy\":{\"allowedOrigins\":[\"MORADOR_APP\"]}")),
    "morador pelo app exige a opção do condomínio ligada");
+  String twoSameNative=local.replace("\"direction\":\"IN\"}]","\"direction\":\"IN\"},{\"channelId\":\"c2\",\"pointId\":\"p2\",\"bindingRevision\":1,\"nativeChannel\":\"1\",\"direction\":\"OUT\"}]");
+  assertNotEquals(local,twoSameNative);
+  var error=assertThrows(IllegalArgumentException.class,()->ConfigLoader.parse(base.formatted(twoSameNative,"")),
+   "canal nativo repetido no mesmo equipamento tornaria a decisão local ambígua");
+  assertTrue(error.getMessage().contains("Canal nativo repetido"),error.getMessage());
+  assertEquals(2,ConfigLoader.parse(base.formatted(twoSameNative.replace("\"nativeChannel\":\"1\",\"direction\":\"OUT\"","\"nativeChannel\":\"2\",\"direction\":\"OUT\""),""))
+   .devices().getFirst().channels().size(),"canais nativos distintos continuam aceitos");
  }
 
  @Test void exemploDeConfiguracaoDoRepositorioEValidoEComecaDesligado() {
