@@ -12,6 +12,7 @@ import { isUUID } from '../../api/client';
 import { displayText } from '../../api/text';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { queryFailure } from '../queryFailure';
+import { StaleNotice, useVersionedDraft } from '../readVersion';
 import { ActionFeedback, blank, can, installationKey, newId, short, useAccessGuard, useAction, useInstallation } from './shared';
 
 function useList<T>(part: string, load: (tenantId: string, signal?: AbortSignal) => Promise<T>) {
@@ -63,12 +64,14 @@ function AreaPhysicalForm({ area, close }: { area: AccessArea; close(): void }) 
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(area.version, () => { setEssential(area.essentialRoute); setVerified(area.physicalBoundaryVerified); action.clear(); });
   const [essential, setEssential] = useState(area.essentialRoute);
   const [verified, setVerified] = useState(area.physicalBoundaryVerified);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     const ok = await action.run(() => accessInstall.setAreaPhysical(scope.tenantId, area.areaId,
-      { essentialRoute: essential, physicalBoundaryVerified: verified, expectedVersion: area.version }), 'Conferência física registrada.',
+      { essentialRoute: essential, physicalBoundaryVerified: verified, expectedVersion: seen.version }), 'Conferência física registrada.',
     async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'areas') }); });
     if (ok) close();
   }
@@ -77,7 +80,8 @@ function AreaPhysicalForm({ area, close }: { area: AccessArea; close(): void }) 
       <span>Separação física verificada no local (paredes, portas e grades fecham a área)</span></label>
     <label className="checkbox-label"><input type="checkbox" checked={essential} disabled={action.state.pending} onChange={(event) => setEssential(event.target.checked)} />
       <span>Rota essencial (passagem que não pode ficar bloqueada, inclusive em falha)</span></label>
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending}>{action.state.pending ? 'Salvando…' : 'Salvar conferência'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || action.state.pending}>{action.state.pending ? 'Salvando…' : 'Salvar conferência'}</button>
       <button className="button button-secondary" type="button" disabled={action.state.pending} onClick={close}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -133,6 +137,7 @@ function PointForm({ areas, point, close }: { areas: readonly AccessArea[]; poin
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(point?.version ?? 0, () => { if (point) setDraft({ ...point, accessibleRouteRef: point.accessibleRouteRef ?? '', emergencyDesignRef: point.emergencyDesignRef ?? '' }); action.clear(); });
   const [pointId] = useState(() => point?.pointId ?? newId());
   const [draft, setDraft] = useState<PointDraft>(() => point ? { ...point, accessibleRouteRef: point.accessibleRouteRef ?? '',
     emergencyDesignRef: point.emergencyDesignRef ?? '' } : emptyPoint);
@@ -144,12 +149,13 @@ function PointForm({ areas, point, close }: { areas: readonly AccessArea[]; poin
   const statuses: PointStatus[] = point?.status === 'COMMISSIONED' ? ['COMMISSIONED', 'SUSPENDED', 'RETIRED'] : point ? ['DRAFT', 'MAPPED', 'SUSPENDED', 'RETIRED'] : ['DRAFT', 'MAPPED'];
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     const fields = pointFields(draft);
     if (typeof fields === 'string') { setValidation(fields); return; }
     if (!point && !CODE.test(draft.code)) { setValidation('Código: letras maiúsculas, números, _ ou -, até 64 caracteres.'); return; }
     setValidation('');
     const ok = await action.run(() => point
-      ? accessInstall.updatePoint(scope.tenantId, point.pointId, { ...fields, status: draft.status, expectedVersion: point.version })
+      ? accessInstall.updatePoint(scope.tenantId, point.pointId, { ...fields, status: draft.status, expectedVersion: seen.version })
       : accessInstall.createPoint(scope.tenantId, { ...fields, pointId, code: draft.code, status: draft.status as CreatePointBody['status'] }),
     point ? 'Ponto atualizado.' : 'Ponto cadastrado.', async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'points') }); });
     if (ok) close();
@@ -176,7 +182,8 @@ function PointForm({ areas, point, close }: { areas: readonly AccessArea[]; poin
       <div><label htmlFor={`${prefix}-design`}>Referência do projeto de emergência (opcional)</label>
         <input id={`${prefix}-design`} maxLength={120} value={draft.emergencyDesignRef} disabled={pending} onChange={(event) => set('emergencyDesignRef', event.target.value)} /></div></div>
     {validation ? <Notice tone="error">{validation}</Notice> : null}
-    <div className="button-row"><button className="button" type="submit" disabled={pending}>{pending ? 'Salvando…' : point ? 'Salvar ponto' : 'Cadastrar ponto'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || pending}>{pending ? 'Salvando…' : point ? 'Salvar ponto' : 'Cadastrar ponto'}</button>
       <button className="button button-secondary" type="button" disabled={pending} onClick={close}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -227,6 +234,7 @@ function DeviceForm({ device, known, close }: { device: AccessDevice | null; kno
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(device?.version ?? 0, () => { if (device) setDraft({ ...device, hardwareRevision: device.hardwareRevision ?? '', homologationId: device.homologationId ?? '', deviceRole: device.deviceRole ?? '', connectionMode: device.connectionMode ?? '' }); action.clear(); });
   const [deviceId] = useState(() => device?.deviceId ?? newId());
   const [draft, setDraft] = useState<DeviceDraft>(() => device ? { ...device, hardwareRevision: device.hardwareRevision ?? '',
     homologationId: device.homologationId ?? '', deviceRole: device.deviceRole ?? '', connectionMode: device.connectionMode ?? '' } : emptyDevice);
@@ -237,6 +245,7 @@ function DeviceForm({ device, known, close }: { device: AccessDevice | null; kno
   const connectors = [...new Set(known.map((item) => item.connectorId))];
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     const fields = deviceFields(draft);
     if (typeof fields === 'string') { setValidation(fields); return; }
     if (!device && !isUUID(draft.connectorId.trim())) { setValidation('Informe o identificador do conector recebido no cadastro da integração.'); return; }
@@ -244,7 +253,7 @@ function DeviceForm({ device, known, close }: { device: AccessDevice | null; kno
     setValidation('');
     const body: CreateDeviceBody | null = device ? null : { ...fields, deviceId, connectorId: draft.connectorId.trim().toLowerCase(), externalId: draft.externalId.trim() };
     const ok = await action.run(() => body ? accessInstall.createDevice(scope.tenantId, body)
-      : accessInstall.updateDevice(scope.tenantId, device!.deviceId, { ...fields, status: draft.status, expectedVersion: device!.version }),
+      : accessInstall.updateDevice(scope.tenantId, device!.deviceId, { ...fields, status: draft.status, expectedVersion: seen.version }),
     device ? 'Equipamento atualizado.' : 'Equipamento cadastrado.', async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'devices') }); });
     if (ok) close();
   }
@@ -268,7 +277,8 @@ function DeviceForm({ device, known, close }: { device: AccessDevice | null; kno
         <small className="field-help">Identificador recebido da plataforma.</small></div></div>
     {device ? <Select id={`${prefix}-status`} label="Situação" value={draft.status} options={['ACTIVE', 'RETIRED'] as const} labels={{ ACTIVE: 'Ativo', RETIRED: 'Desativado' }} disabled={pending} onChange={(value) => set('status', value || 'ACTIVE')} /> : null}
     {validation ? <Notice tone="error">{validation}</Notice> : null}
-    <div className="button-row"><button className="button" type="submit" disabled={pending}>{pending ? 'Salvando…' : device ? 'Salvar equipamento' : 'Cadastrar equipamento'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || pending}>{pending ? 'Salvando…' : device ? 'Salvar equipamento' : 'Cadastrar equipamento'}</button>
       <button className="button button-secondary" type="button" disabled={pending} onClick={close}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -347,19 +357,22 @@ function ChannelEditForm({ channel, close }: { channel: DeviceChannel; close(): 
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(channel.version, () => { setKind(channel.channelKind); setStatus(channel.status); action.clear(); });
   const [kind, setKind] = useState<ChannelKind>(channel.channelKind);
   const [status, setStatus] = useState<ChannelStatus>(channel.status);
   const prefix = `channel-${channel.channelId}`;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const ok = await action.run(() => accessInstall.updateChannel(scope.tenantId, channel.channelId, { channelKind: kind, status, expectedVersion: channel.version }),
+    if (seen.stale) return;
+    const ok = await action.run(() => accessInstall.updateChannel(scope.tenantId, channel.channelId, { channelKind: kind, status, expectedVersion: seen.version }),
       'Canal atualizado.', async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'channels') }); });
     if (ok) close();
   }
   return <form className="reason-form" aria-label={`Alterar canal ${channel.externalChannel}`} onSubmit={(event) => void submit(event)}>
     <div className="two-fields"><Select id={`${prefix}-kind`} label="Função" value={kind} options={channelKinds} labels={channelKindLabels} disabled={action.state.pending} onChange={(value) => setKind(value || kind)} />
       <Select id={`${prefix}-status`} label="Situação" value={status} options={channelStatuses} labels={channelStatusLabels} disabled={action.state.pending} onChange={(value) => setStatus(value || status)} /></div>
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending}>{action.state.pending ? 'Salvando…' : 'Salvar canal'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || action.state.pending}>{action.state.pending ? 'Salvando…' : 'Salvar canal'}</button>
       <button className="button button-secondary" type="button" disabled={action.state.pending} onClick={close}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;

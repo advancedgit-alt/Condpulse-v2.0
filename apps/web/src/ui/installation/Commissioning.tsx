@@ -11,6 +11,7 @@ import { formatWhen, toInstant } from '../dateTime';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { areaName } from './Inventory';
 import { queryFailure } from '../queryFailure';
+import { StaleNotice, useVersionedDraft } from '../readVersion';
 import { ActionFeedback, INSTALL_ZONE, PhysicalContext, blank, can, installationKey, newId, short, useAccessGuard, useAction, useInstallation } from './shared';
 
 function useInstallData() {
@@ -175,6 +176,7 @@ function BindingActions({ binding, place, acceptances, close }: { binding: Point
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(binding.version, () => { setConfirmed(false); action.clear(); });
   const open = acceptances.filter((item) => item.status === 'DRAFT' || item.status === 'TESTING');
   const [acceptanceId, setAcceptanceId] = useState(open.length === 1 ? open[0]!.acceptanceId : '');
   const [confirmed, setConfirmed] = useState(false);
@@ -182,13 +184,14 @@ function BindingActions({ binding, place, acceptances, close }: { binding: Point
   const after = async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'bindings') }); };
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     if (!isUUID(acceptanceId) || !confirmed) return;
-    if (await action.run(() => accessInstall.submitBinding(scope.tenantId, binding.bindingId, { installationAcceptanceId: acceptanceId, expectedVersion: binding.version }),
+    if (await action.run(() => accessInstall.submitBinding(scope.tenantId, binding.bindingId, { installationAcceptanceId: acceptanceId, expectedVersion: seen.version }),
       'Vínculo enviado ao aceite: aguarda comissionamento.', after)) close();
   }
   async function discard() {
-    if (!confirmed) return;
-    if (await action.run(() => accessInstall.discardBinding(scope.tenantId, binding.bindingId, { expectedVersion: binding.version }), 'Vínculo descartado.', after)) close();
+    if (!confirmed || seen.stale) return;
+    if (await action.run(() => accessInstall.discardBinding(scope.tenantId, binding.bindingId, { expectedVersion: seen.version }), 'Vínculo descartado.', after)) close();
   }
   return <form className="reason-form" aria-label="Ações do vínculo" onSubmit={(event) => void submit(event)}>
     {binding.status === 'DRAFT' ? open.length === 0 ? <Notice>Não há aceite em rascunho ou em ensaio. Abra um aceite em "Ensaios e aceite" antes de enviar o vínculo.</Notice>
@@ -196,8 +199,9 @@ function BindingActions({ binding, place, acceptances, close }: { binding: Point
         <select id={`submit-${binding.bindingId}`} value={acceptanceId} disabled={pending} onChange={(event) => setAcceptanceId(event.target.value)}>
           <option value="" disabled>Escolha…</option>{open.map((item) => <option key={item.acceptanceId} value={item.acceptanceId}>Revisão {item.installationRevision} · {acceptanceStatusLabels[item.status]}</option>)}</select></div> : null}
     <PhysicalContext place={place} confirmed={confirmed} onConfirm={setConfirmed} disabled={pending} />
-    <div className="button-row">{binding.status === 'DRAFT' && open.length > 0 ? <button className="button" type="submit" disabled={pending || !confirmed || !acceptanceId}>{pending ? 'Enviando…' : 'Enviar ao aceite'}</button> : null}
-      <button className="button button-danger" type="button" disabled={pending || !confirmed} onClick={() => void discard()}>Descartar vínculo</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row">{binding.status === 'DRAFT' && open.length > 0 ? <button className="button" type="submit" disabled={seen.stale || pending || !confirmed || !acceptanceId}>{pending ? 'Enviando…' : 'Enviar ao aceite'}</button> : null}
+      <button className="button button-danger" type="button" disabled={seen.stale || pending || !confirmed} onClick={() => void discard()}>Descartar vínculo</button>
       <button className="button button-secondary" type="button" disabled={pending} onClick={close}>Voltar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -330,18 +334,20 @@ function ResultsForm({ acceptance, close }: { acceptance: InstallationAcceptance
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(acceptance.version, () => { setDraft({ pending: String(acceptance.criticalTestsPending), failed: String(acceptance.criticalTestsFailed), report: acceptance.testReportRef, checkpoint: acceptance.revocationCheckpointRef ?? '' }); action.clear(); });
   const [draft, setDraft] = useState({ pending: String(acceptance.criticalTestsPending), failed: String(acceptance.criticalTestsFailed),
     report: acceptance.testReportRef, checkpoint: acceptance.revocationCheckpointRef ?? '' });
   const [validation, setValidation] = useState('');
   const prefix = `results-${acceptance.acceptanceId}`;
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     const pending = count(draft.pending), failed = count(draft.failed), report = draft.report.trim(), checkpoint = blank(draft.checkpoint);
     if (pending === null || failed === null) { setValidation('Testes críticos: números inteiros, 0 ou mais.'); return; }
     if (!REF.test(report) || (checkpoint && !REF.test(checkpoint))) { setValidation('Referências: 3 a 120 caracteres, só letras, números e . _ : / -.'); return; }
     setValidation('');
     if (await action.run(() => accessInstall.recordResults(scope.tenantId, acceptance.acceptanceId, { criticalTestsPending: pending, criticalTestsFailed: failed,
-      testReportRef: report, revocationCheckpointRef: checkpoint, expectedVersion: acceptance.version }), 'Resultados registrados.',
+      testReportRef: report, revocationCheckpointRef: checkpoint, expectedVersion: seen.version }), 'Resultados registrados.',
     async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'acceptances') }); })) close();
   }
   return <form className="reason-form" aria-label={`Resultados da revisão ${acceptance.installationRevision}`} onSubmit={(event) => void submit(event)}>
@@ -350,7 +356,8 @@ function ResultsForm({ acceptance, close }: { acceptance: InstallationAcceptance
     <div className="two-fields"><div><label htmlFor={`${prefix}-report`}>Referência do relatório</label><input id={`${prefix}-report`} required maxLength={120} value={draft.report} disabled={action.state.pending} onChange={(event) => setDraft({ ...draft, report: event.target.value })} /></div>
       <div><label htmlFor={`${prefix}-checkpoint`}>Ponto de revogação (opcional)</label><input id={`${prefix}-checkpoint`} maxLength={120} value={draft.checkpoint} disabled={action.state.pending} onChange={(event) => setDraft({ ...draft, checkpoint: event.target.value })} /></div></div>
     {validation ? <Notice tone="error">{validation}</Notice> : null}
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending}>{action.state.pending ? 'Salvando…' : 'Salvar resultados'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || action.state.pending}>{action.state.pending ? 'Salvando…' : 'Salvar resultados'}</button>
       <button className="button button-secondary" type="button" disabled={action.state.pending} onClick={close}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -359,18 +366,21 @@ function SignTechnical({ acceptance, place, close }: { acceptance: InstallationA
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(acceptance.version, () => { setConfirmed(false); action.clear(); });
   const [confirmed, setConfirmed] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     if (!confirmed) return;
-    if (await action.run(() => accessInstall.signTechnical(scope.tenantId, acceptance.acceptanceId, { expectedVersion: acceptance.version }),
+    if (await action.run(() => accessInstall.signTechnical(scope.tenantId, acceptance.acceptanceId, { expectedVersion: seen.version }),
       'Aceite técnico assinado. O conteúdo desta revisão não muda mais; a gestão do condomínio assina as regras na tela dela.',
       async () => { await queries.invalidateQueries({ queryKey: installationKey(scope, 'acceptances') }); })) close();
   }
   return <form className="reason-form" aria-label={`Assinar aceite técnico da revisão ${acceptance.installationRevision}`} onSubmit={(event) => void submit(event)}>
     <Notice tone="warning">Depois da assinatura técnica, planta, topologia, ensaios e reversão desta revisão ficam fechados. Mudança exige nova revisão.</Notice>
     <PhysicalContext place={place} confirmed={confirmed} onConfirm={setConfirmed} disabled={action.state.pending} />
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending || !confirmed}>{action.state.pending ? 'Assinando…' : 'Assinar aceite técnico'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || action.state.pending || !confirmed}>{action.state.pending ? 'Assinando…' : 'Assinar aceite técnico'}</button>
       <button className="button button-secondary" type="button" disabled={action.state.pending} onClick={close}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -379,6 +389,7 @@ function TransitionForm({ acceptance, target, place, close }: { acceptance: Inst
   const scope = useInstallation();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(acceptance.version, () => { setConfirmed(false); action.clear(); });
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const needsReason = reasonRequired.includes(target);
@@ -387,8 +398,9 @@ function TransitionForm({ acceptance, target, place, close }: { acceptance: Inst
   const ready = (!needsReason || (normalized !== null && normalized.length >= 3)) && (!physical || confirmed);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     if (!ready) return;
-    if (await action.run(() => accessInstall.transition(scope.tenantId, acceptance.acceptanceId, { status: target, reason: needsReason ? normalized : null, expectedVersion: acceptance.version }),
+    if (await action.run(() => accessInstall.transition(scope.tenantId, acceptance.acceptanceId, { status: target, reason: needsReason ? normalized : null, expectedVersion: seen.version }),
       target === 'APPROVED' ? 'Aceite aprovado: vínculos em vigor e pontos comissionados.' : `Aceite: ${acceptanceStatusLabels[target].toLowerCase()}.`,
       async () => { await queries.invalidateQueries({ queryKey: installationKey(scope) }); })) close();
   }
@@ -398,7 +410,8 @@ function TransitionForm({ acceptance, target, place, close }: { acceptance: Inst
     {needsReason ? <><label htmlFor={`reason-${acceptance.acceptanceId}`}>Motivo (3 a 300 caracteres)</label>
       <textarea id={`reason-${acceptance.acceptanceId}`} maxLength={300} rows={2} required value={reason} disabled={action.state.pending} onChange={(event) => setReason(event.target.value)} /></> : null}
     {physical ? <PhysicalContext place={place} confirmed={confirmed} onConfirm={setConfirmed} disabled={action.state.pending} /> : null}
-    <div className="button-row"><button className={`button ${needsReason ? 'button-danger' : ''}`} type="submit" disabled={action.state.pending || !ready}>{action.state.pending ? 'Enviando…' : transitionLabels[target]}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className={`button ${needsReason ? 'button-danger' : ''}`} type="submit" disabled={seen.stale || action.state.pending || !ready}>{action.state.pending ? 'Enviando…' : transitionLabels[target]}</button>
       <button className="button button-secondary" type="button" disabled={action.state.pending} onClick={close}>Voltar</button></div>
     <ActionFeedback state={action.state} />
   </form>;

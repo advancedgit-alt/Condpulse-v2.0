@@ -10,6 +10,7 @@ import { management } from '../../api/management';
 import { displayText } from '../../api/text';
 import { formatWhen } from '../dateTime';
 import { queryFailure } from '../queryFailure';
+import { StaleNotice, useVersionedDraft } from '../readVersion';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { ActionFeedback, managementKey, useAccessGuard, useAction, useManagement } from './shared';
 
@@ -80,6 +81,7 @@ function AreaForm({ area, areas, close }: { area: AccessArea | null; areas: read
   const scope = useManagement();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(area?.version ?? 0, () => { if (area) setDraft({ code: area.code, name: area.name, areaKind: area.areaKind, physicalSubtype: area.physicalSubtype ?? '', blockId: area.blockId ?? '', parentAreaId: area.parentAreaId ?? '', amenityId: area.amenityId ?? '', timeZone: area.timeZone, status: area.status }); action.clear(); });
   const blocks = useQuery({ queryKey: managementKey(scope, 'blocks'), queryFn: ({ signal }) => management.blocks(scope.tenantId, signal) });
   const amenities = useQuery({ queryKey: managementKey(scope, 'amenities'), queryFn: ({ signal }) => management.amenities(scope.tenantId, signal) });
   const [areaId] = useState(() => area?.areaId ?? globalThis.crypto.randomUUID());
@@ -93,12 +95,13 @@ function AreaForm({ area, areas, close }: { area: AccessArea | null; areas: read
   const statuses: readonly AreaStatus[] = area ? areaStatuses : ['DRAFT', 'ACTIVE'];
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     const fields = areaFields(draft, area?.areaId ?? null);
     if (typeof fields === 'string') { setValidation(fields); return; }
     if (!area && !CODE.test(draft.code)) { setValidation('Código: letras maiúsculas, números, _ ou -, até 64 caracteres.'); return; }
     setValidation('');
     const ok = await action.run(() => area
-      ? accessInstall.updateArea(scope.tenantId, area.areaId, { ...fields, status: draft.status, expectedVersion: area.version })
+      ? accessInstall.updateArea(scope.tenantId, area.areaId, { ...fields, status: draft.status, expectedVersion: seen.version })
       : accessInstall.createArea(scope.tenantId, { ...fields, areaId, code: draft.code, status: draft.status === 'DRAFT' ? 'DRAFT' : 'ACTIVE' }),
     area ? 'Área de acesso atualizada.' : 'Área de acesso criada.', async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'access-areas') }); });
     if (ok) close(area ? 'Área de acesso atualizada.' : 'Área de acesso criada.');
@@ -132,7 +135,8 @@ function AreaForm({ area, areas, close }: { area: AccessArea | null; areas: read
           {statuses.map((status) => <option key={status} value={status}>{areaStatusLabels[status]}</option>)}</select></div></div>
     {area && draft.status === 'INTERDICTED' && area.status !== 'INTERDICTED' ? <Notice tone="warning">Interditar a área vale para todos os pontos que levam a ela.</Notice> : null}
     {validation ? <Notice tone="error">{validation}</Notice> : null}
-    <div className="button-row"><button className="button" type="submit" disabled={pending}>{pending ? 'Salvando…' : area ? 'Salvar área' : 'Criar área'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || pending}>{pending ? 'Salvando…' : area ? 'Salvar área' : 'Criar área'}</button>
       <button className="button button-secondary" type="button" disabled={pending} onClick={() => close()}>Cancelar</button></div>
     <ActionFeedback state={action.state} />
   </form>;
@@ -192,11 +196,13 @@ function RulesSignature({ acceptance, close }: { acceptance: AcceptanceSummary; 
   const scope = useManagement();
   const queries = useQueryClient();
   const action = useAction();
+  const seen = useVersionedDraft(acceptance.version, () => { setRead(false); action.clear(); });
   const [read, setRead] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (seen.stale) return;
     if (!read) return;
-    if (await action.run(() => accessInstall.signRules(scope.tenantId, acceptance.acceptanceId, { expectedVersion: acceptance.version }),
+    if (await action.run(() => accessInstall.signRules(scope.tenantId, acceptance.acceptanceId, { expectedVersion: seen.version }),
       'Regras assinadas pela gestão. A aprovação final é do comissionamento técnico.',
       async () => { await queries.invalidateQueries({ queryKey: managementKey(scope, 'installation-acceptances') }); })) close('Regras assinadas pela gestão. A aprovação final é do comissionamento técnico.');
   }
@@ -204,7 +210,8 @@ function RulesSignature({ acceptance, close }: { acceptance: AcceptanceSummary; 
     <Notice>Você assina, pela gestão de {scope.tenantName}, as regras de circulação desta revisão (áreas, pontos e interdições). A assinatura não muda depois.</Notice>
     <label className="checkbox-label"><input type="checkbox" checked={read} disabled={action.state.pending} onChange={(event) => setRead(event.target.checked)} />
       <span>Conferi áreas e pontos desta revisão</span></label>
-    <div className="button-row"><button className="button" type="submit" disabled={action.state.pending || !read}>{action.state.pending ? 'Assinando…' : 'Assinar regras'}</button>
+    {seen.stale ? <StaleNotice onReload={seen.reload} /> : null}
+    <div className="button-row"><button className="button" type="submit" disabled={seen.stale || action.state.pending || !read}>{action.state.pending ? 'Assinando…' : 'Assinar regras'}</button>
       <button className="button button-secondary" type="button" disabled={action.state.pending} onClick={() => close()}>Voltar</button></div>
     <ActionFeedback state={action.state} />
   </form>;

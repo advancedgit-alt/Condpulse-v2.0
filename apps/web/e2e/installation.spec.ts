@@ -38,11 +38,11 @@ const acceptance = (extra: Record<string, unknown> = {}) => ({ acceptanceId: ACC
 interface State {
   scopes: string[]; session: 'ok' | 'denied' | 'off'; areas: Record<string, unknown>[]; acceptances: Record<string, unknown>[];
   bindings: Record<string, unknown>[]; bindingBodies: Record<string, unknown>[]; technicalRequests: string[]; managementRequests: string[];
-  rulesBodies: unknown[]; areaBodies: Record<string, unknown>[];
+  rulesBodies: unknown[]; areaBodies: Record<string, unknown>[]; controllerVersion: number;
 }
 async function installInstallApi(page: Page, initial: Partial<State> = {}): Promise<State> {
   const state: State = { scopes: ALL_SCOPES, session: 'ok', areas: [area(AREA_OUT, 'EXTERIOR', 'Calçada'), area(AREA_HALL, 'HALL-A', 'Hall A')],
-    acceptances: [acceptance()], bindings: [], bindingBodies: [], technicalRequests: [], managementRequests: [], rulesBodies: [], areaBodies: [], ...initial };
+    acceptances: [acceptance()], bindings: [], bindingBodies: [], technicalRequests: [], managementRequests: [], rulesBodies: [], areaBodies: [], controllerVersion: 0, ...initial };
   await page.route(`**/v1/tenants/${TENANT_A}/technical/**`, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname.replace(`/v1/tenants/${TENANT_A}/technical`, '');
@@ -59,7 +59,7 @@ async function installInstallApi(page: Page, initial: Partial<State> = {}): Prom
     if (path === '/access-devices') {
       await json(route, 200, { devices: [
         { deviceId: CONTROLLER, connectorId: CONNECTOR, externalId: 'SN-0001', provisionedInstanceId: null, label: 'Controladora portaria', direction: 'BOTH',
-          status: 'ACTIVE', hardwareRevision: 'rev-a', homologationId: HOMOLOGATION, deviceRole: 'CONTROLLER', connectionMode: 'LOCAL_GATEWAY', version: 0 },
+          status: 'ACTIVE', hardwareRevision: 'rev-a', homologationId: HOMOLOGATION, deviceRole: 'CONTROLLER', connectionMode: 'LOCAL_GATEWAY', version: state.controllerVersion },
         { deviceId: READER, connectorId: CONNECTOR, externalId: 'SN-0002', provisionedInstanceId: null, label: 'Leitor facial portaria', direction: 'ENTRY',
           status: 'ACTIVE', hardwareRevision: null, homologationId: HOMOLOGATION, deviceRole: 'FACE_TERMINAL', connectionMode: null, version: 0 }] });
       return;
@@ -194,6 +194,21 @@ test('concessão revogada com dados em cache: a tela descarta os dados técnicos
   await expect(page.getByText('Controladora portaria')).toHaveCount(0);
 });
 
+test('equipamento alterado por outra pessoa durante a edição exige recarregar antes de salvar', async ({ page }) => {
+  const state = await openInstallation(page, {}, 'equipamentos');
+  const section = page.getByRole('region', { name: 'Inventário e rede' });
+  await section.getByRole('listitem').filter({ hasText: 'Controladora portaria' }).getByRole('button', { name: 'Editar' }).click();
+  const edit = page.getByRole('form', { name: 'Editar Controladora portaria' });
+  await expect(edit.getByRole('button', { name: 'Salvar equipamento' })).toBeEnabled();
+  state.controllerVersion = 3;
+  await section.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(edit.getByText(/alterado por outra pessoa/)).toBeVisible();
+  await expect(edit.getByRole('button', { name: 'Salvar equipamento' })).toBeDisabled();
+  await edit.getByRole('button', { name: 'Recarregar os dados atuais' }).click();
+  await expect(edit.getByRole('button', { name: 'Salvar equipamento' })).toBeEnabled();
+  expect(state.technicalRequests.filter((item) => item.startsWith('PUT'))).toEqual([]);
+});
+
 test('sem concessão técnica ou com a função desligada a implantação não mostra dados', async ({ page }) => {
   const state = await openInstallation(page, { session: 'denied' });
   await expect(page.getByText('Sem concessão técnica')).toBeVisible();
@@ -238,4 +253,15 @@ test('gestão cria área de acesso e assina as regras sem ver equipamento, canal
   await expect(acceptanceRegion.getByText(/por você/)).toBeVisible();
   expect(state.technicalRequests).toEqual([]);
   await expect(page.getByText('Controladora portaria')).toHaveCount(0);
+  // Rascunho aberto não adota a versão nova: a tela pede para recarregar antes de enviar.
+  await areas.getByRole('listitem').filter({ hasText: 'Hall A' }).getByRole('button', { name: 'Editar' }).click();
+  const edit = page.getByRole('form', { name: 'Editar Hall A' });
+  await expect(edit.getByRole('button', { name: 'Salvar área' })).toBeEnabled();
+  state.areas[1]!.version = 7; state.areas[1]!.name = 'Hall A interditado';
+  await areas.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(edit.getByText(/alterado por outra pessoa/)).toBeVisible();
+  await expect(edit.getByRole('button', { name: 'Salvar área' })).toBeDisabled();
+  await edit.getByRole('button', { name: 'Recarregar os dados atuais' }).click();
+  await expect(edit.getByLabel('Nome', { exact: true })).toHaveValue('Hall A interditado');
+  await expect(edit.getByRole('button', { name: 'Salvar área' })).toBeEnabled();
 });
