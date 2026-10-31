@@ -139,6 +139,15 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT UPDATE(lease_until) ON cp.edge_leases TO cp_api","REVOKE UPDATE(lease_until) ON cp.edge_leases FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(connector_id) ON cp.edge_agents TO cp_api","REVOKE UPDATE(connector_id) ON cp.edge_agents FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.edge_agents TO cp_api","REVOKE DELETE ON cp.edge_agents FROM cp_api",false);
+  assertRefusedWith("GRANT DELETE ON platform.partners TO cp_api","REVOKE DELETE ON platform.partners FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(name) ON platform.partners TO cp_api","REVOKE UPDATE(name) ON platform.partners FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(role) ON platform.partner_members TO cp_api","REVOKE UPDATE(role) ON platform.partner_members FROM cp_api",false);
+  assertRefusedWith("GRANT INSERT(status) ON platform.partner_members TO cp_api","REVOKE INSERT(status) ON platform.partner_members FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(starts_at) ON platform.partner_tenant_contracts TO cp_api",
+   "REVOKE UPDATE(starts_at) ON platform.partner_tenant_contracts FROM cp_api",false);
+  assertRefusedWith("GRANT DELETE ON platform.partner_tenant_contracts TO cp_api","REVOKE DELETE ON platform.partner_tenant_contracts FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(ends_at) ON cp.operator_schedules TO cp_api","REVOKE UPDATE(ends_at) ON cp.operator_schedules FROM cp_api",false);
+  assertRefusedWith("GRANT DELETE ON cp.operator_schedules TO cp_api","REVOKE DELETE ON cp.operator_schedules FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.rights_publications TO cp_worker","REVOKE DELETE ON cp.rights_publications FROM cp_worker",true);
   assertRefusedWith("GRANT UPDATE(direction) ON cp.device_events TO cp_worker","REVOKE UPDATE(direction) ON cp.device_events FROM cp_worker",true);
   assertRefusedWith("GRANT INSERT(unit_id) ON cp.device_events TO cp_worker","REVOKE INSERT(unit_id) ON cp.device_events FROM cp_worker",true);

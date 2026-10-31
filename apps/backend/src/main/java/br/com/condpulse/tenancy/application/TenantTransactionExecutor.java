@@ -50,6 +50,7 @@ public class TenantTransactionExecutor {
    jdbc.queryForObject("select set_config('app.technical_scopes','',true)",String.class);
    jdbc.queryForObject("select set_config('app.subject_context_scan','',true)",String.class);
    jdbc.queryForObject("select set_config('app.policy_destination_scan','',true)",String.class);
+   jdbc.queryForObject("select set_config('app.partner_id','',true)",String.class);
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());
    Integer active=jdbc.queryForObject(
     "select count(*) from platform.accounts where id=? and status='ACTIVE'",Integer.class,accountId);
@@ -57,7 +58,7 @@ public class TenantTransactionExecutor {
     throw new BusinessProblem("ACCOUNT_INACTIVE",403,"Seu acesso precisa ser validado pela gestão.");
    var zones=jdbc.query("select time_zone from platform.tenants where id=? and active",
     (r,n)->r.getString("time_zone"),tenantId);
-   if(zones.size()!=1) throw denied();
+   if(zones.size()!=1) throw partnerDenied(accountId);
    ZoneId timeZone;
    try { timeZone=ZoneId.of(zones.getFirst()); }
    catch(DateTimeException | NullPointerException ex) {
@@ -79,17 +80,35 @@ public class TenantTransactionExecutor {
       r.getObject("unit_id",UUID.class),r.getString("role"),r.getBoolean("can_create"),r.getBoolean("can_cancel"),
       r.getBoolean("can_view_parcels")),
       tenantId,accountId);
-   if(memberships.isEmpty()) throw denied();
+   // Sem vínculo: papéis de parceiro que alcançam o condomínio agora (V049, R3.1–R3.3), calculados pelo banco.
+   var partnerRoles=new java.util.TreeSet<String>();
+   if(memberships.isEmpty()) {
+    partnerRoles.addAll(jdbc.queryForList("select distinct r.role from platform.partner_reach() r where r.tenant_id=?",
+     String.class,tenantId));
+    if(partnerRoles.isEmpty()) throw partnerDenied(accountId);
+   }
    // Módulo da rota liberado pela central para este condomínio (V045); depois do vínculo, para não revelar estado a terceiros.
    TenantModuleGate.check(jdbc,tenantId);
-   var context=new TenantContext(accountId,tenantId,timeZone,memberships,assurance);
-   // Capacidades de equipe entram no contexto local somente após vínculo vigente e AAL2.
-   String capabilities=context.effectiveCapabilities().stream().map(StaffCapability::key).sorted()
-    .collect(Collectors.joining(","));
+   var context=new TenantContext(accountId,tenantId,timeZone,memberships,assurance,partnerRoles);
+   // Capacidades de equipe e de parceiro entram no contexto local somente após vínculo ou alcance vigente e AAL2.
+   String capabilities=java.util.stream.Stream.concat(context.effectiveCapabilities().stream().map(StaffCapability::key),
+     context.effectivePartnerCapabilities().stream().map(br.com.condpulse.partners.application.PartnerCapability::key))
+    .sorted().collect(Collectors.joining(","));
    if(!capabilities.isEmpty())
     jdbc.queryForObject("select set_config('app.capabilities',?,true)",String.class,capabilities);
    return action.apply(context);
   });
+ }
+ /**
+  * Sem vínculo nem alcance: quem tem papel ativo de parceiro recebe 403 (fora do contrato ou da escala vigente, CPX-002),
+  * sem revelar se o condomínio existe; as demais contas seguem com 404.
+  */
+ private BusinessProblem partnerDenied(UUID accountId) {
+  Boolean staff=jdbc.queryForObject("select exists(select 1 from platform.partner_members where account_id=? and status='ACTIVE')",
+   Boolean.class,accountId);
+  if(Boolean.TRUE.equals(staff))
+   return new BusinessProblem("PARTNER_ACCESS_DENIED",403,"Condomínio fora do contrato do parceiro ou da sua escala vigente.");
+  return denied();
  }
  private BusinessProblem denied() {
   return new BusinessProblem("TENANT_ACCESS_DENIED",404,"Condomínio não disponível para este acesso.");

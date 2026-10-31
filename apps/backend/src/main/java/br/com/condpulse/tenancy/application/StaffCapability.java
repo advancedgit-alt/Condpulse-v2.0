@@ -29,14 +29,10 @@ public enum StaffCapability {
   * financeiro, cadastro, vínculo, encomenda, visita ou acesso.
   */
  OPERATE_MAINTENANCE("maintenance.operate"),
- /** Log de Segurança do próprio condomínio (CPX-009, V050; PRD complementar 4.4): gestão local, sempre com AAL2. */
- READ_SECURITY_LOG_TENANT("security.log.read.tenant"),
- /**
-  * Log da carteira (SECURITY_LEAD, PARTNER_ADMIN) e exportação com manifesto (SECURITY_LEAD). Já valem nas políticas da V050;
-  * nenhum papel de condomínio as recebe: a hierarquia de parceiros (CPX-001/CPX-003) as publica, sem mudar o schema.
-  */
- READ_SECURITY_LOG("security.log.read"),
- EXPORT_SECURITY_LOG("security.log.export");
+ /** PRD complementar §4.4 (V049): co-aprovação de restrição geral; o banco confere o vínculo MANAGER vigente. */
+ APPROVE_BLOCKLIST("security.blocklist.approve"),
+ /** PRD complementar §4.4 (V049): Log de Segurança do próprio condomínio; o banco confere o vínculo MANAGER vigente. */
+ READ_TENANT_SECURITY_LOG("security.log.read.tenant");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -47,7 +43,7 @@ public enum StaffCapability {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
-    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES,READ_SECURITY_LOG_TENANT);
+    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES,APPROVE_BLOCKLIST,READ_TENANT_SECURITY_LOG);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    case "MAINTENANCE" -> EnumSet.of(OPERATE_MAINTENANCE);
    default -> EnumSet.noneOf(StaffCapability.class);

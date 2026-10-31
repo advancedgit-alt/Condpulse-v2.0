@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.partners.application.PartnerCapability;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.infrastructure.SensitiveViewRecorder;
 import br.com.condpulse.tenancy.application.StaffCapability;
@@ -20,6 +21,9 @@ class SecurityLogRulesTest {
  private static TenantContext context(String role,AssuranceLevel assurance) {
   return new TenantContext(UUID.randomUUID(),UUID.randomUUID(),ZoneId.of("America/Sao_Paulo"),
    List.of(new TenantContext.Membership(UUID.randomUUID(),null,role,false,false)),assurance);
+ }
+ private static TenantContext partner(String role,AssuranceLevel assurance) {
+  return new TenantContext(UUID.randomUUID(),UUID.randomUUID(),ZoneId.of("America/Sao_Paulo"),List.of(),assurance,java.util.Set.of(role));
  }
  private static SecurityLogModels.Event event(long seq,String prev,String hash,String role,UUID actor) {
   var details=new HashMap<String,Object>(); details.put("view","SECURITY_LOG"); details.put("nullable",null);
@@ -44,16 +48,19 @@ class SecurityLogRulesTest {
  }
 
  @Test void managerReadsOwnLogWithSecondFactorAndNobodyExportsYet() {
-  assertTrue(StaffCapability.forRole("MANAGER").contains(StaffCapability.READ_SECURITY_LOG_TENANT));
-  assertEquals("security.log.read.tenant",StaffCapability.READ_SECURITY_LOG_TENANT.key());
-  for(String role:List.of("MANAGER","CONCIERGE","MAINTENANCE","SUPPORT","RESIDENT","RESPONSIBLE","DEPENDENT","OWNER")) {
-   assertFalse(StaffCapability.forRole(role).contains(StaffCapability.EXPORT_SECURITY_LOG),role);
-   assertFalse(StaffCapability.forRole(role).contains(StaffCapability.READ_SECURITY_LOG),role);
-  }
+  assertTrue(StaffCapability.forRole("MANAGER").contains(StaffCapability.READ_TENANT_SECURITY_LOG));
+  assertEquals("security.log.read.tenant",StaffCapability.READ_TENANT_SECURITY_LOG.key());
+  // Exportação só do líder de segurança; leitura da carteira também do gestor do parceiro (V049).
+  assertEquals(java.util.Set.of("SECURITY_LEAD"),PartnerCapability.ROLES.stream()
+   .filter(r->PartnerCapability.forRole(r).contains(PartnerCapability.EXPORT_SECURITY_LOG)).collect(java.util.stream.Collectors.toSet()));
   assertFalse(SecurityLogService.requireReader(context("MANAGER",AssuranceLevel.AAL2)),"Gestão local lê com máscara do parceiro");
   assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->SecurityLogService.requireReader(context("MANAGER",AssuranceLevel.AAL1))).code());
   assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->SecurityLogService.requireReader(context("CONCIERGE",AssuranceLevel.AAL2))).code());
   assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->SecurityLogService.requireReader(context("RESIDENT",AssuranceLevel.AAL2))).code());
+  // Parceiro com alcance: líder lê sem máscara (com AAL2); supervisor (só leitura de turno) ainda é recusado.
+  assertTrue(SecurityLogService.requireReader(partner("SECURITY_LEAD",AssuranceLevel.AAL2)));
+  assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->SecurityLogService.requireReader(partner("PARTNER_ADMIN",AssuranceLevel.AAL1))).code());
+  assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->SecurityLogService.requireReader(partner("SECURITY_SUPERVISOR",AssuranceLevel.AAL2))).code());
  }
 
  @Test void tenantReadersSeePartnerStaffOnlyByRole() {

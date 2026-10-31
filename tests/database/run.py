@@ -4905,6 +4905,27 @@ def security_log_checks():
     expect(value("select count(*) from cp.security_log", tenant=S1, actor=None, role="cp_worker") == count(S1)
            and error("select details from cp.security_log", "42501", tenant=S1, actor=None, role="cp_worker"),
            "worker le so seq/hash/horario do proprio condominio")
+    # Parceiro (V049): lider de seguranca com contrato ativo le o log da carteira, sem mascara; o banco grava papel e parceiro.
+    PT, LD, LM, LC = ("49000000-0000-4000-8000-0000000000a1", "10000000-0000-4000-8000-0000000049d1",
+                      "49000000-0000-4000-8000-0000000000b1", "49000000-0000-4000-8000-0000000000c1")
+    query(f"""INSERT INTO platform.accounts(id,status) VALUES('{LD}','ACTIVE');
+        SET session_replication_role=replica;
+        INSERT INTO platform.partners(id,name,created_by,updated_by) VALUES('{PT}','PARCEIRO LOG FICTICIO','{MG}','{MG}');
+        INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by) VALUES('{LM}','{PT}','{LD}','SECURITY_LEAD','LIDER LOG','{MG}');
+        INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by)
+          VALUES('{LC}','{PT}','{S1}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio do log','{MG}');""")
+    partner_read = "SET LOCAL app.capabilities='security.log.read'; "
+    expect(value(partner_read + "select count(*) from cp.security_log", tenant=S1, actor=LD, role="cp_api") == count(S1),
+           "lider de seguranca com contrato ativo le o log do condominio (security.log.read)")
+    expect(value(partner_read + "select count(*) from cp.security_log", tenant=S2, actor=LD, role="cp_api") == "0",
+           "lider nao le condominio fora do contrato")
+    query(viewed(S1), tenant=S1, actor=LD, role="cp_api")
+    expect(value(f"select actor_role||'|'||partner_id from cp.security_log where tenant_id='{S1}' and actor_account_id='{LD}'") == f"SECURITY_LEAD|{PT}",
+           "papel e parceiro de quem agiu vem do banco (partner_id ligado a platform.partners)")
+    expect(value(f"select count(*) from cp.security_log where tenant_id='{S1}' and actor_account_id='{MG}' and partner_id is not null") == "0",
+           "equipe local nao recebe parceiro")
+    expect(error(f"INSERT INTO cp.security_log(tenant_id,partner_id,event_type,severity,source) VALUES('{S1}','{PT}','SENSITIVE_VIEWED','INFO','MANAGEMENT')",
+                 "42501", tenant=S1, actor=MG, role="cp_api"), "runtime nao escolhe partner_id (grant por coluna)")
     # Concorrencia: 40 gravacoes simultaneas (1 em 4 desfeita) mantem seq contigua e cadeia integra.
     def record_concurrently(index):
         body = f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.actor_id='{MG}'; SET LOCAL app.tenant_id='{S1}'; {viewed(S1)}; "
@@ -4995,6 +5016,237 @@ def security_log_checks():
     expect(value("select count(*) from platform.tenants t where exists(select 1 from cp.security_log s where s.tenant_id=t.id) "
                  f"and t.id not in ('{S1}','{S2}','{S3}','{S4}') and not (select intact from cp.security_log_verify(t.id))") == "0",
            "todas as demais cadeias gravadas pelas fontes estao integras")
+PARTNER_MATRIX = {
+    "PARTNER_ADMIN": {"partner.manage", "partner.team.manage", "security.log.read"},
+    "SECURITY_LEAD": {"security.command", "security.log.read", "security.log.export", "security.remote_open.review",
+                      "security.policy.publish", "security.blocklist.approve"},
+    "SECURITY_SUPERVISOR": {"security.log.read.shift", "ops.shift.supervise", "ops.remote.operate", "ops.remote.open"},
+    "REMOTE_OPERATOR": {"ops.remote.operate", "ops.remote.open"},
+    "TECHNICIAN": {"devices.commission"},
+}
+SECURITY_CAPABILITIES = sorted({c for caps in PARTNER_MATRIX.values() for c in caps} | {"security.log.read.tenant"})
+
+def partner_checks():
+    """V049 (CPX-001..CPX-003, ADR-0011): parceiro, equipe, contrato e escala. Equipe sem contrato ativo nao alcanca o
+    condominio; operador e supervisor so com escala vigente; um operador de seguranca por condominio; capacidades novas
+    conferidas no banco por has_capability; toda mudanca exige evento PARTNER_* no COMMIT; nada e apagado."""
+    ids = {k: f"10000000-0000-4000-8000-0000000049{n:02x}" for n, k in enumerate(
+        ["PL", "ADM", "LEAD", "SUP", "OP", "TECH", "OP2", "ADM2", "NEW", "MG"], start=1)}
+    PL, ADM, LEAD, SUP, OP, TECH, OP2, ADM2, NEW, MG = (ids[k] for k in
+        ["PL", "ADM", "LEAD", "SUP", "OP", "TECH", "OP2", "ADM2", "NEW", "MG"])
+    P1, P2 = "49000000-0000-4000-8000-000000000001", "49000000-0000-4000-8000-000000000002"
+    M = {k: f"49000000-0000-4000-8000-0000000001{n:02x}" for n, k in enumerate(
+        ["ADM", "LEAD", "SUP", "OP", "TECH", "OP2", "ADM2", "NEW", "SELF", "LEAD_SUP"], start=1)}
+    C1, C2, C3, C4 = (f"49000000-0000-4000-8000-0000000002{n:02x}" for n in range(1, 5))
+    S1, S2, S3 = (f"49000000-0000-4000-8000-0000000003{n:02x}" for n in range(1, 4))
+    G1 = "49000000-0000-4000-8000-000000000401"
+    query("INSERT INTO platform.accounts(id,status) VALUES " + ",".join(f"('{a}','ACTIVE')" for a in ids.values()) + ";"
+          f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) "
+          f"VALUES('{TA}','{MG}',NULL,'GESTAO PARCEIRO FICTICIA','MANAGER','ACTIVE')")
+    plat = "SET LOCAL app.platform_capabilities='partners.read,partners.manage,tenants.read'; "
+
+    def audit(action, key, ident, by=PL, tenant=None, version=0, partner=P1):
+        t = f"'{tenant}'" if tenant else "NULL"
+        return (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) VALUES('{by}','{action}',{t},"
+                f"'Ajuste ficticio','{{\"{key}\":\"{ident}\",\"version\":\"{version}\",\"partnerId\":\"{partner}\"}}'); ")
+
+    def partner(pid, name, audited=True):
+        return plat + (audit("PARTNER_CREATED", "partnerId", pid, partner=pid) if audited else "") + \
+            f"INSERT INTO platform.partners(id,name,created_by,updated_by) VALUES('{pid}','{name}','{PL}','{PL}')"
+
+    def member(mid, pid, account, role, by=PL, prefix=None, audited=True):
+        return (prefix if prefix is not None else plat) + \
+            (audit("PARTNER_MEMBER_ADDED", "memberId", mid, by=by, partner=pid) if audited else "") + \
+            f"INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by) " \
+            f"VALUES('{mid}','{pid}','{account}','{role}','PESSOA FICTICIA {role}','{by}')"
+
+    def contract(cid, pid, tenant, start="clock_timestamp()", end="NULL", audited=True):
+        return plat + (audit("PARTNER_CONTRACT_STARTED", "contractId", cid, tenant=tenant, partner=pid) if audited else "") + \
+            f"INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,ends_at,reason,created_by) " \
+            f"VALUES('{cid}','{pid}','{tenant}','SECURITY_OPERATOR',{start},{end},'Contrato ficticio','{PL}')"
+
+    def schedule(sid, mid, account, pid=P1, tenant=TA, start="clock_timestamp()", end="clock_timestamp()+interval '8 hours'",
+                 by=PL, prefix=None):
+        return (prefix if prefix is not None else plat) + \
+            audit("PARTNER_SCHEDULE_CREATED", "scheduleId", sid, by=by, tenant=tenant, partner=pid) + \
+            f"INSERT INTO cp.operator_schedules(id,tenant_id,partner_id,member_id,account_id,starts_at,ends_at,reason,created_by) " \
+            f"VALUES('{sid}','{tenant}','{pid}','{mid}','{account}',{start},{end},'Escala ficticia','{by}')"
+
+    def tenants_seen(actor):
+        return value("select '['||coalesce(string_agg(name,',' order by name),'')||']' from platform.tenants",
+                     actor=actor, role="cp_api")[1:-1]
+
+    def caps_true(actor, tenant=TA, partner_ctx=None):
+        ctx = f"SET LOCAL app.capabilities='{','.join(SECURITY_CAPABILITIES)}'; "
+        if partner_ctx:
+            ctx += f"SET LOCAL app.partner_id='{partner_ctx}'; "
+        out = value(ctx + "select '['||coalesce(string_agg(c,',' order by c),'')||']' from unnest(platform.security_capabilities()) c "
+                    "where platform.has_capability(c)", tenant=tenant, actor=actor, role="cp_api")
+        return set(filter(None, out[1:-1].split(",")))
+
+    for table in ("platform.partners", "platform.partner_members", "platform.partner_tenant_contracts", "cp.operator_schedules"):
+        expect(value(f"select relrowsecurity and relforcerowsecurity from pg_class where oid='{table}'::regclass") == "t",
+               f"{table} com RLS FORCE")
+    expect(value("select platform.partner_role_capabilities(r) = platform.partner_role_capabilities(r) from (values('X')) v(r)") == "t",
+           "matriz e funcao imutavel")
+    for role, caps in PARTNER_MATRIX.items():
+        expect(set(value(f"select array_to_string(platform.partner_role_capabilities('{role}'),',')").split(",")) == caps,
+               f"matriz do banco para {role} igual a §4.4")
+    # Parceiro: so plataforma com partners.manage, com trilha no COMMIT.
+    expect(error("SET LOCAL app.platform_capabilities='tenants.manage,tenants.read'; " + audit("PARTNER_CREATED", "partnerId", P1, partner=P1)
+                 + f"INSERT INTO platform.partners(id,name,created_by,updated_by) VALUES('{P1}','PARCEIRO FICTICIO','{PL}','{PL}')",
+                 "42501", actor=PL, role="cp_api"), "tenants.manage nao cria parceiro")
+    expect(error(partner(P1, "PARCEIRO FICTICIO UM", audited=False), "23514", actor=PL, role="cp_api"), "parceiro sem evento nao conclui")
+    query(partner(P1, "PARCEIRO FICTICIO UM"), actor=PL, role="cp_api")
+    query(partner(P2, "PARCEIRO FICTICIO DOIS"), actor=PL, role="cp_api")
+    expect(error(partner("49000000-0000-4000-8000-000000000009", "parceiro ficticio um"), "23505", actor=PL, role="cp_api"),
+           "nome de parceiro unico sem diferenciar caixa")
+    for mid, pid, account, role in ((M["ADM"], P1, ADM, "PARTNER_ADMIN"), (M["LEAD"], P1, LEAD, "SECURITY_LEAD"),
+                                    (M["SUP"], P1, SUP, "SECURITY_SUPERVISOR"), (M["OP"], P1, OP, "REMOTE_OPERATOR"),
+                                    (M["TECH"], P1, TECH, "TECHNICIAN"), (M["OP2"], P2, OP2, "REMOTE_OPERATOR"),
+                                    (M["ADM2"], P2, ADM2, "PARTNER_ADMIN")):
+        query(member(mid, pid, account, role), actor=PL, role="cp_api")
+    expect(error(member(M["NEW"], P1, NEW, "REMOTE_OPERATOR", audited=False), "23514", actor=PL, role="cp_api"), "papel sem evento nao conclui")
+    expect(error(member(M["NEW"], P1, NEW, "CONCIERGE"), "23514", actor=PL, role="cp_api"), "papel fora da lista fechada")
+    expect(error(member(M["NEW"], P1, OP, "REMOTE_OPERATOR"), "23505", actor=PL, role="cp_api"), "um papel ativo igual por conta e parceiro")
+    # CPX-001: sem contrato ativo a equipe nao le nenhuma linha do condominio.
+    for actor in (ADM, LEAD, SUP, OP, TECH):
+        expect(tenants_seen(actor) == "", f"sem contrato a equipe nao ve condominio ({actor[-2:]})")
+        expect(value("select count(*) from platform.partner_tenant_contracts", actor=actor, role="cp_api") == "0",
+               f"sem contrato nada na carteira ({actor[-2:]})")
+    expect(caps_true(LEAD) == set(), "sem contrato nenhuma capacidade nova vale mesmo publicada")
+    expect(error(contract(C1, P1, TA, audited=False), "23514", actor=PL, role="cp_api"), "contrato sem evento nao conclui")
+    expect(error(contract(C1, P1, TA, start="clock_timestamp()-interval '1 day'"), "23514", actor=PL, role="cp_api"),
+           "contrato nao retroage")
+    expect(error("SET LOCAL app.platform_capabilities='partners.read'; " + audit("PARTNER_CONTRACT_STARTED", "contractId", C1, tenant=TA)
+                 + f"INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) "
+                 f"VALUES('{C1}','{P1}','{TA}','SECURITY_OPERATOR',clock_timestamp(),'Contrato ficticio','{PL}')", "42501", actor=PL, role="cp_api"),
+           "leitura de parceiros nao cria contrato")
+    query(contract(C1, P1, TA), actor=PL, role="cp_api")
+    expect(error(contract(C2, P2, TA), "23P01", actor=PL, role="cp_api"), "R3.4: segundo operador de seguranca no mesmo condominio e recusado")
+    query(contract(C2, P2, TB), actor=PL, role="cp_api")
+    # R3.2: gestor e lider alcancam todo condominio com contrato ativo, sem escala; tecnico idem (sem devices.commission).
+    for actor in (ADM, LEAD, TECH):
+        expect(tenants_seen(actor) == "FICTICIO A", f"contrato ativo libera o condominio sem escala ({actor[-2:]})")
+    for actor in (SUP, OP):
+        expect(tenants_seen(actor) == "", f"R3.1: operador/supervisor sem escala nao ve o condominio ({actor[-2:]})")
+        expect(value("select count(*) from platform.partner_tenant_contracts", actor=actor, role="cp_api") == "0",
+               f"sem escala nao ve o contrato ({actor[-2:]})")
+    expect(tenants_seen(OP2) == "", "operador de outro parceiro nao ve o condominio")
+    expect(value("select count(*) from platform.partner_tenant_contracts", actor=LEAD, role="cp_api") == "1",
+           "lider ve so a carteira do proprio parceiro")
+    expect(value("select count(*) from platform.partners", actor=LEAD, role="cp_api") == "1", "membro ve so o proprio parceiro")
+    expect(value("select count(*) from platform.partner_members", actor=LEAD, role="cp_api") == "1", "membro sem gestao ve so o proprio papel")
+    # CPX-003: matriz papel x capacidade conferida no banco (todas as capacidades novas publicadas).
+    expect(caps_true(ADM) == PARTNER_MATRIX["PARTNER_ADMIN"], "matriz no banco: PARTNER_ADMIN")
+    expect(caps_true(LEAD) == PARTNER_MATRIX["SECURITY_LEAD"], "matriz no banco: SECURITY_LEAD")
+    expect(caps_true(TECH) == set(), "TECHNICIAN sem concessao tecnica nao tem devices.commission")
+    expect(caps_true(OP) == set() and caps_true(SUP) == set(), "operador e supervisor sem escala nao tem capacidade")
+    expect(caps_true(LEAD, tenant=TB) == set(), "lider nao tem capacidade em condominio de outro parceiro")
+    expect(caps_true(MG) == {"security.log.read.tenant", "security.blocklist.approve"}, "MANAGER vigente: capacidades da gestao local")
+    expect(caps_true(AA) == set(), "morador nao ganha capacidade nova publicada")
+    expect(value("SET LOCAL app.capabilities='units.manage'; select platform.has_capability('units.manage')", tenant=TA, actor=AA,
+                 role="cp_api") == "t", "capacidade antiga segue so pela publicacao")
+    expect(value("select platform.has_capability('security.command')", tenant=TA, actor=LEAD, role="cp_api") == "f",
+           "capacidade nova sem publicacao (AAL1) nao vale")
+    query(f"INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) "
+          f"VALUES('{G1}','{TA}','{TECH}','TECHNICAL_SUPPORT',ARRAY['installation.read'],clock_timestamp(),"
+          f"clock_timestamp()+interval '1 day','OPERATIONS','Concessao ficticia de ensaio')")
+    expect(caps_true(TECH) == PARTNER_MATRIX["TECHNICIAN"], "matriz no banco: TECHNICIAN com concessao tecnica vigente")
+    # Escala (CPX-002).
+    expect(error(schedule(S1, M["LEAD"], LEAD), "23514", actor=PL, role="cp_api"), "lider nao recebe escala")
+    expect(error(schedule(S1, M["OP"], OP, tenant=TB), "23514", actor=PL, role="cp_api"), "escala fora de contrato do parceiro")
+    expect(error(schedule(S1, M["OP"], LEAD), "23503", actor=PL, role="cp_api"), "conta da escala igual a do papel")
+    expect(error(schedule(S1, M["OP"], OP, end="clock_timestamp()+interval '32 days'"), "23514", actor=PL, role="cp_api"),
+           "janela de escala limitada")
+    query(schedule(S1, M["OP"], OP), actor=PL, role="cp_api")
+    expect(error(schedule(S2, M["OP"], OP, start="clock_timestamp()+interval '1 hour'"), "23P01", actor=PL, role="cp_api"),
+           "escalas do mesmo operador no mesmo condominio nao se sobrepoem")
+    query(schedule(S2, M["SUP"], SUP, start="clock_timestamp()+interval '2 hours'", end="clock_timestamp()+interval '10 hours'"),
+          actor=PL, role="cp_api")
+    expect(tenants_seen(OP) == "FICTICIO A", "operador com escala vigente ve o condominio")
+    expect(caps_true(OP) == PARTNER_MATRIX["REMOTE_OPERATOR"], "matriz no banco: REMOTE_OPERATOR com escala")
+    expect(tenants_seen(SUP) == "", "supervisor com escala futura ainda nao ve o condominio")
+    expect(value("select count(*) from platform.partner_tenant_contracts", actor=SUP, role="cp_api") == "1",
+           "supervisor escalado ve o contrato do condominio da escala")
+    expect(value("select count(*) from cp.operator_schedules", actor=OP, role="cp_api") == "1", "operador ve so a propria escala")
+    expect(caps_true(OP, tenant=TB) == set(), "escala nao atravessa para outro condominio")
+    expect(caps_true(OP, tenant=None, partner_ctx=P1) == set(), "operacao no condominio nunca vale so pelo contexto do parceiro")
+    # Gestor do parceiro gerencia a propria equipe e escala (contexto app.partner_id + partner.team.manage).
+    team = f"SET LOCAL app.partner_id='{P1}'; SET LOCAL app.capabilities='partner.team.manage'; "
+    expect(value(team + "select count(*) from platform.partner_members", actor=ADM, role="cp_api") == "5", "gestor ve a equipe do parceiro")
+    query(member(M["NEW"], P1, NEW, "REMOTE_OPERATOR", by=ADM, prefix=team), actor=ADM, role="cp_api")
+    expect(value(f"select created_by from platform.partner_members where id='{M['NEW']}'") == ADM, "gestor do parceiro adiciona papel")
+    expect(error(member(M["SELF"], P1, ADM, "SECURITY_LEAD", by=ADM, prefix=team), "42501", actor=ADM, role="cp_api"),
+           "gestor nao concede papel a si mesmo")
+    expect(error(member(M["LEAD_SUP"], P1, LEAD, "SECURITY_SUPERVISOR", by=OP, prefix=team), "42501", actor=OP, role="cp_api"),
+           "operador com publicacao forjada nao gerencia equipe (conferencia no banco)")
+    other = f"SET LOCAL app.partner_id='{P2}'; SET LOCAL app.capabilities='partner.team.manage'; "
+    expect(error(member(M["LEAD_SUP"], P2, LEAD, "SECURITY_SUPERVISOR", by=ADM, prefix=other), "42501", actor=ADM, role="cp_api"),
+           "gestor nao gerencia equipe de outro parceiro")
+    expect(value(other + "select count(*) from platform.partner_members where partner_id<>'" + P2 + "'", actor=ADM2, role="cp_api") == "0",
+           "gestor de outro parceiro nao le a equipe alheia")
+    expect(error(schedule(S3, M["NEW"], NEW, by=ADM, prefix=team.replace("partner.team.manage", "ops.shift.supervise")), "42501",
+                 actor=ADM, role="cp_api"), "escala exige partner.team.manage")
+    query(schedule(S3, M["NEW"], NEW, by=ADM, prefix=team), actor=ADM, role="cp_api")
+    expect(tenants_seen(NEW) == "FICTICIO A", "escala criada pelo gestor do parceiro vale")
+    query(team + audit("PARTNER_SCHEDULE_CANCELLED", "scheduleId", S3, by=ADM, tenant=TA, version=1) +
+          f"UPDATE cp.operator_schedules SET status='CANCELLED',cancelled_by='{ADM}',cancel_reason='Troca ficticia',version=1 WHERE id='{S3}'",
+          actor=ADM, role="cp_api")
+    expect(tenants_seen(NEW) == "", "escala cancelada corta o acesso na hora")
+    expect(error(team + audit("PARTNER_MEMBER_REVOKED", "memberId", M["ADM"], by=ADM, version=1) +
+                 f"UPDATE platform.partner_members SET status='REVOKED',revoked_by='{ADM}',revoke_reason='Ficticio',version=1 WHERE id='{M['ADM']}'",
+                 "42501", actor=ADM, role="cp_api"), "gestor nao revoga o proprio papel")
+    query(team + audit("PARTNER_MEMBER_REVOKED", "memberId", M["NEW"], by=ADM, version=1) +
+          f"UPDATE platform.partner_members SET status='REVOKED',revoked_by='{ADM}',revoke_reason='Desligamento ficticio',version=1 WHERE id='{M['NEW']}'",
+          actor=ADM, role="cp_api")
+    expect(value(f"select status from platform.partner_members where id='{M['NEW']}'") == "REVOKED", "gestor revoga papel da equipe")
+    expect(error(plat + audit("PARTNER_MEMBER_REVOKED", "memberId", M["NEW"], version=2) +
+                 f"UPDATE platform.partner_members SET status='ACTIVE',version=2 WHERE id='{M['NEW']}'", "23514", actor=PL, role="cp_api"),
+           "revogacao e final")
+    # Imutabilidade e append-only.
+    for table, ident in (("platform.partners", P1), ("platform.partner_members", M["OP"]),
+                         ("platform.partner_tenant_contracts", C1), ("cp.operator_schedules", S1)):
+        expect(error(plat + f"DELETE FROM {table} WHERE id='{ident}'", "42501", actor=PL, role="cp_api"), f"{table} nao e apagada")
+    expect(error(plat + f"UPDATE platform.partner_tenant_contracts SET starts_at=clock_timestamp() WHERE id='{C1}'", "42501",
+                 actor=PL, role="cp_api"), "vigencia do contrato nao muda por coluna")
+    expect(error(plat + f"UPDATE platform.partners SET name='OUTRO' WHERE id='{P1}'", "42501", actor=PL, role="cp_api"),
+           "nome do parceiro sem grant de alteracao")
+    # R3.3: encerrar o contrato revoga na hora o acesso de toda a equipe.
+    expect(error(plat + f"UPDATE platform.partner_tenant_contracts SET status='ENDED',ended_by='{PL}',end_reason='Fim ficticio',version=1 "
+                 f"WHERE id='{C1}'", "23514", actor=PL, role="cp_api"), "encerramento sem evento nao conclui")
+    query(plat + audit("PARTNER_CONTRACT_ENDED", "contractId", C1, tenant=TA, version=1) +
+          f"UPDATE platform.partner_tenant_contracts SET status='ENDED',ended_by='{PL}',end_reason='Fim ficticio',version=1 WHERE id='{C1}'",
+          actor=PL, role="cp_api")
+    for actor in (ADM, LEAD, TECH, OP):
+        # O tecnico ainda ve o condominio pela concessao tecnica V037 (via propria), nunca pelo parceiro.
+        if actor != TECH:
+            expect(tenants_seen(actor) == "", f"R3.3: contrato encerrado tira o condominio ({actor[-2:]})")
+        expect(caps_true(actor) == set(), f"R3.3: contrato encerrado tira as capacidades ({actor[-2:]})")
+    expect(value(f"select count(*) from platform.tenant_modules where tenant_id='{TA}'", actor=LEAD, role="cp_api") == "0",
+           "sem contrato a equipe nao le o modulo do condominio")
+    query(contract(C3, P2, TA), actor=PL, role="cp_api")
+    expect(value(f"select count(*) from platform.partner_tenant_contracts where tenant_id='{TA}'") == "2",
+           "troca de parceiro: novo contrato depois do encerramento")
+    expect(tenants_seen(ADM2) == "FICTICIO A,FICTICIO B", "novo parceiro alcanca a carteira")
+    # Parceiro suspenso perde o acesso; reativado volta.
+    query(plat + audit("PARTNER_SUSPENDED", "partnerId", P2, version=1, partner=P2) +
+          f"UPDATE platform.partners SET status='SUSPENDED',updated_by='{PL}',version=1 WHERE id='{P2}'", actor=PL, role="cp_api")
+    expect(tenants_seen(ADM2) == "", "parceiro suspenso perde o acesso")
+    expect(error(contract(C4, P2, TA, start="clock_timestamp()+interval '400 days'"), "23514", actor=PL, role="cp_api"),
+           "contrato com inicio muito distante e recusado")
+    query(plat + audit("PARTNER_REACTIVATED", "partnerId", P2, version=2, partner=P2) +
+          f"UPDATE platform.partners SET status='ACTIVE',updated_by='{PL}',version=2 WHERE id='{P2}'", actor=PL, role="cp_api")
+    expect(tenants_seen(ADM2) == "FICTICIO A,FICTICIO B", "parceiro reativado volta a alcancar")
+    expect(value("select count(*) from platform.platform_audit_log where action like 'PARTNER\\_%'", actor=ADM2, role="cp_api") == "0",
+           "trilha de parceiro nao e lida sem capacidade")
+    expect(error(f"INSERT INTO platform.platform_audit_log(actor_id,action,reason,details) VALUES('{OP}','PARTNER_CREATED','x','{{}}')",
+                 "42501", actor=OP, role="cp_api"), "equipe nao grava evento de plataforma")
+    query("DELETE FROM cp.operator_schedules WHERE partner_id in ('%s','%s'); DELETE FROM platform.partner_tenant_contracts WHERE partner_id in ('%s','%s'); "
+          "DELETE FROM platform.partner_members WHERE partner_id in ('%s','%s'); DELETE FROM platform.partners WHERE id in ('%s','%s'); "
+          "DELETE FROM cp.technical_grants WHERE id='%s'; DELETE FROM platform.platform_audit_log WHERE action like 'PARTNER%%'; "
+          "DELETE FROM cp.memberships WHERE account_id='%s'; DELETE FROM platform.accounts WHERE id in (%s)"
+          % (P1, P2, P1, P2, P1, P2, P1, P2, G1, MG, ",".join(f"'{a}'" for a in ids.values())))
 
 def main():
     guard()
@@ -5133,6 +5385,7 @@ def main():
     maintenance_checks()
     tenant_module_checks()
     security_log_checks()
+    partner_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

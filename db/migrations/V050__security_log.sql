@@ -12,10 +12,10 @@
 --    e a operação inteira é desfeita.
 --  - platform.security_log_anchors: âncora diária (último hash do dia, fuso America/Sao_Paulo) gravada pelo worker;
 --    cp.security_log_verify recalcula a cadeia e confere âncoras e cabeça.
---  - Leitura: security.log.read.tenant (MANAGER, próprio condomínio, AAL2). security.log.read e security.log.export
---    (parceiro, CPX-003) já valem nas políticas e só passam a ser publicadas pela hierarquia de parceiros, sem migration.
---  - partner_id fica sem chave estrangeira nesta migration: platform.partners nasce no PR da hierarquia (CPX-001), que
---    acrescenta a FK. Retenção ainda indefinida (DECISOES_COMPLEMENTAR.md): nenhuma rotina de expurgo.
+--  - Leitura: security.log.read.tenant (MANAGER, próprio condomínio, AAL2) ou security.log.read/security.log.export
+--    (papel de parceiro com alcance, V049), sempre conferidas por platform.has_capability.
+--  - partner_id referencia platform.partners (V049) e é definido pelo banco: parceiro do papel com alcance de quem agiu.
+--    Retenção ainda indefinida (DECISOES_COMPLEMENTAR.md): nenhuma rotina de expurgo.
 
 -- 1. Catálogo, cabeça da cadeia e log.
 CREATE FUNCTION cp.security_log_event_types() RETURNS text[]
@@ -57,8 +57,9 @@ CREATE TABLE cp.security_log_heads (
 CREATE TABLE cp.security_log (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  tenant_id uuid NOT NULL REFERENCES platform.tenants(id),
- -- Parceiro operador no momento. FK para platform.partners entra com a hierarquia (CPX-001), em migration própria.
- partner_id uuid,
+ -- Parceiro da equipe que agiu (papel de parceiro com alcance no condomínio, V049); nulo para equipe local, morador,
+ -- equipamento e sistema. Definido pelo banco, nunca pelo cliente.
+ partner_id uuid REFERENCES platform.partners(id),
  seq bigint NOT NULL CHECK(seq>=1),
  occurred_at timestamptz NOT NULL CHECK(isfinite(occurred_at)),
  recorded_at timestamptz NOT NULL,
@@ -106,7 +107,30 @@ GRANT EXECUTE ON FUNCTION cp.security_log_digest(text,cp.security_log) TO cp_api
 
 -- Papel do ator no condomínio (equipe antes de unidade); plataforma e escopo técnico quando não há vínculo. Sem ator
 -- (worker, gateway, sistema) retorna antes de qualquer consulta: o PostgreSQL confere os privilégios de toda tabela da
--- instrução mesmo no ramo não executado, e o worker não lê vínculos.
+-- instrução mesmo no ramo não executado, e o worker não lê vínculos. Sem vínculo no condomínio, o papel de parceiro com
+-- alcance (platform.partner_reach, V049), só para quem pode executá-la (cp_api).
+-- Ordem estável dos papéis de parceiro (o de maior alcance primeiro).
+CREATE FUNCTION cp.security_log_partner_rank(role_code text) RETURNS integer
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+ SELECT CASE role_code WHEN 'SECURITY_LEAD' THEN 0 WHEN 'PARTNER_ADMIN' THEN 1 WHEN 'SECURITY_SUPERVISOR' THEN 2
+  WHEN 'REMOTE_OPERATOR' THEN 3 WHEN 'TECHNICIAN' THEN 4 ELSE 5 END $$;
+REVOKE ALL ON FUNCTION cp.security_log_partner_rank(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.security_log_partner_rank(text) TO cp_api,cp_worker,cp_onboarding;
+
+-- Parceiro do papel com alcance usado acima (mesma ordem); nulo sem ator, com vínculo local ou sem permissão.
+CREATE FUNCTION cp.security_log_actor_partner(target_tenant uuid,actor_role text) RETURNS uuid
+LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
+DECLARE found uuid;
+BEGIN
+ IF platform.current_actor_id() IS NULL OR actor_role IS NULL OR cp.security_log_partner_rank(actor_role)=5
+   OR NOT has_function_privilege('platform.partner_reach()','EXECUTE') THEN RETURN NULL; END IF;
+ SELECT r.partner_id INTO found FROM platform.partner_reach() r WHERE r.tenant_id=target_tenant AND r.role=actor_role
+  ORDER BY r.partner_id LIMIT 1;
+ RETURN found;
+END $$;
+REVOKE ALL ON FUNCTION cp.security_log_actor_partner(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.security_log_actor_partner(uuid,text) TO cp_api,cp_worker,cp_onboarding;
+
 CREATE FUNCTION cp.security_log_actor_role(target_tenant uuid) RETURNS text
 LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
 DECLARE actor uuid:=platform.current_actor_id(); found_role text;
@@ -116,6 +140,10 @@ BEGIN
    AND m.status='ACTIVE' AND m.valid_from<=now() AND (m.valid_until IS NULL OR m.valid_until>now())
   ORDER BY (m.unit_id IS NOT NULL),CASE m.role WHEN 'MANAGER' THEN 0 WHEN 'CONCIERGE' THEN 1 WHEN 'MAINTENANCE' THEN 2
    WHEN 'SUPPORT' THEN 3 WHEN 'RESPONSIBLE' THEN 4 WHEN 'OWNER' THEN 5 WHEN 'RESIDENT' THEN 6 ELSE 7 END LIMIT 1;
+ IF found_role IS NULL AND has_function_privilege('platform.partner_reach()','EXECUTE') THEN
+  SELECT r.role INTO found_role FROM platform.partner_reach() r WHERE r.tenant_id=target_tenant
+   ORDER BY cp.security_log_partner_rank(r.role),r.partner_id LIMIT 1;
+ END IF;
  RETURN coalesce(found_role,
   CASE WHEN nullif(current_setting('app.platform_capabilities',true),'') IS NOT NULL THEN 'PLATFORM_ADMIN'
    WHEN nullif(current_setting('app.technical_scopes',true),'') IS NOT NULL THEN 'TECHNICAL_GRANT' END);
@@ -139,6 +167,7 @@ BEGIN
  NEW.clock_skew_ms:=CASE WHEN NEW.source='DEVICE' THEN NEW.clock_skew_ms END;
  NEW.actor_account_id:=platform.current_actor_id();
  NEW.actor_role:=cp.security_log_actor_role(NEW.tenant_id);
+ NEW.partner_id:=cp.security_log_actor_partner(NEW.tenant_id,NEW.actor_role);
  NEW.details:=coalesce(NEW.details,'{}'::jsonb);
  NEW.seq:=head.last_seq+1;
  NEW.prev_hash:=head.last_hash;
@@ -175,7 +204,7 @@ CREATE TRIGGER security_log_heads_no_truncate BEFORE TRUNCATE ON cp.security_log
 
 -- 3. Grants e RLS. Runtime: só INSERT, por coluna, sem colunas preenchidas pelo banco (R5.1).
 REVOKE ALL ON cp.security_log,cp.security_log_heads FROM PUBLIC;
-GRANT INSERT(id,tenant_id,partner_id,occurred_at,clock_skew_ms,event_type,severity,source,session_id,subject_type,subject_id,unit_id,
+GRANT INSERT(id,tenant_id,occurred_at,clock_skew_ms,event_type,severity,source,session_id,subject_type,subject_id,unit_id,
  point_id,device_id,reason,evidence_ref,correlation_id,trace_id,corrects_id,details) ON cp.security_log TO cp_api,cp_worker,cp_onboarding;
 GRANT SELECT ON cp.security_log TO cp_api;
 -- Worker: só o necessário para a âncora diária.

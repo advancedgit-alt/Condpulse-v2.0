@@ -5,6 +5,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.partners.application.PartnerCapability;
 import br.com.condpulse.securitylog.infrastructure.SecurityLogStore;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.application.DisplayText;
@@ -62,7 +63,8 @@ public class SecurityLogService {
      || request.fromSeq()!=null && request.toSeq()!=null && request.toSeq()<request.fromSeq())
    throw new BusinessProblem("SECURITY_LOG_EXPORT_RANGE_INVALID",400,"Intervalo de sequência inválido.");
   return execute(actor,tenant,assurance,context->{
-   context.requireCapability(StaffCapability.EXPORT_SECURITY_LOG);
+   // Exportação só pelo líder de segurança do parceiro com alcance no condomínio (R5.7, V049); gestão local não exporta.
+   context.requirePartnerCapability(PartnerCapability.EXPORT_SECURITY_LOG);
    long last=store.lastSeq(tenant);
    long to=request.toSeq()==null?last:request.toSeq();
    long from=request.fromSeq()==null?Math.max(1,to-SecurityLogModels.MAX_EXPORT+1):request.fromSeq();
@@ -88,11 +90,16 @@ public class SecurityLogService {
   });
  }
 
- /** Leitura com AAL2: parceiro (security.log.read) vê tudo; gestão local (read.tenant) sem conta da equipe do parceiro. */
+ /**
+  * Leitura com AAL2: equipe do parceiro com alcance (security.log.read, V049) vê tudo; gestão local
+  * (security.log.read.tenant) vê a equipe do parceiro só pelo papel (R5.6). Leitura de turno (security.log.read.shift)
+  * ainda não tem política no log: recusada aqui.
+  */
  static boolean requireReader(TenantContext context) {
-  var granted=context.grantedCapabilities();
-  if(granted.contains(StaffCapability.READ_SECURITY_LOG)) { context.requireCapability(StaffCapability.READ_SECURITY_LOG); return true; }
-  context.requireCapability(StaffCapability.READ_SECURITY_LOG_TENANT);
+  if(context.grantedPartnerCapabilities().contains(PartnerCapability.READ_SECURITY_LOG)) {
+   context.requirePartnerCapability(PartnerCapability.READ_SECURITY_LOG); return true;
+  }
+  context.requireCapability(StaffCapability.READ_TENANT_SECURITY_LOG);
   return false;
  }
 

@@ -20573,6 +20573,1422 @@
         }
       }
     },
+    "/v1/platform/partners": {
+      "get": {
+        "operationId": "platformPartners",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Parceiros da plataforma (partners.read, AAL2), até 500 por nome. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPlatformPartner",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Cria parceiro ativo (partners.manage, AAL2) com motivo e evento PARTNER_CREATED exigido pelo banco no COMMIT (V049, ADR-0011). Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePartner"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}": {
+      "get": {
+        "operationId": "platformPartner",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Ficha do parceiro: equipe e contratos com condomínios (partners.read, AAL2). Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/status": {
+      "put": {
+        "operationId": "changePlatformPartnerStatus",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Suspende ou reativa o parceiro pela versão lida (partners.manage, AAL2), com evento PARTNER_SUSPENDED/PARTNER_REACTIVATED. Suspenso, a equipe perde na hora o acesso a todos os condomínios. Pedido igual ao estado devolve applied=false. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePartnerStatus"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/contracts": {
+      "post": {
+        "operationId": "startPlatformPartnerContract",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Vincula condomínio ativo ao parceiro (contrato de operador de segurança, partners.manage, AAL2), com evento PARTNER_CONTRACT_STARTED. No máximo um operador de segurança por condomínio em cada instante (R3.4: 409 PARTNER_PERIOD_CONFLICT). Sem início, vale a partir de agora. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPartnerContract"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerContract"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/contracts/{contractId}/end": {
+      "post": {
+        "operationId": "endPlatformPartnerContract",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Desvincula: encerra o contrato com motivo e evento PARTNER_CONTRACT_ENDED; o acesso de toda a equipe do parceiro ao condomínio termina na próxima requisição (R3.3). Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "contractId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerContract"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/members": {
+      "post": {
+        "operationId": "addPlatformPartnerMember",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Concede papel de parceiro a uma conta existente (partners.manage, AAL2), com evento PARTNER_MEMBER_ADDED. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPartnerMember"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/members/{memberId}/revoke": {
+      "post": {
+        "operationId": "revokePlatformPartnerMember",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Revoga o papel (final) com motivo e evento PARTNER_MEMBER_REVOKED; o acesso termina na próxima requisição. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/schedules": {
+      "get": {
+        "operationId": "platformPartnerSchedules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Escalas do parceiro, opcionalmente de um condomínio (partners.read, AAL2). Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorSchedulePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPlatformPartnerSchedule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Escala operador ou supervisor ativo num condomínio com contrato ativo do parceiro (no máximo 31 dias por escala), com evento PARTNER_SCHEDULE_CREATED. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOperatorSchedule"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/partners/{partnerId}/schedules/{scheduleId}/cancel": {
+      "post": {
+        "operationId": "cancelPlatformPartnerSchedule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Cancela a escala (final) com motivo e evento PARTNER_SCHEDULE_CANCELLED; o operador perde o condomínio na hora. Exige também CP_PLATFORM_ENABLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma ou sem partners.read/partners.manage), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/team": {
+      "get": {
+        "operationId": "partnerTeam",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Equipe do próprio parceiro (partner.team.manage, AAL2; conferido no banco).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMemberPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addPartnerTeamMember",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "O gestor do parceiro concede papel a outra conta (nunca a si mesmo), com evento PARTNER_MEMBER_ADDED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPartnerMember"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/team/{memberId}/revoke": {
+      "post": {
+        "operationId": "revokePartnerTeamMember",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "O gestor do parceiro revoga papel de outra conta (nunca o próprio), com evento PARTNER_MEMBER_REVOKED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/schedules": {
+      "get": {
+        "operationId": "partnerSchedules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Escalas do próprio parceiro (partner.team.manage, AAL2).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorSchedulePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPartnerSchedule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "O gestor do parceiro escala operador ou supervisor num condomínio com contrato ativo, com evento PARTNER_SCHEDULE_CREATED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOperatorSchedule"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/schedules/{scheduleId}/cancel": {
+      "post": {
+        "operationId": "cancelPartnerSchedule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "O gestor do parceiro cancela a escala, com evento PARTNER_SCHEDULE_CANCELLED.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED, PARTNER_NAME_INVALID, PARTNER_STATUS_INVALID, PARTNER_VERSION_REQUIRED, PARTNER_CONTRACT_INVALID, PARTNER_MEMBER_INVALID, PARTNER_ROLE_INVALID ou PARTNER_SCHEDULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "409": {
+            "description": "PARTNER_CHANGED, PARTNER_DUPLICATE, PARTNER_PERIOD_CONFLICT (R3.4 ou escala sobreposta), PARTNER_CONTRACT_ENDED, PARTNER_MEMBER_REVOKED ou PARTNER_SCHEDULE_CANCELLED"
+          },
+          "422": {
+            "description": "PARTNER_RULE_VIOLATED (parceiro/condomínio inativo, escala fora de contrato ou de papel operador/supervisor) ou PARTNER_REFERENCE_INVALID"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/portfolio": {
+      "get": {
+        "operationId": "partnerPortfolio",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "Carteira do próprio parceiro: contratos com condomínios (partner.manage, AAL2).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerContractPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem a capacidade), PARTNER_SELF_CHANGE_DENIED (o gestor não altera o próprio papel), ACCOUNT_INACTIVE, MFA_REQUIRED (segundo fator exigido) ou PARTNER_FORBIDDEN (recusado pelo banco)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, PARTNER_MEMBER_NOT_FOUND, PARTNER_SCHEDULE_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "PARTNER_UNAVAILABLE"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/security-log": {
       "get": {
         "operationId": "securityLogPage",
@@ -20585,7 +22001,7 @@
           }
         ],
         "x-feature-flag": "CP_SECURITY_LOG_ENABLED",
-        "description": "Log de Segurança do condomínio (V050, CPX-009), mais recente primeiro (seq decrescente). Exige security.log.read.tenant (gestão local) ou security.log.read (parceiro) e AAL2. Toda consulta grava SENSITIVE_VIEWED na mesma transação. Para a gestão local, a conta da equipe do parceiro aparece só pelo papel (actorAccountId nulo).",
+        "description": "Log de Segurança do condomínio (V050, CPX-009), mais recente primeiro (seq decrescente). Exige security.log.read.tenant (gestão local) ou security.log.read (PARTNER_ADMIN/SECURITY_LEAD com contrato ativo, V049) e AAL2. Toda consulta grava SENSITIVE_VIEWED na mesma transação. Para a gestão local, a conta da equipe do parceiro aparece só pelo papel (actorAccountId nulo).",
         "parameters": [
           {
             "name": "tenantId",
@@ -20777,7 +22193,7 @@
           }
         ],
         "x-feature-flag": "CP_SECURITY_LOG_ENABLED",
-        "description": "Exporta um intervalo contíguo de seq (até 5.000 eventos; padrão: os mais recentes) com manifesto (intervalo, hash anterior ao primeiro, hashes de início e fim, quem exportou, motivo) e grava LOG_EXPORTED na mesma transação (CPX-010, R5.7). Só com security.log.export (líder de segurança do parceiro, publicada pela hierarquia) e AAL2; nenhum papel de condomínio a recebe hoje.",
+        "description": "Exporta um intervalo contíguo de seq (até 5.000 eventos; padrão: os mais recentes) com manifesto (intervalo, hash anterior ao primeiro, hashes de início e fim, quem exportou, motivo) e grava LOG_EXPORTED na mesma transação (CPX-010, R5.7). Só com security.log.export (SECURITY_LEAD do parceiro com contrato ativo no condomínio, V049) e AAL2; a gestão local não exporta.",
         "parameters": [
           {
             "name": "tenantId",
@@ -20889,7 +22305,7 @@
           },
           "tenantModules": {
             "type": "array",
-            "description": "Por condomínio dos vínculos, os módulos liberados (flag global ligada e condomínio liberado pela central) para o menu; a API confere de novo a cada requisição.",
+            "description": "Por condomínio dos vínculos, os módulos liberados (flag global ligada e condomínio liberado pela central) para o menu; a API confere de novo a cada requisição. Inclui os condomínios alcançados por papel de parceiro.",
             "items": {
               "type": "object",
               "required": [
@@ -20919,6 +22335,13 @@
                 }
               }
             }
+          },
+          "partnerContexts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerContext"
+            },
+            "description": "Papéis ativos de parceiro (V049, ADR-0011) para a /entrada rotear; vazio com CP_PARTNERS_ENABLED=false. Campo novo e aditivo."
           }
         }
       },
@@ -35288,6 +36711,635 @@
           },
           "duplicate": {
             "type": "boolean"
+          }
+        }
+      },
+      "Partner": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "status",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PartnerPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partners"
+        ],
+        "properties": {
+          "partners": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/Partner"
+            }
+          }
+        }
+      },
+      "PartnerMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "partnerId",
+          "accountId",
+          "role",
+          "displayName",
+          "status",
+          "version",
+          "createdAt",
+          "revokedAt",
+          "revokeReason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTNER_ADMIN",
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR",
+              "TECHNICIAN"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokeReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PartnerContract": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "partnerId",
+          "tenantId",
+          "tenantName",
+          "service",
+          "status",
+          "version",
+          "startsAt",
+          "endsAt",
+          "endedAt",
+          "endReason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nulo quando o condomínio não é mais visível para quem lê."
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "SECURITY_OPERATOR"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ENDED"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "endReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "OperatorSchedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "partnerId",
+          "tenantId",
+          "memberId",
+          "accountId",
+          "status",
+          "version",
+          "startsAt",
+          "endsAt",
+          "cancelledAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "CANCELLED"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancelledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "PartnerDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partner",
+          "members",
+          "contracts"
+        ],
+        "properties": {
+          "partner": {
+            "$ref": "#/components/schemas/Partner"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerMember"
+            }
+          },
+          "contracts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerContract"
+            }
+          }
+        }
+      },
+      "PartnerMemberPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partnerId",
+          "members"
+        ],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerMember"
+            }
+          }
+        }
+      },
+      "PartnerContractPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partnerId",
+          "contracts"
+        ],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contracts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerContract"
+            }
+          }
+        }
+      },
+      "OperatorSchedulePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partnerId",
+          "schedules"
+        ],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schedules": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/OperatorSchedule"
+            }
+          }
+        }
+      },
+      "PartnerChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applied",
+          "partner"
+        ],
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "partner": {
+            "$ref": "#/components/schemas/Partner"
+          }
+        }
+      },
+      "CreatePartner": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "reason"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "ChangePartnerStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "StartPartnerContract": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "reason"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "PartnerReason": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "AddPartnerMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "role",
+          "displayName",
+          "reason"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTNER_ADMIN",
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR",
+              "TECHNICIAN"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "CreateOperatorSchedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memberId",
+          "tenantId",
+          "endsAt",
+          "reason"
+        ],
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "PartnerContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memberId",
+          "partnerId",
+          "partnerName",
+          "role",
+          "panel",
+          "capabilities",
+          "tenants"
+        ],
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTNER_ADMIN",
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR",
+              "TECHNICIAN"
+            ]
+          },
+          "panel": {
+            "type": "string",
+            "enum": [
+              "gestao",
+              "comando",
+              "turno",
+              "console",
+              "tecnico"
+            ],
+            "description": "Segmento da rota /p/{partnerId}/{panel} (PRD complementar §4.1)."
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "partner.manage",
+                "partner.team.manage",
+                "security.command",
+                "security.log.read",
+                "security.log.read.shift",
+                "security.log.export",
+                "security.remote_open.review",
+                "security.policy.publish",
+                "security.blocklist.approve",
+                "ops.shift.supervise",
+                "ops.remote.operate",
+                "ops.remote.open",
+                "devices.commission"
+              ]
+            },
+            "description": "Capacidades do papel para o menu; a API e o banco conferem de novo (AAL2, contrato e escala)."
+          },
+          "tenants": {
+            "type": "array",
+            "description": "Condomínios alcançados agora: contrato ativo e, para operador e supervisor, escala vigente.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tenantId",
+                "tenantName",
+                "timeZone"
+              ],
+              "properties": {
+                "tenantId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "tenantName": {
+                  "type": "string"
+                },
+                "timeZone": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },

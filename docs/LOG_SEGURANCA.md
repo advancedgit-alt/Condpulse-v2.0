@@ -12,8 +12,9 @@ Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na V
 - Sequência por condomínio sem buracos e cadeia SHA-256 calculadas no banco sob a trava da linha de
   `cp.security_log_heads` (R5.3). `recorded_at = clock_timestamp()` depois da trava; `occurred_at` é o relógio do banco,
   exceto para eventos de equipamento (horário informado; R5.5).
-- `details` em jsonb de até 4 KB, sem chave que sugira biometria em qualquer nível (R5.9). `partner_id` existe sem
-  chave estrangeira: `platform.partners` chega com a hierarquia (CPX-001), que acrescenta a FK em migration própria.
+- `details` em jsonb de até 4 KB, sem chave que sugira biometria em qualquer nível (R5.9). `partner_id` referencia
+  `platform.partners` (V049) e é definido pelo banco: parceiro do papel com alcance de quem agiu
+  (`platform.partner_reach`); `actor_role` traz o papel de parceiro quando a conta não tem vínculo no condomínio.
 - Gravação na mesma transação (R5.4) por gatilhos de restrição `DEFERRABLE INITIALLY DEFERRED` nas fontes. Eles rodam no
   COMMIT, depois das travas de negócio, então a trava do log é sempre a última (sem ciclo de impasse). Se o log falha,
   o COMMIT falha e a operação inteira é desfeita.
@@ -50,9 +51,9 @@ novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
   contíguo de até 5.000 eventos com manifesto e `LOG_EXPORTED` na mesma transação (R5.7).
 - `SENSITIVE_VIEWED` na mesma transação da leitura: busca e integridade do log (sempre), histórico de acesso do
   condomínio pela portaria, cadastro de pessoas (sujeitos de acesso) e evidência de idade (com a flag ligada).
-- `security.log.read`, `security.log.export` e `security.log.read.shift` não são publicadas por nenhum papel de
-  condomínio: chegam com a hierarquia de parceiros (CPX-001/CPX-003). As duas primeiras já valem nas políticas da V050;
-  a de turno depende da escala (CPX-002) e precisa de política nova.
+- `security.log.read` (PARTNER_ADMIN, SECURITY_LEAD) e `security.log.export` (SECURITY_LEAD) vêm dos papéis de
+  parceiro com alcance no condomínio (V049, `PartnerCapability`) e são conferidas de novo por `platform.has_capability`.
+  `security.log.read.shift` (supervisor) ainda não tem política no log: recusada até uma fatia própria (log do turno).
 
 ## Forma canônica do hash (`cpsl1`)
 
@@ -66,7 +67,7 @@ recalcula um hash fora do banco com essa regra.
 ## Limites e pendências
 
 - Retenção indefinida até decisão do responsável (DECISOES_COMPLEMENTAR.md): nenhuma rotina de expurgo.
-- `platform.partner_security_log` (eventos só de parceiro) e a FK de `partner_id` ficam para depois da hierarquia.
+- `platform.partner_security_log` (eventos só de parceiro, sem condomínio) e o log do turno ficam para depois.
 - A gravação pelas fontes é do banco: aplicar a V050 na homologação liga a gravação mesmo com a flag desligada (a flag
   controla a API, as consultas sensíveis e a âncora). A V050 não foi aplicada em nenhum banco remoto.
 - Intervenção de superusuário com `session_replication_role=replica` não grava no log (gatilhos desligados); a
