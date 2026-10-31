@@ -1,8 +1,9 @@
 import type {
   Amenity, AmenityAvailability, CancelReservation, CreateReservation, CurrentIdentity, InvitationAccepted, InvitationFirstAccess, Membership,
   MfaStatus, MutationResult, RecoveryCompleted, RecoveryVerified, Reservation, ReservationPage, ReservationPolicy, Session,
-  TotpEnrollment, Unit,
+  TenantModules, TotpEnrollment, Unit,
 } from './types';
+import { tenantModuleIds } from './types';
 import { parseRetryAfterSeconds, remainingCooldown } from './cooldown';
 import { instantMicros } from './instant';
 
@@ -337,7 +338,7 @@ const messages: Record<string, string> = {
   TENANT_MODULE_CHANGED: 'O módulo foi alterado por outra pessoa depois da leitura. Recarregue e confira antes de repetir.',
   TENANT_MODULE_INVALID: 'Os dados da alteração do módulo não atendem às regras.',
   TENANT_MODULE_UNAVAILABLE: 'Não foi possível consultar ou alterar os módulos agora. Tente novamente.',
-  MODULE_DISABLED: 'Este módulo não está liberado para o condomínio.',
+  MODULE_DISABLED: 'Módulo desligado pela administradora para este condomínio. Nenhum dado foi apagado.',
   TENANT_MODULE_FORBIDDEN: 'Operação não permitida para este acesso.',
   TENANT_MODULE_STATE_REQUIRED: 'Informe se o módulo fica liberado ou suspenso.',
   TENANT_MODULE_VERSION_REQUIRED: 'Recarregue o módulo antes de alterar.',
@@ -672,10 +673,33 @@ function membership(value: unknown): Membership | null {
     timeZone: value.timeZone, unitId: value.unitId, role: value.role };
 }
 
+/**
+ * Módulos liberados por condomínio (V045). Ausente (servidor anterior): null, sem esconder nada. Módulo novo que esta
+ * versão da web não conhece fica de fora, como o papel novo; condomínio repetido ou valor malformado derruba a resposta.
+ */
+function tenantModuleList(value: unknown): TenantModules[] | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) throw invalidResponse();
+  const seen = new Set<string>();
+  return value.map((item) => {
+    if (!record(item) || !isUUID(item.tenantId) || !Array.isArray(item.enabled)
+        || !item.enabled.every((module) => typeof module === 'string' && /^[a-z][a-z_]{1,39}$/.test(module))
+        || seen.has(item.tenantId.toLowerCase())) throw invalidResponse();
+    seen.add(item.tenantId.toLowerCase());
+    return { tenantId: item.tenantId, enabled: tenantModuleIds.filter((module) => (item.enabled as unknown[]).includes(module)) };
+  });
+}
+
 function identity(value: unknown): CurrentIdentity {
   if (!record(value) || !isUUID(value.accountId) || !Array.isArray(value.memberships)) throw invalidResponse();
   return { accountId: value.accountId,
-    memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null) };
+    memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null),
+    tenantModules: tenantModuleList(value.tenantModules) };
+}
+
+/** Módulo desligado pela central para o condomínio (403 MODULE_DISABLED): não é perda de vínculo nem de sessão. */
+export function isModuleDisabled(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'MODULE_DISABLED';
 }
 
 function unit(value: unknown): Unit {
@@ -806,10 +830,17 @@ export class CondPulseApi {
   private refreshFlight: { generation: number; promise: Promise<Session> } | undefined;
   private csrfFlight: { generation: number; promise: Promise<Csrf> } | undefined;
   private readonly expiredListeners = new Set<(failure: unknown) => void>();
+  private readonly moduleListeners = new Set<(failure: ApiError) => void>();
 
   constructor(options: { fetch?: typeof globalThis.fetch; now?: () => number } = {}) {
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? (() => globalThis.performance.now());
+  }
+
+  /** Aviso de 403 MODULE_DISABLED em qualquer chamada: a casca relê /v1/me para atualizar o menu. */
+  onModuleDisabled(listener: (failure: ApiError) => void): () => void {
+    this.moduleListeners.add(listener);
+    return () => { this.moduleListeners.delete(listener); };
   }
 
   onSessionExpired(listener: (failure: unknown) => void): () => void {
@@ -933,6 +964,11 @@ export class CondPulseApi {
       }
     } catch (error: unknown) {
       if (error instanceof ApiError && (error.status === 401 || error.code === 'ACCOUNT_INACTIVE')) this.expire(generation, error);
+      if (error instanceof ApiError && error.code === 'MODULE_DISABLED' && generation === this.generation) {
+        for (const listener of this.moduleListeners) {
+          try { listener(error); } catch { /* Um consumidor não pode impedir os demais. */ }
+        }
+      }
       throw error;
     }
   }

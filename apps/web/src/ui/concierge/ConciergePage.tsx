@@ -14,7 +14,7 @@ import { ArrivalDesk } from './Arrivals';
 import { OccurrenceSection } from './Occurrences';
 import { ConciergeMoves } from '../Moves';
 import { AccessHealthSection, ConciergeDeviceEvents, ConciergePendingRevocations } from '../AccessCredentials';
-import { ENTRY_PATH, conciergePath } from '../shell/paths';
+import { ENTRY_PATH, conciergePath, condoOf, sectionEnabled } from '../shell/paths';
 import '../management/Management.css';
 
 export type ConciergeSection = 'encomendas' | 'visitas' | 'ocorrencias';
@@ -35,6 +35,8 @@ export function ConciergePage({ section }: { section: ConciergeSection }) {
 
 function ConciergeGate({ scope, section }: { scope: ManagementScope; section: ConciergeSection }) {
   const queries = useQueryClient();
+  const { identity } = useAuth();
+  const condo = condoOf(identity, scope.tenantId);
   const status = useQuery({ queryKey: mfaStatusKey(scope.accountId), queryFn: ({ signal }) => api.mfaStatus(signal), refetchOnWindowFocus: false });
   const [demanded, setDemanded] = useState(false);
   const [denied, setDenied] = useState<unknown>(null);
@@ -67,7 +69,7 @@ function ConciergeGate({ scope, section }: { scope: ManagementScope; section: Co
         ? 'Chegadas, confirmações e encerramentos ficam registrados com o seu acesso. Sem resposta da unidade nada é liberado automaticamente.'
         : 'Recebimentos, retiradas e anulações ficam registrados com o seu acesso. O aviso ao morador segue em fila e nunca condiciona o registro.'} Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão da portaria</span></div></div></div>
-    <SectionTabs label="Seções da portaria" current={section} items={conciergeSections.map((item) => ({ id: item.id, label: item.label, to: conciergePath(scope.tenantId, item.id) }))} />
+    <SectionTabs label="Seções da portaria" current={section} items={conciergeSections.filter((item) => sectionEnabled(condo, 'portaria', item.id)).map((item) => ({ id: item.id, label: item.label, to: conciergePath(scope.tenantId, item.id) }))} />
     {section === 'ocorrencias' ? <OccurrenceSection canPickUnit /> : section === 'visitas' ? <><ArrivalDesk /><ConciergePendingRevocations /><AccessHealthSection /><ConciergeDeviceEvents /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
   </ManagementProvider>;
 }

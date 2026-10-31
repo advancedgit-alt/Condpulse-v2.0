@@ -20,8 +20,10 @@ import { OwnerRentalPage, rentalKey } from './ui/Rental';
 import { UnitFinancePage, financeRoles } from './ui/Finance';
 import { rental } from './api/rental';
 import { EntryPage, usePlatformAccess } from './ui/shell/Entry';
-import { CondoHome, CondoIndex, ResidentUnitPicker, areaPath, useCondo, useTechnicalAccess } from './ui/shell/Condo';
-import { ENTRY_PATH, centralPath, condoAreas, condominiums, legacyTarget, placeOf, residentRoot, type AreaId } from './ui/shell/paths';
+import { ConciergeIndex, CondoHome, CondoIndex, CondoModuleOff, ResidentUnitPicker, areaPath, useCondo, useTechnicalAccess } from './ui/shell/Condo';
+import { ENTRY_PATH, centralPath, condoAreas, condominiums, legacyTarget, maintenancePath, placeModules, placeOf, residentRoot, sectionEnabled,
+  type AreaId } from './ui/shell/paths';
+import { MaintenancePage, maintenanceSections } from './ui/maintenance/MaintenancePage';
 import { Brand, Icon, Loading, OfflineNotice, type IconName } from './ui/primitives';
 import { BrandingProvider, ThemeProvider, ThemeToggle, useBrandingStyle } from './ui/theme/ThemeContext';
 import type { TenantBrandingConfig } from './ui/theme/branding';
@@ -49,10 +51,13 @@ export default function App() {
       <Route path="/c/:tenantId/morador/:unitId/acessos" element={<VisitsPage />} />
       <Route path="/c/:tenantId/morador/:unitId/inquilinos" element={<OwnerRentalPage />} />
       <Route path="/c/:tenantId/morador/:unitId/financeiro" element={<UnitFinancePage />} />
-      <Route path="/c/:tenantId/portaria" element={<Navigate to="encomendas" replace />} />
+      <Route path="/c/:tenantId/portaria" element={<ConciergeIndex />} />
       <Route path="/c/:tenantId/portaria/encomendas" element={<ConciergePage section="encomendas" />} />
       <Route path="/c/:tenantId/portaria/visitas" element={<ConciergePage section="visitas" />} />
       <Route path="/c/:tenantId/portaria/ocorrencias" element={<ConciergePage section="ocorrencias" />} />
+      <Route path="/c/:tenantId/zeladoria" element={<Navigate to="pedidos" replace />} />
+      <Route path="/c/:tenantId/zeladoria/pedidos" element={<MaintenancePage />} />
+      <Route path="/c/:tenantId/zeladoria/pedidos/:requestId" element={<MaintenancePage />} />
       <Route path="/c/:tenantId/gestao" element={<ManagementPage />} />
       <Route path="/c/:tenantId/gestao/:section" element={<ManagementPage />} />
       <Route path="/c/:tenantId/implantacao" element={<InstallationPage />} />
@@ -79,12 +84,13 @@ function ProtectedShell() {
   return <AuthBoundary><OperationsProvider key={identity?.accountId}><Shell /></OperationsProvider></AuthBoundary>;
 }
 
-interface NavItem { id: string; label: string; icon: IconName; to: string | null; current: boolean }
+/** to null: item sem link, com a nota (padrão "em breve"; área com módulos desligados: "desligado"). */
+interface NavItem { id: string; label: string; icon: IconName; to: string | null; current: boolean; note?: string }
 const areaIcons: Record<AreaId, IconName> = { inicio: 'grid', morador: 'home', portaria: 'door', zeladoria: 'truck', gestao: 'building', implantacao: 'key' };
 const areaTitles: Record<AreaId | '', string> = { '': 'Condomínio', inicio: 'Condomínio', morador: 'Portal do morador', portaria: 'Portaria',
   zeladoria: 'Zeladoria', gestao: 'Gestão do condomínio', implantacao: 'Implantação técnica' };
 const areaFooters: Record<AreaId | '', string> = { '': 'Condomínio · Cada área segue o seu papel', inicio: 'Condomínio · Cada área segue o seu papel',
-  morador: 'Portal do morador · Seu acesso é pessoal', portaria: 'Portaria · Ações exigem segundo fator', zeladoria: 'Zeladoria',
+  morador: 'Portal do morador · Seu acesso é pessoal', portaria: 'Portaria · Ações exigem segundo fator', zeladoria: 'Zeladoria · Ações exigem segundo fator',
   gestao: 'Gestão do condomínio · Ações exigem segundo fator', implantacao: 'Implantação técnica · Ações exigem segundo fator e concessão vigente' };
 
 function Shell() {
@@ -117,7 +123,7 @@ function Shell() {
   const accountId = auth.identity?.accountId;
   const memberships = auth.identity?.memberships ?? [];
   const place = placeOf(location.pathname);
-  const condos = condominiums(memberships);
+  const condos = condominiums(memberships, auth.identity?.tenantModules ?? null);
   const platformAccess = usePlatformAccess(accountId, false);
   const condoWorld = place.world === 'condo';
   const tenantId = place.world === 'condo' ? place.tenantId : undefined;
@@ -130,6 +136,7 @@ function Shell() {
   const unitId = place.world === 'condo' && area === 'morador' ? place.unitId : undefined;
   const managing = area === 'gestao';
   const concierging = area === 'portaria';
+  const maintaining = area === 'zeladoria' && memberships.some(membership => membership.tenantId === tenantId && membership.role === 'MAINTENANCE');
   const portaria = concierging ? memberships.find(membership => membership.tenantId === tenantId && membership.role === 'CONCIERGE') : undefined;
   const mastering = place.world === 'central';
   const masterNavigation = usePlatformNavigation(mastering ? accountId : undefined, mastering ? section : 'condominios');
@@ -154,12 +161,13 @@ function Shell() {
   // Fica no menu principal; a barra de abas da unidade (até quatro, sem rolagem) só o mostra quando aberto.
   const financeMember = Boolean(memberships.some(membership => membership.tenantId === tenantId && membership.unitId === unitId
     && (financeRoles as readonly string[]).includes(membership.role)));
-  const residentItems = rented ? [ownerItem] : [{ id: 'inicio', label: 'Início', icon: 'home' as const },
+  // Seções de módulos desligados pela administradora (V045) saem do menu; o endereço direto mostra o estado próprio.
+  const residentItems = (rented ? [ownerItem] : [{ id: 'inicio', label: 'Início', icon: 'home' as const },
     ...(residential ? [{ id: 'acessos', label: 'Acessos', icon: 'door' as const }] : []),
     { id: 'reservas', label: 'Reservas', icon: 'calendar' as const },
     ...(residential ? [{ id: 'encomendas', label: 'Encomendas', icon: 'box' as const }] : []),
     ...(financeMember ? [{ id: 'financeiro', label: 'Financeiro', icon: 'card' as const }] : []),
-    ...(owner ? [ownerItem] : [])];
+    ...(owner ? [ownerItem] : [])]).filter((item) => sectionEnabled(condo, 'morador', item.id));
   // Troca de unidade ou de condomínio: os dados privados do contexto anterior saem do cache (a decisão da entrada fica).
   async function changeContext(to: string) {
     if (switching || operations.locked) return;
@@ -172,12 +180,17 @@ function Shell() {
     ? installNavigation.items.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/implantacao/${item.id}`, current: item.id === installNavigation.current }))
     : mastering ? [...masterNavigation.items.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: centralPath(item.id), current: item.id === masterNavigation.current })),
       ...upcomingCentralSections.filter((item) => !masterNavigation.items.some((visible) => visible.id === item.id)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: null, current: false }))]
-    : managed ? managementSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/gestao/${item.id}`, current: item.id === (section || 'pendencias') }))
-    : portaria ? conciergeSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/portaria/${item.id}`, current: item.id === (section || 'encomendas') }))
+    : managed ? managementSections.filter((item) => sectionEnabled(condo, 'gestao', item.id)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/gestao/${item.id}`, current: item.id === (section || 'pendencias') }))
+    : portaria ? conciergeSections.filter((item) => sectionEnabled(condo, 'portaria', item.id)).map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `/c/${tenantId}/portaria/${item.id}`, current: item.id === (section || 'encomendas') }))
+    : maintaining && tenantId && sectionEnabled(condo, 'zeladoria', 'pedidos') ? maintenanceSections.map((item) => ({ id: item.id, label: item.label, icon: item.icon,
+      to: maintenancePath(tenantId), current: item.id === (section || 'pedidos') }))
     : contextSelected ? residentItems.map((item) => ({ id: item.id, label: item.label, icon: item.icon, to: `${residence}/${item.id}`, current: item.id === residentSection }))
     : [];
   const areaItems: NavItem[] = tenantId ? areas.map((item) => ({ id: item.id, label: item.label, icon: areaIcons[item.id],
-    to: item.disabled ? null : areaPath(tenantId, item.id), current: item.id === area })) : [];
+    to: item.disabled ? null : areaPath(tenantId, item.id, condo), current: item.id === area, ...(item.disabled ? { note: 'desligado' } : {}) })) : [];
+  // Endereço direto de um módulo desligado: estado próprio no lugar da tela, sem consultar a API do módulo.
+  const requiredModules = condoWorld && condo ? placeModules(area, section) : null;
+  const moduleOff = requiredModules !== null && tenantId !== undefined && !sectionEnabled(condo, area as AreaId, section);
   // No início do condomínio (ou sem seções na área) as áreas ocupam a navegação principal; nas demais, ficam no seletor de área.
   const areasAsMain = condoWorld && sectionItems.length === 0;
   const navItems: NavItem[] = condoWorld ? (areasAsMain ? areaItems : sectionItems)
@@ -196,7 +209,7 @@ function Shell() {
   const brandingConfig: TenantBrandingConfig | undefined = undefined;
   const { branding, style: brandingStyle } = useBrandingStyle(brandingConfig);
   const renderItem = (item: NavItem, className: string) => item.to === null
-    ? <span key={item.id} className={`${className} nav-item-disabled`} aria-disabled="true"><Icon name={item.icon} /><span>{item.label}</span><small className="nav-soon">em breve</small></span>
+    ? <span key={item.id} className={`${className} nav-item-disabled`} aria-disabled="true"><Icon name={item.icon} /><span>{item.label}</span><small className="nav-soon">{item.note ?? 'em breve'}</small></span>
     : <Link key={item.id} className={`${className}${item.current ? ' active' : ''}`} aria-current={item.current ? 'page' : undefined} to={item.to}><Icon name={item.icon} /><span>{item.label}</span>{item.current && className === 'nav-item' ? <span className="nav-dot" /> : null}</Link>;
   return <BrandingProvider value={branding}><div className={`app-frame${menuOpen ? ' menu-open' : ''}`} style={brandingStyle}>
     <aside className="sidebar" id="app-sidebar"><div className="sidebar-top"><Link className="brand-link" to={ENTRY_PATH} aria-label="CondPulse, meus acessos"><Brand light /></Link>
@@ -208,5 +221,5 @@ function Shell() {
         {mastering ? <><span className="nav-group-label">EM BREVE</span>{navItems.filter((item) => item.to === null).map((item) => renderItem(item, 'nav-item'))}</> : null}</nav>
       <div className="sidebar-bottom"><div className="sidebar-line" /><span className="sidebar-caption">Um condomínio.<br />Muitas boas conexões.</span><p>CondPulse · Vida em comunidade</p></div></aside>
     <div className="sidebar-backdrop" aria-hidden="true" onClick={closeMenu} />
-    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand compact /></div><span className="header-breadcrumb">{breadcrumb}<span aria-hidden="true"> / </span><strong><bdi>{breadcrumbName}</bdi></strong></span></div><div className="header-actions">{switchTarget ? <button className="button button-secondary button-compact" onClick={() => void changeContext(switchTarget.to)} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : switchTarget.label}</span></button> : null}<ThemeToggle /><button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.filter((item) => item.id !== 'financeiro' || residentSection === 'financeiro').map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && accountId && tenantId && unitId ? <UnitEvents accountId={accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice />{contextSelected && owner && ownerRental.isPending ? <Loading label="Conferindo a locação da unidade…" /> : rented && residentSection !== 'inquilinos' ? <Navigate to={`${residence}/inquilinos`} replace /> : <Outlet />}</main><footer className="app-footer"><span>CondPulse</span><span>{footer}</span></footer></div></div></BrandingProvider>;
+    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand compact /></div><span className="header-breadcrumb">{breadcrumb}<span aria-hidden="true"> / </span><strong><bdi>{breadcrumbName}</bdi></strong></span></div><div className="header-actions">{switchTarget ? <button className="button button-secondary button-compact" onClick={() => void changeContext(switchTarget.to)} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : switchTarget.label}</span></button> : null}<ThemeToggle /><button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.filter((item) => item.id !== 'financeiro' || residentSection === 'financeiro').map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && accountId && tenantId && unitId ? <UnitEvents accountId={accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice />{moduleOff ? <CondoModuleOff tenantId={tenantId!} modules={requiredModules!} /> : contextSelected && owner && ownerRental.isPending ? <Loading label="Conferindo a locação da unidade…" /> : rented && residentSection !== 'inquilinos' ? <Navigate to={`${residence}/inquilinos`} replace /> : <Outlet />}</main><footer className="app-footer"><span>CondPulse</span><span>{footer}</span></footer></div></div></BrandingProvider>;
 }

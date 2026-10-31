@@ -120,7 +120,7 @@ test('conta só de gestão abre a gestão sem formulário de unidade residencial
   await expect(page.getByRole('list', { name: 'Condomínios' })).toHaveCount(0);
   const areas = page.getByRole('navigation', { name: 'Áreas do condomínio' });
   await expect(areas.getByRole('link')).toHaveText(['Início', 'Gestão']);
-  await expect(areas.getByText('Zeladoria')).toBeVisible();
-  await expect(areas.getByRole('link', { name: 'Zeladoria' })).toHaveCount(0);
+  // Zeladoria é só da equipe de zeladoria (MAINTENANCE); a gestão acompanha os pedidos na própria área.
+  await expect(areas.getByText('Zeladoria')).toHaveCount(0);
   expect(unitRequests).toEqual([]);
 });

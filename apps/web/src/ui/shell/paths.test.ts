@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { Membership } from '../../api/types';
-import { activeResidentUnits, condoAreas, condominiums, entryDecision, legacyTarget, placeOf, principalPath } from './paths';
+import type { Membership, TenantModuleId } from '../../api/types';
+import { activeResidentUnits, conciergeHome, condoAreas, condominiums, entryDecision, legacyTarget, placeModules, placeOf, principalPath, sectionEnabled } from './paths';
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
@@ -31,13 +31,14 @@ describe('áreas por papel dentro do condomínio', () => {
     const [resident] = condominiums([membership(A, 'RESIDENT', U1)]);
     expect(condoAreas(resident, false).map((area) => area.id)).toEqual(['inicio', 'morador']);
     const [staff] = condominiums([membership(A, 'MANAGER'), membership(A, 'CONCIERGE')]);
-    expect(condoAreas(staff, false).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['portaria', false],
-      ['zeladoria', true], ['gestao', false]]);
+    // A gestão acompanha pedidos na própria área: zeladoria é só da equipe de zeladoria.
+    expect(condoAreas(staff, false).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['portaria', false], ['gestao', false]]);
   });
-  it('zelador vê a zeladoria (em breve) e nenhuma área de gestão ou portaria', () => {
+  it('zelador vê a zeladoria e nenhuma área de gestão ou portaria; é a área principal dele', () => {
     const [maintenance] = condominiums([membership(A, 'MAINTENANCE')]);
     expect(maintenance!.roles).toEqual(['MAINTENANCE']);
-    expect(condoAreas(maintenance, false).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['zeladoria', true]]);
+    expect(condoAreas(maintenance, false).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['zeladoria', false]]);
+    expect(principalPath(A, maintenance)).toBe(`/c/${A}/zeladoria/pedidos`);
   });
   it('implantação só com concessão técnica, inclusive sem vínculo no condomínio', () => {
     const [resident] = condominiums([membership(A, 'RESIDENT', U1)]);
@@ -53,6 +54,52 @@ describe('áreas por papel dentro do condomínio', () => {
     expect(principalPath(A, condominiums([membership(A, 'RESIDENT', U1), membership(A, 'OWNER', U2)])[0])).toBe(`/c/${A}/morador`);
     expect(principalPath(A, condominiums([membership(A, 'SUPPORT')])[0])).toBe(`/c/${A}/inicio`);
     expect(principalPath(A, undefined)).toBe(`/c/${A}/implantacao/roteiro`);
+  });
+});
+
+describe('módulos desligados pela administradora', () => {
+  const modules = (...enabled: TenantModuleId[]) => [{ tenantId: A, enabled }];
+  it('sem informação do servidor nada é escondido', () => {
+    const [condo] = condominiums([membership(A, 'CONCIERGE')]);
+    expect(condo!.modules).toBeNull();
+    expect(sectionEnabled(condo, 'portaria', 'encomendas')).toBe(true);
+    expect(condoAreas(condo, true).every((area) => !area.disabled)).toBe(true);
+  });
+  it('módulos de outro condomínio não valem aqui; id comparado sem caixa', () => {
+    const [condo] = condominiums([membership(A, 'RESIDENT', U1)], [{ tenantId: B, enabled: [] }]);
+    expect(condo!.modules).toBeNull();
+    const [same] = condominiums([membership(A, 'RESIDENT', U1)], [{ tenantId: A.toUpperCase(), enabled: ['parcels'] }]);
+    expect(same!.modules).toEqual(['parcels']);
+  });
+  it('seções seguem a regra das rotas do servidor', () => {
+    const [condo] = condominiums([membership(A, 'MANAGER'), membership(A, 'RESIDENT', U1)], modules('parcels', 'announcements'));
+    expect(sectionEnabled(condo, 'gestao', 'avisos')).toBe(true);
+    for (const section of ['reservas', 'areas', 'pedidos', 'mudancas', 'acesso', 'mapa-acesso', 'ocorrencias', 'financeiro'])
+      expect(sectionEnabled(condo, 'gestao', section)).toBe(false);
+    for (const section of ['pendencias', 'unidades', 'importacao', 'pessoas', 'auditoria']) expect(sectionEnabled(condo, 'gestao', section)).toBe(true);
+    expect(sectionEnabled(condo, 'morador', 'encomendas')).toBe(true);
+    expect(sectionEnabled(condo, 'morador', 'reservas')).toBe(false);
+    expect(sectionEnabled(condo, 'morador', 'inicio')).toBe(true);
+    expect(sectionEnabled(condo, 'morador', 'inquilinos')).toBe(true);
+    expect(placeModules('zeladoria', 'qualquer')).toEqual(['requests']);
+    expect(placeModules('implantacao', 'roteiro')).toEqual(['facial_access']);
+    expect(placeModules('inicio', '')).toBeNull();
+    expect(placeModules('', '')).toBeNull();
+  });
+  it('área com todos os módulos desligados fica desabilitada e deixa de ser a principal', () => {
+    const [condo] = condominiums([membership(A, 'CONCIERGE'), membership(A, 'MAINTENANCE'), membership(A, 'RESIDENT', U1)], modules('visits'));
+    expect(condoAreas(condo, true).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['morador', false],
+      ['portaria', false], ['zeladoria', true], ['implantacao', true]]);
+    // Portaria abre na primeira seção liberada.
+    expect(conciergeHome(condo)).toBe('visitas');
+    expect(principalPath(A, condo)).toBe(`/c/${A}/portaria/visitas`);
+    const [none] = condominiums([membership(A, 'CONCIERGE'), membership(A, 'MAINTENANCE'), membership(A, 'RESIDENT', U1)], modules());
+    expect(condoAreas(none, false).find((area) => area.id === 'portaria')?.disabled).toBe(true);
+    expect(principalPath(A, none)).toBe(`/c/${A}/morador`);
+    const [maintenance] = condominiums([membership(A, 'MAINTENANCE')], modules());
+    expect(principalPath(A, maintenance)).toBe(`/c/${A}/inicio`);
+    const [zelador] = condominiums([membership(A, 'MAINTENANCE')], modules('requests'));
+    expect(principalPath(A, zelador)).toBe(`/c/${A}/zeladoria/pedidos`);
   });
 });
 
@@ -120,6 +167,8 @@ describe('lugar lido do endereço', () => {
     expect(placeOf(`/c/${A}/morador`)).toEqual({ world: 'condo', tenantId: A, area: 'morador', section: 'inicio' });
     expect(placeOf(`/c/${A}/gestao`)).toEqual({ world: 'condo', tenantId: A, area: 'gestao', section: 'pendencias' });
     expect(placeOf(`/c/${A}/portaria/visitas`)).toEqual({ world: 'condo', tenantId: A, area: 'portaria', section: 'visitas' });
+    expect(placeOf(`/c/${A}/zeladoria`)).toEqual({ world: 'condo', tenantId: A, area: 'zeladoria', section: 'pedidos' });
+    expect(placeOf(`/c/${A}/zeladoria/pedidos/${U1}`)).toEqual({ world: 'condo', tenantId: A, area: 'zeladoria', section: 'pedidos' });
     expect(placeOf(`/c/${A}`)).toEqual({ world: 'condo', tenantId: A, area: '', section: '' });
   });
 });

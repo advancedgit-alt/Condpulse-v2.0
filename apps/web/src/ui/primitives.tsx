@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ApiError } from '../api/client';
+import { ApiError, isModuleDisabled } from '../api/client';
 import { useCooldown } from './cooldown';
 import { BRAND_BUILDINGS, BRAND_SYMBOL_STROKE, BRAND_SYMBOL_VIEWBOX, BRAND_VIEWBOX, BRAND_WORD_ACCENT, BRAND_WORD_INK } from './brandLogo';
 import { useBranding, useTheme } from './theme/ThemeContext';
@@ -72,8 +72,18 @@ export function errorMessage(error: unknown): string {
   return 'Não foi possível concluir a operação. Tente novamente.';
 }
 
+/**
+ * Módulo desligado pela administradora (central) para o condomínio: estado próprio, sem "tentar novamente" (repetir
+ * não liga o módulo). Usado na rota aberta direto e quando a API responde 403 MODULE_DISABLED.
+ */
+export function ModuleOff({ children }: { children?: ReactNode }) {
+  return <div className="panel module-off"><Empty icon="shield" title="Módulo desligado pela administradora">
+    {children ?? 'Este recurso não está liberado para este condomínio. Quando a administradora religar o módulo, ele volta a aparecer; nenhum dado foi apagado.'}</Empty></div>;
+}
+
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
   const remaining = useCooldown(error);
+  if (isModuleDisabled(error)) return <ModuleOff />;
   return <div className="error-state">{error instanceof ApiError && error.status === 429
     ? <RateLimitNotice error={error} remaining={remaining} /> : <Notice tone="error">{errorMessage(error)}</Notice>}
     {retry && <button className="button button-secondary" type="button" disabled={remaining > 0} onClick={() => { if (remaining === 0) retry(); }}>Tentar novamente</button>}

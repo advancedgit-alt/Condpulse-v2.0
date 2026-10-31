@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, isModuleDisabled } from '../api/client';
 import type { Amenity, Membership, Reservation } from '../api/types';
 import { useAuth } from './Auth';
 import { scopeKey, useOperations, type Scope } from './Operations';
@@ -44,7 +44,7 @@ function ReservationContext({ accountId, membership, unitId }: { accountId: stri
   }, [date, membership.timeZone]);
   const reservations = useQuery({ queryKey: [...scopeKey(scope), 'reservations', date],
     queryFn: ({ signal }) => api.reservations(tenantId, unitId, range.value!, signal), enabled: enabled && range.value !== null });
-  const denial = [units.error, areas.error, reservations.error].find(error => error instanceof ApiError && [403, 404].includes(error.status));
+  const denial = [units.error, areas.error, reservations.error].find(error => error instanceof ApiError && [403, 404].includes(error.status) && !isModuleDisabled(error));
   useEffect(() => {
     function clear(error: unknown) {
       setPrivateDenied(error); setSelectedArea(null); setCancelId(null);

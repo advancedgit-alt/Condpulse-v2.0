@@ -53,6 +53,30 @@ export interface ManagedRequest extends ManagedRequestSummary {
   description: string; resolution: string | null; requesterName: string; resolvedAt: ISODateTime | null; closedAt: ISODateTime | null;
   messages: RequestMessage[]; messagesTruncated: boolean; team: TeamMember[];
 }
+/**
+ * Zeladoria (V046): pedidos não encerrados atribuídos ao próprio vínculo MAINTENANCE. Sem nome de quem abriu, sem equipe
+ * e sem responsável/prazo editáveis: a zeladoria só conversa e muda o andamento (em execução, aguardando a unidade ou
+ * concluído com resolução), pela versão lida.
+ */
+export const maintenanceStates = ['IN_PROGRESS', 'WAITING_RESIDENT', 'RESOLVED'] as const;
+export type MaintenanceState = typeof maintenanceStates[number];
+/** Andamentos de onde a zeladoria pode partir (o servidor e o banco repetem a regra). */
+const maintenanceFrom: readonly RequestState[] = ['TRIAGED', 'IN_PROGRESS', 'WAITING_RESIDENT'];
+export function maintenanceTransitions(state: RequestState): MaintenanceState[] {
+  if (!maintenanceFrom.includes(state)) return [];
+  return maintenanceStates.filter((target) => requestTransitions[state].includes(target));
+}
+export interface MaintenanceRequestSummary {
+  requestId: UUID; unitId: UUID; unitLabel: string; category: RequestCategory; title: string; state: RequestState; dueOn: CivilDate | null;
+  updatedAt: ISODateTime; version: number;
+}
+export interface MaintenanceRequestPage { requests: MaintenanceRequestSummary[]; truncated: boolean }
+export interface MaintenanceRequest extends MaintenanceRequestSummary {
+  description: string; resolution: string | null; createdAt: ISODateTime; resolvedAt: ISODateTime | null;
+  messages: RequestMessage[]; messagesTruncated: boolean;
+}
+export interface MaintenanceUpdate { state: MaintenanceState; resolution: string | null; expectedVersion: number }
+
 export interface RequestUpdate {
   state: RequestState; assigneeMembershipId: UUID | null; dueOn: CivilDate | null; resolution: string | null; expectedVersion: number;
 }
@@ -149,6 +173,37 @@ export function managedRequest(value: unknown, uncertain = false): ManagedReques
     requesterName: value.requesterName as string, resolvedAt: value.resolvedAt as string | null, closedAt: value.closedAt as string | null,
     messages: messages(value.messages, true, uncertain), messagesTruncated: value.messagesTruncated, team: list(value.team, teamMember) };
 }
+function maintenanceFields(value: Record<string, unknown>): boolean {
+  // A zeladoria nunca recebe o nome de quem abriu, o responsável ou a equipe.
+  return !('requesterName' in value) && !('team' in value) && !('assigneeName' in value) && isUUID(value.requestId) && isUUID(value.unitId)
+    && name(value.unitLabel) && oneOf(value.category, requestCategories) && title(value.title) && oneOf(value.state, requestStates)
+    && nullableCivil(value.dueOn) && isDate(value.updatedAt) && isInteger(value.version);
+}
+function maintenanceSummaryOf(value: Record<string, unknown>): MaintenanceRequestSummary {
+  return { requestId: value.requestId as string, unitId: value.unitId as string, unitLabel: value.unitLabel as string,
+    category: value.category as RequestCategory, title: value.title as string, state: value.state as RequestState,
+    dueOn: value.dueOn as string | null, updatedAt: value.updatedAt as string, version: value.version as number };
+}
+export function maintenanceRequestSummary(value: unknown): MaintenanceRequestSummary {
+  // A lista não traz o texto do pedido nem a conversa; pedido encerrado não é mais da zeladoria.
+  if (!record(value) || 'description' in value || 'messages' in value || !maintenanceFields(value) || value.state === 'CLOSED') throw invalidResponse();
+  return maintenanceSummaryOf(value);
+}
+export function maintenanceRequest(value: unknown, uncertain = false): MaintenanceRequest {
+  if (!record(value) || !maintenanceFields(value) || !description(value.description) || !(value.resolution === null || resolutionText(value.resolution))
+      || !isDate(value.createdAt) || !nullableDate(value.resolvedAt) || typeof value.messagesTruncated !== 'boolean'
+      || (value.state === 'RESOLVED' && (value.resolution === null || value.resolvedAt === null))
+      || (value.state !== 'RESOLVED' && value.state !== 'CLOSED' && (value.resolution !== null || value.resolvedAt !== null))) throw invalidResponse(uncertain);
+  return { ...maintenanceSummaryOf(value), description: value.description as string, resolution: value.resolution as string | null,
+    createdAt: value.createdAt as string, resolvedAt: value.resolvedAt as string | null,
+    messages: messages(value.messages, true, uncertain), messagesTruncated: value.messagesTruncated };
+}
+function maintenancePage(value: unknown): MaintenanceRequestPage {
+  if (!record(value) || typeof value.truncated !== 'boolean' || !Array.isArray(value.requests) || value.requests.length > 100) throw invalidResponse();
+  const items = list(value.requests, maintenanceRequestSummary);
+  if (new Set(items.map((item) => item.requestId)).size !== items.length) throw invalidResponse();
+  return { requests: items, truncated: value.truncated };
+}
 function unitPage(value: unknown): UnitRequestPage {
   if (!record(value) || typeof value.truncated !== 'boolean' || !Array.isArray(value.requests) || value.requests.length > 100) throw invalidResponse();
   return { requests: list(value.requests, unitRequestSummary), truncated: value.truncated };
@@ -161,6 +216,7 @@ function managedPage(value: unknown): ManagedRequestPage {
 export function createRequestsApi(client: CondPulseApi = api) {
   const tenant = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}`;
   const management = (tenantId: string) => `${tenant(tenantId)}/management/requests`;
+  const maintenance = (tenantId: string) => `${tenant(tenantId)}/maintenance/requests`;
   const replayed = (response: Response) => response.headers.get('Idempotency-Replayed') === 'true';
   return {
     unit: async (tenantId: string, unitId: string, signal?: AbortSignal) =>
@@ -211,6 +267,29 @@ export function createRequestsApi(client: CondPulseApi = api) {
         const request = managedRequest(value, true);
         if (request.requestId !== requestId || request.version !== body.expectedVersion + 1 || request.state !== body.state
           || request.assigneeMembershipId !== body.assigneeMembershipId || request.dueOn !== body.dueOn) throw invalidResponse(true);
+        return request;
+      }, { method: 'POST', body }),
+    maintenance: async (tenantId: string, signal?: AbortSignal) =>
+      client.call(maintenance(tenantId), maintenancePage, signal ? { signal } : {}),
+    maintenanceRequest: async (tenantId: string, requestId: string, signal?: AbortSignal) =>
+      client.call(`${maintenance(tenantId)}/${identifier(requestId)}`, (value) => {
+        const request = maintenanceRequest(value);
+        if (request.requestId !== requestId) throw invalidResponse();
+        return request;
+      }, signal ? { signal } : {}),
+    maintenanceOlderMessages: async (tenantId: string, requestId: string, before: string, signal?: AbortSignal) =>
+      client.call(`${maintenance(tenantId)}/${identifier(requestId)}/messages?before=${identifier(before)}`,
+        (value) => messagePage(value, true, before), signal ? { signal } : {}),
+    maintenanceMessage: async (tenantId: string, requestId: string, key: string, body: string, visibility: 'RESIDENT' | 'INTERNAL') =>
+      client.call(`${maintenance(tenantId)}/${identifier(requestId)}/messages`, (value, response): MessageResult => {
+        const message = requestMessage(value, true, true);
+        if (message.authorRole !== 'STAFF' || message.visibility !== visibility || !message.mine || message.body !== body) throw invalidResponse(true);
+        return { message, replayed: replayed(response) };
+      }, { method: 'POST', body: { body, visibility }, key }),
+    maintenanceUpdate: async (tenantId: string, requestId: string, body: MaintenanceUpdate) =>
+      client.call(`${maintenance(tenantId)}/${identifier(requestId)}/state`, (value) => {
+        const request = maintenanceRequest(value, true);
+        if (request.requestId !== requestId || request.version !== body.expectedVersion + 1 || request.state !== body.state) throw invalidResponse(true);
         return request;
       }, { method: 'POST', body }),
   };

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, isModuleDisabled } from '../api/client';
 import type { Membership, Reservation } from '../api/types';
 import { useAuth } from './Auth';
 import { scopeKey, type Scope } from './Operations';
@@ -11,7 +11,7 @@ import { UnitInbox } from './Inbox';
 import { UnitAnnouncements } from './Announcements';
 import { UnitRequests } from './Requests';
 import { UnitMoves } from './Moves';
-import { residentPath, residentRoot } from './shell/paths';
+import { condoOf, moduleEnabled, residentPath, residentRoot, type Condo } from './shell/paths';
 import './Dashboard.css';
 
 const residentialRoles = new Set<Membership['role']>(['RESIDENT', 'RESPONSIBLE', 'DEPENDENT']);
@@ -37,10 +37,13 @@ export function DashboardPage() {
   if (!identity || !membership) return <div className="panel"><Empty title="Unidade indisponível">Selecione uma unidade com vínculo residencial para consultar seu resumo.</Empty><Link className="button button-secondary" to={residentRoot(tenantId)}>Selecionar unidade</Link></div>;
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido pela gestão antes de consultar o resumo.</Notice>; }
-  return <DashboardContext key={`${identity.accountId}:${tenantId}:${unitId}:${membership.timeZone}`} accountId={identity.accountId} membership={membership} unitId={unitId} />;
+  return <DashboardContext key={`${identity.accountId}:${tenantId}:${unitId}:${membership.timeZone}`} accountId={identity.accountId} membership={membership} unitId={unitId}
+    condo={condoOf(identity, tenantId)} />;
 }
 
-function DashboardContext({ accountId, membership, unitId }: { accountId: string; membership: Membership; unitId: string }) {
+function DashboardContext({ accountId, membership, unitId, condo }: { accountId: string; membership: Membership; unitId: string; condo: Condo | undefined }) {
+  // Módulos desligados pela administradora (V045) somem do resumo: nada é consultado e o 403 não vira perda de vínculo.
+  const reservationsOn = moduleEnabled(condo, 'reservations');
   const tenantId = membership.tenantId;
   const route = residentPath(tenantId, unitId);
   const agenda = residentPath(tenantId, unitId, 'reservas');
@@ -55,12 +58,12 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
   const units = useQuery({ queryKey: ['private', accountId, 'tenant', tenantId, 'units'],
     queryFn: ({ signal }) => api.units(tenantId, signal), enabled: !privateDenied });
   const unit = units.data?.find(item => item.id === unitId);
-  const enabled = Boolean(unit) && units.isSuccess && !units.isFetching && !privateDenied;
+  const enabled = Boolean(unit) && units.isSuccess && !units.isFetching && !privateDenied && reservationsOn;
   const areas = useQuery({ queryKey: [...scopeKey(scope), 'amenities'],
     queryFn: ({ signal }) => api.amenities(tenantId, signal), enabled });
   const reservations = useQuery({ queryKey: [...scopeKey(scope), 'dashboard', range.value?.from],
     queryFn: ({ signal }) => api.reservations(tenantId, unitId, range.value!, signal), enabled: enabled && range.value !== null });
-  const denial = [units.error, areas.error, reservations.error].find(error => error instanceof ApiError && [403, 404].includes(error.status));
+  const denial = [units.error, areas.error, reservations.error].find(error => error instanceof ApiError && [403, 404].includes(error.status) && !isModuleDisabled(error));
   useEffect(() => {
     function clear(error: unknown) {
       setPrivateDenied(error);
@@ -108,14 +111,13 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
   return <div className="dashboard-page">
     <div className="residence-heading"><div><span className="eyebrow">SEU DIA A DIA</span><h1>Sua unidade, em dia.</h1><p>Confira suas próximas reservas e encontre o caminho para organizar sua rotina.</p></div><div className="context-badge"><Icon name="home" /><div><strong>{unitLabel}</strong><span>{membership.tenantName}</span></div></div></div>
     <div className="dashboard-grid">
-      <section className="panel dashboard-welcome" aria-labelledby="dashboard-shortcuts"><span className="section-index">SEU CONTEXTO</span><h2 id="dashboard-shortcuts">Um espaço para a sua rotina.</h2><p>Você está consultando a unidade <strong>{unitLabel}</strong>. O acesso é conferido pelo servidor em cada consulta.</p><Link className="button" to={agenda}><Icon name="calendar" />Abrir reservas<Icon name="arrow" /></Link>{membership.role !== 'DEPENDENT' ? <Link className="text-button" to={residentPath(tenantId, unitId, 'financeiro')}>Ver cobranças da unidade<Icon name="arrow" /></Link> : null}<p className="dashboard-context-note">Horários do condomínio: <strong>{membership.timeZone}</strong></p></section>
+      <section className="panel dashboard-welcome" aria-labelledby="dashboard-shortcuts"><span className="section-index">SEU CONTEXTO</span><h2 id="dashboard-shortcuts">Um espaço para a sua rotina.</h2><p>Você está consultando a unidade <strong>{unitLabel}</strong>. O acesso é conferido pelo servidor em cada consulta.</p>{reservationsOn ? <Link className="button" to={agenda}><Icon name="calendar" />Abrir reservas<Icon name="arrow" /></Link> : null}{membership.role !== 'DEPENDENT' && moduleEnabled(condo, 'finance') ? <Link className="text-button" to={residentPath(tenantId, unitId, 'financeiro')}>Ver cobranças da unidade<Icon name="arrow" /></Link> : null}<p className="dashboard-context-note">Horários do condomínio: <strong>{membership.timeZone}</strong></p></section>
       <aside className="panel dashboard-guide" aria-label="Sobre este resumo"><span className="round-icon"><Icon name="shield" /></span><h2>Apenas o seu contexto.</h2><p>Este resumo reúne solicitações da unidade selecionada. A agenda de outras unidades não aparece aqui.</p><p>A confirmação de uma nova reserva depende das regras e da disponibilidade conferidas no envio.</p></aside>
     </div>
     <UnitInbox scope={scope} timeZone={membership.timeZone} />
-    <UnitAnnouncements scope={scope} timeZone={membership.timeZone} />
-    <UnitRequests scope={scope} timeZone={membership.timeZone} />
-    <UnitMoves scope={scope} timeZone={membership.timeZone} />
-    <section className="dashboard-reservations" aria-labelledby="dashboard-reservations-title"><div className="section-heading"><div><span className="section-index">PRÓXIMOS COMPROMISSOS</span><h2 id="dashboard-reservations-title">Próximas reservas da unidade</h2></div><button className="button button-secondary button-compact" disabled={validating} onClick={() => void refresh()}>{validating ? 'Atualizando.' : 'Atualizar resumo'}</button></div>
+    {moduleEnabled(condo, 'announcements') ? <UnitAnnouncements scope={scope} timeZone={membership.timeZone} /> : null}
+    {moduleEnabled(condo, 'requests') ? <><UnitRequests scope={scope} timeZone={membership.timeZone} /><UnitMoves scope={scope} timeZone={membership.timeZone} /></> : null}
+    {reservationsOn ? <section className="dashboard-reservations" aria-labelledby="dashboard-reservations-title"><div className="section-heading"><div><span className="section-index">PRÓXIMOS COMPROMISSOS</span><h2 id="dashboard-reservations-title">Próximas reservas da unidade</h2></div><button className="button button-secondary button-compact" disabled={validating} onClick={() => void refresh()}>{validating ? 'Atualizando.' : 'Atualizar resumo'}</button></div>
       <p className="dashboard-window">Consulta de 30 dias locais, iniciada em {new Intl.DateTimeFormat('pt-BR', { timeZone: membership.timeZone, day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(range.value?.from ?? now))}. Horários em {membership.timeZone}.</p>
       {stale && !validating && !denial ? <Notice tone="warning">Este resumo usa a última consulta, feita há mais de um minuto. Atualize antes de tomar uma decisão.</Notice> : null}
       {range.error ? <Notice tone="error">{range.error}</Notice>
@@ -127,6 +129,6 @@ function DashboardContext({ accountId, membership, unitId }: { accountId: string
       {areas.isError && !denial ? <div className="dashboard-catalog-warning"><Notice tone="warning">Os nomes das áreas não puderam ser atualizados. Os períodos e estados exibidos vêm da consulta de reservas.</Notice></div> : null}
       {reservations.data && (upcoming.length > 3 || reservations.data.truncated) && !validating && !reservations.isError && !incompatible ? <div className="dashboard-more"><Notice>Este resumo mostra até três próximas reservas. Consulte a agenda para conferir todas as solicitações e seus estados no período.</Notice></div> : null}
       <div className="dashboard-footer-link"><Link className="text-button" to={agenda}>Ver agenda e regras das áreas<Icon name="arrow" /></Link></div>
-    </section>
+    </section> : null}
   </div>;
 }
