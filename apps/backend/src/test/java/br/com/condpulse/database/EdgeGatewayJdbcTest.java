@@ -164,6 +164,39 @@ class EdgeGatewayJdbcTest {
   db.assertEmptyContext();
  }
 
+ /**
+  * Codex P1 (#153): trabalho com ACK de um gateway que é revogado não fica preso. A revogação libera a entrega na hora; o
+  * gateway novo do conector retoma o mesmo trabalho (mesmo hash e prioridade) e confirma; o antigo não relata mais nada.
+  * Entrega vencida sem resultado (com ACK) volta ao mesmo gateway depois do prazo.
+  */
+ @Test void ackedJobOfARevokedGatewayIsTakenOverAndExpiredDeliveriesComeBack() throws Exception {
+  var inst=published("4.8.3");
+  UUID first=UUID.randomUUID(),second=UUID.randomUUID();
+  agents.register(MASTER,db.tenantA,AAL2,new EdgeModels.RegisterAgent(first,inst.connector(),"Gateway antigo",hash(TOKEN_A),30));
+  var leased=gateway.lease(TOKEN_A,new EdgeModels.LeaseRequest(10,60)).commands();
+  assertEquals(2,leased.size());
+  var job=leased.getFirst();
+  assertEquals("ACK",gateway.report(TOKEN_A,job.commandId(),"ack-a-"+job.commandId(),new EdgeModels.ReportRequest("ACK",null,job.documentHash(),null)).jobState());
+  // Prazo vencido com ACK e sem resultado: o mesmo gateway recebe de novo (tentativa 2), sem perder o ACK.
+  db.adminUpdateWithoutTriggers("update cp.edge_leases set leased_at=now()-interval '5 minutes',lease_until=now()-interval '1 minute' where publication_id=?",
+   job.commandId());
+  var again=gateway.lease(TOKEN_A,new EdgeModels.LeaseRequest(10,60)).commands();
+  assertTrue(again.stream().anyMatch(c->c.commandId().equals(job.commandId()) && c.attempt()==2),"entrega vencida volta");
+  var agent=agents.agents(MASTER,db.tenantA,AAL2).agents().getFirst();
+  agents.revoke(MASTER,db.tenantA,AAL2,first,new EdgeModels.RevokeAgent("Computador do gateway substituido",agent.version()));
+  assertEquals("0",db.adminString("select count(*)::text from cp.edge_leases where agent_id=? and finished_at is null and released_at is null",first),
+   "revogação libera as entregas abertas");
+  agents.register(MASTER,db.tenantA,AAL2,new EdgeModels.RegisterAgent(second,inst.connector(),"Gateway novo",hash(TOKEN_B),30));
+  var taken=gateway.lease(TOKEN_B,new EdgeModels.LeaseRequest(10,60)).commands();
+  var same=taken.stream().filter(c->c.commandId().equals(job.commandId())).findFirst().orElseThrow();
+  assertEquals(job.documentHash(),same.documentHash()); assertEquals(job.priority(),same.priority()); assertEquals(job.desiredVersion(),same.desiredVersion());
+  assertEquals("EDGE_UNAUTHENTICATED",code(()->gateway.report(TOKEN_A,job.commandId(),"tarde-a-"+job.commandId(),
+   new EdgeModels.ReportRequest("FAILED",null,job.documentHash(),null))),"gateway revogado não relata");
+  var ok=gateway.report(TOKEN_B,job.commandId(),"ok-b-"+job.commandId(),new EdgeModels.ReportRequest("CONFIRMED",null,job.documentHash(),job.documentHash()));
+  assertEquals("APPLIED",ok.outcome()); assertEquals("CONFIRMED",ok.jobState());
+  db.assertEmptyContext();
+ }
+
  /** Bloqueio publica REVOKE_ALL (prioridade 0), que supera a aplicação pendente; relatório do superado só encerra. */
  @Test void revocationIsDeliveredFirstAndSupersededJobsOnlyClose() throws Exception {
   var inst=published("4.8.2");

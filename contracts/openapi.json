@@ -20416,7 +20416,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Entrega (arrendamento com prazo) dos trabalhos PENDING da publicação por destino (V047) dos equipamentos do conector do gateway: retirada (prioridade 0) antes de ampliação. Entrega não é sucesso. Trabalho em entrega, com ACK ou com resultado não é entregue de novo; entrega vencida sem ACK volta na tentativa seguinte (mesmo commandId e mesma idempotencyKey).",
+        "description": "Entrega (arrendamento com prazo) dos trabalhos sem resultado (PENDING ou só ACK) da publicação por destino (V047) dos equipamentos do conector do gateway: retirada (prioridade 0) antes de ampliação. Entrega não é sucesso. Trabalho com entrega viva ou com resultado não é entregue de novo; entrega vencida sem resultado (mesmo com ACK) volta na tentativa seguinte, com o mesmo commandId e a mesma idempotencyKey; revogar o gateway libera na hora as entregas dele para o gateway novo do conector.",
         "parameters": [
           {
             "name": "X-CondPulse-Edge-Credential",

@@ -64,7 +64,7 @@ public class EdgeGatewayService {
    var row=store.job(c.tenantId(),commandId);
    if(row==null) throw notFound();
    var lease=store.latestLease(c.tenantId(),commandId);
-   if(lease==null || !lease.agentId().equals(c.agentId()))
+   if(lease==null || lease.released() || !lease.agentId().equals(c.agentId()))
     throw new BusinessProblem("EDGE_LEASE_NOT_HELD",409,"Este gateway não detém a entrega mais recente do trabalho.");
    var decision=EdgeReportRules.decide(report,row.job());
    if("APPLIED".equals(decision.outcome())) {

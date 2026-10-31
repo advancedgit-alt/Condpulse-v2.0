@@ -284,9 +284,9 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
        where c.attrelid=to_regclass('cp.edge_agents') and c.attname in ('status','version','last_seen_at','revoked_at','instance_id','created_at')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.edge_leases') and c.attnum>0 and not c.attisdropped
-        and c.attname not in ('acknowledged_at','finished_at','version')),false)
+        and c.attname not in ('acknowledged_at','finished_at','released_at','version')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
-       where c.attrelid=to_regclass('cp.edge_leases') and c.attname in ('attempt','leased_at','lease_until','acknowledged_at','finished_at','version')),false)
+       where c.attrelid=to_regclass('cp.edge_leases') and c.attname in ('attempt','leased_at','lease_until','acknowledged_at','finished_at','released_at','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.revocation_markers'),'DELETE,TRUNCATE'),false)
      or coalesce(has_any_column_privilege(current_user,to_regclass('cp.revocation_markers'),'UPDATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c

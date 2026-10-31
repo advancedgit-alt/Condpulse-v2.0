@@ -92,13 +92,16 @@ public class EdgeStore {
  public Instant serverTime() { return jdbc.queryForObject("select clock_timestamp()",Timestamp.class).toInstant(); }
 
  // ---- entrega
- /** Trabalhos pendentes dos equipamentos deste gateway, sem entrega em andamento: retirada (prioridade 0) primeiro. */
+ /**
+  * Trabalhos sem resultado (PENDING ou só ACK) dos equipamentos deste gateway, sem entrega viva (aberta, no prazo e não
+  * liberada pela revogação do gateway anterior): retirada (prioridade 0) primeiro.
+  */
  public List<UUID> leasable(UUID tenant,int max) {
   return jdbc.query("""
    select p.id from cp.rights_publications p
-   where p.tenant_id=? and p.state='PENDING' and p.next_attempt_at<=clock_timestamp() and cp.edge_device(p.tenant_id,p.device_id)
+   where p.tenant_id=? and p.state in ('PENDING','ACK') and p.next_attempt_at<=clock_timestamp() and cp.edge_device(p.tenant_id,p.device_id)
     and not exists(select 1 from cp.edge_leases l where l.tenant_id=p.tenant_id and l.publication_id=p.id
-     and (l.acknowledged_at is not null or l.finished_at is not null or l.lease_until>clock_timestamp()))
+     and l.finished_at is null and l.released_at is null and l.lease_until>clock_timestamp())
    order by p.priority,p.desired_version,p.id limit ?
    """,(r,n)->r.getObject(1,UUID.class),tenant,max);
  }
@@ -131,12 +134,12 @@ public class EdgeStore {
    """,(r,n)->new StoredReport(r.getString(1),r.getString(2),r.getString(3),r.getObject(4,UUID.class)),tenant,agent,key);
   return rows.isEmpty()?null:rows.getFirst();
  }
- public record Lease(UUID leaseId,UUID agentId) {}
+ public record Lease(UUID leaseId,UUID agentId,boolean released) {}
  /** Arrendamento mais recente do trabalho (visível só se o equipamento é deste gateway). */
  public Lease latestLease(UUID tenant,UUID publication) {
   var rows=jdbc.query("""
-   select id,agent_id from cp.edge_leases where tenant_id=? and publication_id=? order by attempt desc limit 1
-   """,(r,n)->new Lease(r.getObject(1,UUID.class),r.getObject(2,UUID.class)),tenant,publication);
+   select id,agent_id,released_at is not null from cp.edge_leases where tenant_id=? and publication_id=? order by attempt desc limit 1
+   """,(r,n)->new Lease(r.getObject(1,UUID.class),r.getObject(2,UUID.class),r.getBoolean(3)),tenant,publication);
   return rows.isEmpty()?null:rows.getFirst();
  }
  public record JobRow(EdgeReportRules.Job job,int attempts,long version) {}

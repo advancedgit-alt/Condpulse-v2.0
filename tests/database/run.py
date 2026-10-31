@@ -4633,8 +4633,13 @@ def edge_checks():
     query(edge(H1) + pub("state='ACK',confirmation_level='TRANSPORT_ACK',attempts=2") + "; "
           + f"UPDATE cp.edge_leases SET acknowledged_at=now(),version=version+1 WHERE id='{L2}'; " + report("chave-ack-0001", "ACK"), **machine)
     expect(error(edge(H1) + report("chave-ack-0001", "ACK"), "23505", **machine), "chave de idempotencia nao gera segundo relatorio")
+    expect(error(edge(H1) + lease(), "23514", **machine), "entrega viva (com ACK, no prazo) nao sai de novo")
+    # ACK sem resultado e prazo vencido: o trabalho volta (pelo menos uma vez), e a entrega anterior perde o relatorio.
     query(f"SET session_replication_role=replica; UPDATE cp.edge_leases SET lease_until=now()-interval '1 second',leased_at=now()-interval '2 minutes' WHERE id='{L2}'")
-    expect(error(edge(H1) + lease(), "23514", **machine), "trabalho com ACK nao e reentregue")
+    query(edge(H1) + lease(), **machine)
+    LOLD, L2 = L2, value(f"select id from cp.edge_leases where publication_id='{J1}' and attempt=3")
+    expect(value(f"select state from cp.rights_publications where id='{J1}'") == "ACK", "ACK vencido sem resultado entregue de novo, mesmo trabalho")
+    expect(error(edge(H1) + report("chave-velha-01", "UNKNOWN", lid=LOLD), "42501", **machine), "entrega anterior nao relata depois da nova")
     expect(error(both + pub("state='ACK',confirmation_level='TRANSPORT_ACK'"), "42501", **as_mgr), "gestao continua sem relatar")
     expect(query(edge(H1) + pub("state='SUPERSEDED',superseded_by=id"), check=False, **machine).returncode != 0, "gateway nao supera trabalho")
     expect(error(edge(H1) + pub(f"state='CONFIRMED',confirmation_level='STATE_READ',observed_hash='{'0'*64}'"), "23514", **machine),
@@ -4658,11 +4663,38 @@ def edge_checks():
     expect(value(edge(H1) + "select coalesce(cp.edge_agent_id()::text,'nenhum')", **machine) == "nenhum", "credencial girada nao autentica")
     expect(value(edge(H2) + "select cp.edge_agent_id()::text", **machine) == EA, "credencial nova autentica")
     expect(error(gw + f"UPDATE cp.edge_agents SET status='REVOKED',version=version+1 WHERE id='{EA}'", "23514", **tec), "revogacao exige motivo")
+    # Revogacao com retirada so com ACK (Codex P1): a entrega e liberada na hora e o gateway novo retoma o mesmo trabalho.
+    query(both + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G1}','MANUAL_REVOCATION')",
+          **as_mgr)
+    J2 = value(f"select id from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}' and origin='REVOCATION'")
+    D2 = value(f"select document_hash||':'||priority||':'||action from cp.rights_publications where id='{J2}'")
+    query(edge(H2) + lease(pub=J2), **machine)
+    LA = value(f"select id from cp.edge_leases where publication_id='{J2}'")
+    query(edge(H2) + f"UPDATE cp.rights_publications SET state='ACK',confirmation_level='TRANSPORT_ACK',attempts=1,version=version+1 WHERE id='{J2}'; "
+          f"UPDATE cp.edge_leases SET acknowledged_at=now(),version=version+1 WHERE id='{LA}'", **machine)
+    expect(error(gw + f"UPDATE cp.edge_leases SET released_at=now(),version=version+1 WHERE id='{LA}'", "42501", **tec),
+           "entrega de gateway valido nao e liberada pelo MASTER")
     query(gw + f"UPDATE cp.edge_agents SET status='REVOKED',revoke_reason='Troca do computador do gateway',version=version+1 WHERE id='{EA}'", **tec)
     expect(value(edge(H2) + "select coalesce(cp.edge_agent_id()::text,'nenhum')", **machine) == "nenhum", "gateway revogado nao autentica")
+    expect(value(f"select (released_at is not null)::text from cp.edge_leases where id='{LA}'") == "true", "revogacao libera a entrega aberta do gateway")
     expect(error(gw + f"UPDATE cp.edge_agents SET status='ONLINE',revoke_reason=NULL,version=version+1 WHERE id='{EA}'", "23514", **tec), "revogacao e definitiva")
     expect(error(register(EB, H2), "23505", **tec), "hash ja usado nunca volta")
     query(register(EB, H3), **tec)
+    query(edge(H3) + lease(pub=J2, agent=EB), **machine)
+    LB = value(f"select id from cp.edge_leases where publication_id='{J2}' and attempt=2")
+    expect(value(f"select document_hash||':'||priority||':'||action from cp.rights_publications where id='{J2}'") == D2,
+           "gateway novo retoma a mesma retirada (versao, hash e prioridade 0)")
+    expect(value(edge(H2) + f"WITH u AS (UPDATE cp.rights_publications SET state='FAILED',version=version+1 WHERE id='{J2}' RETURNING 1) "
+                 "SELECT count(*) FROM u", **machine) == "0", "gateway revogado nao enxerga nem relata o trabalho")
+    expect(error(edge(H2) + f"INSERT INTO cp.edge_reports(tenant_id,agent_id,lease_id,publication_id,idempotency_key,request_hash,state,document_hash,"
+                 f"outcome,outcome_code) VALUES('{TA}','{EA}','{LA}','{J2}','chave-revogado-1','{'e'*64}','FAILED','{'e'*64}','REJECTED','LATE')",
+                 "42501", **machine), "relatorio tardio do gateway revogado e recusado")
+    h2doc = D2.split(":")[0]
+    query(edge(H3) + f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash='{h2doc}',attempts=2,version=version+1 "
+          f"WHERE id='{J2}'; UPDATE cp.edge_leases SET finished_at=now(),version=version+1 WHERE id='{LB}'; "
+          f"INSERT INTO cp.edge_reports(tenant_id,agent_id,lease_id,publication_id,idempotency_key,request_hash,state,document_hash,observed_hash,outcome) "
+          f"VALUES('{TA}','{EB}','{LB}','{J2}','chave-novo-gw-1','{'e'*64}','CONFIRMED','{h2doc}','{h2doc}','APPLIED')", **machine)
+    expect(value(f"select state from cp.rights_publications where id='{J2}'") == "CONFIRMED", "retirada confirmada pelo gateway substituto")
     expect(error(edge(H3) + f"UPDATE cp.edge_reports SET outcome='CLOSED'", "42501", **machine), "gateway novo nao altera historico")
     # Trilha do MASTER e RLS.
     audit = lambda by: (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
