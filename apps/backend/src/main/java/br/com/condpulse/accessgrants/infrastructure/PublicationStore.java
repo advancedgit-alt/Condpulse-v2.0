@@ -67,18 +67,19 @@ public class PublicationStore {
 
  /**
   * Destinos do sujeito cujo documento compilado mudou desde o último trabalho do destino; destino que nunca recebeu nada
-  * só entra se houver direito a aplicar.
+  * só entra se houver direito a aplicar. cp.rights_compiled_set (V051) compila todos os destinos com uma só passagem
+  * dos alvos, a mesma fonte de cp.rights_compiled usada pelo gatilho (antes eram uma passagem por destino, mais uma
+  * para listar os destinos).
   */
  public List<UUID> changedDevices(UUID tenant,UUID subject) {
   return scan(()->jdbc.query("""
-   select d.device from (select distinct device from cp.rights_destinations(?,?) device) d
-    cross join lateral (select cp.rights_compiled(?,?,d.device) doc) c
-    left join lateral (select r.document_hash from cp.rights_publications r where r.tenant_id=? and r.subject_id=? and r.device_id=d.device
+   select c.device_id from cp.rights_compiled_set(?,?,null) c
+    left join lateral (select r.document_hash from cp.rights_publications r where r.tenant_id=? and r.subject_id=? and r.device_id=c.device_id
      and r.state<>'SUPERSEDED' order by r.desired_version desc limit 1) l on true
-   where c.doc is not null and l.document_hash is distinct from cp.rights_document_hash(c.doc)
-    and (l.document_hash is not null or c.doc->>'action'='APPLY_RIGHTS')
-   order by d.device
-   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject,tenant,subject));
+   where c.document is not null and l.document_hash is distinct from cp.rights_document_hash(c.document)
+    and (l.document_hash is not null or c.document->>'action'='APPLY_RIGHTS')
+   order by c.device_id
+   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject));
  }
  /** Direito vigente que ficou fora do documento de um destino, com o motivo do predicado único (cp.rights_targets). */
  public record Excluded(UUID deviceId,String issue) {}

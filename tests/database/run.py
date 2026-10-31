@@ -4295,6 +4295,13 @@ def grant_checks():
                  f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
                  f"(select cp.access_grants_current_now('{TA}','{SV}',null)))", **as_mgr) == "0",
            "V047: conjunto vigente igual a cp.access_grant_current para todos os direitos (convites, reservas, bloqueios, marcas)")
+    for who in (None, SV):
+        subject = "null" if who is None else f"'{who}'"
+        expect(value(both + scan + f"select count(*) from cp.subject_contexts c where c.tenant_id='{TA}' and ({subject} is null or c.subject_id={subject}) "
+                     f"and cp.subject_context_current(c.tenant_id,c.id) <> (c.id in (select cp.subject_contexts_current_now('{TA}',{subject})))", **as_mgr) == "0"
+               and value(both + scan + f"select count(*) from cp.subject_contexts_current_now('{TA}',{subject}) x(id) "
+                         f"where not cp.subject_context_current('{TA}',x.id)", **as_mgr) == "0",
+               f"V051: vigencia de contextos em conjunto igual a cp.subject_context_current ({'condominio' if who is None else 'sujeito'})")
     # Corrida cartao x bloqueio (mesmo lock por condominio): nenhuma ordem deixa cartao ativo para sujeito bloqueado.
     def card(identifier):
         return (mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
@@ -4346,6 +4353,25 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM cp.technical_grants WHERE id in ('{G1}','{G2}','42700000-0000-4000-8000-000000000003'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
+
+def rights_entries_v047(tenant, subject, device):
+    """Formula de referencia de cp.rights_entries da V047 (uma passagem dos alvos por destino)."""
+    return (f"(SELECT coalesce(jsonb_agg(jsonb_build_object('grantId',x.grant_id,'areaId',x.area_id,'pointId',x.point_id,'bindingId',x.binding_id,"
+            f"'bindingRevision',x.binding_revision,'channelId',x.channel_id,'direction',x.direction,'deviceRole',x.device_role,'generation',x.generation,"
+            f"'validFrom',to_char(x.valid_from AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),"
+            f"'validUntil',to_char(x.valid_until AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')) ORDER BY x.grant_id,x.point_id,x.direction,x.device_role),'[]'::jsonb) "
+            f"FROM cp.rights_targets({tenant},{subject}) x WHERE x.device_id={device} AND x.issue IS NULL AND x.is_current)")
+
+def rights_compiled_v047(tenant, subject, device):
+    """Formula de referencia de cp.rights_compiled da V047, para conferir que a compilacao em conjunto da V051 produz o
+    mesmo documento (e portanto o mesmo hash) em todos os destinos."""
+    e = rights_entries_v047(tenant, subject, device)
+    return (f"(SELECT CASE WHEN s.status<>'ACTIVE' THEN jsonb_build_object('schemaVersion','1.0','subjectRef',s.external_ref,'action','REVOKE_ALL',"
+            f"'subjectRestrictionEpoch',s.restriction_epoch,'coveredMethods',jsonb_build_array('FACE','CARD','PIN','QR','INTERMEDIARY_GRANT'),'entries','[]'::jsonb) "
+            f"ELSE jsonb_build_object('schemaVersion','1.0','subjectRef',s.external_ref,"
+            f"'action',CASE WHEN jsonb_array_length({e})>0 AND jsonb_array_length({e})<=512 THEN 'APPLY_RIGHTS' ELSE 'REVOKE_RIGHTS' END,"
+            f"'subjectRestrictionEpoch',s.restriction_epoch,'coveredMethods','[]'::jsonb,'entries',CASE WHEN jsonb_array_length({e})<=512 THEN {e} ELSE '[]'::jsonb END) END "
+            f"FROM cp.access_subjects s WHERE s.tenant_id={tenant} AND s.id={subject})")
 
 def publication_checks():
     """V047 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
@@ -4513,6 +4539,19 @@ def publication_checks():
     expect(value(both + f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.access_grants g where g.tenant_id='{TA}' and "
                  f"cp.access_grant_current(g.tenant_id,g.id,greatest(clock_timestamp(),g.valid_from)) <> (g.id in "
                  f"(select cp.access_grants_current_now('{TA}',null,'{AR}')))", **as_mgr) == "0", "conjunto vigente por area igual ao predicado por direito")
+    def compiled_parity(label):
+        T, S = f"'{TA}'", f"'{SRS}'"
+        ref = rights_compiled_v047(T, S, "d.device")
+        expect(value(both + "SET LOCAL app.subject_context_scan='on'; "
+                     f"select count(*) from (select distinct device from cp.rights_destinations({T},{S}) device) d "
+                     f"full join cp.rights_compiled_set({T},{S},null) c on c.device_id=d.device "
+                     f"where d.device is null or c.device_id is null or c.document is distinct from {ref} "
+                     f"or cp.rights_compiled({T},{S},d.device) is distinct from {ref} "
+                     f"or cp.rights_entries({T},{S},d.device) is distinct from {rights_entries_v047(T, S, 'd.device')}", **as_mgr) == "0"
+               and value(both + "SET LOCAL app.subject_context_scan='on'; "
+                         f"select count(*) from cp.rights_destinations({T},{S})", **as_mgr) != "0",
+               f"V051: documento compilado em conjunto igual a formula da V047 em todos os destinos ({label})")
+    compiled_parity("direitos vigentes, fora do documento e leitores")
     # Bloqueio: REVOKE_ALL supera a retirada pendente (um so trabalho em aberto por destino).
     query(mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
     expect(value(latest.format("action||':'||priority||':'||array_to_string(array(select jsonb_array_elements_text(document->'coveredMethods')),',')"))
@@ -4524,6 +4563,7 @@ def publication_checks():
     expect(error(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash=document_hash,version=version+1 WHERE id='{J4}'",
                  "23514", **worker), "resultado de trabalho superado e recusado")
     expect(error(both + plan(), "23514", **as_mgr), "sujeito bloqueado: compilacao igual ao REVOKE_ALL nao amplia")
+    compiled_parity("sujeito bloqueado")
     expect(value("select count(*) from cp.rights_publications", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: publicacoes nao atravessam condominio")
     expect(value(f"select count(*) from cp.rights_publications", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le publicacoes")
     expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname='rights_publications' "
