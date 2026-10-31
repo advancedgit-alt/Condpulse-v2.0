@@ -69,9 +69,13 @@ interface ControlIdTransport {
     requireNotExpired(notAfter);
     response=post(endpoint,renewed,body,actuation);
    }
+   // 5xx não é recusa explícita: o pedido pode ter sido executado (resultado incerto). 4xx é recusa.
+   if(response.status()>=500) throw new DeviceCallException(Failure.AMBIGUOUS,"HTTP_"+response.status());
    if(!response.ok()) throw new ControlIdHttpError(response.status());
    String text=response.text().trim();
-   return text.isEmpty()?Map.of():Json.object(text);
+   // Resposta ininterpretável: resultado incerto, nunca recusa.
+   try { return text.isEmpty()?Map.of():Json.object(text); }
+   catch(Json.JsonException e) { throw new DeviceCallException(Failure.AMBIGUOUS,"INVALID_RESPONSE"); }
   }
 
   /** Prazo revalidado imediatamente antes de cada envio (inclusive após login ou renovação de sessão). */
@@ -105,6 +109,11 @@ interface ControlIdTransport {
    if(!response.ok()) { session=null; return false; }
    return Boolean.TRUE.equals(Json.bool(Json.object(response.text()),"session_is_valid"));
   }
+ }
+
+ /** O equipamento informou erro explícito no /result do push (campo "error"). */
+ final class DeviceReportedError extends RuntimeException {
+  DeviceReportedError() { super("device error",null,false,false); }
  }
 
  /** HTTP de erro do equipamento: o pedido chegou e foi recusado. */
@@ -173,7 +182,9 @@ interface ControlIdTransport {
     Thread.currentThread().interrupt();
     throw new DeviceCallException(Failure.AMBIGUOUS,"INTERRUPTED");
    } catch(ExecutionException e) {
-    throw new ControlIdHttpError(502);
+    // Só o campo "error" do /result é recusa explícita; resultado ininterpretável é incerto (pode ter acionado).
+    if(e.getCause() instanceof DeviceReportedError) throw new ControlIdHttpError(422);
+    throw new DeviceCallException(Failure.AMBIGUOUS,"INVALID_PUSH_RESULT");
    }
   }
 
@@ -214,7 +225,7 @@ interface ControlIdTransport {
    if(pending==null) return Response.empty();
    try {
     var body=Json.object(new String(request.body(),StandardCharsets.UTF_8));
-    if(body.get("error")!=null) { pending.result().completeExceptionally(new IllegalStateException("device error")); return Response.empty(); }
+    if(body.get("error")!=null) { pending.result().completeExceptionally(new DeviceReportedError()); return Response.empty(); }
     Object response=body.get("response");
     Map<String,Object> parsed=response instanceof String s?(s.isBlank()?Map.of():Json.object(s)):response==null?Map.of():Json.map(response);
     pending.result().complete(parsed);
