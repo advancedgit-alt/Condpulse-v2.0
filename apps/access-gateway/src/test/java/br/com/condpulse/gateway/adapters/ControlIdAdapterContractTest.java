@@ -456,4 +456,36 @@ class ControlIdAdapterContractTest {
   var ok=Json.map(Json.object(new String(endpoint.handle(req("POST","/new_user_identified.fcgi",Map.of(),"user_id=7"),allowAll).body())).get("result"));
   assertEquals(7L,ok.get("event"),"portal ausente segue a regra do canal único");
  }
+
+ // ----- oitava rodada (#130): resposta ininterpretável é incerta -----
+
+ @Test void respostaIninterpretavelDaAberturaEIncertaNuncaRecusa() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var clock=new TestSupport.TestClock();
+   fake.on("POST","/login.fcgi",Reply.json("{\"session\":\"s\"}"));
+   var a=lan(fake,clock,null);
+   fake.on("POST","/execute_actions.fcgi",Reply.status(500));
+   assertEquals(OpenOutcome.AMBIGUOUS,a.open(new OpenAction("o1","c1","1","door:door=1",clock.instant().plusSeconds(5))).outcome());
+   fake.on("POST","/execute_actions.fcgi",Reply.json("{nao-e-json"));
+   assertEquals(OpenOutcome.AMBIGUOUS,a.open(new OpenAction("o2","c1","1","door:door=1",clock.instant().plusSeconds(5))).outcome());
+   fake.on("POST","/execute_actions.fcgi",Reply.status(403));
+   assertEquals(OpenOutcome.REJECTED_BY_DEVICE,a.open(new OpenAction("o3","c1","1","door:door=1",clock.instant().plusSeconds(5))).outcome());
+  }
+ }
+
+ @Test void resultadoPushMalformadoEIncertoErroExplicitoERecusa() throws Exception {
+  for(var c:List.of(new String[]{"{nao-e-json","AMBIGUOUS"},new String[]{"{\"error\":\"falhou\"}","REJECTED_BY_DEVICE"})) {
+   var clock=new TestSupport.TestClock();
+   var a=push(clock);
+   var endpoint=a.inbound().orElseThrow();
+   var future=CompletableFuture.supplyAsync(()->a.open(new OpenAction("o","c1","1","sec_box:id=65793,reason=3",clock.instant().plusSeconds(5))));
+   InboundEndpoint.Response delivered=null;
+   for(int i=0;i<50 && (delivered==null || delivered.body().length==0);i++) {
+    Thread.sleep(10);
+    delivered=endpoint.handle(req("GET","/push",Map.of("deviceId","1","uuid","u-"+c[1]),""),ctx(false));
+   }
+   endpoint.handle(req("POST","/result",Map.of("deviceId","1","uuid","u-"+c[1]),c[0]),ctx(false));
+   assertEquals(c[1],future.get().outcome().name(),c[0]);
+  }
+ }
 }
