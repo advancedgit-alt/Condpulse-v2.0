@@ -101,6 +101,10 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   try {
    var existing=search(person.subjectRef());
    if(existing.isEmpty()) return status(send("POST",P_RECORD,Map.of("UserInfo",userInfo(person))));
+   // Sem prazo pedido, um Valid anterior continuaria valendo; a fonte não documenta como removê-lo: recusa.
+   var previous=Json.map(existing.get().get("Valid"));
+   if(person.validFrom()==null && previous!=null && Boolean.TRUE.equals(Json.bool(previous,"enable")))
+    return OperationResult.of(OperationState.FAILED,"VALIDITY_CLEAR_NOT_DOCUMENTED");
    var info=userInfo(person);
    // Modificação preserva direitos atuais: só nome e validade mudam aqui.
    return status(send("PUT",P_MODIFY,Map.of("UserInfo",info)));
@@ -121,7 +125,8 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   if((person.validFrom()==null)!=(person.validUntil()==null)) return Optional.empty();
   var out=new java.util.HashMap<String,String>();
   out.put("name",person.displayName());
-  if(person.validFrom()!=null) out.put("valid",validKey(person.validFrom(),person.validUntil()));
+  // Sem prazo, o esperado é explicitamente "sem Valid habilitado" — nunca só o nome.
+  out.put("valid",person.validFrom()!=null?validKey(person.validFrom(),person.validUntil()):"none");
   return Optional.of(out);
  }
 
@@ -257,7 +262,8 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    var attributes=new java.util.HashMap<String,String>();
    if(Json.string(user,"name")!=null) attributes.put("name",Json.string(user,"name"));
    var valid=Json.map(user.get("Valid"));
-   if(valid!=null && Boolean.TRUE.equals(Json.bool(valid,"enable"))) {
+   if(valid==null || Boolean.FALSE.equals(Json.bool(valid,"enable"))) attributes.put("valid","none");
+   else if(Boolean.TRUE.equals(Json.bool(valid,"enable"))) {
     try { attributes.put("valid",validKey(parseValid(Json.string(valid,"beginTime"),Json.string(valid,"timeType")),
      parseValid(Json.string(valid,"endTime"),Json.string(valid,"timeType")))); }
     catch(RuntimeException e) { attributes=null; }

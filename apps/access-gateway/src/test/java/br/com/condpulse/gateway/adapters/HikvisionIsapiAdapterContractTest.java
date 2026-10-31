@@ -264,4 +264,22 @@ class HikvisionIsapiAdapterContractTest {
    }
   }
  }
+
+ // ----- sexta rodada (#131) -----
+
+ @Test void pessoaSemPrazoNaoPreservaJanelaAntigaEmSilencio() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   a.upsertPerson(new PersonSpec("ref-12","Morador 12",Instant.parse("2030-01-01T03:00:00Z"),Instant.parse("2031-01-01T03:00:00Z")));
+   int before=fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size();
+   var semPrazo=new PersonSpec("ref-12","Morador 12",null,null);
+   assertEquals("VALIDITY_CLEAR_NOT_DOCUMENTED",a.upsertPerson(semPrazo).reasonCode());
+   assertEquals(before,fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size());
+   assertNotEquals(a.personAttributes(semPrazo).orElseThrow(),a.readState("ref-12").personAttributes(),"leitura não confirma pessoa sem prazo");
+   var nova=new PersonSpec("ref-13","Morador 13",null,null);
+   a.upsertPerson(nova);
+   assertEquals(a.personAttributes(nova).orElseThrow(),a.readState("ref-13").personAttributes(),"sem Valid: \"none\" lido de volta");
+  }
+ }
 }
