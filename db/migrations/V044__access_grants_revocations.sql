@@ -229,8 +229,8 @@ BEGIN
   ELSIF NEW.revocation_marker_id IS NOT NULL OR NEW.revoked_at IS NOT NULL THEN
    RAISE EXCEPTION 'só a revogação cita marca' USING ERRCODE='23514';
   ELSIF NEW.status='EXPIRED' THEN
-   IF NEW.valid_until>clock_timestamp() AND cp.access_grant_current(NEW.tenant_id,NEW.id,clock_timestamp()) THEN
-    RAISE EXCEPTION 'direito vigente não expira' USING ERRCODE='23514';
+   IF NEW.valid_until>clock_timestamp() AND cp.access_grant_current(NEW.tenant_id,NEW.id,greatest(clock_timestamp(),NEW.valid_from)) THEN
+    RAISE EXCEPTION 'direito vigente ou ainda por começar não expira' USING ERRCODE='23514';
    END IF;
   ELSIF NEW.status='SUPERSEDED' AND NOT cp.grant_manager() AND current_setting('is_superuser')<>'on' THEN
    RAISE EXCEPTION 'substituição só pela derivação da gestão' USING ERRCODE='42501';
@@ -383,14 +383,15 @@ BEGIN
   END IF;
   NEW.dedupe_key:='CONTEXT:'||NEW.context_id::text;
  ELSE
-  SELECT id,context_id INTO g FROM cp.access_grants WHERE tenant_id=NEW.tenant_id AND id=NEW.grant_id AND subject_id=NEW.subject_id;
+  SELECT id,context_id,valid_from INTO g FROM cp.access_grants WHERE tenant_id=NEW.tenant_id AND id=NEW.grant_id AND subject_id=NEW.subject_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'direito inexistente' USING ERRCODE='23503'; END IF;
   -- Revogação explícita pela gestão; a varredura só marca direito que já deixou de valer na origem.
   IF NEW.reason_code='MANUAL_REVOCATION' THEN
    IF NOT cp.grant_manager() AND current_setting('is_superuser')<>'on' THEN
     RAISE EXCEPTION 'revogação manual só pela gestão' USING ERRCODE='42501';
    END IF;
-  ELSIF NEW.reason_code<>'ORIGIN_CHANGED' OR cp.access_grant_current(NEW.tenant_id,NEW.grant_id,clock_timestamp()) THEN
+  -- Origem avaliada no início da janela quando ela é futura: direito ainda por começar não é origem inválida.
+  ELSIF NEW.reason_code<>'ORIGIN_CHANGED' OR cp.access_grant_current(NEW.tenant_id,NEW.grant_id,greatest(clock_timestamp(),g.valid_from)) THEN
    RAISE EXCEPTION 'varredura só marca direito que deixou de valer na origem' USING ERRCODE='23514';
   END IF;
   NEW.context_id:=g.context_id;

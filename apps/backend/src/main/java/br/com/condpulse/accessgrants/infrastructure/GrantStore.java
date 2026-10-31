@@ -67,7 +67,8 @@ public class GrantStore {
   g.id,g.subject_id,g.context_id,g.area_id,g.policy_id,g.policy_version_id,g.origin_kind,
   coalesce(g.origin_reservation_id,g.origin_permit_id,g.origin_functional_context_id,g.origin_membership_id) origin_id,g.origin_version,g.valid_from,
   g.valid_until,g.generation,g.subject_restriction_epoch,g.status,g.status_reason_code,g.revocation_marker_id,
-  cp.access_grant_current(g.tenant_id,g.id,now()) is_current,g.version
+  cp.access_grant_current(g.tenant_id,g.id,now()) is_current,g.version,
+  cp.access_grant_current(g.tenant_id,g.id,greatest(now(),g.valid_from)) origin_valid
   """;
  private static GrantModels.Grant mapGrant(ResultSet r,int n) throws SQLException {
   return new GrantModels.Grant(r.getObject("id",UUID.class),r.getObject("subject_id",UUID.class),r.getObject("context_id",UUID.class),
@@ -84,10 +85,14 @@ public class GrantStore {
   var rows=scan(()->jdbc.query("select "+GRANT_COLUMNS+" from cp.access_grants g where g.tenant_id=? and g.id=?",GrantStore::mapGrant,tenant,id));
   return rows.isEmpty()?null:rows.getFirst();
  }
- /** Direitos ativos da área (para a varredura antes da derivação). */
- public List<GrantModels.Grant> activeInArea(UUID tenant,UUID area) {
+ /**
+  * Direito ativo para a varredura: originValid separa a validade da origem (contexto, convite, reserva, sujeito, revisão e
+  * revogações, avaliados no início da janela quando ela é futura) da vigência no tempo.
+  */
+ public record Sweep(GrantModels.Grant grant,boolean originValid) {}
+ public List<Sweep> activeInArea(UUID tenant,UUID area) {
   return scan(()->jdbc.query("select "+GRANT_COLUMNS+" from cp.access_grants g where g.tenant_id=? and g.area_id=? and g.status='ACTIVE' order by g.generation",
-   GrantStore::mapGrant,tenant,area));
+   (r,n)->new Sweep(mapGrant(r,n),r.getBoolean("origin_valid")),tenant,area));
  }
  public String key(UUID subject,UUID context,UUID area,UUID version,String kind,UUID origin,long originVersion,long epoch,UUID evidence) {
   return jdbc.queryForObject("select cp.access_grant_key(?,?,?,?,?,?,?,?,?)",String.class,subject,context,area,version,kind,origin,originVersion,epoch,evidence);
@@ -104,9 +109,10 @@ public class GrantStore {
    +"and g.status='ACTIVE'",GrantStore::mapGrant,tenant,context,area,originKey));
   return rows.isEmpty()?null:rows.getFirst();
  }
+ /** O gatilho confere de novo o contexto e o convite: a conferência de vigência de convites fica ligada durante o INSERT. */
  public void insert(UUID tenant,UUID id,UUID policy,UUID version,UUID area,GrantPlanner.Planned p,UUID actor) {
   var c=p.candidate();
-  jdbc.update("""
+  scan(()->jdbc.update("""
    insert into cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_membership_id,origin_permit_id,
     origin_reservation_id,origin_functional_context_id,origin_version,age_evidence_id,valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by)
    values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::text[],?)
@@ -114,7 +120,7 @@ public class GrantStore {
    "MEMBERSHIP".equals(p.originKind()) || "RESERVATION".equals(p.originKind())?c.membershipId():null,
    "VISIT_PERMIT".equals(p.originKind())?p.originId():null,"RESERVATION".equals(p.originKind())?p.originId():null,
    "FUNCTIONAL_AUTHORIZATION".equals(p.originKind())?c.contextId():null,p.originVersion(),p.ageEvidenceId(),Timestamp.from(p.validFrom()),
-   Timestamp.from(p.validUntil()),c.restrictionEpoch(),p.reasonCodes().toArray(String[]::new),actor);
+   Timestamp.from(p.validUntil()),c.restrictionEpoch(),p.reasonCodes().toArray(String[]::new),actor));
  }
  public boolean close(UUID tenant,UUID id,long expected,String status,String reason) {
   return jdbc.update("update cp.access_grants set status=?,status_reason_code=?,version=version+1 where tenant_id=? and id=? and version=? and status='ACTIVE'",

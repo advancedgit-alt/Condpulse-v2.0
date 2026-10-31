@@ -70,9 +70,11 @@ public class GrantService implements SubjectFactsPort {
    // 1. Varredura dos ativos da área: vencido expira; o que deixou de valer na origem recebe marca; outra revisão é substituída.
    int expired=0,revoked=0,superseded=0;
    Instant now=Instant.now();
-   for(var g:store.activeInArea(tenant,policy.areaId())) {
+   // Direito com janela futura (reserva ainda por começar) não é "origem inválida": só a origem decide a marca.
+   for(var sw:store.activeInArea(tenant,policy.areaId())) {
+    var g=sw.grant();
     if(!g.validUntil().isAfter(now)) { if(store.close(tenant,g.grantId(),g.version(),"EXPIRED","WINDOW_ENDED")) expired++; }
-    else if(!g.current()) { store.markGrant(tenant,g.subjectId(),g.grantId(),"ORIGIN_CHANGED"); revoked++; }
+    else if(!sw.originValid()) { store.markGrant(tenant,g.subjectId(),g.grantId(),"ORIGIN_CHANGED"); revoked++; }
     else if(!g.policyVersionId().equals(version.versionId())) { if(store.close(tenant,g.grantId(),g.version(),"SUPERSEDED","POLICY_REDERIVED")) superseded++; }
    }
    // 2. Candidatos: contextos ativos dos tipos elegíveis; acima do limite a derivação é recusada (nunca truncada).

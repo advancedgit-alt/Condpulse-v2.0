@@ -73,13 +73,17 @@ final class FacialInstallationFixture {
 
  /** Duas áreas (hall de origem e área-alvo) e uma passagem comissionada entre elas. */
  Installed commissioned(UUID manager,UUID master,List<String> approved,String firmware) throws Exception {
+  return commissioned(manager,master,approved,firmware,null);
+ }
+ /** amenity: área-alvo ligada ao espaço reservável (tipo AMENITY), para regras com reserva. */
+ Installed commissioned(UUID manager,UUID master,List<String> approved,String firmware,UUID amenity) throws Exception {
   UUID homologation=homologation(firmware,approved,true);
   String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
   UUID hall=UUID.randomUUID(),area=UUID.randomUUID(),point=UUID.randomUUID(),connector=UUID.randomUUID(),device=UUID.randomUUID(),
    channel=UUID.randomUUID(),binding=UUID.randomUUID(),acceptance=UUID.randomUUID();
   String suffix=firmware.replace(".","");
   map.createArea(manager,db.tenantA,AAL2,new MapModels.CreateArea(hall,"HALL"+suffix,"Hall ficticio","RESIDENTIAL_ROUTE",null,null,null,zone,null,"ACTIVE"));
-  map.createArea(manager,db.tenantA,AAL2,new MapModels.CreateArea(area,"AREA"+suffix,"Area ficticia","COMMON_AREA",null,null,null,zone,null,"ACTIVE"));
+  map.createArea(manager,db.tenantA,AAL2,new MapModels.CreateArea(area,"AREA"+suffix,"Area ficticia",amenity==null?"COMMON_AREA":"AMENITY",null,null,amenity,zone,null,"ACTIVE"));
   map.createPoint(master,db.tenantA,AAL2,new MapModels.CreatePoint(point,"P"+suffix,"Porta ficticia",hall,area,"DOOR","FROM_TO","FREE_EGRESS",null,null,"MAPPED"));
   db.adminUpdate("insert into cp.access_connectors(id,tenant_id,provider,label) values(?,?,'SIMULATED','Conector ficticio JDBC')",connector,db.tenantA);
   install.createDevice(master,db.tenantA,AAL2,new InstallModels.CreateDevice(device,connector,"ctrl-"+suffix,"Controlador ficticio",null,null,homologation,

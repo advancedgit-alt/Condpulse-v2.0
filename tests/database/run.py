@@ -4261,14 +4261,19 @@ def grant_checks():
           f"VALUES('{CV}','{TA}','{SV}','VISITOR','VISIT_PERMIT','{PV}',now()+interval '2 days','{MG}')")
     guest = (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_permit_id,origin_version,"
              f"valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{G3}','{TA}','{SV}','{CV}','{AR}','{PO}','{V2}','VISIT_PERMIT',"
-             f"'{PV}',0,now(),now()+interval '1 day',0,ARRAY['VISIT_PERMIT'],'{MG}')")
+             f"'{PV}',0,now()+interval '1 hour',now()+interval '1 day',0,ARRAY['VISIT_PERMIT'],'{MG}')")
     scan = "SET LOCAL app.subject_context_scan='on'; "
     expect(error(both + scan + guest.replace("'1 day'", "'3 days'"), "23514", **as_mgr), "direito do convidado nunca alem do convite")
     query(both + scan + guest, **as_mgr)
-    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',now())", **as_mgr) == "t", "visitante com convite vigente tem direito")
-    expect(value(both + f"select cp.access_grant_current('{TA}','{G3}',now())", **as_mgr) == "f", "sem a conferencia ligada a gestao nao le o convite: nega")
+    later = "now()+interval '2 hours'"
+    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',{later})", **as_mgr) == "t", "visitante com convite vigente tem direito")
+    expect(value(both + f"select cp.access_grant_current('{TA}','{G3}',{later})", **as_mgr) == "f", "sem a conferencia ligada a gestao nao le o convite: nega")
+    expect(error(both + scan + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) "
+                 f"VALUES('{TA}','GRANT','{SV}','{G3}','ORIGIN_CHANGED')", "23514", **as_mgr), "direito ainda por comecar nao e origem invalida")
+    expect(error(both + scan + f"UPDATE cp.access_grants SET status='EXPIRED',status_reason_code='WINDOW_ENDED',version=1 WHERE id='{G3}'", "23514", **as_mgr),
+           "direito ainda por comecar nao expira")
     query(f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{RS}',revoked_at=now(),revoke_reason='Cancelado',version=version+1 WHERE id='{PV}'")
-    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',now())", **as_mgr) == "f",
+    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',{later})", **as_mgr) == "f",
            "AC-009: convite cancelado derruba na hora o direito do visitante")
     query(both + scan + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SV}','{G3}','ORIGIN_CHANGED')", **as_mgr)
     expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G3}'") == "REVOKED:ORIGIN_CHANGED",

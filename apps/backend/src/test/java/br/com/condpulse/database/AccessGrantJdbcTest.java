@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class AccessGrantJdbcTest {
  private static final AssuranceLevel AAL1=AssuranceLevel.AAL1,AAL2=AssuranceLevel.AAL2;
- private static final UUID MANAGER=UUID.randomUUID(),MASTER=UUID.randomUUID();
+ private static final UUID MANAGER=UUID.randomUUID(),MASTER=UUID.randomUUID(),CONCIERGE=UUID.randomUUID();
  private static final List<String> APPROVED=List.of("faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity");
  private static JdbcDisposableDatabase db;
  private static PolicyService policies;
@@ -53,8 +53,9 @@ class AccessGrantJdbcTest {
   policies=new PolicyService(tenants,policyStore,audit,grants);
   subjects=new SubjectService(tenants,new SubjectStore(db.jdbc),audit);
   fixture=new FacialInstallationFixture(db);
-  db.extraAccounts.add(MANAGER); db.extraAccounts.add(MASTER);
-  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE'),(?,'ACTIVE')",MANAGER,MASTER);
+  db.extraAccounts.add(MANAGER); db.extraAccounts.add(MASTER); db.extraAccounts.add(CONCIERGE);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE'),(?,'ACTIVE'),(?,'ACTIVE')",MANAGER,MASTER,CONCIERGE);
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'PORTARIA DIREITOS JDBC','CONCIERGE','ACTIVE')",db.tenantA,CONCIERGE);
   db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'GESTAO DIREITOS JDBC','MANAGER','ACTIVE')",db.tenantA,MANAGER);
  }
  @BeforeEach void reset() throws Exception {
@@ -64,10 +65,11 @@ class AccessGrantJdbcTest {
  @AfterEach void clear() throws Exception { fixture.clear(); }
  @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }
  private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
- private static PolicyModels.PolicyDocument rule(String zone,UUID area) {
-  return new PolicyModels.PolicyDocument("1.0","Academia moradores",area,zone,"ALL",List.of("RESIDENT"),"DENY",null,true,
+ private static PolicyModels.PolicyDocument rule(String zone,UUID area) { return rule(zone,area,List.of("RESIDENT"),"DENY","NOT_REQUIRED"); }
+ private static PolicyModels.PolicyDocument rule(String zone,UUID area,List<String> contexts,String visitors,String reservation) {
+  return new PolicyModels.PolicyDocument("1.0","Academia moradores",area,zone,"ALL",contexts,visitors,null,true,
    List.of(new PolicyModels.WeeklyWindow(List.of("MON","TUE","WED","THU","FRI","SAT","SUN"),"06:00","22:00",false)),List.of(),"HOLIDAY_OVERRIDES_WEEKLY",
-   new PolicyModels.ReservationRule("NOT_REQUIRED",0,0),new PolicyModels.CompanionRule("NONE",0),
+   new PolicyModels.ReservationRule(reservation,600,900),new PolicyModels.CompanionRule("NONE",0),
    new PolicyModels.OfflineRule("SAFE_LOCAL_SUBSET",300,true),new PolicyModels.FailureRule("DENY","DENY"),"OFF",null,true,null,"DENY");
  }
  private static SubjectModels.Subject subjectOf(UUID account) {
@@ -156,6 +158,66 @@ class AccessGrantJdbcTest {
   assertEquals(1,swept.revoked());
   assertEquals("ORIGIN_CHANGED",grantsOf(a.subjectId()).stream().filter(g->g.grantId().equals(renewed.grantId())).findFirst().orElseThrow().statusReasonCode());
   assertEquals("TENANT_ACCESS_DENIED",code(()->grants.grants(MANAGER,db.tenantB,AAL2,null,null)),"HAC-007");
+  db.assertEmptyContext();
+ }
+ /** Política aprovada pelos fluxos reais (rascunho, validação, aprovação). */
+ private static UUID approvedPolicy(UUID area,PolicyModels.PolicyDocument doc) {
+  UUID policyId=UUID.randomUUID(),versionId=UUID.randomUUID();
+  policies.createPolicy(MANAGER,db.tenantA,AAL2,new PolicyModels.CreatePolicy(policyId,area,"Area"));
+  policies.createVersion(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.CreateVersion(versionId,doc,"Regra de direitos ficticia"));
+  var validation=policies.validate(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.ValidateRequest(versionId));
+  assertEquals("VALIDATED",validation.status(),validation.issues().toString());
+  long v=policies.versions(MANAGER,db.tenantA,AAL2,policyId).versions().getFirst().version();
+  policies.approve(MANAGER,db.tenantA,AAL2,policyId,versionId,new PolicyModels.VersionAction(v));
+  return versionId;
+ }
+ private static UUID policyOf(UUID version) throws Exception {
+  return UUID.fromString(db.adminString("select policy_id::text from cp.access_policy_versions where id=?",version));
+ }
+
+ /** Visitante de convite vigente: o gatilho confere o convite com a conferência ligada; derivação não aborta. */
+ @Test void visitorOfCurrentInvitationReceivesARight() throws Exception {
+  var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.4.2");
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  UUID version=approvedPolicy(inst.area(),rule(zone,inst.area(),List.of("RESIDENT","VISITOR"),"ALLOW_WITH_VALID_PERMIT","NOT_REQUIRED"));
+  UUID visitor=UUID.randomUUID(),permit=UUID.randomUUID();
+  db.adminUpdate("insert into cp.visitors(id,tenant_id,full_name,created_by) values(?,?,'VISITANTE DIREITO JDBC',?)",visitor,db.tenantA,db.accountA);
+  db.adminUpdate("insert into cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until) values(?,?,?,?,?,now(),now()+interval '1 day')",
+   permit,db.tenantA,visitor,db.unitA,db.accountA);
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  subjects.materializePermits(CONCIERGE,db.tenantA,AAL2);
+  var result=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
+  assertEquals(3,result.created(),result.toString());
+  var visitorGrant=grants.grants(MANAGER,db.tenantA,AAL2,null,inst.area()).grants().stream().filter(g->"VISIT_PERMIT".equals(g.originKind())).findFirst().orElseThrow();
+  assertTrue(visitorGrant.current());
+  assertFalse(visitorGrant.validUntil().isAfter(Instant.now().plus(java.time.Duration.ofDays(1))),"Nunca além do convite");
+  db.adminUpdate("update cp.visit_permits set state='REVOKED',revoked_by=?,revoked_at=now(),revoke_reason='Cancelado JDBC',version=version+1 where id=?",db.accountA,permit);
+  assertEquals(1,grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version)).revoked(),"Convite cancelado: marca na varredura");
+  db.assertEmptyContext();
+ }
+
+ /** Reserva ainda por começar: o direito futuro não é tratado como origem inválida; cancelar a reserva revoga. */
+ @Test void futureReservationRightSurvivesRederivationUntilCancelled() throws Exception {
+  UUID amenity=UUID.randomUUID(),booking=UUID.randomUUID();
+  db.adminUpdate("insert into cp.amenities(id,tenant_id,name,capacity,approval_required) values(?,?,'SALAO DIREITO JDBC',10,false)",amenity,db.tenantA);
+  var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.4.3",amenity);
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  UUID version=approvedPolicy(inst.area(),rule(zone,inst.area(),List.of("RESIDENT"),"DENY","VALID_RESERVATION"));
+  db.adminUpdate("insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+   +"values(?,?,?,?,?,'BOOKING','CONFIRMED',now()+interval '2 hours',now()+interval '4 hours',now()+interval '2 hours',now()+interval '4 hours','{}'::jsonb)",
+   booking,db.tenantA,amenity,db.unitA,db.accountA);
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  UUID policy=policyOf(version);
+  var first=grants.derive(MANAGER,db.tenantA,AAL2,policy,new GrantModels.DeriveRequest(version));
+  assertEquals(1,first.created(),first.toString());
+  assertEquals(1,first.skippedByReason().getOrDefault("RESERVATION_REQUIRED",0),"Unidade sem reserva não recebe direito");
+  var host=grants.grants(MANAGER,db.tenantA,AAL2,null,inst.area()).grants().getFirst();
+  assertEquals("RESERVATION",host.originKind()); assertEquals(booking,host.originId());
+  assertFalse(host.current(),"Ainda não começou"); assertTrue(host.validFrom().isAfter(Instant.now()));
+  var again=grants.derive(MANAGER,db.tenantA,AAL2,policy,new GrantModels.DeriveRequest(version));
+  assertEquals(0,again.revoked(),"Direito futuro não é origem inválida"); assertEquals(1,again.unchanged());
+  db.adminUpdate("update cp.reservations set status='CANCELLED',version=version+1 where id=?",booking);
+  assertEquals(1,grants.derive(MANAGER,db.tenantA,AAL2,policy,new GrantModels.DeriveRequest(version)).revoked(),"Reserva cancelada: marca na varredura");
   db.assertEmptyContext();
  }
 }
