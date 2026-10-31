@@ -418,4 +418,20 @@ class ControlIdAdapterContractTest {
    assertEquals("1",a.fetchEvents("1",10).nextCursor());
   }
  }
+
+ // ----- sexta rodada (#129 propagado) -----
+
+ @Test void pessoaAusenteNaoProvaAusenciaDeRegistrosVinculados() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   store.objects.computeIfAbsent("cards",k->new ArrayList<>()).add(new LinkedHashMap<>(Map.of("id",1L,"value",123L,"user_id",99L)));
+   var a=lan(fake,new TestSupport.TestClock(),null);
+   var state=a.readState("ref-sem-usuario");
+   assertEquals(Boolean.FALSE,state.personPresent());
+   assertNull(state.credentialCounts(),"cartão órfão possível: contagem desconhecida, não zero");
+   assertNull(state.rightKeys());
+   assertNotEquals(OperationState.CONFIRMED,a.removeCredential("ref-sem-usuario",CredentialKind.CARD).state());
+   assertFalse(a.removePersonCoversCredentials());
+  }
+ }
 }
