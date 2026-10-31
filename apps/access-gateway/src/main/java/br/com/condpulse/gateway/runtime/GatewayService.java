@@ -60,6 +60,7 @@ public final class GatewayService {
      OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,DecisionOutbox decisionOutbox,CentralApiClient central,Clock clock) {
   this.config=config; this.registry=registry; this.adapters=Map.copyOf(adapters); this.queue=queue; this.opens=opens;
   this.outbox=outbox; this.decisions=decisions; this.decisionOutbox=decisionOutbox; this.central=central; this.clock=clock;
+  opens.quarantineCheck(id->{ var st=status.get(id); return st!=null && st.quarantined(); });
  }
 
  public Optional<AccessProviderAdapter> adapter(String deviceId) { return Optional.ofNullable(adapters.get(deviceId)); }
@@ -352,7 +353,9 @@ public final class GatewayService {
    try { page=adapter.fetchEvents(outbox.cursor(d.deviceId()).orElse(null),100); }
    catch(RuntimeException e) { LOG.log(System.Logger.Level.WARNING,"Eventos adiados: {0}",e.getClass().getSimpleName()); continue; }
    if(page.state()!=OperationState.CONFIRMED && page.state()!=OperationState.ACK) continue;
-   outbox.add(d.deviceId(),page.events(),page.nextCursor());
+   // Fila cheia ou falha de gravação: o cursor não avança e a mesma página volta na próxima passada.
+   try { outbox.add(d.deviceId(),page.events(),page.nextCursor()); }
+   catch(RuntimeException e) { LOG.log(System.Logger.Level.WARNING,"Eventos não gravados localmente: {0}",e.getMessage()); }
   }
  }
 
