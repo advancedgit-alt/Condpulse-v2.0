@@ -106,7 +106,7 @@ public class CatalogService {
     || limits.values().stream().anyMatch(v->v!=null && (v<0 || v>Integer.MAX_VALUE)))
    throw invalid("HOMOLOGATION_LIMITS_INVALID","Informe os 10 limites (null = desconhecido, nunca ilimitado).");
   var evidence=request.evidenceRefs()==null?List.<UUID>of():request.evidenceRefs();
-  if(evidence.size()>300 || evidence.contains(null) || new HashSet<>(evidence).size()!=evidence.size())
+  if(evidence.size()>300 || evidence.stream().anyMatch(java.util.Objects::isNull) || new HashSet<>(evidence).size()!=evidence.size())
    throw invalid("HOMOLOGATION_EVIDENCE_INVALID","Até 300 referências de evidência, sem repetição.");
   var sorted=new ArrayList<>(evidence); sorted.sort(null);
   var limitations=request.limitations()==null?List.<String>of():request.limitations();
@@ -151,12 +151,12 @@ public class CatalogService {
   String reason=DisplayText.normalize(request.reason(),1000);
   if(reason==null || reason.length()<8) throw invalid("AUDIT_REASON_REQUIRED","Informe o motivo (8 a 1000 caracteres).");
   var evidence=request.evidenceRefs()==null?List.<UUID>of():request.evidenceRefs();
-  if(evidence.size()>300 || evidence.contains(null) || new HashSet<>(evidence).size()!=evidence.size())
+  if(evidence.size()>300 || evidence.stream().anyMatch(java.util.Objects::isNull) || new HashSet<>(evidence).size()!=evidence.size())
    throw invalid("HOMOLOGATION_EVIDENCE_INVALID","Até 300 referências de evidência, sem repetição.");
   boolean approval=request.decision().startsWith("APPROVE_");
   if(approval && evidence.isEmpty()) throw invalid("HOMOLOGATION_EVIDENCE_REQUIRED","Aprovação exige evidência de execução própria.");
   var approved=request.approvedCapabilityNames()==null?List.<String>of():request.approvedCapabilityNames();
-  if(!CatalogModels.CAPABILITIES.containsAll(approved) || new HashSet<>(approved).size()!=approved.size() || (!approval && !approved.isEmpty()))
+  if(approved.stream().anyMatch(name->name==null || !CatalogModels.CAPABILITIES.contains(name)) || new HashSet<>(approved).size()!=approved.size() || (!approval && !approved.isEmpty()))
    throw invalid("HOMOLOGATION_CAPABILITIES_INVALID","Capacidades aprovadas só em aprovação, sem repetição e da lista do contrato.");
   if(request.reviewDueAt()!=null && (!approval || !request.reviewDueAt().isAfter(Instant.now())))
    throw invalid("HOMOLOGATION_REVIEW_INVALID","Revisão futura, só em aprovação.");

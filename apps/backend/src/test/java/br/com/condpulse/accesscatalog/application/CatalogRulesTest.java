@@ -39,4 +39,16 @@ class CatalogRulesTest {
   assertEquals("HOMOLOGATION_LIMITS_INVALID",assertThrows(BusinessProblem.class,()->service.validate(request(caps(),negative))).code());
   assertEquals("HOMOLOGATION_ID_REQUIRED",assertThrows(BusinessProblem.class,()->service.validate(null)).code());
  }
+ @Test void nullElementsAreValidationErrorsNotServerErrors() {
+  var withNull=new java.util.ArrayList<UUID>(); withNull.add(null);
+  var withNullName=new java.util.ArrayList<String>(); withNullName.add(null);
+  var id=UUID.randomUUID();
+  assertEquals("HOMOLOGATION_EVIDENCE_INVALID",assertThrows(BusinessProblem.class,()->service.decide(id,br.com.condpulse.identity.application.AssuranceLevel.AAL2,
+   id,new CatalogModels.Decide(id,"REJECT","Motivo ficticio",withNull,List.of(),null,List.of(),0L))).code());
+  assertEquals("HOMOLOGATION_CAPABILITIES_INVALID",assertThrows(BusinessProblem.class,()->service.decide(id,br.com.condpulse.identity.application.AssuranceLevel.AAL2,
+   id,new CatalogModels.Decide(id,"APPROVE_LAB","Motivo ficticio",List.of(id),withNullName,null,List.of(),0L))).code());
+  var limitations=new java.util.ArrayList<String>(); limitations.add(null);
+  assertEquals("HOMOLOGATION_LIMITATIONS_INVALID",assertThrows(BusinessProblem.class,()->service.validate(new CatalogModels.CreateHomologation(id,id,"1.0.0",
+   "control-id-rest","0.1.0","v1","EDGE_ONLINE","LOCAL_GATEWAY",caps(),limits(),List.of(),limitations,"Dossie ficticio"))).code());
+ }
 }
