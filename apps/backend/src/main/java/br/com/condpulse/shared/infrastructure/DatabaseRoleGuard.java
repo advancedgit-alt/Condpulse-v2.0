@@ -34,7 +34,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem.
   // Evidência de idade (V039): nunca apagada nem editada; só revogada/substituída; o worker nunca lê a data cifrada.
   // Catálogo e homologação (V040): perfil só por migration; homologação só muda de estado por decisão; decisão nunca muda.
-  // Áreas e pontos (V041): nunca apagados; código, condomínio, autoria inicial e horários fixos. Outbox (V032): a operação da plataforma só devolve
+  // Gateway (V048): identidade, entrega e relatório nunca apagados; relatório nunca muda; identidade, tentativa, prazos e
+  // horários vêm do banco. Áreas e pontos (V041): nunca apagados; código, condomínio, autoria inicial e horários fixos. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
@@ -272,6 +273,20 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.rights_publications') and c.attname in ('document','document_hash','grant_ids','desired_version','action',
         'state','confirmation_level','observed_hash','reported_at','confirmed_at','superseded_by','version')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.edge_agents'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.edge_leases'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.edge_reports'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.edge_reports'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.edge_agents') and c.attname in ('id','tenant_id','connector_id','instance_id','label','created_by','created_at',
+        'revoked_at','credential_rotated_at','updated_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.edge_agents') and c.attname in ('status','version','last_seen_at','revoked_at','instance_id','created_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.edge_leases') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('acknowledged_at','finished_at','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.edge_leases') and c.attname in ('attempt','leased_at','lease_until','acknowledged_at','finished_at','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.revocation_markers'),'DELETE,TRUNCATE'),false)
      or coalesce(has_any_column_privilege(current_user,to_regclass('cp.revocation_markers'),'UPDATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c

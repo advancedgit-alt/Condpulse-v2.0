@@ -36,11 +36,17 @@ public record GatewayConfig(String gatewayId,String connectorId,String condoLabe
 
  public Optional<Device> device(String deviceId) { return devices.stream().filter(d->d.deviceId().equals(deviceId)).findFirst(); }
 
- /** API central (mTLS). keystorePath/truststorePath são arquivos montados; a senha vem do cofre. */
- public record Central(URI baseUrl,String keystorePath,String keystorePasswordRef,String truststorePath) {
+ /**
+  * API central. credentialRef: credencial própria do gateway (V048), lida do cofre e enviada no cabeçalho
+  * X-CondPulse-Edge-Credential; a plataforma guarda só o SHA-256 dela. keystorePath/truststorePath (opcionais) são
+  * arquivos montados: certificado de cliente para quando a borda central aceitar mTLS (pendente) e CA da API central.
+  */
+ public record Central(URI baseUrl,String credentialRef,String keystorePath,String keystorePasswordRef,String truststorePath) {
   public Central {
    Objects.requireNonNull(baseUrl,"central.baseUrl");
    if(!"https".equals(baseUrl.getScheme()) || baseUrl.getUserInfo()!=null) throw new IllegalArgumentException("API central exige HTTPS sem credencial na URL.");
+   requireId(credentialRef,"central.credentialRef");
+   if((keystorePath==null)!=(keystorePasswordRef==null)) throw new IllegalArgumentException("Certificado de cliente exige keystorePath e keystorePasswordRef juntos.");
   }
  }
  /** Servidor de entrada para chamadas iniciadas pelos equipamentos (online, push, nuvem). */

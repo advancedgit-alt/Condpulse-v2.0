@@ -105,6 +105,9 @@ final class FacialInstallationFixture {
  void clear() throws Exception {
   db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and (action like 'POLICY\\_%' or action like 'DEVICE\\_%' or action like 'CHANNEL\\_%' "
    +"or action like 'BINDING\\_%' or action like 'INSTALLATION\\_%' or action like 'RIGHTS\\_%' or action like 'SUBJECT\\_%' or action like 'AREA\\_%' or action like 'POINT\\_%')",db.tenantA,db.tenantB);
+  db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and action like 'EDGE\\_%'",db.tenantA,db.tenantB);
+  for(String table:new String[]{"edge_reports","edge_leases","edge_agents"})
+   db.adminUpdate("delete from cp."+table+" where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("with p as (delete from cp.rights_publications where tenant_id in (?,?)),g as (delete from cp.access_grants where tenant_id in (?,?)) "
    +"delete from cp.revocation_markers where tenant_id in (?,?)",db.tenantA,db.tenantB,db.tenantA,db.tenantB,db.tenantA,db.tenantB);
   db.adminUpdate("with v as (delete from cp.access_policy_validations where tenant_id in (?,?)) delete from cp.access_policy_versions where tenant_id in (?,?)",

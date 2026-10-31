@@ -98,7 +98,9 @@ Variáveis de ambiente do processo:
 | `CP_GATEWAY_SECRETS_DIR` | diretório com um arquivo por segredo, nome = referência |
 | `CP_GATEWAY_DATA_DIR` | diretório persistente dos diários (fila, recibos, eventos, decisão); um processo por diretório (trava exclusiva) |
 
-Segredos (um arquivo cada, sem quebra de linha final): credencial de equipamento `usuario:senha` (`credentialRef`),
+Segredos (um arquivo cada, sem quebra de linha final): credencial do gateway na API central (`central.credentialRef`,
+base64url de 43 a 128 caracteres; gere com `openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n'` e entregue ao MASTER só
+o `sha256sum` do arquivo), credencial de equipamento `usuario:senha` (`credentialRef`),
 token de entrada (`inboundTokenRef`), senha do keystore mTLS do gateway (`central.keystorePasswordRef`), senha do
 keystore TLS de entrada (`inbound.tlsKeystorePasswordRef`).
 
@@ -155,8 +157,9 @@ central e NTP. Se algum equipamento usa modo online/push na LAN, publique só a 
 Modo NUVEM: a mesma imagem como serviço central, com `inbound` público em TLS e um token por aparelho. **Não
 implantado** (precisa de OK de custo).
 
-Hoje a API central ainda não expõe as rotas de comando (seção 7): o processo sobe, mantém fila e diários, mas não
-recebe comandos reais até o backend existir. Só `POST /v1/edge/events` e `POST /v1/edge/decisions` têm cliente HTTP.
+A API central expõe (V048, atrás de `CP_FACIAL_ACCESS_ENABLED=false`) a entrega e o relatório dos trabalhos de
+direitos (seção 7); abertura, eventos, decisões, saúde e material ainda não existem no backend. `POST /v1/edge/events`
+e `POST /v1/edge/decisions` têm cliente HTTP à espera do backend.
 
 ## 6. Matriz de operações por marca
 
@@ -204,15 +207,20 @@ Fontes:
 
 ## 7. Contrato esperado da API central (o que o backend precisa expor)
 
-Autenticação de máquina: mTLS com certificado do gateway; tenant e conector derivados do certificado; corpo nunca
-traz `tenantId`/`actorId`. Respostas com recibo e chave de idempotência.
+Autenticação de máquina (V048, decisão P19): credencial própria de cada gateway, gerada no gateway (≥ 256 bits,
+base64url), enviada no cabeçalho `X-CondPulse-Edge-Credential`; a plataforma guarda só o SHA-256 (cadastrado pelo MASTER
+com `gateway.manage` em `/v1/tenants/{t}/technical/edge-agents`), nunca gera nem devolve credencial. O mTLS do pacote
+fica pendente: a borda atual termina o TLS e não repassa certificado de cliente (o cliente ainda apresenta o
+certificado se `central.keystorePath` estiver configurado). Tenant e conector derivados da identidade; corpo nunca traz
+`tenantId`/`actorId`. Respostas com recibo e chave de idempotência.
 
 | Rota | Estado | Uso |
 |---|---|---|
 | `POST /v1/edge/events` | no OpenAPI 1.1.0 (`ingestEdgeEvents`) | lote ≤ 100 `EdgeEvent`; resultado por item `ACCEPTED/DUPLICATE/REJECTED` |
 | `POST /v1/edge/decisions` | no OpenAPI 1.1.0 (`ingestEdgeDecision`) | telemetria da decisão local; nunca autoriza nada |
-| `GET /v1/edge/sync-commands?max=` | **PROPOSTO** | comandos tipados: `commandId`, `idempotencyKey`, `deviceId`, `subjectRef`, `type` (`UPSERT_PERSON`, `ENROLL_FACE`, `SET_CREDENTIAL`, `APPLY_RIGHTS`, `REMOVE_FACE`, `REMOVE_CREDENTIAL`, `REVOKE_RIGHTS`, `REVOKE_ALL`), `desiredVersion`, `payload` sem segredo |
-| `POST /v1/edge/sync-commands/{commandId}/result` | **PROPOSTO** | estado por destino (`CONFIRMED`, `APPLIED_UNVERIFIED`, `PARTIAL`, `FAILED`, `UNKNOWN`, `NAO_SUPORTADO_SEM_DOCUMENTACAO`) e motivo |
+| `GET /v1/edge/identity` | **V048** (`contracts/openapi.json`) | identidade do gateway autenticado e relógio do servidor |
+| `POST /v1/edge/sync-commands/lease` | **V048** (era `GET .../sync-commands`: entrega altera estado) | entrega com prazo (30–600 s) dos trabalhos PENDING da publicação por destino (V047) dos equipamentos do conector: `commandId`=`idempotencyKey`=trabalho, `leaseId`, `attempt`, `deviceId`, `subjectRef`, `type` (`APPLY_RIGHTS`, `REVOKE_RIGHTS`, `REVOKE_ALL`), `desiredVersion`, `priority`, `documentHash` e `document` (texto exato do hash). O cliente confere o SHA-256, traduz para o comando local (faixa `FULL_TIME`, vigência pela interseção) e responde ACK depois de gravar na fila durável; documento que não confere é relatado FAILED sem tocar no equipamento. Pessoa, face e credencial seguem **PROPOSTO** |
+| `POST /v1/edge/sync-commands/{commandId}/result` | **V048** | `ACK`, `APPLIED_UNVERIFIED`, `CONFIRMED` (com `observedHash` = hash do documento lido de volta), `PARTIAL`, `FAILED` (inclui `NAO_SUPORTADO_SEM_DOCUMENTACAO` como motivo), `UNKNOWN`; `Idempotency-Key` estável por resultado; só quem detém a entrega mais recente; resposta `APPLIED`/`CLOSED`/`REJECTED` |
 | `GET /v1/edge/open-commands?max=` | **PROPOSTO** | `OpenCommand`: `commandId`, `nonce`, `deviceId`, `channelId`, `pointId`, `bindingRevision`, `installationRevision`, `issuedAt`, `expiresAt`, `origin`, `authorizationRef`, `residentGrantRef` |
 | `POST /v1/edge/open-commands/{commandId}/receipt` | **PROPOSTO** | recibo durável (`replayProhibited=true`) |
 | `POST /v1/edge/health` | **PROPOSTO** | resumo: fila, revogações pendentes e a mais antiga, eventos pendentes/quarentena, alcance e quarentena por equipamento |

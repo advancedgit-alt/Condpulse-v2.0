@@ -3854,6 +3854,8 @@ def facial_cleanup(ids, tenant=None):
     tenant = tenant or TA
     actors = "','".join([ids["PL"], ids["MG"], ids["MI"]])
     query(f"DELETE FROM cp.audit_log WHERE actor_id in ('{actors}'); "
+          f"DELETE FROM cp.edge_reports WHERE tenant_id='{tenant}'; DELETE FROM cp.edge_leases WHERE tenant_id='{tenant}'; "
+          f"DELETE FROM cp.edge_agents WHERE tenant_id='{tenant}'; "
           f"WITH p AS (DELETE FROM cp.rights_publications WHERE tenant_id='{tenant}'), g AS (DELETE FROM cp.access_grants WHERE tenant_id='{tenant}') "
           f"DELETE FROM cp.revocation_markers WHERE tenant_id='{tenant}'; "
           f"WITH v AS (DELETE FROM cp.access_policy_validations WHERE tenant_id='{tenant}') DELETE FROM cp.access_policy_versions WHERE tenant_id='{tenant}'; "
@@ -4532,6 +4534,149 @@ def publication_checks():
           f"DELETE FROM cp.subject_contexts WHERE subject_id='{SRS}'; DELETE FROM cp.access_subjects WHERE id='{SRS}'; "
           f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
     facial_cleanup(ids)
+def edge_checks():
+    """V048 (AC-018 dados e contrato do gateway): identidade do gateway so por hash da credencial, entrega (arrendamento) dos
+    trabalhos da V047 ao gateway do conector e relatorio idempotente; CONFIRMED so com a leitura de volta do mesmo hash."""
+    caps = ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"]
+    ids = facial_installation(8, caps)
+    MG, MI, AR, DV, KA = ids["MG"], ids["MI"], ids["AREA"], ids["DV"], ids["KA"]
+    RS = "10000000-0000-4000-8000-0000000008a1"
+    MRS, SRS, CRS = "4c100000-0000-4000-8000-000000000001", "4c200000-0000-4000-8000-000000000001", "4c300000-0000-4000-8000-000000000001"
+    PO, V1, L1, G1 = ("4c400000-0000-4000-8000-000000000001", "4c500000-0000-4000-8000-000000000001",
+                      "4c600000-0000-4000-8000-000000000001", "4c700000-0000-4000-8000-000000000001")
+    OP, EA, EB, GW = ("4c800000-0000-4000-8000-000000000001", "4c900000-0000-4000-8000-000000000001",
+                      "4c900000-0000-4000-8000-000000000002", "4ca00000-0000-4000-8000-000000000001")
+    H1, H2, H3 = (hashlib.sha256(f"credencial-sintetica-{i}".encode()).hexdigest() for i in (1, 2, 3))
+    both = "SET LOCAL app.capabilities='memberships.manage,policy.edit,policy.publish'; SET LOCAL app.policy_destination_scan='on'; "
+    mm = "SET LOCAL app.capabilities='memberships.manage'; "
+    gw = "SET LOCAL app.technical_scopes='gateway.manage'; "
+    inst = "SET LOCAL app.technical_scopes='installation.read,installation.manage'; "
+    as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
+    tec = dict(tenant=TA, actor=MI, role="cp_api")
+    edge = lambda h: f"SET LOCAL app.edge_credential_hash='{h}'; "
+    machine = dict(tenant=TA, actor=None, role="cp_api")
+    query(f"INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) VALUES('{GW}','{TA}',"
+          f"'{MI}','MASTER_IMPLANTACAO',ARRAY['gateway.manage'],now(),now()+interval '30 days','OPERATIONS','Gateway ficticio'); "
+          f"INSERT INTO platform.accounts(id,status) VALUES('{RS}','ACTIVE'); INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) "
+          f"VALUES('{MRS}','{TA}','{RS}','{UA}','MORADOR GATEWAY','RESIDENT','ACTIVE')")
+    def register(identifier, h, days=90, scopes=gw, by=MI):
+        return (scopes + f"INSERT INTO cp.edge_agents(id,tenant_id,connector_id,label,credential_hash,credential_expires_at,created_by) "
+                f"VALUES('{identifier}','{TA}','{KA}','Gateway ficticio','{h}',now()+interval '{days} days','{by}')")
+    # Cadastro: so o MASTER com gateway.manage, credencial so como hash, validade limitada, um gateway por conector.
+    expect(error(register(EA, H1, scopes=inst), "42501", **tec), "cadastro de gateway exige gateway.manage")
+    expect(error(register(EA, H1, scopes=gw + "SET LOCAL app.capabilities='memberships.manage'; ", by=MG), "42501", **as_mgr), "gestao nao cadastra gateway")
+    expect(error(register(EA, H1, days=200), "23514", **tec), "validade da credencial ate 180 dias")
+    expect(error(register(EA, "segredo-em-claro"), "23514", **tec), "credencial so como hash SHA-256")
+    query(register(EA, H1), **tec)
+    expect(error(register(EB, H2), "23505", **tec), "um gateway nao revogado por conector")
+    expect(value(f"select status||':'||version from cp.edge_agents where id='{EA}'") == "PROVISIONED:0", "gateway nasce provisionado")
+    # Contexto de maquina: so a propria linha, so sem ator/capacidade, nunca em outro condominio.
+    expect(value(edge(H1) + "select count(*) from cp.edge_agents", tenant=None, actor=None, role="cp_api") == "1", "gateway acha a propria identidade pelo hash")
+    expect(value(edge(H2) + "select count(*) from cp.edge_agents", tenant=None, actor=None, role="cp_api") == "0", "hash desconhecido nao ve nada")
+    expect(value(edge(H1) + "select count(*) from cp.edge_agents", tenant=None, actor=MG, role="cp_api") == "0", "hash nao vale em sessao de pessoa")
+    expect(value(edge(H1) + "select count(*) from cp.edge_agents", tenant=TB, actor=None, role="cp_api") == "0", "HAC-007: gateway nao atravessa condominio")
+    expect(value(edge(H1) + "select cp.edge_agent_id()::text", **machine) == EA, "gateway autenticado no proprio condominio")
+    query(edge(H1) + f"UPDATE cp.edge_agents SET status='ONLINE',last_seen_at=now(),agent_version='0.1.0',protocol_version='1.0',version=version+1 WHERE id='{EA}'", **machine)
+    expect(error(edge(H1) + f"UPDATE cp.edge_agents SET credential_expires_at=now()+interval '170 days',version=version+1 WHERE id='{EA}'", "42501", **machine),
+           "gateway nao estende a propria credencial")
+    expect(error(gw + f"UPDATE cp.edge_agents SET last_seen_at=now(),version=version+1 WHERE id='{EA}'", "42501", **tec), "MASTER nao forja contato do gateway")
+    expect(error("select count(*) from cp.edge_agents", "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao le identidade de gateway")
+    # Trabalho da V047 pelo fluxo real (regra de tempo integral, sujeito, direito, compilacao).
+    query(both + f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Area','{MG}')", **as_mgr)
+    days = '["MON","TUE","WED","THU","FRI","SAT","SUN"]'
+    doc = ('{"schemaVersion":"1.0","name":"Area","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT"],"visitorPolicy":"DENY",'
+           '"weeklyWindows":[{"weekdays":%s,"startLocalTime":"00:00","endLocalTime":"24:00","crossesMidnight":false}],'
+           '"reservation":{"mode":"NOT_REQUIRED","entryGraceBeforeSeconds":0,"entryGraceAfterSeconds":0}}' % (AR, days))
+    rev = value(f"select cp.installation_current_revision('{TA}')")
+    query(both + f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
+          f"VALUES('{V1}','{TA}','{PO}','1.0','{doc}'::jsonb,'Regra ficticia do gateway','{MG}')", **as_mgr)
+    h = value(f"select canonical_hash from cp.access_policy_versions where id='{V1}'")
+    query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
+          f"affected_point_ids,required_capabilities,validated_by) VALUES('{L1}','{TA}','{PO}','{V1}','{h}',{rev},'VALIDATED','[]'::jsonb,"
+          f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
+          f"UPDATE cp.access_policy_versions SET validation_id='{L1}',state='VALIDATED',version=1 WHERE id='{V1}'; "
+          f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'", **as_mgr)
+    query(mm + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{SRS}','{TA}','ACCOUNT','{RS}'); "
+          f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,created_by) "
+          f"VALUES('{CRS}','{TA}','{SRS}','RESIDENT','MEMBERSHIP','{MRS}','{MG}')", **as_mgr)
+    ov = value(f"select version from cp.memberships where id='{MRS}'")
+    query(both + f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_membership_id,"
+          f"origin_version,valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{G1}','{TA}','{SRS}','{CRS}','{AR}',"
+          f"'{PO}','{V1}','MEMBERSHIP','{MRS}',{ov},now(),now()+interval '20 days',0,ARRAY['ELIGIBLE_CONTEXT'],'{MG}'); "
+          f"INSERT INTO cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) VALUES('{TA}','{OP}','{SRS}','{DV}','PLAN','{MG}')",
+          **as_mgr)
+    J1 = value(f"select id from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}'")
+    D1 = value(f"select document_hash from cp.rights_publications where id='{J1}'")
+    expect(value(edge(H1) + "select count(*)||':'||max(document_hash) from cp.rights_publications", **machine) == f"1:{D1}",
+           "gateway le o trabalho do equipamento do proprio conector")
+    lease = lambda pub=J1, agent=EA, seconds=60: (f"INSERT INTO cp.edge_leases(tenant_id,publication_id,agent_id,device_id,lease_seconds) "
+                                                  f"VALUES('{TA}','{pub}','{agent}','{DV}',{seconds})")
+    expect(error(both + lease(), "42501", **as_mgr), "gestao nao arrenda trabalho")
+    expect(error(edge(H1) + lease(seconds=5), "23514", **machine), "prazo do arrendamento entre 30 e 600 s")
+    query(edge(H1) + lease(), **machine)
+    expect(value(f"select attempt||':'||(lease_until-leased_at=interval '60 seconds')::text from cp.edge_leases where publication_id='{J1}'") == "1:true",
+           "arrendamento com tentativa e prazo do banco")
+    expect(error(edge(H1) + lease(), "23514", **machine), "trabalho arrendado nao e entregue duas vezes")
+    # Vencido sem ACK: nova tentativa (prazo forcado so no banco descartavel).
+    query(f"SET session_replication_role=replica; UPDATE cp.edge_leases SET leased_at=now()-interval '2 minutes',lease_until=now()-interval '1 minute' "
+          f"WHERE publication_id='{J1}'")
+    query(edge(H1) + lease(), **machine)
+    L2 = value(f"select id from cp.edge_leases where publication_id='{J1}' and attempt=2")
+    report = lambda key, state, outcome="APPLIED", code="NULL", observed="NULL", dh=D1, lid=None: (
+        f"INSERT INTO cp.edge_reports(tenant_id,agent_id,lease_id,publication_id,idempotency_key,request_hash,state,document_hash,observed_hash,outcome,outcome_code) "
+        f"VALUES('{TA}','{EA}','{lid or L2}','{J1}','{key}','{'e'*64}','{state}','{dh}',{observed},'{outcome}',{code})")
+    pub = lambda sets: f"UPDATE cp.rights_publications SET {sets},version=version+1 WHERE id='{J1}'"
+    lid1 = value(f"select id from cp.edge_leases where publication_id='{J1}' and attempt=1")
+    expect(error(edge(H1) + report("chave-antiga-01", "FAILED", outcome="REJECTED", code="'STALE'", lid=lid1), "42501", **machine),
+           "relatorio exige o arrendamento mais recente")
+    expect(error(edge(H1) + report("chave-ack-0001", "ACK"), "23514", **machine), "relatorio aplicado tem de bater com o trabalho")
+    query(edge(H1) + pub("state='ACK',confirmation_level='TRANSPORT_ACK',attempts=2") + "; "
+          + f"UPDATE cp.edge_leases SET acknowledged_at=now(),version=version+1 WHERE id='{L2}'; " + report("chave-ack-0001", "ACK"), **machine)
+    expect(error(edge(H1) + report("chave-ack-0001", "ACK"), "23505", **machine), "chave de idempotencia nao gera segundo relatorio")
+    query(f"SET session_replication_role=replica; UPDATE cp.edge_leases SET lease_until=now()-interval '1 second',leased_at=now()-interval '2 minutes' WHERE id='{L2}'")
+    expect(error(edge(H1) + lease(), "23514", **machine), "trabalho com ACK nao e reentregue")
+    expect(error(both + pub("state='ACK',confirmation_level='TRANSPORT_ACK'"), "42501", **as_mgr), "gestao continua sem relatar")
+    expect(query(edge(H1) + pub("state='SUPERSEDED',superseded_by=id"), check=False, **machine).returncode != 0, "gateway nao supera trabalho")
+    expect(error(edge(H1) + pub(f"state='CONFIRMED',confirmation_level='STATE_READ',observed_hash='{'0'*64}'"), "23514", **machine),
+           "leitura de volta diferente nao confirma")
+    expect(error(edge(H1) + pub("document='{}'::jsonb"), "42501", **machine), "gateway nao altera o documento")
+    query(edge(H1) + pub(f"state='CONFIRMED',confirmation_level='STATE_READ',observed_hash='{D1}'") + "; "
+          + f"UPDATE cp.edge_leases SET finished_at=now(),version=version+1 WHERE id='{L2}'; " + report("chave-ok-00001", "CONFIRMED", observed=f"'{D1}'"), **machine)
+    expect(value(f"select state||':'||confirmation_level||':'||(observed_hash=document_hash)::text from cp.rights_publications where id='{J1}'")
+           == "CONFIRMED:STATE_READ:true", "confirmacao do gateway com o mesmo hash")
+    expect(error(edge(H1) + report("chave-tarde-001", "FAILED", outcome="APPLIED"), "23514", **machine), "relatorio tardio nao finge efeito")
+    query(edge(H1) + report("chave-tarde-001", "FAILED", outcome="CLOSED", code="'JOB_ALREADY_CONFIRMED'"), **machine)
+    expect(error(edge(H1) + f"UPDATE cp.edge_reports SET outcome='APPLIED' WHERE publication_id='{J1}'", "42501", **machine), "relatorio nao muda")
+    expect(error(edge(H1) + f"DELETE FROM cp.edge_reports WHERE publication_id='{J1}'", "42501", **machine), "relatorio nao e apagado")
+    expect(error(edge(H1) + f"UPDATE cp.edge_leases SET finished_at=NULL,version=version+1 WHERE id='{L2}'", "23514", **machine), "termino nao volta")
+    expect(value(both + f"select count(*) from cp.edge_reports where publication_id='{J1}'", **as_mgr) == "3", "gestao acompanha os relatorios")
+    expect(value(f"select count(*) from cp.edge_reports", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le relatorios")
+    # Rotacao e revogacao pelo MASTER; credencial antiga deixa de valer na hora.
+    expect(error(gw + f"UPDATE cp.edge_agents SET credential_hash='{H1}',credential_expires_at=now()+interval '30 days',version=version+1 WHERE id='{EA}'",
+                 "23514", **tec), "rotacao exige credencial nova")
+    query(gw + f"UPDATE cp.edge_agents SET credential_hash='{H2}',credential_expires_at=now()+interval '30 days',version=version+1 WHERE id='{EA}'", **tec)
+    expect(value(edge(H1) + "select coalesce(cp.edge_agent_id()::text,'nenhum')", **machine) == "nenhum", "credencial girada nao autentica")
+    expect(value(edge(H2) + "select cp.edge_agent_id()::text", **machine) == EA, "credencial nova autentica")
+    expect(error(gw + f"UPDATE cp.edge_agents SET status='REVOKED',version=version+1 WHERE id='{EA}'", "23514", **tec), "revogacao exige motivo")
+    query(gw + f"UPDATE cp.edge_agents SET status='REVOKED',revoke_reason='Troca do computador do gateway',version=version+1 WHERE id='{EA}'", **tec)
+    expect(value(edge(H2) + "select coalesce(cp.edge_agent_id()::text,'nenhum')", **machine) == "nenhum", "gateway revogado nao autentica")
+    expect(error(gw + f"UPDATE cp.edge_agents SET status='ONLINE',revoke_reason=NULL,version=version+1 WHERE id='{EA}'", "23514", **tec), "revogacao e definitiva")
+    expect(error(register(EB, H2), "23505", **tec), "hash ja usado nunca volta")
+    query(register(EB, H3), **tec)
+    expect(error(edge(H3) + f"UPDATE cp.edge_reports SET outcome='CLOSED'", "42501", **machine), "gateway novo nao altera historico")
+    # Trilha do MASTER e RLS.
+    audit = lambda by: (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+                        f"VALUES('{TA}','{by}','EDGE_AGENT_REGISTERED','EDGE_AGENT','{EB}',gen_random_uuid())")
+    query(gw + audit(MI), **tec)
+    expect(error(both + audit(MG), "42501", **as_mgr), "trilha EDGE_ so do MASTER com gateway.manage")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' "
+                 "and c.relname in ('edge_agents','edge_leases','edge_reports') and c.relrowsecurity and c.relforcerowsecurity") == "3", "gateway com RLS FORCE")
+    query(f"DELETE FROM cp.audit_log WHERE resource_id='{EB}'; DELETE FROM cp.edge_reports WHERE tenant_id='{TA}'; DELETE FROM cp.edge_leases WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.edge_agents WHERE tenant_id='{TA}'; "
+          f"WITH p AS (DELETE FROM cp.rights_publications WHERE tenant_id='{TA}'), g AS (DELETE FROM cp.access_grants WHERE tenant_id='{TA}') "
+          f"DELETE FROM cp.revocation_markers WHERE tenant_id='{TA}'; DELETE FROM cp.subject_contexts WHERE subject_id='{SRS}'; "
+          f"DELETE FROM cp.access_subjects WHERE id='{SRS}'; DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
+    facial_cleanup(ids)
 def maintenance_checks():
     """V046: zelador (MAINTENANCE) com maintenance.operate le e registra andamento so dos pedidos atribuidos ao proprio
     vinculo; nao muda responsavel nem prazo, nao encerra e nao le cadastro."""
@@ -4776,6 +4921,7 @@ def main():
     policy_checks()
     grant_checks()
     publication_checks()
+    edge_checks()
     maintenance_checks()
     tenant_module_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")

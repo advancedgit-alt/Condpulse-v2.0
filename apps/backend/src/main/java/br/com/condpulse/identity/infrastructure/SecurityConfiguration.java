@@ -168,6 +168,14 @@ public class SecurityConfiguration {
     // Publicação por destino (AC-012/AC-013, V047): mesma gestão; trabalho, nunca sucesso físico.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-publications").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-publications/plan").authenticated()
+    // Identidade do gateway (V048): MASTER de implantação (gateway.manage/installation.read, AAL2) no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/technical/edge-agents").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/technical/edge-agents","/v1/tenants/*/technical/edge-agents/*/rotate",
+      "/v1/tenants/*/technical/edge-agents/*/revoke").authenticated()
+    // Rotas do gateway (V048): sem sessão; a credencial do cabeçalho X-CondPulse-Edge-Credential é conferida (só o hash)
+    // no serviço e no banco antes de qualquer leitura.
+    .requestMatchers(HttpMethod.GET,"/v1/edge/identity").permitAll()
+    .requestMatchers(HttpMethod.POST,"/v1/edge/sync-commands/lease","/v1/edge/sync-commands/*/result").permitAll()
     // Instalação física (AC-004 parte 2, V042): MASTER de implantação (installation.*, AAL2); gestão assina as regras.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/technical/access-devices","/v1/tenants/*/technical/device-channels",
       "/v1/tenants/*/technical/point-bindings","/v1/tenants/*/technical/installation-acceptances",

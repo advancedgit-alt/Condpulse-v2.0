@@ -45,7 +45,7 @@ class GatewayServiceTest {
   clock=new TestSupport.TestClock();
   dir=TestSupport.tempDir();
   var device=TestSupport.device("d1",Brand.CONTROL_ID,ConnectionMode.LOCAL,mode,URI.create("http://192.0.2.10"),
-   List.of(TestSupport.channel("c1","1","door:door=1")),Map.of("sempre","1","comercial","2"),Map.of(),false);
+   List.of(TestSupport.channel("c1","1","door:door=1")),Map.of("sempre","1","comercial","2","FULL_TIME","1"),Map.of(),false);
   config=TestSupport.config(List.of(device),profiles,CondoOpenPolicy.closed());
   adapter=new ScriptedAdapter(TestSupport.context(device,clock),ops);
   central=new TestSupport.StubCentral();
@@ -66,6 +66,36 @@ class GatewayServiceTest {
   assertEquals(OperationState.CONFIRMED,queue.get("p").orElseThrow().lastState());
   assertEquals(OperationState.CONFIRMED,queue.get("r").orElseThrow().lastState());
   assertEquals(2,central.results.size());
+ }
+
+ /**
+  * Contrato V048 de ponta a ponta no gateway: o documento da plataforma vira comando só com o hash conferido, entra na
+  * fila durável, recebe ACK de transporte e o resultado leva o hash do documento; CONFIRMED só com leitura de volta.
+  */
+ @Test void comandoDaPlataformaRecebeAckEResultadoComOMesmoHash() throws Exception {
+  String doc="{\"action\": \"REVOKE_ALL\", \"entries\": [], \"subjectRef\": \"s1\", \"schemaVersion\": \"1.0\", \"coveredMethods\": [\"FACE\"]}";
+  String hash=br.com.condpulse.gateway.central.EdgeSyncContract.sha256Hex(doc);
+  var raw=new java.util.LinkedHashMap<String,Object>();
+  raw.put("commandId","00000000-0000-4000-8000-0000000000c1"); raw.put("idempotencyKey","00000000-0000-4000-8000-0000000000c1");
+  raw.put("deviceId","d1"); raw.put("subjectRef","s1"); raw.put("type","REVOKE_ALL"); raw.put("desiredVersion",9L); raw.put("priority",0L);
+  raw.put("documentHash",hash); raw.put("document",doc); raw.put("issuedAt","2026-10-31T12:00:00Z");
+  central.nextSync.add(br.com.condpulse.gateway.central.EdgeSyncContract.toCommand(raw));
+  service.pullFromCentral();
+  assertEquals(1,central.results.size(),"ACK depois de gravado na fila local");
+  var ack=central.results.getFirst();
+  assertEquals(OperationState.ACK,ack.state()); assertEquals(hash,ack.documentHash());
+  assertNull(br.com.condpulse.gateway.central.EdgeSyncContract.reportBody(ack).get("observedHash"),"ACK não é leitura de volta");
+  central.nextSync.add(br.com.condpulse.gateway.central.EdgeSyncContract.toCommand(raw));
+  service.pullFromCentral();
+  assertEquals(2,central.results.size(),"entrega repetida: DUPLICATE na fila e novo ACK, sem segundo comando");
+  assertEquals(1,queue.all().size());
+  service.processQueues(10);
+  var result=central.results.getLast();
+  assertEquals(hash,result.documentHash());
+  var body=br.com.condpulse.gateway.central.EdgeSyncContract.reportBody(result);
+  assertEquals(OperationState.CONFIRMED,result.state(),"retirada confirmada pela leitura de volta do simulador");
+  assertEquals(hash,body.get("observedHash"),"confirmação leva o hash do documento lido de volta");
+  assertEquals(3,central.results.size(),"um só resultado terminal");
  }
 
  @Test void equipamentoForaDoArMantemPendenciaVisivel() {

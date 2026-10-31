@@ -41,8 +41,9 @@ public final class ConfigLoader {
   var central=Json.map(root.get("central"));
   Central c=null;
   if(central!=null) {
-   allow(central,"baseUrl","keystorePath","keystorePasswordRef","truststorePath");
-   c=new Central(URI.create(req(central,"baseUrl")),Json.string(central,"keystorePath"),Json.string(central,"keystorePasswordRef"),Json.string(central,"truststorePath"));
+   allow(central,"baseUrl","credentialRef","keystorePath","keystorePasswordRef","truststorePath");
+   c=new Central(URI.create(req(central,"baseUrl")),req(central,"credentialRef"),Json.string(central,"keystorePath"),Json.string(central,"keystorePasswordRef"),
+    Json.string(central,"truststorePath"));
   }
   var inbound=Json.map(root.get("inbound"));
   Inbound in=null;

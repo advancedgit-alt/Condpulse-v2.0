@@ -409,7 +409,8 @@ public final class GatewayService {
   if(e==null || e.reported()) return true;
   OperationState state=e.lastState()==null?OperationState.FAILED:e.lastState();
   try {
-   central.reportSyncResult(new CentralApiClient.SyncResult(commandId,e.command().deviceId(),state,e.lastReason(),clock.instant()));
+   central.reportSyncResult(new CentralApiClient.SyncResult(commandId,e.command().deviceId(),state,e.lastReason(),clock.instant(),
+    Json.string(e.command().payload(),"documentHash")));
    queue.markReported(commandId);
    return true;
   } catch(CentralUnavailable ex) {
@@ -475,7 +476,10 @@ public final class GatewayService {
    boolean complete=true;
    for(var c:central.pullSyncCommands(200)) {
     try {
-     if(submit(c).outcome()==LocalCommandQueue.EnqueueOutcome.REJECTED_FULL) complete=false;
+     var outcome=submit(c).outcome();
+     if(outcome==LocalCommandQueue.EnqueueOutcome.REJECTED_FULL) complete=false;
+     // ACK de transporte só depois de o comando estar gravado na fila local durável (aceito agora ou já antes).
+     else if(outcome==LocalCommandQueue.EnqueueOutcome.ACCEPTED || outcome==LocalCommandQueue.EnqueueOutcome.DUPLICATE) acknowledge(c);
     } catch(IllegalArgumentException e) { LOG.log(System.Logger.Level.WARNING,"Comando recusado: equipamento desconhecido."); }
    }
    // Política só é "atual" quando todos os comandos recebidos foram aceitos; senão envelhece até STALE_POLICY.
@@ -487,6 +491,17 @@ public final class GatewayService {
   } catch(CentralUnavailable e) {
    LOG.log(System.Logger.Level.INFO,"Plataforma indisponível: {0}",e.getMessage());
   }
+ }
+
+ /**
+  * ACK de transporte à plataforma (V048): sem ele, a entrega vence e o mesmo trabalho volta (mesma chave, DUPLICATE na
+  * fila local, novo ACK). Falha aqui não desfaz nada local.
+  */
+ private void acknowledge(SyncCommand c) {
+  String hash=Json.string(c.payload(),"documentHash");
+  if(hash==null) return;
+  try { central.reportSyncResult(new CentralApiClient.SyncResult(c.commandId(),c.deviceId(),OperationState.ACK,null,clock.instant(),hash)); }
+  catch(CentralUnavailable e) { LOG.log(System.Logger.Level.INFO,"ACK adiado; a plataforma entrega o trabalho de novo."); }
  }
 
  // ----- saúde -----

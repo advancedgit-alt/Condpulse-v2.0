@@ -5,6 +5,7 @@
   "zone": "America/Sao_Paulo",
   "central": {
     "baseUrl": "https://api.condpulse.example",
+    "credentialRef": "gateway-central-credential",
     "keystorePath": "/run/secrets/gateway-mtls.p12",
     "keystorePasswordRef": "gateway-mtls-password",
     "truststorePath": "/run/secrets/central-ca.p12"
