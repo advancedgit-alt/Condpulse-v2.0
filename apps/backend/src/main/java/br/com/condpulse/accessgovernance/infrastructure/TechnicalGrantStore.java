@@ -31,11 +31,12 @@ public class TechnicalGrantStore {
   return jdbc.query("select "+COLUMNS+" from cp.technical_grants where tenant_id=? order by created_at desc,id limit 200",
    TechnicalGrantStore::grant,tenantId);
  }
+ /** Um único instante (início da transação) para os dois limites e para a leitura de "current". */
  public void insert(UUID grantId,UUID tenantId,UUID accountId,String roleCode,List<String> scopes,int validDays,UUID grantedBy,String reason) {
   jdbc.update(connection->{
    var statement=connection.prepareStatement("""
     insert into cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,granted_by_account_id,reason)
-    values(?,?,?,?,?,clock_timestamp(),clock_timestamp()+make_interval(days=>?),'PLATFORM_API',?,?)
+    values(?,?,?,?,?,now(),now()+make_interval(days=>?),'PLATFORM_API',?,?)
     """);
    Array array=connection.createArrayOf("text",scopes.toArray());
    statement.setObject(1,grantId); statement.setObject(2,tenantId); statement.setObject(3,accountId); statement.setString(4,roleCode);

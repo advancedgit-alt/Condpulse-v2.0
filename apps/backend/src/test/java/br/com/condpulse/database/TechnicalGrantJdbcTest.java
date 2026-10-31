@@ -116,6 +116,19 @@ class TechnicalGrantJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void maximumConfiguredValidityIsAcceptedAndCurrentImmediately() throws Exception {
+  var atMax=new TechnicalGrantModels.IssueTechnicalGrant(UUID.randomUUID(),MASTER,"MASTER_IMPLANTACAO",null,30,"Implantacao piloto ficticia JDBC");
+  var issued=grants.issue(db.accountA,AAL2,db.tenantA,atMax);
+  assertTrue(issued.applied()); assertTrue(issued.grant().current(),"Recém-emitida já vale na resposta");
+  assertEquals(java.time.Duration.ofDays(30),java.time.Duration.between(issued.grant().validFrom(),issued.grant().validUntil()));
+  var hardMax=new TechnicalGrantService(new PlatformTransactionExecutor(db.jdbc,db.manager),new TenantTransactionExecutor(db.jdbc,db.manager),
+   technical,new TechnicalGrantStore(db.jdbc),new PlatformStore(db.jdbc),TechnicalGrantService.HARD_MAX_DAYS);
+  var ninety=hardMax.issue(db.accountA,AAL2,db.tenantB,new TechnicalGrantModels.IssueTechnicalGrant(UUID.randomUUID(),MASTER,
+   "MASTER_IMPLANTACAO",List.of("installation.read"),90,"Teto rigido ficticio JDBC"));
+  assertEquals(java.time.Duration.ofDays(90),java.time.Duration.between(ninety.grant().validFrom(),ninety.grant().validUntil()),
+   "Teto de 90 dias do banco aceito exatamente");
+  db.assertEmptyContext();
+ }
  @Test void expiredGrantStopsWithoutAnyJob() throws Exception {
   UUID id=UUID.randomUUID();
   grants.issue(db.accountA,AAL2,db.tenantA,request(id,MASTER,List.of("installation.read")));

@@ -70,9 +70,10 @@ BEGIN
   RAISE NOTICE 'Concessão vigente equivalente já existe; nada gravado.';
   RETURN;
  END IF;
+ -- Um único instante (início da transação) para os dois limites: o teto de 90 dias do CHECK vale exatamente.
  INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason)
- VALUES(gen_random_uuid(),target_tenant,target,'MASTER_IMPLANTACAO',wanted_scopes,clock_timestamp(),
-  clock_timestamp()+make_interval(days=>grant_days),'OPERATIONS',grant_reason);
+ VALUES(gen_random_uuid(),target_tenant,target,'MASTER_IMPLANTACAO',wanted_scopes,now(),
+  now()+make_interval(days=>grant_days),'OPERATIONS',grant_reason);
 END $$;
 -- Conferência na mesma transação: concessões vigentes da conta no condomínio, sem dados pessoais.
 SELECT id, role_code, array_to_string(scopes,',') AS scopes, granted_via, granted_by_db_user, valid_until

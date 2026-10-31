@@ -3341,7 +3341,8 @@ def technical_grant_checks():
                  "42501", actor=PL, role="cp_api") or value(f"select status from cp.technical_grants where id='{G1}'") == "REVOKED",
            "concessao revogada nao volta a valer")
     # Vencida: mesma regra, sem job.
-    query(issue(G3), actor=PL, role="cp_api")
+    query(issue(G3, days=90), actor=PL, role="cp_api")
+    expect(value(f"select valid_until-valid_from from cp.technical_grants where id='{G3}'") == "90 days", "teto de 90 dias aceito exatamente")
     query(f"SET session_replication_role=replica; UPDATE cp.technical_grants SET valid_from=now()-interval '2 days',valid_until=now()-interval '1 day' WHERE id='{G3}'")
     expect(value(tech + "select platform.has_technical_scope('installation.manage')", tenant=TA, actor=MI, role="cp_api") == "f",
            "HAC-012: concessao vencida nao vale sem depender de job")
