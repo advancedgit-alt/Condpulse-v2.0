@@ -320,13 +320,26 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   cond.put("EmployeeNoList",List.of(Map.of("employeeNo",employeeNo)));
   var response=http.call("POST",P_SEARCH,JSON_FORMAT,"application/json",Json.write(Map.of("UserInfoSearchCond",cond)).getBytes(StandardCharsets.UTF_8),false);
   if(!response.ok()) throw new DeviceCallException(DeviceHttpClient.Failure.AMBIGUOUS,"HIKVISION_SEARCH_HTTP_"+response.status());
-  var result=Json.map(Json.object(response.text()).get("UserInfoSearch"));
+  Map<String,Object> result;
+  try { result=Json.map(Json.object(response.text()).get("UserInfoSearch")); }
+  catch(RuntimeException e) { throw new DeviceCallException(DeviceHttpClient.Failure.AMBIGUOUS,"SEARCH_INCONCLUSIVE"); }
+  if(result==null) throw new DeviceCallException(DeviceHttpClient.Failure.AMBIGUOUS,"SEARCH_INCONCLUSIVE");
   String status=Json.string(result,"responseStatusStrg");
-  if("NO MATCH".equals(status)) return Optional.empty();
   var users=Json.list(result.get("UserInfo"));
-  if(users==null || users.isEmpty()) return Optional.empty();
-  for(Object o:users) { var u=Json.map(o); if(employeeNo.equals(Json.string(u,"employeeNo"))) return Optional.of(u); }
-  return Optional.empty();
+  Map<String,Object> match=null;
+  if(users!=null) for(Object o:users) { var u=Json.map(o); if(employeeNo.equals(Json.string(u,"employeeNo"))) match=u; }
+  // Ausência só com prova: "NO MATCH" coerente (sem contagens positivas nem a pessoa na lista).
+  if("NO MATCH".equals(status)) {
+   if(match!=null || positive(result,"numOfMatches") || positive(result,"totalMatches")) throw new DeviceCallException(DeviceHttpClient.Failure.AMBIGUOUS,"SEARCH_INCONCLUSIVE");
+   return Optional.empty();
+  }
+  // "OK"/"MORE" sem a pessoa pedida (lista vazia, outra pessoa, contagem sem registro) é leitura indisponível.
+  if(("OK".equals(status) || "MORE".equals(status)) && match!=null) return Optional.of(match);
+  throw new DeviceCallException(DeviceHttpClient.Failure.AMBIGUOUS,"SEARCH_INCONCLUSIVE");
+ }
+
+ private static boolean positive(Map<String,Object> m,String key) {
+  try { Long v=Json.longValue(m,key); return v!=null && v>0; } catch(RuntimeException e) { return true; }
  }
 
  private DeviceHttpClient.Response send(String method,String path,Map<String,Object> body) throws DeviceCallException {

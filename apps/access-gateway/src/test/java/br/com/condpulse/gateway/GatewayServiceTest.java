@@ -99,7 +99,7 @@ class GatewayServiceTest {
   service.processQueues(10);
   service.processQueues(10);
   var e=queue.get("r").orElseThrow();
-  assertEquals(Status.NEEDS_READBACK,e.status());
+  assertEquals(Status.HELD,e.status(),"fora da seleção, aguardando decisão humana");
   assertEquals("READBACK_CANNOT_PROVE",e.lastReason());
   assertEquals(1,adapter.calls.stream().filter("APPLY_RIGHTS"::equals).count());
  }
@@ -330,5 +330,60 @@ class GatewayServiceTest {
   service.pollEvents(); // fila cheia: não lança e não avança o cursor
   assertEquals("c1",outbox.cursor("d1").orElseThrow());
   assertEquals(1,service.forwardEvents());
+ }
+
+ // ----- quarta rodada (#129) -----
+
+ @Test void revogacaoRecusadaPorFilaCheiaNegaLocalmenteENaoMarcaPoliticaAtual() {
+  build(ScriptedAdapter.all(),true,DecisionMode.EDGE_ONLINE);
+  queue.close();
+  queue=new LocalCommandQueue(dir.resolve("pequena"),clock,2,3);
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o3"),clock,config,registry,id->Optional.of(adapter)),
+   outbox,decisions,decisionOutbox,central,clock);
+  service.submit(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador","nativeUserRef","77")));
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
+  service.submit(command("x","d1","s2",CommandType.REVOKE_ALL,1,Map.of()));
+  central.nextSync.add(command("rv","d1","s1",CommandType.REVOKE_ALL,3,Map.of()));
+  service.pullFromCentral();
+  decisions.observeClockSkew(Duration.ZERO);
+  var ctx=context();
+  assertEquals(List.of("STALE_POLICY"),ctx.decide("77","1").reasonCodes(),"lote com recusa não marca a política como atual");
+  decisions.markSynced(clock.instant());
+  assertEquals(List.of("REVOKED"),ctx.decide("77","1").reasonCodes(),"revogação recusada pela fila vale na decisão local");
+  assertEquals(1L,service.healthSummary().get("revocationsRejectedQueueFull"));
+ }
+
+ @Test void batimentoNaoDispensaConferenciaDeIdentidadeAntesDeAbrir() {
+  var registry=new CapabilityRegistry(config.profiles());
+  var opens=new OpenDispatcher(dir.resolve("o4"),clock,config,registry,id->Optional.of(adapter));
+  var dev=config.devices().getFirst();
+  var openConfig=TestSupport.config(List.of(new GatewayConfig.Device(dev.deviceId(),dev.deviceProvisioningId(),dev.label(),dev.brand(),dev.sku(),dev.firmware(),
+   dev.apiVersion(),dev.connectionMode(),dev.decisionMode(),dev.baseUrl(),dev.credentialRef(),dev.inboundTokenRef(),dev.nativeDeviceId(),dev.eventEpoch(),true,
+   dev.phase(),true,java.util.EnumSet.of(GatewayConfig.OpenOrigin.PORTARIA_LOCAL),1,dev.channels(),dev.nativeSchedules(),dev.params())),true,
+   new CondoOpenPolicy(java.util.EnumSet.of(GatewayConfig.OpenOrigin.PORTARIA_LOCAL),false));
+  opens.close();
+  opens=new OpenDispatcher(dir.resolve("o5"),clock,openConfig,registry,id->Optional.of(adapter));
+  service=new GatewayService(openConfig,registry,Map.of("d1",adapter),queue,opens,outbox,decisions,decisionOutbox,central,clock);
+  context().heartbeat();
+  var now=clock.instant();
+  var first=opens.dispatch(new OpenDispatcher.OpenCommand("o1","n1","d1","c1","ponto-c1",1,1,now,now.plusSeconds(5),GatewayConfig.OpenOrigin.PORTARIA_LOCAL,"a",null));
+  assertEquals("DEVICE_IDENTITY_NOT_VERIFIED",first.reasonCode());
+  assertFalse(service.status("d1").orElseThrow().reachable(),"batimento não torna alcançável");
+  service.checkHealth();
+  var second=opens.dispatch(new OpenDispatcher.OpenCommand("o2","n2","d1","c1","ponto-c1",1,1,now,now.plusSeconds(5),GatewayConfig.OpenOrigin.PORTARIA_LOCAL,"a",null));
+  assertEquals(OpenDispatcher.Status.SENT,second.status(),"após a sonda conferir a identidade (BANCADA)");
+ }
+
+ @Test void entradaRetidaParaDecisaoHumanaNaoTravaAFila() {
+  build(EnumSet.complementOf(EnumSet.of(Operation.READ_STATE)),true,DecisionMode.DEVICE_LOCAL_ACL);
+  adapter.script(Operation.APPLY_RIGHTS,OperationResult.of(OperationState.UNKNOWN,"RESPONSE_NOT_RECEIVED"));
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
+  service.submit(command("c","d1","s2",CommandType.APPLY_RIGHTS,1,RIGHTS));
+  service.processQueues(10);
+  assertEquals(Status.HELD,queue.get("r").orElseThrow().status());
+  assertEquals(Status.DONE,queue.get("c").orElseThrow().status(),"o comando seguinte foi processado");
+  assertEquals(1,queue.pending("d1").size(),"a retida continua visível");
+  assertEquals(OperationState.UNKNOWN,central.results.stream().filter(x->x.commandId().equals("r")).findFirst().orElseThrow().state());
  }
 }

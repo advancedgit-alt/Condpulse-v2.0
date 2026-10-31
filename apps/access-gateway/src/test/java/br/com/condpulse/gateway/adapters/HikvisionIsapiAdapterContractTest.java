@@ -242,4 +242,26 @@ class HikvisionIsapiAdapterContractTest {
    assertEquals(before,fake.requests("/ISAPI/AccessControl/UserInfo/Modify").size());
   }
  }
+
+ // ----- quarta rodada (#131) -----
+
+ @Test void buscaContraditoriaNuncaProvaAusenciaNemConfirmaRevogacao() throws Exception {
+  for(String body:List.of(
+    "{\"UserInfoSearch\":{\"responseStatusStrg\":\"OK\",\"numOfMatches\":1,\"totalMatches\":1}}",
+    "{\"UserInfoSearch\":{\"responseStatusStrg\":\"NO MATCH\",\"numOfMatches\":0,\"totalMatches\":1}}",
+    "{\"UserInfoSearch\":{\"responseStatusStrg\":\"OK\",\"numOfMatches\":1,\"UserInfo\":[{\"employeeNo\":\"outra\"}]}}",
+    "{\"UserInfoSearch\":{\"responseStatusStrg\":\"ESTRANHO\"}}",
+    "{}")) {
+   try(var fake=new FakeDeviceServer()) {
+    fake.on("POST","/ISAPI/AccessControl/UserInfo/Search",Reply.json(body));
+    fake.on("PUT","/ISAPI/AccessControl/UserInfoDetail/Delete",Reply.json(OK));
+    var a=adapter(fake);
+    var state=a.readState("ref-x");
+    assertNotEquals(OperationState.CONFIRMED,state.state(),body);
+    var removal=a.removePerson("ref-x");
+    assertNotEquals(OperationState.CONFIRMED,removal.state(),"revogação não confirma com leitura contraditória: "+body);
+    assertEquals(0,fake.requests("/ISAPI/AccessControl/UserInfoDetail/Delete").size(),"sem prova, também não age às cegas");
+   }
+  }
+ }
 }
