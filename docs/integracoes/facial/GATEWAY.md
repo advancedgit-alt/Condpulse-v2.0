@@ -115,7 +115,7 @@ Parâmetros por equipamento (`devices[]`):
 | `enabled`, `openEnabled`, `openOrigins` | começam desligados |
 | `phase` | `BANCADA` (capacidade documentada basta) ou `PRODUCAO` (exige observada **e** aprovada no perfil) |
 | `installationRevision` | revisão da instalação conferida na abertura |
-| `channels[]` | `channelId`, `pointId`, `bindingRevision`, `nativeChannel` (porta/portal nativo), `nativeOpenAction`, `direction` |
+| `channels[]` | `channelId`, `pointId`, `bindingRevision`, `nativeChannel` (porta/portal nativo, único por equipamento; repetido é recusado no carregamento), `nativeOpenAction`, `direction` |
 | `nativeSchedules` | faixa CondPulse → valor nativo (Control iD: `access_rules.id` quando há um canal; Hikvision: `planTemplateNo`) |
 | `params` | Control iD: `rule.<channelId>.<scheduleRef>` = `access_rules.id`; Hikvision: `hikvision.deleteProgressPolls`; Intelbras: `intelbras.streamWindowMillis` |
 
