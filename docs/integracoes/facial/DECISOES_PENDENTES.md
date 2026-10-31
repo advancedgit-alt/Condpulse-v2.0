@@ -38,6 +38,7 @@ aplicado em banco, Fly ou Vercel; a aplicação fica com o executor protegido.
 | P11 | Validade da evidência de idade | 365 dias (1 a 3660), parâmetro do condomínio | `cp.facial_access_settings.age_evidence_validity_days` |
 | P12 | Aprovador da homologação | Não se exige aprovador distinto de quem criou o dossiê (há um único MASTER, D3); a trilha guarda quem pediu e quem decidiu. Catálogo semeado com os 27 modelos do pacote como candidatos documentados (SKU, revisão e região UNKNOWN até o G0) | V040 |
 | P13 | Área × ponto | Gestão cria e edita área lógica e interdita; rota essencial, separação física e todos os pontos (origem/destino, mecanismo, sentido, saída) são do MASTER de implantação; ponto só fica COMMISSIONED pelo aceite técnico (V042) e mudança física de ponto comissionado o devolve a MAPPED | V041 |
+| P14 | Aceite de instalação | Assinatura das regras pela gestão com `area.manage` e o próprio vínculo MANAGER (até existir `policy.publish` na V043); aprovação técnica só com `installation.commission`, sem exigir pessoa distinta (D3). Combinação APROVADO_PILOTO basta no piloto; `review_due_at` vencido bloqueia. Mudança física de ponto comissionado suspende o vínculo ativo; equipamento trocado é nova instância | V042 |
 | P7 | Gestor (MANAGER) | sem herança de escopo técnico; `area.manage` entrou na V041 (área lógica, nome, hierarquia, interdição); `policy.edit`/`policy.publish` entram na V043 | `StaffCapability` |
 
 ## Perguntas ainda abertas
