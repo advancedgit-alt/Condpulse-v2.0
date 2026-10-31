@@ -219,9 +219,10 @@ test('workflow manual: gate sem segredos, Environment protegido, flyctl com chec
   assert.match(job,/CP_SUPABASE_PUBLISHABLE_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_SUPABASE_PUBLISHABLE_KEY \|\| '' \}\}/);
   assert.match(job,/CP_STORAGE_SERVICE_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_STORAGE_SERVICE_KEY \|\| '' \}\}/);
   assert.equal((workflow.match(/secrets\.CP_STORAGE_SERVICE_KEY/g)||[]).length,1,'chave do Storage só no passo do apply');
-  assert.match(job,/CP_ASAAS_API_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_ASAAS_API_KEY \|\| '' \}\}/);
+  assert.match(job,/CP_ASAAS_API_KEY: \$\{\{ inputs\.operation == 'apply' && inputs\.include_finance && secrets\.CP_ASAAS_API_KEY \|\| '' \}\}/);
+  assert.match(workflow,/include_finance:\n(?:.*\n){1,2}\s+type: boolean\n\s+default: false/,'financeiro só com escolha explícita no apply');
   assert.equal((workflow.match(/secrets\.CP_ASAAS_API_KEY/g)||[]).length,1,'chave do Asaas só no passo do apply');
-  assert.match(job,/CP_ASAAS_WEBHOOK_EMAIL: \$\{\{ inputs\.operation == 'apply' && vars\.CP_ASAAS_WEBHOOK_EMAIL \|\| '' \}\}/);
+  assert.match(job,/CP_ASAAS_WEBHOOK_EMAIL: \$\{\{ inputs\.operation == 'apply' && inputs\.include_finance && vars\.CP_ASAAS_WEBHOOK_EMAIL \|\| '' \}\}/);
   assert.doesNotMatch(workflow,/secrets\.CP_ASAAS_WEBHOOK_TOKEN/,'token do webhook nunca vem do GitHub: é gerado no runner');
   assert.match(workflow,/group: condpulse-database-operations-rpnrqfrfwywglvyykgrg/);
   assert.doesNotMatch(workflow,/set -x|echo "\$\{?(FLY_API_TOKEN|DATABASE_PASSWORD|CP_VERCEL_TOKEN|CP_STORAGE_SERVICE_KEY)/);
