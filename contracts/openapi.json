@@ -18122,6 +18122,801 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies": {
+      "get": {
+        "operationId": "managementListAccessPolicies",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Políticas de ingresso por área (policy.edit, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicyPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "managementCreateAccessPolicy",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cria a política de uma área (uma por área), em DRAFT. policyId do cliente: o mesmo pedido inteiro é repetição.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicy"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_ID_REQUIRED ou POLICY_NAME_INVALID"
+          },
+          "409": {
+            "description": "POLICY_ID_CONFLICT ou POLICY_CONFLICT"
+          },
+          "422": {
+            "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}": {
+      "put": {
+        "operationId": "managementUpdateAccessPolicy",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V045).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccessPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicy"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_STATUS_INVALID, POLICY_NAME_INVALID ou POLICY_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "POLICY_STALE"
+          },
+          "422": {
+            "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}/versions": {
+      "get": {
+        "operationId": "managementListAccessPolicyVersions",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Revisões da política, mais recente primeiro.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicyVersionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "managementCreateAccessPolicyVersion",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Grava revisão imutável (DRAFT) do documento fechado schema 1.0; número e hash pelo banco. Edição é nova revisão. versionId do cliente: o mesmo documento e motivo é repetição.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessPolicyVersion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicyVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_DOCUMENT_REQUIRED, POLICY_SCHEMA_UNSUPPORTED, POLICY_NAME_INVALID, POLICY_AREA_MISMATCH, POLICY_TIMEZONE_INVALID, POLICY_COMBINATION_INVALID, POLICY_CONTEXTS_INVALID, POLICY_VISITOR_INVALID, POLICY_VISITOR_INCONSISTENT, POLICY_AGE_INVALID, POLICY_AGE_RANGE_INVALID, POLICY_AGE_EVIDENCE_REQUIRED, POLICY_WINDOWS_INVALID, POLICY_WINDOW_INVALID, POLICY_HOLIDAYS_INVALID, POLICY_PRECEDENCE_INVALID, POLICY_RESERVATION_INVALID, POLICY_COMPANION_INVALID, POLICY_OFFLINE_INVALID, POLICY_FAILURE_INVALID, POLICY_ANTIPASSBACK_INVALID, POLICY_OCCUPANCY_INVALID, POLICY_EGRESS_REQUIRED, POLICY_DEFAULT_EFFECT_INVALID, POLICY_VERSION_ID_REQUIRED ou POLICY_REASON_INVALID"
+          },
+          "409": {
+            "description": "POLICY_VERSION_ID_CONFLICT ou POLICY_CONFLICT"
+          },
+          "422": {
+            "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}/validate": {
+      "post": {
+        "operationId": "managementValidateAccessPolicy",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Valida a revisão contra a área e todas as passagens de ingresso comissionadas (capacidades aprovadas da combinação vigente). Sem comando físico. Resultado preso ao hash e à revisão de instalação; vale 24 h. Mais de 1000 passagens de ingresso bloqueia com TOO_MANY_TARGETS (nunca lista truncada).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateAccessPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicyValidation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_NOT_FOUND ou POLICY_VERSION_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_VERSION_ID_REQUIRED"
+          },
+          "409": {
+            "description": "POLICY_VERSION_NOT_EDITABLE ou POLICY_STALE"
+          },
+          "422": {
+            "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}/simulate": {
+      "post": {
+        "operationId": "managementSimulateAccessPolicy",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Simula cenário sintético numa passagem de ingresso da área. Não grava decisão, não cria comando nem autorização reutilizável (simulated=true, hardwareCommandCreated=false). Sujeito real entra com os direitos (V044).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateAccessPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicySimulation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_NOT_FOUND ou POLICY_VERSION_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_SIMULATION_INVALID, POLICY_SIMULATION_MODE_UNSUPPORTED ou POLICY_SIMULATION_SUBJECT_INVALID"
+          },
+          "409": {
+            "description": "POLICY_VERSION_NOT_EDITABLE"
+          },
+          "422": {
+            "description": "POLICY_POINT_NOT_IN_AREA"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}/versions/{versionId}/approve": {
+      "post": {
+        "operationId": "managementApproveAccessPolicyVersion",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V045).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicyVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_VERSION_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "POLICY_STALE"
+          },
+          "422": {
+            "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}/versions/{versionId}/reject": {
+      "post": {
+        "operationId": "managementRejectAccessPolicyVersion",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Rejeita revisão em preparação, validada ou aprovada, com motivo; nada é apagado.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectAccessPolicyVersion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPolicyVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), POLICY_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_VERSION_NOT_FOUND"
+          },
+          "503": {
+            "description": "POLICY_UNAVAILABLE"
+          },
+          "400": {
+            "description": "POLICY_REASON_INVALID ou POLICY_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "POLICY_STALE"
+          },
+          "422": {
+            "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -30196,6 +30991,928 @@
             "items": {
               "$ref": "#/components/schemas/InstallationAcceptanceSummary"
             }
+          }
+        }
+      },
+      "PolicyWeeklyWindow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "weekdays",
+          "startLocalTime",
+          "endLocalTime",
+          "crossesMidnight"
+        ],
+        "properties": {
+          "weekdays": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI",
+                "SAT",
+                "SUN"
+              ]
+            }
+          },
+          "startLocalTime": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "endLocalTime": {
+            "type": "string",
+            "pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$"
+          },
+          "crossesMidnight": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PolicyDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "name",
+          "areaId",
+          "timezone",
+          "ruleCombination",
+          "eligibleContexts",
+          "visitorPolicy",
+          "minimumAgeYears",
+          "requireVerifiedAgeEvidence",
+          "weeklyWindows",
+          "holidayCalendarIds",
+          "calendarPrecedence",
+          "reservation",
+          "companion",
+          "offline",
+          "failure",
+          "antiPassbackMode",
+          "maximumOccupancy",
+          "emergencyEgressIndependent",
+          "maximumAgeYears",
+          "defaultEffect"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.0"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "ruleCombination": {
+            "type": "string",
+            "const": "ALL"
+          },
+          "eligibleContexts": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "RESIDENT",
+                "DEPENDENT",
+                "OWNER_NONRESIDENT",
+                "VISITOR",
+                "SERVICE_PROVIDER",
+                "EMPLOYEE",
+                "EMERGENCY_RESPONDER"
+              ]
+            }
+          },
+          "visitorPolicy": {
+            "type": "string",
+            "enum": [
+              "DENY",
+              "ALLOW_WITH_VALID_PERMIT",
+              "ONLY_VISITORS"
+            ]
+          },
+          "minimumAgeYears": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 120
+          },
+          "requireVerifiedAgeEvidence": {
+            "type": "boolean"
+          },
+          "weeklyWindows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 128,
+            "items": {
+              "$ref": "#/components/schemas/PolicyWeeklyWindow"
+            }
+          },
+          "holidayCalendarIds": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "calendarPrecedence": {
+            "type": "string",
+            "const": "HOLIDAY_OVERRIDES_WEEKLY"
+          },
+          "reservation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mode",
+              "entryGraceBeforeSeconds",
+              "entryGraceAfterSeconds"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "NOT_REQUIRED",
+                  "VALID_RESERVATION",
+                  "HOST_OR_LISTED_GUEST"
+                ]
+              },
+              "entryGraceBeforeSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "entryGraceAfterSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            }
+          },
+          "companion": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mode",
+              "maximumPairingSeconds"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "NONE",
+                  "VERIFIED_PHYSICAL_COMPANION",
+                  "ASSISTED_BY_STAFF"
+                ]
+              },
+              "maximumPairingSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 120
+              }
+            }
+          },
+          "offline": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mode",
+              "maximumStalenessSeconds",
+              "requireLocalExpiry"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "DENY_ENTRY",
+                  "SAFE_LOCAL_SUBSET",
+                  "ASSISTED_OPERATION"
+                ]
+              },
+              "maximumStalenessSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 86400
+              },
+              "requireLocalExpiry": {
+                "type": "boolean"
+              }
+            }
+          },
+          "failure": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "onMissingAttribute",
+              "onServiceFailure"
+            ],
+            "properties": {
+              "onMissingAttribute": {
+                "type": "string",
+                "enum": [
+                  "DENY",
+                  "ASSISTED_VERIFICATION"
+                ]
+              },
+              "onServiceFailure": {
+                "type": "string",
+                "enum": [
+                  "DENY",
+                  "ASSISTED_OPERATION"
+                ]
+              }
+            }
+          },
+          "antiPassbackMode": {
+            "type": "string",
+            "enum": [
+              "OFF",
+              "LOCAL",
+              "GLOBAL"
+            ]
+          },
+          "maximumOccupancy": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "emergencyEgressIndependent": {
+            "type": "boolean",
+            "const": true
+          },
+          "maximumAgeYears": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 120
+          },
+          "defaultEffect": {
+            "type": "string",
+            "const": "DENY"
+          }
+        },
+        "description": "Documento fechado de regra de ingresso (pacote v1.1). Sem SQL, script, rota de fabricante ou segredo. Idade nunca inferida pela face; faixa etária exige evidência verificada. Antirretorno, lotação, acompanhamento físico e calendários de feriado ainda bloqueiam a validação."
+      },
+      "AccessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policyId",
+          "areaId",
+          "name",
+          "status",
+          "currentPublishedVersionId",
+          "updatedAt",
+          "version"
+        ],
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "SUSPENDED",
+              "RETIRED"
+            ]
+          },
+          "currentPublishedVersionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessPolicyPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policies"
+        ],
+        "properties": {
+          "policies": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/AccessPolicy"
+            }
+          }
+        }
+      },
+      "CreateAccessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policyId",
+          "areaId",
+          "name"
+        ],
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      },
+      "UpdateAccessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status",
+          "expectedVersion"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "RETIRED"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessPolicyVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "policyId",
+          "revisionNumber",
+          "state",
+          "document",
+          "canonicalHash",
+          "changeReason",
+          "validationId",
+          "authoredBy",
+          "approvedBy",
+          "approvedAt",
+          "rejectedReason",
+          "createdAt",
+          "version"
+        ],
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "VALIDATED",
+              "APPROVED",
+              "PUBLISHED",
+              "SUPERSEDED",
+              "REJECTED"
+            ]
+          },
+          "document": {
+            "$ref": "#/components/schemas/PolicyDocument"
+          },
+          "canonicalHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "changeReason": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 1000
+          },
+          "validationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "authoredBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "approvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rejectedReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessPolicyVersionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versions"
+        ],
+        "properties": {
+          "versions": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/AccessPolicyVersion"
+            }
+          }
+        }
+      },
+      "CreateAccessPolicyVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "document",
+          "changeReason"
+        ],
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document": {
+            "$ref": "#/components/schemas/PolicyDocument"
+          },
+          "changeReason": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 1000
+          }
+        }
+      },
+      "ValidateAccessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policyVersionId"
+        ],
+        "properties": {
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "PolicyValidationIssue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "pointer",
+          "message",
+          "severity",
+          "pointId",
+          "capability",
+          "occurrences",
+          "pointIds"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "pointer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "BLOCKER",
+              "WARNING",
+              "INFO"
+            ]
+          },
+          "pointId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "capability": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "faceEnrollment",
+              "faceDeletion",
+              "perDoorRights",
+              "localValidity",
+              "onlineDecisionBeforeRelay",
+              "offlineRestriction",
+              "doorContactEvents",
+              "passageEvents",
+              "scopedRemoteOpen",
+              "eventBackfill",
+              "secureTransport",
+              "safeRecovery",
+              null
+            ]
+          },
+          "occurrences": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pointIds": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "description": "Problema agregado por código, gravidade e capacidade: occurrences conta todas as passagens afetadas; pointIds é amostra de até 20; pointId é a primeira."
+      },
+      "AccessPolicyValidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "validationId",
+          "policyVersionId",
+          "installationRevision",
+          "validatedAt",
+          "expiresAt",
+          "status",
+          "issues",
+          "affectedPointIds",
+          "requiredCapabilityNames"
+        ],
+        "properties": {
+          "validationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "validatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "VALIDATED",
+              "BLOCKED"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "maxItems": 300,
+            "items": {
+              "$ref": "#/components/schemas/PolicyValidationIssue"
+            }
+          },
+          "affectedPointIds": {
+            "type": "array",
+            "maxItems": 1000,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "requiredCapabilityNames": {
+            "type": "array",
+            "maxItems": 12,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "faceEnrollment",
+                "faceDeletion",
+                "perDoorRights",
+                "localValidity",
+                "onlineDecisionBeforeRelay",
+                "offlineRestriction",
+                "doorContactEvents",
+                "passageEvents",
+                "scopedRemoteOpen",
+                "eventBackfill",
+                "secureTransport",
+                "safeRecovery"
+              ]
+            }
+          }
+        },
+        "description": "VALIDATED não é aprovação de hardware nem aplicação; installationRevision 0 indica condomínio sem aceite de instalação aprovado."
+      },
+      "SyntheticSimulationSubject": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "context",
+          "ageEvidence",
+          "permitActive",
+          "reservationActive",
+          "physicalCompanionVerified"
+        ],
+        "properties": {
+          "context": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "DEPENDENT",
+              "OWNER_NONRESIDENT",
+              "VISITOR",
+              "SERVICE_PROVIDER",
+              "EMPLOYEE",
+              "EMERGENCY_RESPONDER"
+            ]
+          },
+          "ageEvidence": {
+            "type": "string",
+            "enum": [
+              "VERIFIED_BELOW_MINIMUM",
+              "VERIFIED_MEETS_MINIMUM",
+              "UNKNOWN"
+            ]
+          },
+          "permitActive": {
+            "type": "boolean"
+          },
+          "reservationActive": {
+            "type": "boolean"
+          },
+          "physicalCompanionVerified": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SimulateAccessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "policyVersionId",
+          "pointId",
+          "subject",
+          "at"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "SYNTHETIC"
+          },
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/SyntheticSimulationSubject"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AccessPolicySimulation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "result",
+          "reasonCodes",
+          "safeExplanation",
+          "policyVersionId",
+          "bindingRevision",
+          "missingCapabilities",
+          "simulated",
+          "hardwareCommandCreated"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "ALLOW",
+              "DENY",
+              "REQUIRE_ASSISTANCE",
+              "UNAVAILABLE"
+            ]
+          },
+          "reasonCodes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 30,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "ALLOWED",
+                "NOT_COMMISSIONED",
+                "CAPABILITY_MISSING",
+                "AREA_INTERDICTED",
+                "VISITOR_NOT_ALLOWED",
+                "NO_ELIGIBLE_CONTEXT",
+                "PERMIT_EXPIRED",
+                "AGE_NOT_VERIFIED",
+                "AGE_BELOW_MINIMUM",
+                "RESERVATION_REQUIRED",
+                "COMPANION_NOT_VERIFIED",
+                "ASSISTANCE_REQUIRED",
+                "OUTSIDE_SCHEDULE",
+                "UNSUPPORTED_RESTRICTION",
+                "POLICY_BLOCKED"
+              ]
+            }
+          },
+          "safeExplanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bindingRevision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "missingCapabilities": {
+            "type": "array",
+            "maxItems": 12,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "faceEnrollment",
+                "faceDeletion",
+                "perDoorRights",
+                "localValidity",
+                "onlineDecisionBeforeRelay",
+                "offlineRestriction",
+                "doorContactEvents",
+                "passageEvents",
+                "scopedRemoteOpen",
+                "eventBackfill",
+                "secureTransport",
+                "safeRecovery"
+              ]
+            }
+          },
+          "simulated": {
+            "type": "boolean",
+            "const": true
+          },
+          "hardwareCommandCreated": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "description": "REQUIRE_ASSISTANCE e UNAVAILABLE negam atuação automática; nunca convertidos em ALLOW. Restrição declarada que o motor ainda não avalia (idade máxima, antirretorno, lotação, acompanhamento físico, feriados) sempre nega com UNSUPPORTED_RESTRICTION. A simulação aplica, para a passagem avaliada, os mesmos impeditivos da validação (POLICY_BLOCKED, CAPABILITY_MISSING, NOT_COMMISSIONED, UNSUPPORTED_RESTRICTION)."
+      },
+      "VersionAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "RejectAccessPolicyVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

@@ -151,6 +151,12 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-areas","/v1/tenants/*/technical/access-points").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/access-areas/*","/v1/tenants/*/technical/access-areas/*/physical",
       "/v1/tenants/*/technical/access-points/*").authenticated()
+    // Políticas de ingresso (AC-007/AC-008, V043): gestão com policy.edit/policy.publish (AAL2).
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-policies","/v1/tenants/*/management/access-policies/*/versions").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-policies","/v1/tenants/*/management/access-policies/*/versions",
+      "/v1/tenants/*/management/access-policies/*/validate","/v1/tenants/*/management/access-policies/*/simulate",
+      "/v1/tenants/*/management/access-policies/*/versions/*/approve","/v1/tenants/*/management/access-policies/*/versions/*/reject").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/access-policies/*").authenticated()
     // Instalação física (AC-004 parte 2, V042): MASTER de implantação (installation.*, AAL2); gestão assina as regras.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/technical/access-devices","/v1/tenants/*/technical/device-channels",
       "/v1/tenants/*/technical/point-bindings","/v1/tenants/*/technical/installation-acceptances",
