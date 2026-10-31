@@ -301,4 +301,36 @@ class DahuaIntelbrasAdapterContractTest {
   assertEquals(200,failed.status());
   assertEquals("false",Json.object(new String(failed.body())).get("auth"),"falha na decisão: negativa segura");
  }
+
+ // ----- quarta rodada (#132) -----
+
+ @Test void intelbrasBlocoCompletoAntesDeQuedaDoFluxoNaoSePerde() throws Exception {
+  String data="Code=AccessControl;action=Pulse;index=0;data={\"Door\":0,\"ErrorCode\":0,\"Method\":15,\"UTC\":1893456100,\"UserID\":\"601\"}\r\n";
+  String complete="--myboundary\r\nContent-Type: text/plain\r\nContent-Length: "+data.getBytes().length+"\r\n\r\n"+data;
+  String partial="--myboundary\r\nContent-Type: text/plain\r\nContent-Length: 500\r\n\r\nCode=AccessControl;action=Pulse;index=0;data={\"Door\":0,\"Err";
+  var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),4);
+  var calls=new java.util.concurrent.atomic.AtomicInteger();
+  server.createContext("/cgi-bin/eventManager.cgi",ex->{
+   int call=calls.incrementAndGet();
+   byte[] body=(call==1?complete:partial).getBytes();
+   ex.sendResponseHeaders(200,body.length+1000); // tamanho declarado maior: o cliente recebe erro de fim prematuro
+   ex.getResponseBody().write(body);
+   ex.getResponseBody().flush();
+   ex.close();
+  });
+  server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool(r->{ var t=new Thread(r); t.setDaemon(true); return t; }));
+  server.start();
+  var device=TestSupport.device("ibq",Brand.INTELBRAS,ConnectionMode.LOCAL,DecisionMode.DEVICE_LOCAL_ACL,
+   java.net.URI.create("http://127.0.0.1:"+server.getAddress().getPort()),List.of(TestSupport.channel("c1","0",null)),Map.of(),Map.of(),false);
+  var a=new IntelbrasCgiAdapter(TestSupport.context(device,new TestSupport.TestClock()));
+  try {
+   cursor=null;
+   var events=drain(a,1,new ArrayList<>());
+   assertEquals(1,events.size(),"bloco completo pelo Content-Length é aceito mesmo com o fluxo caindo");
+   assertEquals(EventKind.ACCESS_ALLOWED,events.getFirst().kind());
+   for(int i=0;i<300 && calls.get()<2;i++) Thread.sleep(20);
+   Thread.sleep(200);
+   assertTrue(drain(a,1,new ArrayList<>()).isEmpty(),"parte incompleta é descartada, nunca inventada");
+  } finally { a.shutdown(); server.stop(0); }
+ }
 }

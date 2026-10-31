@@ -203,18 +203,46 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   char[] chunk=new char[8192];
   int n;
   String boundary="--"+BOUNDARY;
-  while(running && (n=reader.read(chunk))>=0) {
-   lastData=context.clock().instant();
-   pending.append(chunk,0,n);
-   int last=pending.lastIndexOf(boundary);
-   if(last>0) {
-    // Tudo antes do último delimitador está completo; o resto espera o próximo pedaço.
-    accept(pending.substring(0,last));
-    pending.delete(0,last);
+  try {
+   while(running && (n=reader.read(chunk))>=0) {
+    lastData=context.clock().instant();
+    pending.append(chunk,0,n);
+    int last=pending.lastIndexOf(boundary);
+    if(last>0) {
+     // Tudo antes do último delimitador está completo; o resto espera o próximo pedaço.
+     accept(pending.substring(0,last));
+     pending.delete(0,last);
+    }
+    if(pending.length()>MAX_PENDING_CHARS) { pending.setLength(0); unmappedSinceDrain.incrementAndGet(); }
    }
-   if(pending.length()>MAX_PENDING_CHARS) { pending.setLength(0); unmappedSinceDrain.incrementAndGet(); }
+  } finally {
+   // Fim normal ou interrupção (IOException, watchdog): a última parte só é aceita se for comprovadamente completa.
+   acceptIfComplete(pending.toString());
   }
-  if(pending.length()>0) accept(pending.toString());
+ }
+
+ /**
+  * Parte final sem delimitador seguinte: aceita quando o Content-Length da parte está satisfeito (corta no
+  * tamanho declarado) ou, sem Content-Length, quando o bloco traz {@code data} JSON completo.
+  */
+ void acceptIfComplete(String part) {
+  if(part.isBlank()) return;
+  int sep=part.indexOf("\r\n\r\n");
+  int skip=4;
+  if(sep<0) { sep=part.indexOf("\n\n"); skip=2; }
+  if(sep<0) return;
+  String headers=part.substring(0,sep);
+  String content=part.substring(sep+skip);
+  var length=java.util.regex.Pattern.compile("(?im)^Content-Length:\\s*(\\d{1,9})\\s*$").matcher(headers);
+  if(length.find()) {
+   int declared=Integer.parseInt(length.group(1));
+   byte[] bytes=content.getBytes(StandardCharsets.UTF_8);
+   if(bytes.length<declared) return; // incompleta: descarta sem inventar
+   accept(headers+"\r\n\r\n"+new String(bytes,0,declared,StandardCharsets.UTF_8));
+   return;
+  }
+  var blocks=KeyValueText.eventBlocks("--"+BOUNDARY+"\r\n"+part,BOUNDARY);
+  if(!blocks.isEmpty() && blocks.stream().allMatch(b->b.data()!=null)) accept(part);
  }
 
  private void accept(String complete) {
