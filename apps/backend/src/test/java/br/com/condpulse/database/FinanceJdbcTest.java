@@ -200,6 +200,14 @@ class FinanceJdbcTest {
   // Sincronização: atraso vindo do Asaas.
   asaas.set(paymentId(pending.chargeId()),"OVERDUE",null);
   assertEquals("OVERDUE",finance.sync(MANAGER,db.tenantA,AAL2,pending.chargeId()).state());
+  // Excluída direto no Asaas antes do webhook: a conciliação cancela com autoria de quem sincroniza e motivo fixo.
+  var deleted=charge("PIX");
+  var stored=asaas.payments.get(paymentId(deleted.chargeId()));
+  asaas.payments.put(stored.id(),new AsaasGateway.Payment(stored.id(),stored.status(),stored.externalReference(),stored.billingType(),
+   stored.valueCents(),null,stored.invoiceUrl(),stored.bankSlipUrl(),true));
+  var reconciled=finance.sync(MANAGER,db.tenantA,AAL2,deleted.chargeId());
+  assertEquals("CANCELLED",reconciled.state()); assertEquals("Excluída no Asaas (conciliação)",reconciled.cancelReason());
+  assertEquals(MANAGER.toString(),db.adminString("select cancelled_by from cp.finance_charges where id=?",deleted.chargeId()));
   // Recorrente: gerar de novo a mesma competência não duplica.
   finance.createRecurringFee(MANAGER,db.tenantA,AAL2,new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",45000L,28,"PIX",
    "Valor aprovado em assembleia fictícia"));

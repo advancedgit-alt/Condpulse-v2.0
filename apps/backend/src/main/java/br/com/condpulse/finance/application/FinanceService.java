@@ -202,9 +202,9 @@ public class FinanceService {
    if(FinanceRules.terminal(view.state())) return view;
    var target=FinanceRules.target(view.state(),view.paidAt(),view.paidCents(),payment,LocalDate.now(context.timeZone()));
    if(same(view,target)) return view;
-   if(!store.sync(tenant,chargeId,view.version(),target)) throw changed();
+   if(!store.sync(tenant,chargeId,view.version(),target,actor)) throw changed();
    var synced=store.charge(tenant,chargeId,false).view();
-   audit.record(tenant,actor,"FINANCE_CHARGE_SYNCED","FINANCE_CHARGE",chargeId,null);
+   audit.record(tenant,actor,"FINANCE_CHARGE_SYNCED","FINANCE_CHARGE",chargeId,"CANCELLED".equals(synced.state())?FinanceStore.DELETED_IN_ASAAS:null);
    if(!view.state().equals(synced.state())) store.event(tenant,"FINANCE_CHARGE_UPDATED",synced);
    return synced;
   });

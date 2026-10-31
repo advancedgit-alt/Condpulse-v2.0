@@ -3030,6 +3030,13 @@ def finance_checks():
     query(fin + recurring(C3), **as_manager)
     expect(error(fin + recurring(C4), "23505", **as_manager), "uma cobranca por taxa, unidade e competencia")
     query(fin + f"UPDATE cp.finance_charges SET state='OPEN',asaas_payment_id='pay_000000000003',version=1 WHERE id='{C3}'", **as_manager)
+    # Conciliacao da gestao: cobranca excluida no Asaas so vira CANCELLED com autoria de quem sincroniza e motivo.
+    expect(error(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',asaas_status='DELETED',version=2 WHERE id='{C3}'", "23514", **as_manager),
+           "conciliacao sem autoria e motivo e recusada")
+    query(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',asaas_status='DELETED',cancelled_by='{MGF}',"
+                f"cancel_reason='Excluída no Asaas (conciliação)',version=2 WHERE id='{C3}'", **as_manager)
+    expect(value(f"select state||':'||cancelled_by||':'||(cancelled_at is not null) from cp.finance_charges where id='{C3}'") == f"CANCELLED:{MGF}:true",
+           "conciliacao cancela com autoria, motivo e horario do banco")
     # Locacao: proprietario de unidade alugada perde a visao do financeiro da unidade.
     query(f"SET LOCAL app.capabilities='memberships.manage'; INSERT INTO cp.unit_rentals(tenant_id,unit_id,owner_membership_id,owner_account_id,started_by) "
           f"VALUES('{TA}','{UF}','{MOW}','{OWF}','{MGF}')", **as_manager)

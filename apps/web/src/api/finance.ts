@@ -58,6 +58,8 @@ const text = (maximum: number) => (value: unknown): value is string => isString(
 // Links da segunda via só do domínio do Asaas, em HTTPS (nunca outro destino vindo da resposta).
 const asaasLink = (value: unknown): value is string => isString(value) && /^https:\/\/([a-z]+\.)?asaas\.com\/[A-Za-z0-9/_.-]{1,200}$/.test(value);
 const money = (value: unknown): value is number => isInteger(value) && value <= 200_000_000;
+/** Totais agregados (relatório, inadimplência) somam várias cobranças: sem o teto de uma cobrança, só inteiro seguro não negativo. */
+const total = (value: unknown): value is number => isInteger(value);
 
 /** R$ 1.234,56 a partir de centavos. */
 export function formatCents(cents: number): string {
@@ -148,10 +150,10 @@ const counts = <K extends string>(keys: readonly K[]) => (value: unknown): Recor
   return Object.fromEntries(keys.map((key) => [key, value[key] as number])) as Record<K, number>;
 };
 function delinquency(value: unknown): DelinquencyReport {
-  if (!record(value) || !day(value.referenceDate) || !money(value.totalCents)) throw invalidResponse();
+  if (!record(value) || !day(value.referenceDate) || !total(value.totalCents)) throw invalidResponse();
   const units = list(value.units, (item) => {
     if (!record(item) || !isUUID(item.unitId) || !text(40)(item.unitLabel) || !nullable(text(60))(item.blockName) || !isInteger(item.charges)
-        || item.charges < 1 || !money(item.totalCents) || !day(item.oldestDue) || item.oldestDue >= (value.referenceDate as string)) throw invalidResponse();
+        || item.charges < 1 || !total(item.totalCents) || !day(item.oldestDue) || item.oldestDue >= (value.referenceDate as string)) throw invalidResponse();
     return { unitId: item.unitId, unitLabel: item.unitLabel, blockName: item.blockName as string | null, charges: item.charges,
       totalCents: item.totalCents, oldestDue: item.oldestDue };
   });
@@ -160,8 +162,8 @@ function delinquency(value: unknown): DelinquencyReport {
 function report(value: unknown): MonthSummary[] {
   if (!record(value)) throw invalidResponse();
   return list(value.months, (item) => {
-    if (!record(item) || !isString(item.month) || !/^\d{4}-\d{2}$/.test(item.month) || !money(item.issuedCents) || !money(item.paidCents)
-        || !money(item.openCents) || !money(item.overdueCents) || !isInteger(item.cancelled)) throw invalidResponse();
+    if (!record(item) || !isString(item.month) || !/^\d{4}-\d{2}$/.test(item.month) || !total(item.issuedCents) || !total(item.paidCents)
+        || !total(item.openCents) || !total(item.overdueCents) || !isInteger(item.cancelled)) throw invalidResponse();
     return { month: item.month, issuedCents: item.issuedCents, paidCents: item.paidCents, openCents: item.openCents,
       overdueCents: item.overdueCents, cancelled: item.cancelled };
   });

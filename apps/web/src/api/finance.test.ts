@@ -82,5 +82,13 @@ describe('contrato do financeiro condominial', () => {
     reply = () => json({ referenceDate: '2030-01-05', totalCents: 15000, units: [{ unitId: unit, unitLabel: 'FICTÍCIA 101', blockName: null, charges: 1,
       totalCents: 15000, oldestDue: '2030-01-10' }] });
     await expect(client.delinquency(tenant)).rejects.toThrow();
+    // Totais agregados acima do teto de uma cobrança (R$ 2.000.000,00) continuam válidos.
+    reply = () => json({ referenceDate: '2030-02-01', totalCents: 300_000_000, units: [{ unitId: unit, unitLabel: 'FICTÍCIA 101', blockName: null, charges: 3,
+      totalCents: 300_000_000, oldestDue: '2030-01-10' }] });
+    expect((await client.delinquency(tenant)).totalCents).toBe(300_000_000);
+    reply = () => json({ months: [{ month: '2030-01', issuedCents: 500_000_000, paidCents: 300_000_000, openCents: 200_000_000, overdueCents: 0, cancelled: 0 }] });
+    expect((await client.report(tenant, '2030-01', '2030-01'))[0]!.issuedCents).toBe(500_000_000);
+    reply = () => json({ months: [{ month: '2030-01', issuedCents: -1, paidCents: 0, openCents: 0, overdueCents: 0, cancelled: 0 }] });
+    await expect(client.report(tenant, '2030-01', '2030-01')).rejects.toThrow();
   });
 });

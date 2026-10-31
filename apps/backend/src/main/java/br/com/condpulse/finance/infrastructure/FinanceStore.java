@@ -153,10 +153,19 @@ public class FinanceStore {
    where tenant_id=? and id=? and state in ('PENDING_ISSUE','OPEN','OVERDUE') and version=?
    """,actor,reason,tenant,id,version)==1;
  }
- public boolean sync(UUID tenant,UUID id,long version,FinanceRules.Target target) {
+ /** Motivo gravado quando a conciliação da gestão encontra a cobrança excluída no Asaas. */
+ public static final String DELETED_IN_ASAAS="Excluída no Asaas (conciliação)";
+ /**
+  * Conciliação pela gestão. Cancelamento fora do webhook exige autoria e motivo (gatilho da V036): quem sincroniza fica
+  * como autor, com o motivo fixo de exclusão no Asaas.
+  */
+ public boolean sync(UUID tenant,UUID id,long version,FinanceRules.Target target,UUID actor) {
+  boolean cancelled="CANCELLED".equals(target.state());
   return jdbc.update("""
-   update cp.finance_charges set state=?,asaas_status=?,paid_at=?,paid_cents=?,version=version+1 where tenant_id=? and id=? and version=?
-   """,target.state(),target.asaasStatus(),date(target.paidAt()),target.paidCents(),tenant,id,version)==1;
+   update cp.finance_charges set state=?,asaas_status=?,paid_at=?,paid_cents=?,cancelled_by=?,cancel_reason=?,version=version+1
+   where tenant_id=? and id=? and version=?
+   """,target.state(),target.asaasStatus(),date(target.paidAt()),target.paidCents(),cancelled?actor:null,cancelled?DELETED_IN_ASAAS:null,
+   tenant,id,version)==1;
  }
  public List<UUID> pendingIssue(UUID tenant,int limit) {
   return jdbc.query("""
