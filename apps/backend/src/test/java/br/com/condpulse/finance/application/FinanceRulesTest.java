@@ -41,4 +41,33 @@ class FinanceRulesTest {
   assertEquals("OPEN",FinanceRules.issued(payment("PENDING",false),TODAY).state());
   assertThrows(AsaasGateway.Unavailable.class,()->FinanceRules.issued(payment("PENDING",true),TODAY));
  }
+ @Test void everyAsaasStatusMapsConsistentlyForAdoptionWebhookAndSync() {
+  // Adoção (pagamento já criado com a referência): mesma regra do webhook, nunca "aberta" para dinheiro recebido.
+  for(String paid:new String[]{"RECEIVED","CONFIRMED","RECEIVED_IN_CASH","REFUND_REQUESTED","REFUND_IN_PROGRESS","CHARGEBACK_REQUESTED",
+    "CHARGEBACK_DISPUTE","AWAITING_CHARGEBACK_REVERSAL","DUNNING_RECEIVED"}) {
+   var adopted=FinanceRules.issued(payment(paid,false),TODAY);
+   assertEquals("PAID",adopted.state(),paid); assertEquals(15000L,adopted.paidCents(),paid);
+   assertEquals("PAID",FinanceRules.target("OPEN",null,null,payment(paid,false),TODAY).state(),paid);
+  }
+  var refunded=FinanceRules.issued(payment("REFUNDED",false),TODAY);
+  assertEquals("REFUNDED",refunded.state()); assertEquals(LocalDate.of(2026,10,29),refunded.paidAt());
+  assertEquals("OVERDUE",FinanceRules.issued(payment("OVERDUE",false),TODAY).state());
+  for(String unknown:new String[]{"DUNNING_REQUESTED","AWAITING_RISK_ANALYSIS","ALGO_NOVO"}) {
+   assertEquals("OPEN",FinanceRules.issued(payment(unknown,false),TODAY).state(),unknown);
+   var kept=FinanceRules.target("OVERDUE",null,null,payment(unknown,false),TODAY);
+   assertEquals("OVERDUE",kept.state()); assertEquals(unknown,kept.asaasStatus());
+  }
+  // Transições produzidas sempre aceitas pelo gatilho da V036.
+  var allowed=java.util.Map.of("PENDING_ISSUE",java.util.Set.of("PENDING_ISSUE","OPEN","OVERDUE","PAID","REFUNDED"),
+   "OPEN",java.util.Set.of("OPEN","OVERDUE","PAID","REFUNDED","CANCELLED"),"OVERDUE",java.util.Set.of("OPEN","OVERDUE","PAID","REFUNDED","CANCELLED"),
+   "PAID",java.util.Set.of("PAID","REFUNDED"),"CANCELLED",java.util.Set.of("CANCELLED"),"REFUNDED",java.util.Set.of("REFUNDED"));
+  for(var current:allowed.keySet()) for(String raw:new String[]{"PENDING","OVERDUE","RECEIVED","CONFIRMED","RECEIVED_IN_CASH","REFUNDED",
+    "REFUND_REQUESTED","CHARGEBACK_REQUESTED","DUNNING_REQUESTED","DELETED",null}) {
+   AsaasGateway.Payment payment=raw==null?null:"DELETED".equals(raw)?payment("PENDING",true):payment(raw,false);
+   String next;
+   try { next=FinanceRules.target(current,TODAY,15000L,payment,TODAY).state(); }
+   catch(AsaasGateway.Unavailable notAdopted) { assertEquals("PENDING_ISSUE",current); continue; }
+   assertTrue(allowed.get(current).contains(next),current+" -> "+next+" ("+raw+")");
+  }
+ }
 }

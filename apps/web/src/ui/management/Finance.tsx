@@ -247,6 +247,8 @@ function RecurringFees() {
   const [draft, setDraft] = useState({ description: 'Taxa condominial', amount: '', dueDay: '10', billingType: 'BOLETO' as BillingType, reason: '' });
   const [generation, setGeneration] = useState({ competence: today(scope.timeZone).slice(0, 7), reason: '' });
   const [ending, setEnding] = useState<string | null>(null);
+  // Mesma chave enquanto o resultado for incerto: repetir nunca cria outra taxa ativa; sucesso libera uma nova.
+  const [feeKey, setFeeKey] = useState(newOperationKey);
   if (useAccessGuard(fees.error)) return null;
   if (codeOf(fees.error) === 'API_NOT_AVAILABLE') return <Unavailable />;
   const refresh = async () => { setEnding(null); await queries.invalidateQueries({ queryKey: managementKey(scope, 'finance') }); };
@@ -257,9 +259,9 @@ function RecurringFees() {
   async function create(event: FormEvent) {
     event.preventDefault();
     if (!valid || cents === null) return;
-    await action.run(() => finance.createFee(scope.tenantId, { unitId: null, kind: 'CONDO_FEE', description: draft.description.trim(), amountCents: cents,
+    await action.run(() => finance.createFee(scope.tenantId, feeKey, { unitId: null, kind: 'CONDO_FEE', description: draft.description.trim(), amountCents: cents,
       dueDay: day, billingType: draft.billingType, reason: draft.reason.trim() }), 'Taxa recorrente criada para todas as unidades com pagador.',
-      async () => { setDraft({ ...draft, amount: '', reason: '' }); await refresh(); });
+      async () => { setFeeKey(newOperationKey()); setDraft({ ...draft, amount: '', reason: '' }); await refresh(); });
   }
   async function generate(event: FormEvent) {
     event.preventDefault();

@@ -74,6 +74,14 @@ describe('contrato do financeiro condominial', () => {
     await expect(client.unitCharges(tenant, unit)).rejects.toThrow();
     reply = () => json({ charges: [{ ...charge, state: 'PENDING_ISSUE', invoiceUrl: null, bankSlipUrl: null }], truncated: false });
     await expect(client.unitCharges(tenant, unit)).rejects.toThrow();
+    const fee = { feeId: '54000000-0000-4000-8000-000000000001', unitId: null, unitLabel: null, kind: 'CONDO_FEE', description: 'Taxa', amountCents: 45000,
+      dueDay: 10, billingType: 'PIX', state: 'ACTIVE', createdAt: '2030-01-01T12:00:00Z', version: 0 };
+    reply = () => json(fee, 201);
+    await client.createFee(tenant, 'web:00000000-0000-4000-8000-000000000011', { unitId: null, kind: 'CONDO_FEE', description: 'Taxa',
+      amountCents: 45000, dueDay: 10, billingType: 'PIX', reason: 'Assembleia' });
+    call = fetcher.mock.calls.at(-1)!;
+    expect(String(call[0])).toBe(`/v1/tenants/${tenant}/management/finance/recurring-fees`);
+    expect(new Headers(call[1]?.headers).get('Idempotency-Key')).toBe('web:00000000-0000-4000-8000-000000000011');
     reply = () => json({ created: 3, skipped: 1, issued: 3, pending: 0 });
     expect(await client.generate(tenant, '2030-01', 'Competência')).toEqual({ created: 3, skipped: 1, issued: 3, pending: 0 });
     reply = () => json({ referenceDate: '2030-02-01', totalCents: 15000, units: [{ unitId: unit, unitLabel: 'FICTÍCIA 101', blockName: null, charges: 1,

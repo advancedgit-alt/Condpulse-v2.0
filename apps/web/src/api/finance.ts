@@ -213,12 +213,12 @@ export function createFinanceApi(client: CondPulseApi = api) {
       client.call(`${base(tenantId)}/charges/${identifier(chargeId)}/sync`, same(chargeId), { method: 'POST', body: {} }),
     fees: async (tenantId: string, signal?: AbortSignal) =>
       client.call(`${base(tenantId)}/recurring-fees`, (value) => list(value, (item) => recurringFee(item)), options(signal)),
-    createFee: async (tenantId: string, body: RecurringCreate) =>
+    createFee: async (tenantId: string, key: string, body: RecurringCreate) =>
       client.call(`${base(tenantId)}/recurring-fees`, (value) => {
         const fee = recurringFee(value, true);
         if (fee.amountCents !== body.amountCents || fee.dueDay !== body.dueDay || fee.state !== 'ACTIVE') throw invalidResponse(true);
         return fee;
-      }, { method: 'POST', body }),
+      }, { method: 'POST', body, key }),
     endFee: async (tenantId: string, feeId: string, reason: string) =>
       client.call(`${base(tenantId)}/recurring-fees/${identifier(feeId)}/end`, (value) => {
         const fee = recurringFee(value, true);

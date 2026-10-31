@@ -13515,6 +13515,17 @@
         ],
         "x-feature-flag": "CP_FINANCE_ENABLED",
         "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "minLength": 16,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9._:-]{16,200}$"
+              }
+            },
           {
             "name": "tenantId",
             "in": "path",
@@ -13534,7 +13545,7 @@
             }
           }
         ],
-        "description": "Gestão (AAL2) cria taxa recorrente (uma unidade ou todas com pagador), com motivo.",
+        "description": "Gestão (AAL2) cria taxa recorrente (uma unidade ou todas com pagador), com motivo. Idempotente pela chave de operação: repetir não cria outra taxa ativa.",
         "requestBody": {
           "required": true,
           "content": {

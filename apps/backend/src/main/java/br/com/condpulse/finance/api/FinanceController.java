@@ -75,8 +75,10 @@ public class FinanceController {
  }
  @PostMapping(BASE+"/recurring-fees")
  public ResponseEntity<FinanceModels.RecurringFee> createFee(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
-     @RequestBody FinanceModels.RecurringCreate request) {
-  return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(finance.createRecurringFee(account(jwt),tenantId,assurance(jwt),request));
+     @RequestHeader("Idempotency-Key") String key,@RequestBody FinanceModels.RecurringCreate request) {
+  var result=finance.createRecurringFee(account(jwt),tenantId,assurance(jwt),key,request);
+  return ResponseEntity.status(result.status()).cacheControl(CacheControl.noStore())
+   .header("Idempotency-Replayed",Boolean.toString(result.replayed())).body(result.fee());
  }
  @PostMapping(BASE+"/recurring-fees/{feeId}/end")
  public ResponseEntity<FinanceModels.RecurringFee> endFee(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID feeId,

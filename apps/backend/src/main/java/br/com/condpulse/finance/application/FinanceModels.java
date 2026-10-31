@@ -37,6 +37,7 @@ public final class FinanceModels {
 
  public record RecurringFee(UUID feeId,UUID unitId,String unitLabel,String kind,String description,long amountCents,int dueDay,
      String billingType,String state,Instant createdAt,long version) {}
+ public record FeeMutation(RecurringFee fee,boolean replayed,int status) {}
  public record RecurringCreate(UUID unitId,String kind,String description,Long amountCents,Integer dueDay,String billingType,String reason) {}
  public record Reason(String reason) {}
  /** competence: AAAA-MM. */

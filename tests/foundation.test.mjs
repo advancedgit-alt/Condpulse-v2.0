@@ -176,7 +176,7 @@ test('contrato publica somente a superficie implementada da fundacao',()=>{
  for(const [path,item] of Object.entries(spec.paths).filter(([p])=>p.includes('/finance'))) for(const [method,operation] of Object.entries(item)) {
   assert.equal(operation['x-feature-flag'],'CP_FINANCE_ENABLED',path);
   if(path.includes('/management/')) assert.match(operation.responses['403'].description,/MFA_REQUIRED/,path);
-  if(method==='post' && path.endsWith('/management/finance/charges')) assert.ok(operation.parameters.some(p=>p.name==='Idempotency-Key' && p.required),path);
+  if(method==='post' && (path.endsWith('/management/finance/charges') || path.endsWith('/management/finance/recurring-fees'))) assert.ok(operation.parameters.some(p=>p.name==='Idempotency-Key' && p.required),path);
  }
  const webhook=spec.paths['/v1/finance/asaas/webhook'].post;
  assert.deepEqual(webhook.security,[],'webhook do Asaas não usa sessão');

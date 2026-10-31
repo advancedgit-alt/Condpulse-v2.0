@@ -215,10 +215,16 @@ class FinanceJdbcTest {
   assertEquals("CANCELLED",reconciled.state()); assertEquals("Excluída no Asaas (conciliação)",reconciled.cancelReason());
   assertEquals(MANAGER.toString(),db.adminString("select cancelled_by from cp.finance_charges where id=?",deleted.chargeId()));
   // Recorrente: gerar de novo a mesma competência não duplica.
-  var fee=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",45000L,28,"PIX",
+  String feeKey=key();
+  var fee=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,feeKey,new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",45000L,28,"PIX",
+   "Valor aprovado em assembleia fictícia")).fee();
+  var repeated=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,feeKey,new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",45000L,28,"PIX",
    "Valor aprovado em assembleia fictícia"));
-  var ended=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,new FinanceModels.RecurringCreate(null,"OTHER","Fundo de obras",10000L,10,"PIX",
-   "Valor aprovado em assembleia fictícia"));
+  assertTrue(repeated.replayed()); assertEquals(fee.feeId(),repeated.fee().feeId(),"Repetir a mesma chave não cria outra taxa");
+  assertEquals("IDEMPOTENCY_KEY_REUSED",code(()->finance.createRecurringFee(MANAGER,db.tenantA,AAL2,feeKey,
+   new FinanceModels.RecurringCreate(null,"CONDO_FEE","Taxa condominial",46000L,28,"PIX","Valor aprovado em assembleia fictícia"))));
+  var ended=finance.createRecurringFee(MANAGER,db.tenantA,AAL2,key(),new FinanceModels.RecurringCreate(null,"OTHER","Fundo de obras",10000L,10,"PIX",
+   "Valor aprovado em assembleia fictícia")).fee();
   assertEquals("ENDED",finance.endRecurringFee(MANAGER,db.tenantA,AAL2,ended.feeId(),new FinanceModels.Reason("Obra concluída")).state());
   assertEquals("ACTIVE",fee.state());
   String month=YearMonth.from(today()).toString();
@@ -300,6 +306,17 @@ class FinanceJdbcTest {
   assertEquals("PAID",issued.state()); assertEquals(before,asaas.created.get(),"Adota o pagamento existente");
   // Reenvio do Asaas depois do vínculo: processado normalmente.
   assertEquals(FinanceWebhookService.Outcome.PROCESSED,webhook.handle(TOKEN,event("evt_i1","PAYMENT_RECEIVED",created.id())));
+  db.assertEmptyContext();
+ }
+ @Test void adoptionOfAPaymentAlreadyRefundedRecordsTheRefund() throws Exception {
+  payer();
+  asaas.down=true;
+  var pending=charge("PIX");
+  asaas.down=false;
+  var created=asaas.createPayment(new AsaasGateway.PaymentRequest("cus_1000","PIX",15000,today().plusDays(5),"Multa",pending.chargeId().toString()));
+  asaas.set(created.id(),"REFUNDED",today().minusDays(1));
+  var adopted=finance.issue(MANAGER,db.tenantA,AAL2,pending.chargeId());
+  assertEquals("REFUNDED",adopted.state()); assertEquals(today().minusDays(1),adopted.paidAt()); assertEquals(15000L,adopted.paidCents());
   db.assertEmptyContext();
  }
 }

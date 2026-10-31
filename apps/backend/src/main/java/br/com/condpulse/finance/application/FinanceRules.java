@@ -6,50 +6,68 @@ import java.util.Set;
 /** Regras puras do financeiro condominial: situação a partir do Asaas, CPF/CNPJ e máscaras exibidas. */
 public final class FinanceRules {
  private FinanceRules() {}
+ /** Recebido (dinheiro entrou), inclusive em dinheiro. */
  static final Set<String> PAID_STATUSES=Set.of("RECEIVED","CONFIRMED","RECEIVED_IN_CASH");
+ /** Depois do recebimento: estorno pedido ou em andamento, contestação, negativação já recebida. Continua paga. */
+ static final Set<String> AFTER_PAYMENT=Set.of("REFUND_REQUESTED","REFUND_IN_PROGRESS","CHARGEBACK_REQUESTED","CHARGEBACK_DISPUTE",
+  "AWAITING_CHARGEBACK_REVERSAL","DUNNING_RECEIVED");
 
  /** Situação sincronizada; {@code paidAt}/{@code paidCents} só para PAID e REFUNDED. */
  public record Target(String state,String asaasStatus,LocalDate paidAt,Long paidCents) {}
 
  /**
-  * Próxima situação de uma cobrança já emitida, respeitando as transições do banco (V036): OPEN/OVERDUE vão para
-  * OPEN, OVERDUE, PAID, REFUNDED ou CANCELLED; PAID só vai para REFUNDED (nunca regride por leitura); CANCELLED e REFUNDED são finais. Status
-  * do Asaas sem equivalente (estorno solicitado, chargeback, negativação...) só atualiza o status bruto.
-  * {@code payment} nulo significa pagamento inexistente no Asaas (tratado como excluído).
+  * Situação lógica de um pagamento do Asaas: OPEN (PENDING), OVERDUE, PAID (recebido ou com estorno/contestação ainda não
+  * concluídos), REFUNDED, CANCELLED (excluído ou inexistente) ou null quando o status não tem equivalente (negativação
+  * solicitada, análise de risco, desconhecido): só o status bruto muda.
+  */
+ static String logical(AsaasGateway.Payment payment) {
+  if(payment==null || payment.deleted()) return "CANCELLED";
+  String raw=payment.status();
+  if("PENDING".equals(raw)) return "OPEN";
+  if("OVERDUE".equals(raw)) return "OVERDUE";
+  if(PAID_STATUSES.contains(raw) || AFTER_PAYMENT.contains(raw)) return "PAID";
+  if("REFUNDED".equals(raw)) return "REFUNDED";
+  return null;
+ }
+
+ /**
+  * Próxima situação, respeitando as transições do banco (V036), para emissão/adoção (current = PENDING_ISSUE), webhook e
+  * conciliação. PENDING_ISSUE vai para OPEN, OVERDUE, PAID ou REFUNDED (nunca CANCELLED: excluído não é adotado);
+  * OPEN/OVERDUE vão para OPEN, OVERDUE, PAID, REFUNDED ou CANCELLED; PAID só vai para REFUNDED (leitura antiga nunca apaga
+  * o pagamento; desfazer recebimento em dinheiro fica só no status bruto); CANCELLED e REFUNDED são finais.
+  * {@code payment} nulo significa pagamento inexistente no Asaas (excluído).
   */
  public static Target target(String current,LocalDate currentPaidAt,Long currentPaidCents,AsaasGateway.Payment payment,LocalDate today) {
-  String raw=payment==null?"DELETED":payment.deleted()?"DELETED":payment.status();
+  String raw=payment==null || payment.deleted()?"DELETED":payment.status();
   String status=raw!=null && raw.matches("[A-Z][A-Z_]{2,39}")?raw:null;
-  if("CANCELLED".equals(current) || "REFUNDED".equals(current) || "PENDING_ISSUE".equals(current))
-   return new Target(current,status,currentPaidAt,currentPaidCents);
+  Target keep=new Target(current,status,currentPaidAt,currentPaidCents);
+  if(terminal(current)) return keep;
+  String next=logical(payment);
+  boolean pending="PENDING_ISSUE".equals(current);
   boolean open="OPEN".equals(current) || "OVERDUE".equals(current);
-  if("DELETED".equals(raw)) return open?new Target("CANCELLED",status,null,null):new Target(current,status,currentPaidAt,currentPaidCents);
-  if(PAID_STATUSES.contains(raw)) {
-   if("PAID".equals(current)) return new Target(current,status,currentPaidAt,currentPaidCents);
-   LocalDate paid=payment.paymentDate()==null?today:payment.paymentDate();
-   return new Target("PAID",status,paid,payment.valueCents());
+  if(next==null) return pending?new Target("OPEN",status,null,null):keep;
+  switch(next) {
+   case "OPEN","OVERDUE" -> { return "PAID".equals(current)?keep:new Target(next,status,null,null); }
+   case "PAID" -> {
+    if("PAID".equals(current)) return keep;
+    return new Target("PAID",status,payment.paymentDate()==null?today:payment.paymentDate(),payment.valueCents());
+   }
+   case "REFUNDED" -> {
+    if("PAID".equals(current)) return new Target("REFUNDED",status,currentPaidAt,currentPaidCents);
+    return new Target("REFUNDED",status,payment.paymentDate()==null?today:payment.paymentDate(),payment.valueCents());
+   }
+   default -> { // CANCELLED
+    if(open) return new Target("CANCELLED",status,null,null);
+    if(pending) throw new AsaasGateway.Unavailable(); // excluído nunca é adotado: a emissão cria outro
+    return keep;
+   }
   }
-  // Paga não volta a aberta/vencida por leitura do Asaas: uma resposta antiga (lida antes do pagamento) nunca apaga o
-  // pagamento. Desfazer recebimento em dinheiro no Asaas fica só no status bruto, para a gestão conferir.
-  if("PAID".equals(current) && ("PENDING".equals(raw) || "OVERDUE".equals(raw))) return new Target(current,status,currentPaidAt,currentPaidCents);
-  if("PENDING".equals(raw)) return new Target("OPEN",status,null,null);
-  if("OVERDUE".equals(raw)) return new Target("OVERDUE",status,null,null);
-  if("REFUNDED".equals(raw) && "PAID".equals(current)) return new Target("REFUNDED",status,currentPaidAt,currentPaidCents);
-  // Recebido e estornado antes de o recebimento chegar aqui: vai direto a REFUNDED com os dados de pagamento do Asaas.
-  if("REFUNDED".equals(raw) && open)
-   return new Target("REFUNDED",status,payment.paymentDate()==null?today:payment.paymentDate(),payment.valueCents());
-  return new Target(current,status,currentPaidAt,currentPaidCents);
  }
  /** Cancelada e estornada não mudam mais (gatilho da V036). */
  public static boolean terminal(String state) { return "CANCELLED".equals(state) || "REFUNDED".equals(state); }
- /** Situação inicial depois da emissão (ou da adoção do pagamento já criado). */
+ /** Situação inicial depois da emissão (ou da adoção do pagamento já criado): mesma regra de {@link #target}. */
  public static Target issued(AsaasGateway.Payment payment,LocalDate today) {
-  if(payment.deleted()) throw new AsaasGateway.Unavailable();
-  String status=payment.status()!=null && payment.status().matches("[A-Z][A-Z_]{2,39}")?payment.status():null;
-  if(PAID_STATUSES.contains(payment.status()))
-   return new Target("PAID",status,payment.paymentDate()==null?today:payment.paymentDate(),payment.valueCents());
-  if("OVERDUE".equals(payment.status())) return new Target("OVERDUE",status,null,null);
-  return new Target("OPEN",status,null,null);
+  return target("PENDING_ISSUE",null,null,payment,today);
  }
 
  /** Somente dígitos; CPF (11) ou CNPJ (14) com dígitos verificadores válidos; null quando inválido. */

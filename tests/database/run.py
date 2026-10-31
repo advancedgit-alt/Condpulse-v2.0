@@ -3021,6 +3021,12 @@ def finance_checks():
     # Aberta direto para estornada (recebimento e estorno ja no Asaas): exige os dados do pagamento.
     C5 = "55000000-0000-4000-8000-0000000009a5"
     query(fin + charge(C5), **as_manager)
+    # Adocao (emissao) de pagamento ja estornado no Asaas: PENDING_ISSUE vai direto a REFUNDED com os dados do pagamento.
+    C6 = "55000000-0000-4000-8000-0000000009a6"
+    query(fin + charge(C6), **as_manager)
+    query(fin + f"UPDATE cp.finance_charges SET state='REFUNDED',asaas_payment_id='pay_000000000006',asaas_status='REFUNDED',paid_at=current_date,"
+                f"paid_cents=15000,version=1 WHERE id='{C6}'", **as_manager)
+    expect(value(f"select state from cp.finance_charges where id='{C6}'") == "REFUNDED", "adocao de pagamento estornado vai direto a REFUNDED")
     query(fin + f"UPDATE cp.finance_charges SET state='OPEN',asaas_payment_id='pay_000000000005',version=1 WHERE id='{C5}'", **as_manager)
     expect(error(hook.replace(C1, C5) + f"UPDATE cp.finance_charges SET state='REFUNDED',version=2 WHERE id='{C5}'", "23514", tenant=TA, actor=None, role="cp_api"),
            "estornada sem data de pagamento e recusada")

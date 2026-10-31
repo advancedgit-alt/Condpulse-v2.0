@@ -222,7 +222,7 @@ BEGIN
   RAISE EXCEPTION 'webhook só sincroniza a situação da cobrança' USING ERRCODE='42501';
  END IF;
  IF NEW.state<>OLD.state THEN
-  IF OLD.state='PENDING_ISSUE' AND NEW.state IN ('OPEN','OVERDUE','PAID') AND NOT webhook AND NEW.asaas_payment_id IS NOT NULL THEN
+  IF OLD.state='PENDING_ISSUE' AND NEW.state IN ('OPEN','OVERDUE','PAID','REFUNDED') AND NOT webhook AND NEW.asaas_payment_id IS NOT NULL THEN
    NULL; -- emissão (ou adoção, depois de falha, do pagamento já criado com a mesma referência externa)
   ELSIF NEW.state='CANCELLED' AND OLD.state IN ('PENDING_ISSUE','OPEN','OVERDUE') THEN
    IF NOT webhook AND (NEW.cancelled_by IS DISTINCT FROM platform.current_actor_id() OR NEW.cancel_reason IS NULL) THEN

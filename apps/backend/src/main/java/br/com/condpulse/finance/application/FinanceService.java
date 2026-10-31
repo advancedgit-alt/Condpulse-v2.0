@@ -216,7 +216,9 @@ public class FinanceService {
  public java.util.List<FinanceModels.RecurringFee> recurringFees(UUID actor,UUID tenant,AssuranceLevel assurance) {
   return execute(actor,tenant,assurance,context->{ manager(context); return store.recurringFees(tenant); });
  }
- public FinanceModels.RecurringFee createRecurringFee(UUID actor,UUID tenant,AssuranceLevel assurance,FinanceModels.RecurringCreate request) {
+ /** Criação idempotente pela chave de operação: repetir depois de resultado incerto nunca cria outra taxa ativa. */
+ public FinanceModels.FeeMutation createRecurringFee(UUID actor,UUID tenant,AssuranceLevel assurance,String key,FinanceModels.RecurringCreate request) {
+  requireKey(key);
   if(request==null) throw invalid("FINANCE_FEE_INVALID","Informe a taxa recorrente.");
   String kind=request.kind()==null?"CONDO_FEE":request.kind();
   if(!FEE_KINDS.contains(kind)) throw invalid("FINANCE_KIND_INVALID","Taxa recorrente é taxa condominial ou outro.");
@@ -225,12 +227,22 @@ public class FinanceService {
   long amount=amount(request.amountCents());
   String description=description(request.description());
   String reason=reason(request.reason());
+  String hash=digest("FEE|"+request.unitId()+"|"+kind+"|"+request.billingType()+"|"+amount+"|"+request.dueDay()+"|"
+   +description.length()+":"+description+"|"+reason.length()+":"+reason);
+  String route="/v1/tenants/"+tenant+"/management/finance/recurring-fees";
   return execute(actor,tenant,assurance,context->{
    manager(context);
+   var previous=store.begin(tenant,actor,route,key,hash);
+   if(!previous.fresh()) {
+    var replay=store.recurringFee(tenant,previous.resource());
+    if(replay==null) throw feeNotFound();
+    return new FinanceModels.FeeMutation(replay,true,previous.responseStatus());
+   }
    UUID id=UUID.randomUUID();
    store.insertRecurringFee(id,tenant,request.unitId(),kind,description,amount,request.dueDay(),request.billingType());
    audit.record(tenant,actor,"FINANCE_RECURRING_FEE_CREATED","FINANCE_RECURRING_FEE",id,reason);
-   return store.recurringFee(tenant,id);
+   store.finish(tenant,actor,route,key,id,201);
+   return new FinanceModels.FeeMutation(store.recurringFee(tenant,id),false,201);
   });
  }
  public FinanceModels.RecurringFee endRecurringFee(UUID actor,UUID tenant,AssuranceLevel assurance,UUID feeId,FinanceModels.Reason request) {
