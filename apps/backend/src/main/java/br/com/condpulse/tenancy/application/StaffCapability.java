@@ -19,7 +19,11 @@ public enum StaffCapability {
  /** Financeiro condominial com Asaas (ADR-0008). */
  MANAGE_FINANCE("finance.manage"),
  /** Acesso facial (AC-004, V041): áreas lógicas, nome, tipo, hierarquia e interdição; nunca canal, relé ou segredo. */
- MANAGE_AREAS("area.manage");
+ MANAGE_AREAS("area.manage"),
+ /** Acesso facial (AC-007/AC-008, V043): cria revisões de regra, valida e simula, sem publicar. */
+ EDIT_POLICIES("policy.edit"),
+ /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V045). */
+ PUBLISH_POLICIES("policy.publish");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -30,7 +34,7 @@ public enum StaffCapability {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
-    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS);
+    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    default -> EnumSet.noneOf(StaffCapability.class);
   };
