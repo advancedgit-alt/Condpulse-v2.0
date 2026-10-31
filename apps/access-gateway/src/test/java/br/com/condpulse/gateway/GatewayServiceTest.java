@@ -585,4 +585,15 @@ class GatewayServiceTest {
   assertFalse(service.status("d1").orElseThrow().identityPending());
   assertEquals(2,attempts[0]);
  }
+
+ @Test void credencialAceitaPorCascataTemRetiradaPelaMesmaCascata() {
+  build(EnumSet.of(Operation.SET_CARD,Operation.REMOVE_PERSON,Operation.READ_STATE,Operation.HEALTH),true,DecisionMode.DEVICE_LOCAL_ACL);
+  adapter.coversCredentials=true;
+  central.materials.put("m1","123".getBytes());
+  service.submit(command("c","d1","s1",CommandType.SET_CREDENTIAL,1,Map.of("kind","CARD","materialRef","m1")));
+  service.submit(command("rc","d1","s1",CommandType.REMOVE_CREDENTIAL,2,Map.of("kind","CARD")));
+  service.processQueues(10);
+  assertTrue(adapter.calls.contains("REMOVE_PERSON"),"retirada pela cascata declarada, nunca NAO_SUPORTADO depois de aceitar o cadastro");
+  assertFalse(String.valueOf(queue.get("rc").orElseThrow().lastReason()).startsWith("NAO_SUPORTADO"));
+ }
 }
