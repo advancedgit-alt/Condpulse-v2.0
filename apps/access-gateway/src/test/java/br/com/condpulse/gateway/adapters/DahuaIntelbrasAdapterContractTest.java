@@ -276,4 +276,29 @@ class DahuaIntelbrasAdapterContractTest {
    assertEquals(2,connections.get(),"watchdog fechou o fluxo parado e a assinatura reconectou");
   } finally { a.shutdown(); server.stop(0); }
  }
+
+ // ----- terceira rodada (#132) -----
+
+ @Test void intelbrasFalhaNaGravacaoOuNaDecisaoNuncaViraErroHttp() {
+  var a=intelbras(null,ConnectionMode.NUVEM);
+  var endpoint=a.inbound().orElseThrow();
+  String one="--myboundary\r\nContent-Type: text/plain\r\n\r\nCode=AccessControl;action=Pulse;index=0;data={\"Door\":0,\"ErrorCode\":96,\"UTC\":1893456000,\"UserID\":\"501\"}\r\n";
+  class Ctx implements InboundEndpoint.Context {
+   final boolean allow,decideFails;
+   Ctx(boolean allow,boolean decideFails) { this.allow=allow; this.decideFails=decideFails; }
+   @Override public Instant now() { return Instant.now(); }
+   @Override public InboundEndpoint.LocalDecision decide(String u,String c) {
+    if(decideFails) throw new IllegalStateException("motor indisponível");
+    return new InboundEndpoint.LocalDecision(allow,List.of("x"),null,null);
+   }
+   @Override public void events(List<EdgeEvent> e) { throw new IllegalStateException("EVENT_OUTBOX_FULL"); }
+   @Override public void heartbeat() {}
+  }
+  var ok=endpoint.handle(new InboundEndpoint.Request("POST","/notification",Map.of(),null,one.getBytes(),"127.0.0.1"),new Ctx(true,false));
+  assertEquals(200,ok.status());
+  assertEquals("true",Json.object(new String(ok.body())).get("auth"),"falha da fila de eventos não muda a decisão");
+  var failed=endpoint.handle(new InboundEndpoint.Request("POST","/notification",Map.of(),null,one.getBytes(),"127.0.0.1"),new Ctx(true,true));
+  assertEquals(200,failed.status());
+  assertEquals("false",Json.object(new String(failed.body())).get("auth"),"falha na decisão: negativa segura");
+ }
 }

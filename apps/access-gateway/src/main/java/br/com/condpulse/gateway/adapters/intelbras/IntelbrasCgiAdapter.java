@@ -290,24 +290,25 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
     case "/keepalive" -> { ctx.heartbeat(); return InboundEndpoint.Response.empty(); }
     case "/notification" -> {
      if(!request.method().equals("POST")) return InboundEndpoint.Response.notFound();
-     ctx.heartbeat();
-     String body=new String(request.body(),StandardCharsets.UTF_8);
-     var parsed=events(body);
-     ctx.events(parsed.events());
      boolean allow=false;
-     String message="Acesso negado";
-     for(var block:KeyValueText.eventBlocks(body,BOUNDARY)) {
-      if(!"AccessControl".equals(block.code()) || block.data()==null) continue;
-      String user=Json.string(block.data(),"UserID");
-      String door=Json.string(block.data(),"Door");
-      if(user==null || !user.matches("[A-Za-z0-9_-]{1,64}")) continue;
-      var decision=ctx.decide(user,door!=null && door.matches("\\d{1,3}")?door:null);
-      allow=decision.allow();
-      if(allow) message="Acesso liberado";
-      break;
-     }
+     String body=new String(request.body(),StandardCharsets.UTF_8);
+     try {
+      ctx.heartbeat();
+      // Decisão primeiro e sem depender de disco; qualquer falha vira negativa segura (nunca erro HTTP, que levaria
+      // o equipamento ao modo offline em que todos os usuários locais são VIP).
+      for(var block:KeyValueText.eventBlocks(body,BOUNDARY)) {
+       if(!"AccessControl".equals(block.code()) || block.data()==null) continue;
+       String user=Json.string(block.data(),"UserID");
+       String door=Json.string(block.data(),"Door");
+       if(user==null || !user.matches("[A-Za-z0-9_-]{1,64}")) continue;
+       allow=ctx.decide(user,door!=null && door.matches("\\d{1,3}")?door:null).allow();
+       break;
+      }
+     } catch(RuntimeException e) { allow=false; }
+     // Gravação dos eventos fora do caminho da decisão: falha não muda nem atrasa a resposta já decidida.
+     try { ctx.events(events(body).events()); } catch(RuntimeException ignored) {}
      var response=new LinkedHashMap<String,Object>();
-     response.put("message",message);
+     response.put("message",allow?"Acesso liberado":"Acesso negado");
      response.put("code","200");
      response.put("auth",allow?"true":"false");
      return InboundEndpoint.Response.json(Json.write(response));
