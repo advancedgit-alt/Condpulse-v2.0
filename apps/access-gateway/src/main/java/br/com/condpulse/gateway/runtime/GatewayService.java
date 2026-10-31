@@ -15,6 +15,7 @@ import br.com.condpulse.gateway.capability.CapabilityRegistry;
 import br.com.condpulse.gateway.capability.CapabilityRegistry.IdentityCheck;
 import br.com.condpulse.gateway.central.CentralApiClient;
 import br.com.condpulse.gateway.central.CentralApiClient.CentralUnavailable;
+import br.com.condpulse.gateway.central.DecisionOutbox;
 import br.com.condpulse.gateway.config.GatewayConfig;
 import br.com.condpulse.gateway.config.GatewayConfig.Device;
 import br.com.condpulse.gateway.decision.LocalDecisionEngine;
@@ -51,13 +52,14 @@ public final class GatewayService {
  private final EventOutbox outbox;
  private final LocalDecisionEngine decisions;
  private final CentralApiClient central;
+ private final DecisionOutbox decisionOutbox;
  private final Clock clock;
  private final Map<String,DeviceStatus> status=new ConcurrentHashMap<>();
 
  public GatewayService(GatewayConfig config,CapabilityRegistry registry,Map<String,AccessProviderAdapter> adapters,LocalCommandQueue queue,
-     OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,CentralApiClient central,Clock clock) {
+     OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,DecisionOutbox decisionOutbox,CentralApiClient central,Clock clock) {
   this.config=config; this.registry=registry; this.adapters=Map.copyOf(adapters); this.queue=queue; this.opens=opens;
-  this.outbox=outbox; this.decisions=decisions; this.central=central; this.clock=clock;
+  this.outbox=outbox; this.decisions=decisions; this.decisionOutbox=decisionOutbox; this.central=central; this.clock=clock;
  }
 
  public Optional<AccessProviderAdapter> adapter(String deviceId) { return Optional.ofNullable(adapters.get(deviceId)); }
@@ -109,15 +111,22 @@ public final class GatewayService {
    queue.mark(command.commandId(),Status.PENDING,null,"DEVICE_IDENTITY_MISMATCH"); return false;
   }
   if(entry.status()==Status.NEEDS_READBACK) {
-   var verdict=verify(adapter,command);
-   if(verdict==OperationState.CONFIRMED) { finish(command,Status.DONE,OperationState.CONFIRMED,"CONFIRMED_BY_READBACK"); return true; }
-   if(verdict==OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO && !command.type().revocation()) {
-    // Sem leitura de volta, aplicação ambígua não é repetida às cegas: fica visível para decisão humana.
-    queue.mark(command.commandId(),Status.NEEDS_READBACK,OperationState.UNKNOWN,"READBACK_NOT_AVAILABLE");
-    return true;
+   switch(verify(adapter,command)) {
+    case MATCH -> { finish(command,Status.DONE,OperationState.CONFIRMED,"CONFIRMED_BY_READBACK"); return true; }
+    case ABSENT -> {} // leitura bem-sucedida mostrou que não chegou: reenvio autorizado
+    case UNAVAILABLE -> {
+     // Leitura indisponível agora não prova nada: mantém a pendência e não reenvia.
+     queue.mark(command.commandId(),Status.NEEDS_READBACK,OperationState.UNKNOWN,"READBACK_UNAVAILABLE");
+     return false;
+    }
+    case UNPROVEN,NOT_SUPPORTED -> {
+     // Retirada é idempotente e restringe: pode ser reenviada. Aplicação ambígua sem prova fica para decisão humana.
+     if(!command.type().revocation()) {
+      queue.mark(command.commandId(),Status.NEEDS_READBACK,OperationState.UNKNOWN,"READBACK_CANNOT_PROVE");
+      return true;
+     }
+    }
    }
-   if(verdict==OperationState.FAILED) return false;
-   // Leitura mostrou que não chegou (ou é revogação idempotente sem leitura): reenvio é seguro.
   }
   String gate=gate(device,adapter,command);
   if(gate!=null) {
@@ -139,8 +148,8 @@ public final class GatewayService {
    case CONFIRMED -> finish(command,Status.DONE,OperationState.CONFIRMED,result.reasonCode());
    case ACK,APPLIED_UNVERIFIED -> {
     var verdict=verify(adapter,command);
-    if(verdict==OperationState.CONFIRMED) finish(command,Status.DONE,OperationState.CONFIRMED,"CONFIRMED_BY_READBACK");
-    else finish(command,Status.DONE,OperationState.APPLIED_UNVERIFIED,result.reasonCode());
+    if(verdict==Verdict.MATCH) finish(command,Status.DONE,OperationState.CONFIRMED,"CONFIRMED_BY_READBACK");
+    else finish(command,Status.DONE,OperationState.APPLIED_UNVERIFIED,verdict==Verdict.ABSENT?"READBACK_MISMATCH":result.reasonCode());
    }
    case PARTIAL -> finish(command,Status.FAILED,OperationState.PARTIAL,result.reasonCode());
    case UNKNOWN -> queue.mark(command.commandId(),Status.NEEDS_READBACK,OperationState.UNKNOWN,result.reasonCode());
@@ -243,36 +252,93 @@ public final class GatewayService {
   return OperationResult.of(OperationState.APPLIED_UNVERIFIED,null);
  }
 
- /** Lê de volta e compara com o desejado. CONFIRMED só com observação positiva de todos os campos necessários. */
- OperationState verify(AccessProviderAdapter adapter,SyncCommand c) {
-  if(!adapter.manifest().supports(Operation.READ_STATE)) return OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO;
+ /**
+  * Resultado da leitura de volta. MATCH: leitura bem-sucedida comprova o desejado. ABSENT: leitura bem-sucedida
+  * mostra que o desejado não está lá (autoriza reenvio). UNAVAILABLE: leitura falhou agora. UNPROVEN: leitura não
+  * tem dado suficiente (ex.: só conta credenciais ou vê presença de face). NOT_SUPPORTED: sem leitura documentada.
+  */
+ enum Verdict { MATCH, ABSENT, UNAVAILABLE, UNPROVEN, NOT_SUPPORTED }
+
+ Verdict verify(AccessProviderAdapter adapter,SyncCommand c) {
+  if(c.type()==CommandType.SET_CREDENTIAL) return verifyCredential(adapter,c);
+  if(!adapter.manifest().supports(Operation.READ_STATE)) return Verdict.NOT_SUPPORTED;
   AppliedState s;
   try { s=adapter.readState(c.subjectRef()); }
-  catch(RuntimeException e) { return OperationState.UNKNOWN; }
-  // Leitura impossível agora (fora do ar, resposta ambígua): não é prova de nada; não reenviar nesta passada.
-  if(s.state()!=OperationState.CONFIRMED) return OperationState.FAILED;
-  boolean ok=switch(c.type()) {
-   case UPSERT_PERSON -> Boolean.TRUE.equals(s.personPresent());
-   case REVOKE_ALL -> Boolean.FALSE.equals(s.personPresent())
-    || (s.rightKeys()!=null && s.rightKeys().isEmpty() && s.credentialCounts()!=null
-        && s.credentialCounts().values().stream().allMatch(n->n==0) && Boolean.FALSE.equals(s.facePresent()));
-   case REVOKE_RIGHTS -> Boolean.FALSE.equals(s.personPresent()) || (s.rightKeys()!=null && s.rightKeys().isEmpty());
+  catch(RuntimeException e) { return Verdict.UNAVAILABLE; }
+  if(s==null || s.state()==OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO) return Verdict.NOT_SUPPORTED;
+  if(s.state()!=OperationState.CONFIRMED) return Verdict.UNAVAILABLE;
+  boolean absentPerson=Boolean.FALSE.equals(s.personPresent());
+  return switch(c.type()) {
+   case UPSERT_PERSON -> s.personPresent()==null?Verdict.UNPROVEN:s.personPresent()?Verdict.MATCH:Verdict.ABSENT;
+   case REVOKE_ALL -> {
+    if(absentPerson) yield Verdict.MATCH;
+    boolean anyLeft=(s.rightKeys()!=null && !s.rightKeys().isEmpty()) || Boolean.TRUE.equals(s.facePresent())
+     || (s.credentialCounts()!=null && s.credentialCounts().values().stream().anyMatch(n->n>0));
+    if(anyLeft) yield Verdict.ABSENT;
+    boolean allObserved=s.rightKeys()!=null && s.credentialCounts()!=null && s.credentialCounts().size()==CredentialKind.values().length
+     && Boolean.FALSE.equals(s.facePresent());
+    yield allObserved?Verdict.MATCH:Verdict.UNPROVEN;
+   }
+   case REVOKE_RIGHTS -> absentPerson?Verdict.MATCH:s.rightKeys()==null?Verdict.UNPROVEN:s.rightKeys().isEmpty()?Verdict.MATCH:Verdict.ABSENT;
    case APPLY_RIGHTS -> {
     var expected=adapter.rightKeys(rights(c));
-    yield expected.isPresent() && s.rightKeys()!=null && s.rightKeys().equals(expected.get());
+    if(expected.isEmpty() || s.rightKeys()==null) yield Verdict.UNPROVEN;
+    yield s.rightKeys().equals(expected.get())?Verdict.MATCH:Verdict.ABSENT;
    }
-   case SET_CREDENTIAL -> s.credentialCounts()!=null && s.credentialCounts().getOrDefault(kind(c),0)>=1;
-   case REMOVE_CREDENTIAL -> Boolean.FALSE.equals(s.personPresent()) || (s.credentialCounts()!=null && s.credentialCounts().containsKey(kind(c)) && s.credentialCounts().get(kind(c))==0);
-   case ENROLL_FACE -> Boolean.TRUE.equals(s.facePresent());
-   case REMOVE_FACE -> Boolean.FALSE.equals(s.personPresent()) || Boolean.FALSE.equals(s.facePresent());
+   case REMOVE_CREDENTIAL -> {
+    if(absentPerson) yield Verdict.MATCH;
+    Integer n=s.credentialCounts()==null?null:s.credentialCounts().get(kind(c));
+    yield n==null?Verdict.UNPROVEN:n==0?Verdict.MATCH:Verdict.ABSENT;
+   }
+   // Presença de face não prova que a foto nova foi aplicada (substituição); só a ausência é observável.
+   case ENROLL_FACE -> Boolean.FALSE.equals(s.facePresent()) || absentPerson?Verdict.ABSENT:Verdict.UNPROVEN;
+   case REMOVE_FACE -> absentPerson || Boolean.FALSE.equals(s.facePresent())?Verdict.MATCH:Boolean.TRUE.equals(s.facePresent())?Verdict.ABSENT:Verdict.UNPROVEN;
+   case SET_CREDENTIAL -> Verdict.UNPROVEN;
   };
-  return ok?OperationState.CONFIRMED:OperationState.UNKNOWN;
  }
 
+ /**
+  * Cartão/PIN/QR só são confirmados comparando o valor aplicado: o material é buscado de novo na plataforma (nunca
+  * guardado) e o adaptador responde se aquele valor está vinculado à pessoa. Contagem de credenciais não prova
+  * substituição.
+  */
+ private Verdict verifyCredential(AccessProviderAdapter adapter,SyncCommand c) {
+  byte[] value;
+  try { value=material(c); } catch(MaterialUnavailable e) { return Verdict.UNAVAILABLE; }
+  try {
+   var present=adapter.credentialPresent(new CredentialSpec(c.subjectRef(),kind(c),new String(value,StandardCharsets.UTF_8)));
+   if(present.isEmpty()) return Verdict.UNPROVEN;
+   return present.get()?Verdict.MATCH:Verdict.ABSENT;
+  } catch(RuntimeException e) {
+   return Verdict.UNAVAILABLE;
+  } finally { Arrays.fill(value,(byte)0); }
+ }
+
+ /** Marca o resultado terminal e tenta publicar; se a plataforma falhar, a publicação fica pendente na fila local. */
  private void finish(SyncCommand c,Status status,OperationState state,String reason) {
   queue.mark(c.commandId(),status,state,reason);
-  try { central.reportSyncResult(new CentralApiClient.SyncResult(c.commandId(),c.deviceId(),state,reason,clock.instant())); }
-  catch(CentralUnavailable e) { LOG.log(System.Logger.Level.INFO,"Resultado guardado na fila local; plataforma indisponível."); }
+  publish(c.commandId());
+ }
+
+ private boolean publish(String commandId) {
+  var e=queue.get(commandId).orElse(null);
+  if(e==null || e.reported()) return true;
+  OperationState state=e.lastState()==null?OperationState.FAILED:e.lastState();
+  try {
+   central.reportSyncResult(new CentralApiClient.SyncResult(commandId,e.command().deviceId(),state,e.lastReason(),clock.instant()));
+   queue.markReported(commandId);
+   return true;
+  } catch(CentralUnavailable ex) {
+   LOG.log(System.Logger.Level.INFO,"Resultado guardado na fila local; publicação pendente.");
+   return false;
+  }
+ }
+
+ /** Reenvia só os relatórios de resultados terminais não publicados; nenhuma operação física é repetida. */
+ public int publishPendingResults() {
+  int done=0;
+  for(var e:queue.unreported()) { if(!publish(e.command().commandId())) break; done++; }
+  return done;
  }
 
  // ----- eventos -----
@@ -306,6 +372,9 @@ public final class GatewayService {
    return done;
   } catch(CentralUnavailable e) { return 0; }
  }
+
+ /** Envia a telemetria de decisões acumulada (ciclo de fundo). */
+ public int forwardDecisions() { return decisionOutbox.flush(central); }
 
  // ----- plataforma -----
 
@@ -362,6 +431,9 @@ public final class GatewayService {
   out.put("queueActive",queue.activeCount());
   out.put("eventsPending",outbox.pendingCount());
   out.put("eventsQuarantined",outbox.quarantinedCount());
+  out.put("resultsUnpublished",queue.unreported().size());
+  out.put("decisionsPending",decisionOutbox.pendingCount());
+  out.put("decisionsDropped",decisionOutbox.dropped());
   var devices=new ArrayList<Object>();
   for(Device d:config.devices()) {
    var m=new LinkedHashMap<String,Object>();
@@ -417,8 +489,8 @@ public final class GatewayService {
    channel.pointId(),channel.bindingRevision(),device.installationRevision(),decision.subjectRef(),
    decision.allow()?CentralApiClient.DecisionResult.ALLOW:CentralApiClient.DecisionResult.DENY,decision.reasonCodes(),now,now.plusSeconds(10),
    decision.allow(),decision.reasonCodes().contains("CLOCK_UNTRUSTED")?"UNTRUSTED":"TRUSTED",millis);
-  try { central.postDecision(d,id); }
-  catch(CentralUnavailable|RuntimeException e) { LOG.log(System.Logger.Level.INFO,"Telemetria de decisão não entregue agora."); }
+  // Só enfileira em memória: rede e disco ficam fora do caminho da resposta ao equipamento.
+  decisionOutbox.offer(d);
  }
 
  // ----- utilitários -----
