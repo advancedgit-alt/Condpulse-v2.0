@@ -55,12 +55,15 @@ public final class GatewayService {
  private final DecisionOutbox decisionOutbox;
  private final Clock clock;
  private final Map<String,DeviceStatus> status=new ConcurrentHashMap<>();
+ /** Eventos recebidos dos equipamentos que não puderam ser gravados na hora; regravados no ciclo de coleta. */
+ private final java.util.concurrent.ConcurrentLinkedQueue<Object[]> inboundBacklog=new java.util.concurrent.ConcurrentLinkedQueue<>();
 
  public GatewayService(GatewayConfig config,CapabilityRegistry registry,Map<String,AccessProviderAdapter> adapters,LocalCommandQueue queue,
      OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,DecisionOutbox decisionOutbox,CentralApiClient central,Clock clock) {
   this.config=config; this.registry=registry; this.adapters=Map.copyOf(adapters); this.queue=queue; this.opens=opens;
   this.outbox=outbox; this.decisions=decisions; this.decisionOutbox=decisionOutbox; this.central=central; this.clock=clock;
   opens.quarantineCheck(id->{ var st=status.get(id); return st!=null && st.quarantined(); });
+  reconcileDecisions();
  }
 
  public Optional<AccessProviderAdapter> adapter(String deviceId) { return Optional.ofNullable(adapters.get(deviceId)); }
@@ -74,20 +77,39 @@ public final class GatewayService {
   var device=config.device(command.deviceId()).orElseThrow(()->new IllegalArgumentException("Equipamento desconhecido."));
   var result=queue.enqueue(command);
   if(result.outcome()!=LocalCommandQueue.EnqueueOutcome.ACCEPTED) return result;
+  applyToDecisions(command,false);
+  return result;
+ }
+
+ /**
+  * Recuperação: refaz a cópia de decisão local a partir dos comandos duráveis da fila, na ordem de chegada, antes de
+  * atender qualquer equipamento. Uma queda entre gravar o comando e atualizar a cópia não deixa revogação sem
+  * efeito; versões menores ou iguais às já registradas são ignoradas pelo motor.
+  */
+ void reconcileDecisions() {
+  for(var e:queue.all()) {
+   var c=e.command();
+   if(config.device(c.deviceId()).isEmpty()) continue;
+   if(e.status()==Status.REJECTED_STALE) continue;
+   applyToDecisions(c,e.status()==Status.SUPERSEDED);
+  }
+ }
+
+ private void applyToDecisions(SyncCommand command,boolean superseded) {
   switch(command.type()) {
-   case REVOKE_ALL,REVOKE_RIGHTS -> decisions.revoke(device.deviceId(),command.subjectRef(),command.desiredVersion());
+   case REVOKE_ALL,REVOKE_RIGHTS -> decisions.revoke(command.deviceId(),command.subjectRef(),command.desiredVersion());
    case APPLY_RIGHTS -> {
+    if(superseded) return;
     var spec=rights(command);
-    decisions.grant(device.deviceId(),command.subjectRef(),command.desiredVersion(),
+    decisions.grant(command.deviceId(),command.subjectRef(),command.desiredVersion(),
      spec.rights().stream().map(r->new String[]{r.channelId(),r.scheduleRef()}).toList(),spec.validFrom(),spec.validUntil());
    }
    case UPSERT_PERSON -> {
     String nativeRef=Json.string(command.payload(),"nativeUserRef");
-    if(nativeRef!=null) decisions.mapNativeUser(device.deviceId(),nativeRef,command.subjectRef());
+    if(nativeRef!=null) decisions.mapNativeUser(command.deviceId(),nativeRef,command.subjectRef());
    }
    default -> {}
   }
-  return result;
  }
 
  /** Uma passada: até {@code perDevice} comandos por equipamento habilitado. */
@@ -213,7 +235,7 @@ public final class GatewayService {
  private OperationResult execute(Device device,AccessProviderAdapter adapter,SyncCommand c) {
   var p=c.payload();
   return switch(c.type()) {
-   case UPSERT_PERSON -> adapter.upsertPerson(new PersonSpec(c.subjectRef(),Json.string(p,"displayName"),instant(p,"validFrom"),instant(p,"validUntil")));
+   case UPSERT_PERSON -> adapter.upsertPerson(person(c));
    case ENROLL_FACE -> {
     byte[] photo=material(c);
     try { yield adapter.enrollFace(new FaceSpec(c.subjectRef(),photo)); } finally { Arrays.fill(photo,(byte)0); }
@@ -270,7 +292,14 @@ public final class GatewayService {
   if(s.state()!=OperationState.CONFIRMED) return Verdict.UNAVAILABLE;
   boolean absentPerson=Boolean.FALSE.equals(s.personPresent());
   return switch(c.type()) {
-   case UPSERT_PERSON -> s.personPresent()==null?Verdict.UNPROVEN:s.personPresent()?Verdict.MATCH:Verdict.ABSENT;
+   case UPSERT_PERSON -> {
+    if(s.personPresent()==null) yield Verdict.UNPROVEN;
+    if(!s.personPresent()) yield Verdict.ABSENT;
+    // Presença não basta: os campos aplicados (nome, validade) precisam bater com o desejado.
+    var expected=adapter.personAttributes(person(c));
+    if(expected.isEmpty() || s.personAttributes()==null) yield Verdict.UNPROVEN;
+    yield s.personAttributes().entrySet().containsAll(expected.get().entrySet())?Verdict.MATCH:Verdict.ABSENT;
+   }
    case REVOKE_ALL -> {
     if(absentPerson) yield Verdict.MATCH;
     boolean anyLeft=(s.rightKeys()!=null && !s.rightKeys().isEmpty()) || Boolean.TRUE.equals(s.facePresent())
@@ -345,7 +374,13 @@ public final class GatewayService {
  // ----- eventos -----
 
  /** Busca uma página de eventos de cada equipamento que suporta backfill; o cursor só avança após gravação local. */
+ @SuppressWarnings("unchecked")
  public void pollEvents() {
+  Object[] pending;
+  while((pending=inboundBacklog.peek())!=null) {
+   try { outbox.add((String)pending[0],(List<EdgeEvent>)pending[1],null); inboundBacklog.poll(); }
+   catch(RuntimeException e) { break; }
+  }
   for(Device d:config.devices()) {
    var adapter=adapters.get(d.deviceId());
    if(!d.enabled() || adapter==null || !adapter.manifest().supports(Operation.FETCH_EVENTS)) continue;
@@ -470,13 +505,24 @@ public final class GatewayService {
    @Override public InboundEndpoint.LocalDecision decide(String nativeUserRef,String nativeChannel) {
     long started=System.nanoTime();
     InboundEndpoint.LocalDecision decision;
-    if(device.decisionMode()!=DecisionMode.EDGE_ONLINE || !registry.allows(device,adapter.manifest(),CapabilityName.onlineDecisionBeforeRelay).allowed())
-     decision=new InboundEndpoint.LocalDecision(false,List.of("CAPABILITY_MISSING"),null,null);
-    else decision=decisions.decide(deviceId,nativeUserRef,nativeChannel);
-    telemetry(device,decision,(System.nanoTime()-started)/1_000_000);
+    try {
+     var st=status.get(deviceId);
+     if(st!=null && st.quarantined()) decision=new InboundEndpoint.LocalDecision(false,List.of("NOT_COMMISSIONED"),null,null);
+     else if(device.decisionMode()!=DecisionMode.EDGE_ONLINE || !registry.allows(device,adapter.manifest(),CapabilityName.onlineDecisionBeforeRelay).allowed())
+      decision=new InboundEndpoint.LocalDecision(false,List.of("CAPABILITY_MISSING"),null,null);
+     else decision=decisions.decide(deviceId,nativeUserRef,nativeChannel);
+    } catch(RuntimeException e) {
+     decision=new InboundEndpoint.LocalDecision(false,List.of("DEPENDENCY_UNAVAILABLE"),null,null);
+    }
+    try { telemetry(device,decision,(System.nanoTime()-started)/1_000_000); } catch(RuntimeException ignored) {}
     return decision;
    }
-   @Override public void events(List<EdgeEvent> events) { if(!events.isEmpty()) outbox.add(deviceId,events,null); }
+   /** Nunca lança nem bloqueia a resposta: falha de gravação deixa os eventos na reserva de memória. */
+   @Override public void events(List<EdgeEvent> events) {
+    if(events.isEmpty()) return;
+    try { outbox.add(deviceId,events,null); }
+    catch(RuntimeException e) { inboundBacklog.add(new Object[]{deviceId,List.copyOf(events)}); }
+   }
    @Override public void heartbeat() {
     status.compute(deviceId,(k,v)->new DeviceStatus(true,null,clock.instant(),clock.instant(),v==null?IdentityCheck.UNVERIFIED:v.identity(),v!=null && v.quarantined()));
    }
@@ -503,6 +549,10 @@ public final class GatewayService {
   String ref=Json.string(c.payload(),"materialRef");
   if(ref==null) throw new IllegalArgumentException("materialRef obrigatório.");
   try { return central.fetchMaterial(ref,c.deviceId()); } catch(CentralUnavailable e) { throw new MaterialUnavailable(); }
+ }
+ private static PersonSpec person(SyncCommand c) {
+  var p=c.payload();
+  return new PersonSpec(c.subjectRef(),Json.string(p,"displayName"),instant(p,"validFrom"),instant(p,"validUntil"));
  }
  private static CredentialKind kind(SyncCommand c) { return CredentialKind.valueOf(Json.string(c.payload(),"kind")); }
  private static Instant instant(Map<String,Object> p,String key) { String v=Json.string(p,key); return v==null?null:Instant.parse(v); }
