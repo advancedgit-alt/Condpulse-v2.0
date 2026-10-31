@@ -88,6 +88,20 @@ AS $$ SELECT g.id,g.area_id,p.id,b.id,b.binding_revision,b.actuator_channel_id,s
 REVOKE ALL ON FUNCTION cp.rights_targets(uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_targets(uuid,uuid) TO cp_api;
 
+-- Horário: o documento ainda não representa janelas semanais nem fuso (o contrato do gateway vem na fatia seguinte).
+-- Só regra de tempo integral (uma janela de 7 dias, 00:00-24:00, sem virada) é publicável; qualquer outra é recusada
+-- (SCHEDULE_NOT_REPRESENTABLE) ao aplicar, nunca publicada como acesso contínuo; retirar continua sempre possível.
+-- Mesmo critério de PolicyEngine.fullTime.
+CREATE FUNCTION cp.policy_full_time(doc jsonb) RETURNS boolean
+LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT coalesce(jsonb_typeof(doc->'weeklyWindows')='array' AND EXISTS(SELECT 1 FROM jsonb_array_elements(doc->'weeklyWindows') w
+   WHERE jsonb_typeof(w->'weekdays')='array' AND (SELECT count(DISTINCT d) FROM jsonb_array_elements_text(w->'weekdays') d)=7
+    AND jsonb_array_length(w->'weekdays')=7 AND w->>'startLocalTime'='00:00' AND w->>'endLocalTime'='24:00'
+    AND coalesce(w->>'crossesMidnight','false')='false'),false) $$;
+REVOKE ALL ON FUNCTION cp.policy_full_time(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.policy_full_time(jsonb) TO cp_api;
+
+
 -- Entradas do documento de um equipamento: alvos dele cujo direito vale na origem (no início da janela, quando futura).
 CREATE FUNCTION cp.rights_entries(target_tenant uuid,target_subject uuid,target_device uuid) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
@@ -190,6 +204,11 @@ BEGIN
   END IF;
   doc:=cp.rights_compiled(NEW.tenant_id,NEW.subject_id,NEW.device_id);
   IF doc IS NULL THEN RAISE EXCEPTION 'sujeito inexistente' USING ERRCODE='23503'; END IF;
+  IF doc->>'action'='APPLY_RIGHTS' AND EXISTS(SELECT 1 FROM jsonb_array_elements(doc->'entries') e JOIN cp.access_grants g ON g.tenant_id=NEW.tenant_id
+    AND g.id=(e->>'grantId')::uuid LEFT JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id
+    WHERE NOT coalesce(cp.policy_full_time(v.document),false)) THEN
+   RAISE EXCEPTION 'SCHEDULE_NOT_REPRESENTABLE: regra com horário que o documento não representa' USING ERRCODE='23514';
+  END IF;
   IF jsonb_array_length(doc->'entries')>512 THEN RAISE EXCEPTION 'documento acima de 512 entradas' USING ERRCODE='23514'; END IF;
   IF last.id IS NULL AND doc->>'action'<>'APPLY_RIGHTS' THEN
    RAISE EXCEPTION 'nada a retirar de destino que nunca recebeu' USING ERRCODE='23514';

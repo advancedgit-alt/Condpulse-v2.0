@@ -28,7 +28,7 @@ public final class PublicationModels {
  public record Summary(Map<String,Integer> byState,int total,int destinations,int confirmedDestinations,boolean allConfirmed) {}
  public record PublicationPage(List<Publication> publications,Summary summary,boolean truncated) {}
  public record PlanRequest(List<UUID> subjectIds) {}
- public record Failure(UUID subjectId,String reason) {}
+ public record Failure(UUID subjectId,UUID deviceId,String reason) {}
  /** Resultado do planejamento: trabalhos criados e sujeitos recusados pelo banco (registrados por item, sem abortar o lote). */
  public record Plan(UUID operationId,int subjects,int created,Map<String,Integer> failedByReason,List<Failure> failedSample) {}
 }

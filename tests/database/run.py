@@ -4358,30 +4358,37 @@ def publication_checks():
     worker = dict(tenant=TA, actor=None, role="cp_worker")
     query(f"INSERT INTO platform.accounts(id,status) VALUES('{RS}','ACTIVE'); INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) "
           f"VALUES('{MRS}','{TA}','{RS}','{UA}','MORADOR PUBLICACAO','RESIDENT','ACTIVE')")
-    doc = ('{"schemaVersion":"1.0","name":"Area","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT","EMPLOYEE"],'
-           '"visitorPolicy":"DENY","reservation":{"mode":"NOT_REQUIRED","entryGraceBeforeSeconds":0,"entryGraceAfterSeconds":0}}' % AR)
-    query(both + f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Area','{MG}'); "
-          f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
-          f"VALUES('{V1}','{TA}','{PO}','1.0','{doc}'::jsonb,'Regra ficticia de publicacao','{MG}')", **as_mgr)
-    h = value(f"select canonical_hash from cp.access_policy_versions where id='{V1}'")
+    days = '["MON","TUE","WED","THU","FRI","SAT","SUN"]'
+    def policy_doc(start, end):
+        return ('{"schemaVersion":"1.0","name":"Area","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT","EMPLOYEE"],'
+                '"visitorPolicy":"DENY","weeklyWindows":[{"weekdays":%s,"startLocalTime":"%s","endLocalTime":"%s","crossesMidnight":false}],'
+                '"reservation":{"mode":"NOT_REQUIRED","entryGraceBeforeSeconds":0,"entryGraceAfterSeconds":0}}' % (AR, days, start, end))
+    query(both + f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Area','{MG}')", **as_mgr)
     rev = value(f"select cp.installation_current_revision('{TA}')")
-    query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
-          f"affected_point_ids,required_capabilities,validated_by) VALUES('{L1}','{TA}','{PO}','{V1}','{h}',{rev},'VALIDATED','[]'::jsonb,"
-          f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
-          f"UPDATE cp.access_policy_versions SET validation_id='{L1}',state='VALIDATED',version=1 WHERE id='{V1}'; "
-          f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'", **as_mgr)
+    def approve(version, validation, document):
+        query(both + f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
+              f"VALUES('{version}','{TA}','{PO}','1.0','{document}'::jsonb,'Regra ficticia de publicacao','{MG}')", **as_mgr)
+        h = value(f"select canonical_hash from cp.access_policy_versions where id='{version}'")
+        query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
+              f"affected_point_ids,required_capabilities,validated_by) VALUES('{validation}','{TA}','{PO}','{version}','{h}',{rev},'VALIDATED','[]'::jsonb,"
+              f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
+              f"UPDATE cp.access_policy_versions SET validation_id='{validation}',state='VALIDATED',version=1 WHERE id='{version}'; "
+              f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{version}'", **as_mgr)
+    V0, L0 = "45500000-0000-4000-8000-000000000000", "45600000-0000-4000-8000-000000000000"
+    approve(V0, L0, policy_doc("06:00", "22:00"))
     query(mm + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{SRS}','{TA}','ACCOUNT','{RS}'); "
           f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,created_by) "
           f"VALUES('{CRS}','{TA}','{SRS}','RESIDENT','MEMBERSHIP','{MRS}','{MG}')", **as_mgr)
-    for i, cf in enumerate((CF2, CF3, CF4)):
+    CF5, G0 = "45300000-0000-4000-8000-000000000005", "45700000-0000-4000-8000-000000000000"
+    for i, cf in enumerate((CF2, CF3, CF4, CF5)):
         query(mm + f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,functional_authorization_ref,approved_by_account_id,"
               f"valid_until,created_by) VALUES('{cf}','{TA}','{SRS}','EMPLOYEE','FUNCTIONAL_AUTHORIZATION','autorizacao-publicacao-{i}','{MG}',"
               f"now()+interval '10 days','{MG}')", **as_mgr)
-    def grant(identifier, epoch=0, functional=None):
+    def grant(identifier, epoch=0, functional=None, version=V1):
         if functional:
             return (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,"
                     f"origin_functional_context_id,origin_version,valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{identifier}',"
-                    f"'{TA}','{SRS}','{functional}','{AR}','{PO}','{V1}','FUNCTIONAL_AUTHORIZATION','{functional}',0,now(),now()+interval '5 days',{epoch},"
+                    f"'{TA}','{SRS}','{functional}','{AR}','{PO}','{version}','FUNCTIONAL_AUTHORIZATION','{functional}',0,now(),now()+interval '5 days',{epoch},"
                     f"ARRAY['FUNCTIONAL_AUTHORIZATION'],'{MG}')")
         ov = value(f"select version from cp.memberships where id='{MRS}'")
         return (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_membership_id,"
@@ -4390,6 +4397,17 @@ def publication_checks():
     def plan(device=DV):
         return (f"INSERT INTO cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) "
                 f"VALUES('{TA}','{OP}','{SRS}','{device}','PLAN','{MG}')")
+    # Horario que o documento nao representa (Codex P1): recusado ao aplicar, nunca publicado como acesso continuo.
+    expect(value(f"select cp.policy_full_time('{policy_doc('06:00','22:00')}'::jsonb)::text||cp.policy_full_time('{policy_doc('00:00','24:00')}'::jsonb)::text")
+           == "falsetrue", "so regra de tempo integral e representavel")
+    query(both + grant(G0, functional=CF5, version=V0), **as_mgr)
+    refused = query(both + plan(), check=False, **as_mgr)
+    expect(refused.returncode != 0 and "23514" in refused.stderr and "SCHEDULE_NOT_REPRESENTABLE" in refused.stderr,
+           "regra com janela semanal nao vira APPLY_RIGHTS continuo")
+    expect(value(f"select count(*) from cp.rights_publications where subject_id='{SRS}'") == "0", "nada publicado para a regra com horario")
+    query(both + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G0}','MANUAL_REVOCATION')",
+          **as_mgr)
+    approve(V1, L1, policy_doc("00:00", "24:00"))
     latest = f"select {{}} from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}' order by desired_version desc limit 1"
     query(both + grant(G1) + "; " + grant(G2, functional=CF2), **as_mgr)
     # Mapa de sentidos comissionado: leitor de entrada virado para TO_FROM e de saida para FROM_TO (Codex P1).

@@ -66,20 +66,24 @@ public class PublicationStore {
  }
 
  /**
-  * Compila o sujeito em todos os destinos: um trabalho por equipamento cujo documento mudou desde o último trabalho do
-  * destino; destino que nunca recebeu nada só entra se houver direito a aplicar. Retorna os trabalhos criados.
+  * Destinos do sujeito cujo documento compilado mudou desde o último trabalho do destino; destino que nunca recebeu nada
+  * só entra se houver direito a aplicar.
   */
- public int planSubject(UUID tenant,UUID operation,UUID subject,UUID actor) {
-  return scan(()->jdbc.update("""
-   insert into cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by)
-   select ?,?,?,d.device,'PLAN',? from (select distinct device from cp.rights_destinations(?,?) device) d
+ public List<UUID> changedDevices(UUID tenant,UUID subject) {
+  return scan(()->jdbc.query("""
+   select d.device from (select distinct device from cp.rights_destinations(?,?) device) d
     cross join lateral (select cp.rights_compiled(?,?,d.device) doc) c
     left join lateral (select r.document_hash from cp.rights_publications r where r.tenant_id=? and r.subject_id=? and r.device_id=d.device
      and r.state<>'SUPERSEDED' order by r.desired_version desc limit 1) l on true
    where c.doc is not null and l.document_hash is distinct from cp.rights_document_hash(c.doc)
     and (l.document_hash is not null or c.doc->>'action'='APPLY_RIGHTS')
    order by d.device
-   """,tenant,operation,subject,actor,tenant,subject,tenant,subject,tenant,subject));
+   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject,tenant,subject));
+ }
+ /** Grava o trabalho de um destino; o banco compila de novo e recusa o que não pode publicar. */
+ public void planDevice(UUID tenant,UUID operation,UUID subject,UUID device,UUID actor) {
+  scan(()->jdbc.update("insert into cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) values(?,?,?,?,'PLAN',?)",
+   tenant,operation,subject,device,actor));
  }
 
  private static final String COLUMNS="""

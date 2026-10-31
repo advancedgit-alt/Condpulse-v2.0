@@ -70,17 +70,28 @@ public class PublicationService {
   int created=0;
   var failures=new ArrayList<PublicationModels.Failure>();
   for(UUID subject:subjects) {
-   try { created+=store.item(()->store.planSubject(tenant,operation,subject,actor)); }
-   catch(DataAccessException error) {
-    String state=SqlStates.of(error);
-    if("42501".equals(state)) throw error;
-    failures.add(new PublicationModels.Failure(subject,"23514".equals(state) || "23503".equals(state)?"DB_REFUSED":"DB_CONFLICT"));
-    if(!"23514".equals(state) && !"23503".equals(state) && !"23505".equals(state)) throw error;
+   List<UUID> devices=store.changedDevices(tenant,subject);
+   // Cada destino num savepoint: a recusa do banco fica registrada por sujeito × destino sem desfazer os demais.
+   for(UUID device:devices) {
+    try { store.item(()->{ store.planDevice(tenant,operation,subject,device,actor); return null; }); created++; }
+    catch(DataAccessException error) {
+     String state=SqlStates.of(error);
+     if(!"23514".equals(state) && !"23503".equals(state) && !"23505".equals(state)) throw error;
+     failures.add(new PublicationModels.Failure(subject,device,reason(error,state)));
+    }
    }
   }
   var byReason=new LinkedHashMap<String,Integer>();
   for(var f:failures) byReason.merge(f.reason(),1,Integer::sum);
   return new PublicationModels.Plan(operation,subjects.size(),created,Map.copyOf(byReason),failures.stream().limit(SAMPLE).toList());
+ }
+
+ /** Motivo da recusa: horário que o documento não representa é distinguido (falha fechada, nunca acesso contínuo). */
+ static String reason(DataAccessException error,String state) {
+  if("23505".equals(state)) return "DB_CONFLICT";
+  Throwable cause=error.getMostSpecificCause();
+  String message=cause==null?null:cause.getMessage();
+  return message!=null && message.contains("SCHEDULE_NOT_REPRESENTABLE")?"SCHEDULE_NOT_REPRESENTABLE":"DB_REFUSED";
  }
 
  /** Item num savepoint da transação corrente (usado pela derivação para registrar recusas por direito). */

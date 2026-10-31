@@ -80,9 +80,13 @@ class AccessGrantJdbcTest {
  @AfterAll static void cleanup() throws Exception { try { if(workerDb!=null) workerDb.close(); } finally { if(db!=null) db.close(); } }
  private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
  private static PolicyModels.PolicyDocument rule(String zone,UUID area) { return rule(zone,area,List.of("RESIDENT"),"DENY","NOT_REQUIRED"); }
+ /** Tempo integral: o documento por destino (V045) ainda não representa janelas semanais. */
  private static PolicyModels.PolicyDocument rule(String zone,UUID area,List<String> contexts,String visitors,String reservation) {
+  return rule(zone,area,contexts,visitors,reservation,"00:00","24:00");
+ }
+ private static PolicyModels.PolicyDocument rule(String zone,UUID area,List<String> contexts,String visitors,String reservation,String start,String end) {
   return new PolicyModels.PolicyDocument("1.0","Academia moradores",area,zone,"ALL",contexts,visitors,null,true,
-   List.of(new PolicyModels.WeeklyWindow(List.of("MON","TUE","WED","THU","FRI","SAT","SUN"),"06:00","22:00",false)),List.of(),"HOLIDAY_OVERRIDES_WEEKLY",
+   List.of(new PolicyModels.WeeklyWindow(List.of("MON","TUE","WED","THU","FRI","SAT","SUN"),start,end,false)),List.of(),"HOLIDAY_OVERRIDES_WEEKLY",
    new PolicyModels.ReservationRule(reservation,600,900),new PolicyModels.CompanionRule("NONE",0),
    new PolicyModels.OfflineRule("SAFE_LOCAL_SUBSET",300,true),new PolicyModels.FailureRule("DENY","DENY"),"OFF",null,true,null,"DENY");
  }
@@ -268,6 +272,24 @@ class AccessGrantJdbcTest {
   assertEquals(1,publications.publications(MANAGER,db.tenantA,AAL2,null,c.subjectId(),null).publications().size(),"Os demais publicados");
   var again=publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of(a.subjectId(),c.subjectId())));
   assertEquals(0,again.created()); assertEquals(Map.of("DB_REFUSED",1),again.failedByReason(),"Plano explícito também registra por item");
+  db.assertEmptyContext();
+ }
+
+ /**
+  * Regra com janela semanal: o documento ainda não representa horário, então a aplicação é recusada por destino
+  * (SCHEDULE_NOT_REPRESENTABLE) e nada vira acesso contínuo; os direitos lógicos continuam gravados.
+  */
+ @Test void restrictedScheduleIsNeverPublishedAsContinuousAccess() throws Exception {
+  var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.5.3");
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  UUID version=approvedPolicy(inst.area(),rule(zone,inst.area(),List.of("RESIDENT"),"DENY","NOT_REQUIRED","06:00","22:00"));
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
+  assertEquals(2,derived.created(),derived.toString());
+  assertEquals(0,derived.publication().created());
+  assertEquals(Map.of("SCHEDULE_NOT_REPRESENTABLE",2),derived.publication().failedByReason());
+  assertEquals(inst.device(),derived.publication().failedSample().getFirst().deviceId());
+  assertEquals(0,publications.publications(MANAGER,db.tenantA,AAL2,null,null,null).summary().total(),"Nenhum APPLY_RIGHTS contínuo");
   db.assertEmptyContext();
  }
 

@@ -32815,8 +32815,14 @@
                   "type": "string",
                   "enum": [
                     "DB_REFUSED",
-                    "DB_CONFLICT"
-                  ]
+                    "DB_CONFLICT",
+                    "SCHEDULE_NOT_REPRESENTABLE"
+                  ],
+                  "description": "SCHEDULE_NOT_REPRESENTABLE: regra com janela semanal que o documento ainda não representa; nada é publicado como acesso contínuo."
+                },
+                "deviceId": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
