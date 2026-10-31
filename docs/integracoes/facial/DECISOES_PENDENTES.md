@@ -36,6 +36,7 @@ aplicado em banco, Fly ou Vercel; a aplicação fica com o executor protegido.
 | P9 | Quem materializa sujeitos | Gestão para contas com vínculo físico (morador, responsável, dependente, proprietário, portaria); portaria para visitantes de convites vigentes (a gestão não lê convites). `MANAGER` e `SUPPORT` não geram contexto físico | `POST .../management/access-subjects/materialize` e `.../concierge/access-subjects/materialize` |
 | P10 | Revogação de contexto | Vale até reautorização explícita da gestão (`/subject-contexts/{id}/reauthorize`); a materialização nunca a desfaz. Contexto de convite revogado não volta: novo convite é nova origem | V038 (gatilho e `reauthorizes_context_id`) |
 | P11 | Validade da evidência de idade | 365 dias (1 a 3660), parâmetro do condomínio | `cp.facial_access_settings.age_evidence_validity_days` |
+| P12 | Aprovador da homologação | Não se exige aprovador distinto de quem criou o dossiê (há um único MASTER, D3); a trilha guarda quem pediu e quem decidiu. Catálogo semeado com os 27 modelos do pacote como candidatos documentados (SKU, revisão e região UNKNOWN até o G0) | V040 |
 | P7 | Gestor (MANAGER) | sem herança de escopo técnico; capacidades de regra (`area.manage`, `policy.edit`, `policy.publish`, `person.review`) entram nas fatias que as usam (V041/V043) | `StaffCapability` |
 
 ## Perguntas ainda abertas

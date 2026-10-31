@@ -15577,6 +15577,480 @@
           }
         }
       }
+    },
+    "/v1/platform/access-models": {
+      "get": {
+        "operationId": "platformListAccessModels",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Catálogo técnico global (access_catalog.manage, AAL2): perfis documentais com fontes oficiais, capacidades e limites declarados. Catálogo não é homologação.",
+        "parameters": [
+          {
+            "name": "manufacturer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CONTROL_ID",
+                "HIKVISION",
+                "DAHUA",
+                "INTELBRAS"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessModelProfilePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "ACCESS_MODEL_NOT_FOUND ou HOMOLOGATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_MODEL_FILTER_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/platform/access-models/{modelId}": {
+      "get": {
+        "operationId": "platformGetAccessModel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Perfil documental do catálogo.",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessModelProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "ACCESS_MODEL_NOT_FOUND ou HOMOLOGATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/access-homologations": {
+      "get": {
+        "operationId": "platformListAccessHomologations",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Homologações por combinação (até 500 mais recentes).",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHomologationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "ACCESS_MODEL_NOT_FOUND ou HOMOLOGATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "platformCreateAccessHomologation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cria o dossiê candidato da combinação exata (perfil + firmware exato + adaptador + modo + topologia LOCAL_GATEWAY/CLOUD_SERVICE). Não aprova nem habilita atuação; a aprovação nunca vem do cliente. Mesma combinação gera nova revisão. homologationId do cliente: o mesmo dossiê inteiro é repetição (200, applied=false).",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessHomologation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHomologationCreated"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHomologationCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "ACCESS_MODEL_NOT_FOUND ou HOMOLOGATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "HOMOLOGATION_ID_REQUIRED, ACCESS_MODEL_REQUIRED, HOMOLOGATION_FIRMWARE_INVALID, HOMOLOGATION_ADAPTER_INVALID, HOMOLOGATION_CONTRACT_INVALID, HOMOLOGATION_MODE_INVALID, HOMOLOGATION_TOPOLOGY_INVALID, HOMOLOGATION_CAPABILITIES_INVALID, HOMOLOGATION_LIMITS_INVALID, HOMOLOGATION_EVIDENCE_INVALID, HOMOLOGATION_LIMITATIONS_INVALID ou AUDIT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "HOMOLOGATION_ID_CONFLICT"
+          }
+        }
+      }
+    },
+    "/v1/platform/access-homologations/{homologationId}": {
+      "get": {
+        "operationId": "platformGetAccessHomologation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Homologação com a trilha de decisões.",
+        "parameters": [
+          {
+            "name": "homologationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHomologationDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "ACCESS_MODEL_NOT_FOUND ou HOMOLOGATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/access-homologations/{homologationId}/decisions": {
+      "post": {
+        "operationId": "platformDecideAccessHomologation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Decisão do MASTER (homologation.approve, AAL2) pela versão lida: START_TRIAL, APPROVE_LAB, APPROVE_PILOT, APPROVE_PRODUCTION, REJECT ou SUSPEND, na ordem candidato → ensaio → bancada → piloto → homologado. Aprovação exige evidência e só aprova capacidade observada no dossiê; conteúdo técnico nunca muda (nova revisão). decisionId do cliente: a mesma decisão inteira é repetição.",
+        "parameters": [
+          {
+            "name": "homologationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideAccessHomologation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHomologationDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "ACCESS_MODEL_NOT_FOUND ou HOMOLOGATION_NOT_FOUND"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "HOMOLOGATION_DECISION_ID_REQUIRED, HOMOLOGATION_DECISION_INVALID, HOMOLOGATION_VERSION_REQUIRED, HOMOLOGATION_EVIDENCE_REQUIRED, HOMOLOGATION_EVIDENCE_INVALID, HOMOLOGATION_CAPABILITIES_INVALID, HOMOLOGATION_REVIEW_INVALID, HOMOLOGATION_RESTRICTIONS_INVALID ou AUDIT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "HOMOLOGATION_STALE ou HOMOLOGATION_DECISION_ID_CONFLICT"
+          },
+          "422": {
+            "description": "HOMOLOGATION_TRANSITION_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-homologations": {
+      "get": {
+        "operationId": "managementListAccessHomologations",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Gestão (memberships.manage, AAL2) consulta o estado das combinações técnicas; não vê a trilha de decisões nem altera nada.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessHomologationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), HOMOLOGATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "HOMOLOGATION_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -25040,6 +25514,753 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "AccessModelProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "catalogCode",
+          "manufacturer",
+          "sku",
+          "hardwareRevision",
+          "region",
+          "category",
+          "sourceCategory",
+          "lifecycle",
+          "status",
+          "revision",
+          "sources",
+          "declaredCapabilities",
+          "declaredLimits",
+          "notes",
+          "consultedOn",
+          "documentHash"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "catalogCode": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string",
+            "enum": [
+              "CONTROL_ID",
+              "HIKVISION",
+              "DAHUA",
+              "INTELBRAS"
+            ]
+          },
+          "sku": {
+            "type": "string"
+          },
+          "hardwareRevision": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "FACE_TERMINAL",
+              "ACCESS_CONTROLLER",
+              "READER",
+              "EXPANSION_MODULE"
+            ]
+          },
+          "sourceCategory": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "DOCUMENTED_CANDIDATE",
+              "CURRENT_DECLARED",
+              "DISCONTINUED_DECLARED",
+              "SUPPORT_UNKNOWN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CANDIDATE",
+              "ACTIVE",
+              "RETIRED"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "declaredCapabilities": {
+            "type": "object"
+          },
+          "declaredLimits": {
+            "type": "object"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "consultedOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "documentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "AccessModelProfilePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "profiles"
+        ],
+        "properties": {
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessModelProfile"
+            }
+          }
+        }
+      },
+      "CapabilityObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "documented",
+          "observed"
+        ],
+        "properties": {
+          "documented": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "description": "null significa desconhecido. Aprovação não é campo do dossiê: só a decisão do MASTER aprova."
+      },
+      "CreateAccessHomologation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "homologationId",
+          "modelProfileId",
+          "firmwareVersion",
+          "adapterName",
+          "adapterVersion",
+          "apiContractVersion",
+          "operatingMode",
+          "topology",
+          "capabilities",
+          "limits",
+          "evidenceRefs",
+          "limitations",
+          "reason"
+        ],
+        "properties": {
+          "homologationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "modelProfileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firmwareVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._+()-]{1,128}$"
+          },
+          "adapterName": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+          },
+          "adapterVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._+-]{1,64}$"
+          },
+          "apiContractVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,32}$"
+          },
+          "operatingMode": {
+            "type": "string",
+            "enum": [
+              "DEVICE_LOCAL_ACL",
+              "EDGE_ONLINE",
+              "PROVIDER_LOCAL",
+              "ASSISTED"
+            ]
+          },
+          "topology": {
+            "type": "string",
+            "enum": [
+              "LOCAL_GATEWAY",
+              "CLOUD_SERVICE"
+            ]
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "doorContactEvents",
+              "eventBackfill",
+              "faceDeletion",
+              "faceEnrollment",
+              "localValidity",
+              "offlineRestriction",
+              "onlineDecisionBeforeRelay",
+              "passageEvents",
+              "perDoorRights",
+              "safeRecovery",
+              "scopedRemoteOpen",
+              "secureTransport"
+            ],
+            "properties": {
+              "doorContactEvents": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "eventBackfill": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "faceDeletion": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "faceEnrollment": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "localValidity": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "offlineRestriction": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "onlineDecisionBeforeRelay": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "passageEvents": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "perDoorRights": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "safeRecovery": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "scopedRemoteOpen": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              },
+              "secureTransport": {
+                "$ref": "#/components/schemas/CapabilityObservation"
+              }
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cards",
+              "concurrentSessions",
+              "eventsStored",
+              "faces",
+              "groups",
+              "imagesPerPerson",
+              "maximumImageBytes",
+              "plans",
+              "timeWindows",
+              "users"
+            ],
+            "properties": {
+              "cards": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "concurrentSessions": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "eventsStored": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "faces": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "groups": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "imagesPerPerson": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "maximumImageBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "plans": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "timeWindows": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "users": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "maxItems": 300,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 1000
+          }
+        }
+      },
+      "DecideAccessHomologation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decisionId",
+          "decision",
+          "reason",
+          "evidenceRefs",
+          "approvedCapabilityNames",
+          "reviewDueAt",
+          "restrictions",
+          "expectedVersion"
+        ],
+        "properties": {
+          "decisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "START_TRIAL",
+              "APPROVE_LAB",
+              "APPROVE_PILOT",
+              "APPROVE_PRODUCTION",
+              "REJECT",
+              "SUSPEND"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 1000
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "maxItems": 300,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "approvedCapabilityNames": {
+            "type": "array",
+            "maxItems": 12,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "doorContactEvents",
+                "eventBackfill",
+                "faceDeletion",
+                "faceEnrollment",
+                "localValidity",
+                "offlineRestriction",
+                "onlineDecisionBeforeRelay",
+                "passageEvents",
+                "perDoorRights",
+                "safeRecovery",
+                "scopedRemoteOpen",
+                "secureTransport"
+              ]
+            }
+          },
+          "reviewDueAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "restrictions": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessHomologation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision",
+          "modelProfileId",
+          "firmwareVersion",
+          "adapterName",
+          "adapterVersion",
+          "apiContractVersion",
+          "operatingMode",
+          "topology",
+          "capabilities",
+          "limits",
+          "limitations",
+          "evidenceRefs",
+          "evidenceHash",
+          "status",
+          "approvedCapabilities",
+          "restrictions",
+          "approvedAt",
+          "reviewDueAt",
+          "current",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "modelProfileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firmwareVersion": {
+            "type": "string"
+          },
+          "adapterName": {
+            "type": "string"
+          },
+          "adapterVersion": {
+            "type": "string"
+          },
+          "apiContractVersion": {
+            "type": "string"
+          },
+          "operatingMode": {
+            "type": "string",
+            "enum": [
+              "DEVICE_LOCAL_ACL",
+              "EDGE_ONLINE",
+              "PROVIDER_LOCAL",
+              "ASSISTED"
+            ]
+          },
+          "topology": {
+            "type": "string",
+            "enum": [
+              "LOCAL_GATEWAY",
+              "CLOUD_SERVICE"
+            ]
+          },
+          "capabilities": {
+            "type": "object"
+          },
+          "limits": {
+            "type": "object"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "evidenceHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CANDIDATO_DOCUMENTADO",
+              "EM_ENSAIO",
+              "APROVADO_BANCADA",
+              "APROVADO_PILOTO",
+              "HOMOLOGADO",
+              "REPROVADO",
+              "SUSPENSO",
+              "EXPIRADO"
+            ]
+          },
+          "approvedCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "doorContactEvents",
+                "eventBackfill",
+                "faceDeletion",
+                "faceEnrollment",
+                "localValidity",
+                "offlineRestriction",
+                "onlineDecisionBeforeRelay",
+                "passageEvents",
+                "perDoorRights",
+                "safeRecovery",
+                "scopedRemoteOpen",
+                "secureTransport"
+              ]
+            }
+          },
+          "restrictions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "approvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reviewDueAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "Aprovado (bancada, piloto ou produção) e revisão não vencida; calculado pelo banco, sem job."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessHomologationDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decisionId",
+          "decision",
+          "fromStatus",
+          "toStatus",
+          "reason",
+          "evidenceRefs",
+          "approvedCapabilities",
+          "decidedBy",
+          "decidedAt"
+        ],
+        "properties": {
+          "decisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "fromStatus": {
+            "type": "string",
+            "enum": [
+              "CANDIDATO_DOCUMENTADO",
+              "EM_ENSAIO",
+              "APROVADO_BANCADA",
+              "APROVADO_PILOTO",
+              "HOMOLOGADO",
+              "REPROVADO",
+              "SUSPENSO",
+              "EXPIRADO"
+            ]
+          },
+          "toStatus": {
+            "type": "string",
+            "enum": [
+              "CANDIDATO_DOCUMENTADO",
+              "EM_ENSAIO",
+              "APROVADO_BANCADA",
+              "APROVADO_PILOTO",
+              "HOMOLOGADO",
+              "REPROVADO",
+              "SUSPENSO",
+              "EXPIRADO"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "approvedCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "decidedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AccessHomologationDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "homologation",
+          "decisions"
+        ],
+        "properties": {
+          "homologation": {
+            "$ref": "#/components/schemas/AccessHomologation"
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessHomologationDecision"
+            }
+          }
+        }
+      },
+      "AccessHomologationPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "homologations"
+        ],
+        "properties": {
+          "homologations": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/AccessHomologation"
+            }
+          }
+        }
+      },
+      "AccessHomologationCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "homologation",
+          "applied"
+        ],
+        "properties": {
+          "homologation": {
+            "$ref": "#/components/schemas/AccessHomologation"
+          },
+          "applied": {
+            "type": "boolean"
           }
         }
       }
