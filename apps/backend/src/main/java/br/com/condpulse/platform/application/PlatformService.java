@@ -46,7 +46,7 @@ public class PlatformService {
  public PlatformModels.PlatformSession session(UUID actor,AssuranceLevel assurance) {
   return execute(actor,assurance,context->new PlatformModels.PlatformSession(actor,context.role(),
    context.effectiveCapabilities().stream().filter(capability->billingEnabled || !capability.key().startsWith("billing."))
-    .filter(capability->facialAccessEnabled || !capability.key().startsWith("technical_grants."))
+    .filter(capability->facialAccessEnabled || !capability.facialAccess())
     .map(PlatformCapability::key).sorted().toList(),
    assurance!=AssuranceLevel.AAL2));
  }

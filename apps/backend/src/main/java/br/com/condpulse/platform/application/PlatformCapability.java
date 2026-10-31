@@ -17,7 +17,14 @@ public enum PlatformCapability {
  /** Fila de tarefas (CP-034): estado e erro saneado de todos os condomínios, sem conteúdo; devolve FAILED/SKIPPED à fila. */
  OPERATE_OUTBOX("outbox.operate"),
  /** Acesso facial (AC-003, V037): emite e revoga o MASTER de implantação por condomínio; não dá uso físico de áreas. */
- MANAGE_TECHNICAL_GRANTS("technical_grants.manage");
+ MANAGE_TECHNICAL_GRANTS("technical_grants.manage"),
+ /** Acesso facial (AC-019, V040): cria dossiê de homologação da combinação técnica e consulta o catálogo. */
+ MANAGE_ACCESS_CATALOG("access_catalog.manage"),
+ /** Acesso facial (AC-019, V040): decide ensaio, bancada, piloto, produção, reprovação e suspensão. */
+ APPROVE_HOMOLOGATION("homologation.approve");
+
+ /** Capacidades que só aparecem na sessão do painel com CP_FACIAL_ACCESS_ENABLED ligada. */
+ public boolean facialAccess() { return this==MANAGE_TECHNICAL_GRANTS || this==MANAGE_ACCESS_CATALOG || this==APPROVE_HOMOLOGATION; }
 
  private final String key;
  PlatformCapability(String key) { this.key=key; }

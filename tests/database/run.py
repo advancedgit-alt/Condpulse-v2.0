@@ -3595,6 +3595,91 @@ def age_checks():
           f"DELETE FROM cp.facial_access_settings WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_subjects WHERE id in ('{S1}','{S2}'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{CO}','{RS}'); DELETE FROM platform.accounts WHERE id in ('{MG}','{CO}','{RS}')")
 
+def homologation_checks():
+    """V040 (AC-019, dados): catalogo global documental e homologacao por combinacao. Casos HAC-001 (combinacao exata),
+    HAC-002 (declarado x observado x aprovado), HAC-092 (sem heranca entre marcas) e HAC-096 (nova revisao, sem promocao)."""
+    PL, MG = "10000000-0000-4000-8000-0000000040a1", "10000000-0000-4000-8000-0000000040a2"
+    H1, H2, H3 = "40000000-0000-4000-8000-000000000001", "40000000-0000-4000-8000-000000000002", "40000000-0000-4000-8000-000000000003"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{PL}','ACTIVE'),('{MG}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{TA}','{MG}',NULL,'GESTAO CATALOGO','MANAGER','ACTIVE');
+    """)
+    plat = "SET LOCAL app.platform_capabilities='access_catalog.manage,homologation.approve'; "
+    names = ["doorContactEvents","eventBackfill","faceDeletion","faceEnrollment","localValidity","offlineRestriction",
+             "onlineDecisionBeforeRelay","passageEvents","perDoorRights","safeRecovery","scopedRemoteOpen","secureTransport"]
+    def caps(observed=(), approved=False, drop=None):
+        body = ",".join(f'"{n}":{{"documented":true,"observed":{"true" if n in observed else "null"},"approved":{"true" if approved else "null"}}}'
+                        for n in names if n != drop)
+        return "'{" + body + "}'::jsonb"
+    profile = value(f"select id from platform.access_model_profiles where catalog_code='CI-M01'")
+    other = value(f"select id from platform.access_model_profiles where catalog_code='HK-M01'") if value(
+        "select count(*) from platform.access_model_profiles where catalog_code='HK-M01'") == "1" else value(
+        "select id from platform.access_model_profiles where manufacturer='HIKVISION' order by catalog_code limit 1")
+    def create(identifier, prof=profile, firmware="1.2.3", topology="LOCAL_GATEWAY", c=None, audit=True):
+        a = (f"INSERT INTO platform.platform_audit_log(actor_id,action,reason,details) VALUES('{PL}','HOMOLOGATION_CREATED','Dossie ficticio',"
+             f"'{{\"homologationId\":\"{identifier}\"}}'); ") if audit else ""
+        return (plat + a + "INSERT INTO platform.access_homologations(id,model_profile_id,firmware_exact,adapter_name,adapter_version,decision_mode,"
+                f"topology,contract_schema_version,capabilities,limits,evidence_refs,reason,requested_by) VALUES('{identifier}','{prof}','{firmware}',"
+                f"'control-id-rest','0.1.0','EDGE_ONLINE','{topology}','v1',{c or caps(observed=('faceEnrollment',))},'{{}}'::jsonb,"
+                f"ARRAY['41000000-0000-4000-8000-000000000001']::uuid[],'Dossie de ensaio ficticio','{PL}')")
+    def decide(identifier, decision, extra_cols="", extra_vals="", evidence="ARRAY['41000000-0000-4000-8000-000000000002']::uuid[]", audit=True):
+        a = (f"INSERT INTO platform.platform_audit_log(actor_id,action,reason,details) VALUES('{PL}','HOMOLOGATION_{decision}','Decisao ficticia',"
+             f"'{{\"homologationId\":\"{identifier}\"}}'); ") if audit else ""
+        return (plat + a + f"INSERT INTO platform.access_homologation_decisions(homologation_id,decision,reason,evidence_refs,decided_by{extra_cols}) "
+                f"VALUES('{identifier}','{decision}','Decisao de ensaio ficticia',{evidence},'{PL}'{extra_vals}); "
+                f"UPDATE platform.access_homologations SET status=platform.homologation_next(status,'{decision}'),version=version+1 WHERE id='{identifier}'")
+    expect(value("select count(*) from platform.access_model_profiles where status='CANDIDATE' and market_lifecycle='DOCUMENTED_CANDIDATE'") == "27",
+           "HAC-002: catalogo semeado so como candidato documentado")
+    expect(value("SET LOCAL app.capabilities='memberships.manage'; select count(*) from platform.access_model_profiles", tenant=TA, actor=MG, role="cp_api") == "27",
+           "gestao consulta o catalogo")
+    expect(value("select count(*) from platform.access_model_profiles", tenant=TA, actor=AA, role="cp_api") == "0", "morador nao consulta o catalogo")
+    expect(value("select count(*) from platform.access_model_profiles", role="cp_worker", actor=None) == "27", "worker le o catalogo tecnico")
+    expect(error(plat + f"UPDATE platform.access_model_profiles SET notes='x' WHERE id='{profile}'", "42501", actor=PL, role="cp_api"),
+           "perfil do catalogo nao muda pela aplicacao")
+    expect(error(create(H1, audit=False), "23514", actor=PL, role="cp_api"), "dossie sem trilha da plataforma nao conclui")
+    expect(error(create(H1, c=caps(approved=True)), "23514", actor=PL, role="cp_api"), "HAC-002: aprovado nunca vem do cliente")
+    expect(error(create(H1, c=caps(drop='safeRecovery')), "23514", actor=PL, role="cp_api"), "capacidades exigem as 12 chaves")
+    expect(error(create(H1, firmware="1.*"), "23514", actor=PL, role="cp_api"), "HAC-001: firmware sem curinga")
+    expect(error(create(H1, topology="ANY"), "23514", actor=PL, role="cp_api"), "topologia so LOCAL_GATEWAY ou CLOUD_SERVICE")
+    expect(error("SET LOCAL app.capabilities='memberships.manage'; " + create(H1).replace(plat, ""), "42501", tenant=TA, actor=MG, role="cp_api"),
+           "gestao nao cria dossie")
+    query(create(H1), actor=PL, role="cp_api")
+    query(create(H2), actor=PL, role="cp_api")
+    query(create(H3, prof=other, topology="CLOUD_SERVICE"), actor=PL, role="cp_api")
+    expect(value(f"select string_agg(homologation_revision::text,',' order by homologation_revision) from platform.access_homologations where id in ('{H1}','{H2}')") == "1,2",
+           "HAC-096: mesma combinacao gera nova revisao")
+    expect(value(f"select status||':'||version||':'||length(evidence_hash) from platform.access_homologations where id='{H1}'") == "CANDIDATO_DOCUMENTADO:0:64",
+           "dossie nasce candidato com hash de evidencias do banco")
+    expect(error(plat + f"UPDATE platform.access_homologations SET status='HOMOLOGADO',version=1 WHERE id='{H1}'", "23514", actor=PL, role="cp_api"),
+           "estado so muda por decisao registrada")
+    expect(error(decide(H1, "APPROVE_LAB"), "23514", actor=PL, role="cp_api"), "aprovar bancada exige ensaio iniciado")
+    query(decide(H1, "START_TRIAL", evidence="'{}'::uuid[]"), actor=PL, role="cp_api")
+    expect(error(decide(H1, "APPROVE_LAB", evidence="'{}'::uuid[]"), "23514", actor=PL, role="cp_api"), "aprovacao exige evidencia")
+    expect(error(decide(H1, "APPROVE_LAB", ",approved_capabilities", ",ARRAY['perDoorRights']"), "23514", actor=PL, role="cp_api"),
+           "HAC-002: so capacidade observada pode ser aprovada")
+    expect(error(decide(H1, "APPROVE_LAB", audit=False), "23514", actor=PL, role="cp_api"), "decisao sem trilha nao conclui")
+    query(decide(H1, "APPROVE_LAB", ",approved_capabilities", ",ARRAY['faceEnrollment']"), actor=PL, role="cp_api")
+    expect(value(f"select status||':'||array_to_string(approved_capabilities,',')||':'||(approved_by='{PL}') from platform.access_homologations where id='{H1}'")
+           == "APROVADO_BANCADA:faceEnrollment:true", "aprovacao de bancada grava capacidades e autoria pelo banco")
+    expect(value(f"select status from platform.access_homologations where id='{H3}'") == "CANDIDATO_DOCUMENTADO",
+           "HAC-092: aprovacao de uma marca nao se estende a outra")
+    expect(error(decide(H1, "APPROVE_PRODUCTION"), "23514", actor=PL, role="cp_api"), "producao exige piloto aprovado antes")
+    query(decide(H1, "SUSPEND", evidence="'{}'::uuid[]"), actor=PL, role="cp_api")
+    expect(error(decide(H1, "APPROVE_PILOT"), "23514", actor=PL, role="cp_api"), "suspenso nao volta sem nova revisao")
+    expect(error(plat + f"UPDATE platform.access_homologation_decisions SET reason='Outra decisao' WHERE homologation_id='{H1}'", "42501", actor=PL, role="cp_api"),
+           "decisao nao muda")
+    expect(error(plat + f"DELETE FROM platform.access_homologations WHERE id='{H2}'", "42501", actor=PL, role="cp_api"), "homologacao nao e apagada")
+    expect(error(plat + f"UPDATE platform.access_homologations SET firmware_exact='9.9',version=version+1 WHERE id='{H2}'", "42501", actor=PL, role="cp_api"),
+           "conteudo tecnico nao muda")
+    expect(value("SET LOCAL app.capabilities='memberships.manage'; select count(*) from platform.access_homologation_decisions", tenant=TA, actor=MG, role="cp_api") == "0",
+           "gestao ve o estado, nao a trilha de decisoes")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='platform' "
+                 "and c.relname in ('access_model_profiles','access_homologations','access_homologation_decisions') and c.relrowsecurity and c.relforcerowsecurity") == "3",
+           "catalogo e homologacoes com RLS FORCE")
+    query(f"SET session_replication_role=replica; DELETE FROM platform.access_homologation_decisions WHERE homologation_id in ('{H1}','{H2}','{H3}'); "
+          f"DELETE FROM platform.access_homologations WHERE id in ('{H1}','{H2}','{H3}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{PL}'; "
+          f"DELETE FROM cp.memberships WHERE account_id='{MG}'; DELETE FROM platform.accounts WHERE id in ('{PL}','{MG}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -3722,6 +3807,7 @@ def main():
     technical_grant_checks()
     subject_checks()
     age_checks()
+    homologation_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

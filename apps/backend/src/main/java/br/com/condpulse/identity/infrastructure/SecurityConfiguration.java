@@ -141,6 +141,10 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/access-subjects/*/age-check").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/facial-settings").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-subjects/*/age-evidence","/v1/tenants/*/management/age-evidence/*/revoke").authenticated()
+    // Catálogo e homologação (AC-019, V040): plataforma (access_catalog.manage/homologation.approve, AAL2); gestão consulta.
+    .requestMatchers(HttpMethod.GET,"/v1/platform/access-models","/v1/platform/access-models/*","/v1/platform/access-homologations",
+      "/v1/platform/access-homologations/*","/v1/tenants/*/management/access-homologations").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/platform/access-homologations","/v1/platform/access-homologations/*/decisions").authenticated()
     // Proprietário × inquilino (V034): gestão (AAL2) ou vínculo OWNER com locação em vigor, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/rentals","/v1/tenants/*/units/*/rental").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/units/*/rental","/v1/tenants/*/management/units/*/rental/end",
