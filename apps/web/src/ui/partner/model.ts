@@ -92,6 +92,15 @@ export function logFilter(draft: LogFilterDraft): SecurityLogFilter | string {
   return { ...(type ? { type } : {}), ...(draft.severity ? { severity: draft.severity } : {}) };
 }
 
+/**
+ * Pedido de consulta do log: cada envio do formulário é uma consulta nova (contador na chave), mesmo com os mesmos
+ * filtros; a chave do React Query igual não reaproveita a página antiga em silêncio. Começa sempre da primeira página.
+ */
+export interface LogRequest { filter: SecurityLogFilter; run: number }
+export const logRequest = (current: LogRequest | null, filter: SecurityLogFilter): LogRequest => ({ filter, run: (current?.run ?? 0) + 1 });
+export const logRequestKey = (accountId: string, tenantId: string, request: LogRequest | null) =>
+  securityLogKey(accountId, tenantId, 'page', request?.filter ?? null, request?.run ?? 0);
+
 export interface ExportDraft { reason: string; fromSeq: string; toSeq: string }
 export function exportBody(draft: ExportDraft): { reason: string; fromSeq?: number; toSeq?: number } | string {
   const reason = displayText(draft.reason, 500);

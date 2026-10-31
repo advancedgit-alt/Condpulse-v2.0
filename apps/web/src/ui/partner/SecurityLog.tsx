@@ -4,7 +4,7 @@ import { securityLog, securitySeverities, type SecurityLogExport, type SecurityL
 import { Empty, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import { FailureState, usePartnerAccessGuard, usePartnerScope } from './PartnerPage';
-import { exportBody, exportFileName, integrityProblems, logFilter, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft } from './model';
+import { exportBody, exportFileName, integrityProblems, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
 
 const OFF_TEXT = 'O Log de Segurança está desligado no servidor deste ambiente (CP_SECURITY_LOG_ENABLED). Quando for ligado, esta seção passa a funcionar sem mudança na tela.';
 const severityTone: Record<SecuritySeverity, string> = { INFO: 'status-neutral', ATTENTION: 'status-pending', CRITICAL: 'status-overdue' };
@@ -32,10 +32,11 @@ export function SecurityLogSection() {
 function TenantLog({ tenantId, tenantName, timeZone, canExport }: { tenantId: string; tenantName: string; timeZone: string; canExport: boolean }) {
   const { accountId } = usePartnerScope();
   const [draft, setDraft] = useState<LogFilterDraft>({ type: '', severity: '' });
-  const [filter, setFilter] = useState<SecurityLogFilter | null>(null);
+  const [request, setRequest] = useState<LogRequest | null>(null);
+  const filter: SecurityLogFilter | null = request?.filter ?? null;
   const [problem, setProblem] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const pages = useInfiniteQuery({ queryKey: securityLogKey(accountId, tenantId, 'page', filter), enabled: filter !== null, initialPageParam: undefined as number | undefined,
+  const pages = useInfiniteQuery({ queryKey: logRequestKey(accountId, tenantId, request), enabled: request !== null, initialPageParam: undefined as number | undefined,
     queryFn: ({ signal, pageParam }) => securityLog.page(tenantId, { ...filter, ...(pageParam !== undefined ? { beforeSeq: pageParam } : {}) }, signal),
     getNextPageParam: (last) => last.nextBeforeSeq ?? undefined, refetchOnWindowFocus: false });
   const integrity = useQuery({ queryKey: securityLogKey(accountId, tenantId, 'integrity'), enabled: checking, refetchOnWindowFocus: false,
@@ -46,7 +47,7 @@ function TenantLog({ tenantId, tenantName, timeZone, canExport }: { tenantId: st
     event.preventDefault();
     const next = logFilter(draft);
     if (typeof next === 'string') { setProblem(next); return; }
-    setProblem(null); setFilter(next);
+    setProblem(null); setRequest((current) => logRequest(current, next));
   }
   const events = pages.data?.pages.flatMap((page) => page.events) ?? [];
   return <div className="stack-form">

@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import type { PartnerContext } from '../../api/types';
 import { FailureState, PartnerConsole, PartnerScopeProvider } from './PartnerPage';
-import { exportBody, failureKind, logFilter, memberBody, scheduleBody } from './model';
+import { exportBody, failureKind, logFilter, logRequest, logRequestKey, memberBody, scheduleBody } from './model';
 
 const own = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -89,6 +89,14 @@ describe('regras locais dos painéis', () => {
     expect(scheduleBody(draft, undefined)).toMatch(/condomínio/);
     expect(scheduleBody({ ...draft, endsAt: '2026-11-01T08:00' }, 'America/Sao_Paulo')).toMatch(/depois do início/);
     expect(scheduleBody({ ...draft, endsAt: '2026-12-05T09:00' }, 'America/Sao_Paulo')).toMatch(/31 dias/);
+  });
+  it('reenviar a consulta com os mesmos filtros gera chave nova (refaz a busca desde a primeira página)', () => {
+    const first = logRequest(null, { severity: 'CRITICAL' });
+    const again = logRequest(first, { severity: 'CRITICAL' });
+    expect(again.run).toBe(first.run + 1);
+    expect(logRequestKey(own, tenant, again)).not.toEqual(logRequestKey(own, tenant, first));
+    expect(logRequestKey(own, tenant, first)).toEqual(logRequestKey(own, tenant, { ...first }));
+    expect(logRequestKey(own, tenant.toUpperCase(), first)).toEqual(logRequestKey(own, tenant, first));
   });
   it('filtro do log e exportação', () => {
     expect(logFilter({ type: ' access_entry ', severity: 'CRITICAL' })).toEqual({ type: 'ACCESS_ENTRY', severity: 'CRITICAL' });

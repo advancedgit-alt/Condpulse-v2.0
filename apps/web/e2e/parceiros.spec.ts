@@ -80,6 +80,10 @@ test('dois papéis no mesmo parceiro mostram o seletor; comando lista o que vem 
   await page.getByRole('button', { name: 'Consultar log' }).click();
   await expect(page.getByText('#1 · ACCESS_ENTRY')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Exportar com manifesto' })).toBeVisible();
+  // Reenviar com os mesmos filtros refaz a busca (achado P2 do Codex).
+  const before = requests.filter((path) => path.endsWith('/security-log')).length;
+  await page.getByRole('button', { name: 'Consultar log' }).click();
+  await expect.poll(() => requests.filter((path) => path.endsWith('/security-log')).length).toBe(before + 1);
   await scanAccessibility(page, 'parceiro/comando/log');
 });
 
