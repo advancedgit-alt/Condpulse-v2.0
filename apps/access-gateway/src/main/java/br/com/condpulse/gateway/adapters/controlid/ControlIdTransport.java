@@ -107,7 +107,10 @@ interface ControlIdTransport {
    String s=session==null?login():session;
    var response=http.call("POST","/session_is_valid.fcgi",Map.of("session",s),"application/json",new byte[0],false);
    if(!response.ok()) { session=null; return false; }
-   return Boolean.TRUE.equals(Json.bool(Json.object(response.text()),"session_is_valid"));
+   boolean valid=Boolean.TRUE.equals(Json.bool(Json.object(response.text()),"session_is_valid"));
+   // Sessão inválida: descarta do cache para a próxima sonda renovar o login.
+   if(!valid) session=null;
+   return valid;
   }
  }
 

@@ -488,4 +488,17 @@ class ControlIdAdapterContractTest {
    assertEquals(c[1],future.get().outcome().name(),c[0]);
   }
  }
+
+ @Test void sondaComSessaoInvalidaRenovaOLogin() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   fake.on("POST","/login.fcgi",Reply.json("{\"session\":\"s\"}"));
+   var answers=new java.util.concurrent.atomic.AtomicInteger();
+   fake.on("POST","/session_is_valid.fcgi",r->Reply.json(answers.incrementAndGet()==2?"{\"session_is_valid\":false}":"{\"session_is_valid\":true}"));
+   var a=lan(fake,new TestSupport.TestClock(),null);
+   assertTrue(a.health().reachable());
+   assertFalse(a.health().reachable());
+   assertTrue(a.health().reachable(),"nova sessão depois da sonda negativa");
+   assertEquals(2,fake.requests("/login.fcgi").size());
+  }
+ }
 }
