@@ -21,7 +21,8 @@ public final class GrantPlanner {
  public static final int MAX_CANDIDATES=5000;
 
  public record Candidate(UUID contextId,UUID subjectId,String contextKind,String sourceKind,UUID membershipId,UUID permitId,UUID unitId,
-   long sourceVersion,Instant contextUntil,long restrictionEpoch,boolean subjectActive,boolean current,Instant permitUntil,UUID permitReservationId) {}
+   long sourceVersion,Instant contextUntil,long restrictionEpoch,boolean subjectActive,boolean current,Instant permitUntil,UUID permitReservationId,
+   boolean permitReservationConfirmed) {}
  public record Reservation(UUID reservationId,UUID unitId,long version,Instant startsAt,Instant endsAt) {}
  /** Resultado da conferência de idade (MEETS/DOES_NOT_MEET/UNKNOWN) e a evidência usada. */
  public record AgeFact(String outcome,UUID evidenceId,Instant validUntil) {}
@@ -68,6 +69,8 @@ public final class GrantPlanner {
      }
     }
     case "VISIT_PERMIT" -> {
+     // Convite de convidado vale só com a reserva do anfitrião confirmada (o banco confere o mesmo).
+     if(c.permitReservationId()!=null && !c.permitReservationConfirmed()) { skipped.add(new GrantModels.Skip(c.contextId(),"RESERVATION_REQUIRED")); continue; }
      Instant until=min(limit,c.permitUntil());
      if("NOT_REQUIRED".equals(mode)) {
       var rr=new ArrayList<>(reasons); rr.add("VISIT_PERMIT");

@@ -4240,6 +4240,40 @@ def grant_checks():
     expect(value(f"select count(*) from cp.revocation_markers a join cp.revocation_markers b on b.tenant_id=a.tenant_id "
                  f"and b.journal_sequence=a.journal_sequence+1 where a.tenant_id='{TA}' and b.previous_entry_hash is distinct from a.entry_hash") == "0",
            "cada entrada cita o hash da anterior")
+    # Visitante (AC-009): direito do convite nunca alem dele; convite revogado derruba o direito na hora e a varredura grava a marca.
+    V2, L2 = "44500000-0000-4000-8000-000000000002", "44600000-0000-4000-8000-000000000002"
+    VV, PV, SV, CV = ("44900000-0000-4000-8000-000000000001", "44900000-0000-4000-8000-000000000002", "44900000-0000-4000-8000-000000000003",
+                      "44900000-0000-4000-8000-000000000004")
+    doc2 = doc.replace('"eligibleContexts":["RESIDENT"],"visitorPolicy":"DENY"', '"eligibleContexts":["RESIDENT","VISITOR"],"visitorPolicy":"ALLOW_WITH_VALID_PERMIT"')
+    query(both + f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
+          f"VALUES('{V2}','{TA}','{PO}','1.0','{doc2}'::jsonb,'Regra ficticia com visitante','{MG}')", **as_mgr)
+    h2 = value(f"select canonical_hash from cp.access_policy_versions where id='{V2}'")
+    query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
+          f"affected_point_ids,required_capabilities,validated_by) VALUES('{L2}','{TA}','{PO}','{V2}','{h2}',{rev},'VALIDATED','[]'::jsonb,"
+          f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
+          f"UPDATE cp.access_policy_versions SET validation_id='{L2}',state='VALIDATED',version=1 WHERE id='{V2}'; "
+          f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V2}'", **as_mgr)
+    query(f"INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{VV}','{TA}','CONVIDADO FICTICIO','{RS}'); "
+          f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until,reservation_id) "
+          f"VALUES('{PV}','{TA}','{VV}','{UA}','{RS}',now(),now()+interval '2 days',NULL); "
+          f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,visitor_id) VALUES('{SV}','{TA}','VISITOR','{VV}'); "
+          f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,permit_id,valid_until,created_by) "
+          f"VALUES('{CV}','{TA}','{SV}','VISITOR','VISIT_PERMIT','{PV}',now()+interval '2 days','{MG}')")
+    guest = (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_permit_id,origin_version,"
+             f"valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{G3}','{TA}','{SV}','{CV}','{AR}','{PO}','{V2}','VISIT_PERMIT',"
+             f"'{PV}',0,now(),now()+interval '1 day',0,ARRAY['VISIT_PERMIT'],'{MG}')")
+    scan = "SET LOCAL app.subject_context_scan='on'; "
+    expect(error(both + scan + guest.replace("'1 day'", "'3 days'"), "23514", **as_mgr), "direito do convidado nunca alem do convite")
+    query(both + scan + guest, **as_mgr)
+    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',now())", **as_mgr) == "t", "visitante com convite vigente tem direito")
+    expect(value(both + f"select cp.access_grant_current('{TA}','{G3}',now())", **as_mgr) == "f", "sem a conferencia ligada a gestao nao le o convite: nega")
+    query(f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{RS}',revoked_at=now(),revoke_reason='Cancelado',version=version+1 WHERE id='{PV}'")
+    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',now())", **as_mgr) == "f",
+           "AC-009: convite cancelado derruba na hora o direito do visitante")
+    query(both + scan + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SV}','{G3}','ORIGIN_CHANGED')", **as_mgr)
+    expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G3}'") == "REVOKED:ORIGIN_CHANGED",
+           "varredura grava a marca do direito que deixou de valer")
+    expect(error(both + scan + guest.replace(G3, G4), "23514", **as_mgr), "convite cancelado nao gera direito novo")
     expect(value(both + f"select count(*) from cp.access_grants", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: direitos nao atravessam condominio")
     expect(value(f"select count(*) from cp.access_grants where id='{G1}'", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le direitos da gestao")
     expect(error("select derived_by from cp.access_grants", "42501", tenant=TA, role="cp_worker"), "worker nao le autoria do direito")
@@ -4248,7 +4282,8 @@ def grant_checks():
                  "('access_grants','revocation_markers') and c.relrowsecurity and c.relforcerowsecurity") == "2", "direitos e marcas com RLS FORCE")
     query(f"DELETE FROM cp.outbox WHERE aggregate_id='{CR}'; DELETE FROM cp.credential_syncs WHERE credential_id='{CR}'; DELETE FROM cp.access_credentials WHERE id='{CR}'")
     query(f"WITH g AS (DELETE FROM cp.access_grants WHERE tenant_id='{TA}') DELETE FROM cp.revocation_markers WHERE tenant_id='{TA}'; "
-          f"DELETE FROM cp.subject_contexts WHERE subject_id='{SRS}'; DELETE FROM cp.access_subjects WHERE id='{SRS}'; "
+          f"DELETE FROM cp.subject_contexts WHERE subject_id in ('{SRS}','{SV}'); DELETE FROM cp.access_subjects WHERE id in ('{SRS}','{SV}'); "
+          f"DELETE FROM cp.visit_permits WHERE id='{PV}'; DELETE FROM cp.visitors WHERE id='{VV}'; "
           f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
     facial_cleanup(ids)
 

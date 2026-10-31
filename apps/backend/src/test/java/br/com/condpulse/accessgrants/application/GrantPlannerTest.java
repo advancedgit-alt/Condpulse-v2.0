@@ -20,10 +20,10 @@ class GrantPlannerTest {
    new PolicyModels.FailureRule("DENY","DENY"),"OFF",null,true,null,"DENY");
  }
  static GrantPlanner.Candidate member(String kind,Instant until,boolean active,boolean current) {
-  return new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),kind,"MEMBERSHIP",UUID.randomUUID(),null,UNIT,3,until,2,active,current,null,null);
+  return new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),kind,"MEMBERSHIP",UUID.randomUUID(),null,UNIT,3,until,2,active,current,null,null,false);
  }
  static GrantPlanner.Candidate visitor(Instant until,UUID reservation) {
-  return new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),"VISITOR","VISIT_PERMIT",null,UUID.randomUUID(),UNIT,1,until,0,true,true,until,reservation);
+  return new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),"VISITOR","VISIT_PERMIT",null,UUID.randomUUID(),UNIT,1,until,0,true,true,until,reservation,reservation!=null);
  }
 
  @Test void membershipGrantIsFiniteAndBoundedByOrigin() {
@@ -61,7 +61,7 @@ class GrantPlannerTest {
 
  @Test void reservationRuleGrantsOnlyHostsAndListedGuestsWithinTheBookingWindow() {
   var host=member("RESIDENT",null,true,true);
-  var other=new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),"RESIDENT","MEMBERSHIP",UUID.randomUUID(),null,UUID.randomUUID(),1,null,0,true,true,null,null);
+  var other=new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),"RESIDENT","MEMBERSHIP",UUID.randomUUID(),null,UUID.randomUUID(),1,null,0,true,true,null,null,false);
   var booking=new GrantPlanner.Reservation(UUID.randomUUID(),UNIT,4,NOW.plus(Duration.ofHours(2)),NOW.plus(Duration.ofHours(5)));
   var guest=visitor(NOW.plus(Duration.ofDays(1)),booking.reservationId());
   var stranger=visitor(NOW.plus(Duration.ofDays(1)),null);
@@ -81,5 +81,11 @@ class GrantPlannerTest {
  @Test void expiredWindowIsSkipped() {
   var plan=GrantPlanner.plan(doc(List.of("RESIDENT"),"DENY",null,"NOT_REQUIRED"),List.of(member("RESIDENT",NOW.minusSeconds(1),true,true)),List.of(),Map.of(),NOW,null);
   assertEquals("WINDOW_EMPTY",plan.skipped().getFirst().reason());
+ }
+ @Test void guestOfCancelledBookingNeverGetsARight() {
+  var cancelled=new GrantPlanner.Candidate(UUID.randomUUID(),UUID.randomUUID(),"VISITOR","VISIT_PERMIT",null,UUID.randomUUID(),UNIT,1,NOW.plusSeconds(3600),0,true,true,
+   NOW.plusSeconds(3600),UUID.randomUUID(),false);
+  var plan=GrantPlanner.plan(doc(List.of("VISITOR"),"ONLY_VISITORS",null,"NOT_REQUIRED"),List.of(cancelled),List.of(),Map.of(),NOW,null);
+  assertTrue(plan.grants().isEmpty()); assertEquals("RESERVATION_REQUIRED",plan.skipped().getFirst().reason());
  }
 }

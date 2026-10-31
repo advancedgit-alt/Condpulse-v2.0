@@ -39,14 +39,15 @@ public class GrantStore {
  public List<GrantPlanner.Candidate> candidates(UUID tenant,List<String> kinds,int limit) {
   return scan(()->jdbc.query("""
    select c.id,c.subject_id,c.context_kind,c.source_kind,c.membership_id,c.permit_id,c.unit_id,c.source_version,c.valid_until,s.restriction_epoch,
-    s.status='ACTIVE' subject_active,cp.subject_context_current(c.tenant_id,c.id) is_current,p.valid_until permit_until,p.reservation_id
+    s.status='ACTIVE' subject_active,cp.subject_context_current(c.tenant_id,c.id) is_current,p.valid_until permit_until,p.reservation_id,
+    exists(select 1 from cp.reservations r where r.tenant_id=p.tenant_id and r.id=p.reservation_id and r.status='CONFIRMED') reservation_confirmed
    from cp.subject_contexts c join cp.access_subjects s on s.tenant_id=c.tenant_id and s.id=c.subject_id
    left join cp.visit_permits p on p.tenant_id=c.tenant_id and p.id=c.permit_id
    where c.tenant_id=? and c.status='ACTIVE' and c.context_kind=any(?::text[]) order by c.id limit ?
    """,(r,n)->new GrantPlanner.Candidate(r.getObject("id",UUID.class),r.getObject("subject_id",UUID.class),r.getString("context_kind"),
     r.getString("source_kind"),r.getObject("membership_id",UUID.class),r.getObject("permit_id",UUID.class),r.getObject("unit_id",UUID.class),
     r.getLong("source_version"),instant(r.getTimestamp("valid_until")),r.getLong("restriction_epoch"),r.getBoolean("subject_active"),
-    r.getBoolean("is_current"),instant(r.getTimestamp("permit_until")),r.getObject("reservation_id",UUID.class)),tenant,kinds.toArray(String[]::new),limit));
+    r.getBoolean("is_current"),instant(r.getTimestamp("permit_until")),r.getObject("reservation_id",UUID.class),r.getBoolean("reservation_confirmed")),tenant,kinds.toArray(String[]::new),limit));
  }
  public List<GrantPlanner.Reservation> reservations(UUID tenant,UUID amenity) {
   if(amenity==null) return List.of();

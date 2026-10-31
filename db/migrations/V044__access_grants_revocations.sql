@@ -169,8 +169,11 @@ AS $$ SELECT coalesce((SELECT g.status='ACTIVE' AND g.valid_from<=at AND g.valid
    AND p.status<>'RETIRED' AND v.state IN ('APPROVED','PUBLISHED')
    AND a.status='ACTIVE'
    AND CASE g.origin_kind
+    -- Convidado de reserva: o convite vale só enquanto a reserva do anfitrião continuar confirmada.
     WHEN 'VISIT_PERMIT' THEN EXISTS(SELECT 1 FROM cp.visit_permits vp WHERE vp.tenant_id=g.tenant_id AND vp.id=g.origin_permit_id
-      AND vp.state='ACTIVE' AND vp.version=g.origin_version AND vp.valid_until>at)
+      AND vp.state='ACTIVE' AND vp.version=g.origin_version AND vp.valid_until>at
+      AND (vp.reservation_id IS NULL OR EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=vp.tenant_id AND r.id=vp.reservation_id
+       AND r.status='CONFIRMED')))
     WHEN 'RESERVATION' THEN EXISTS(SELECT 1 FROM cp.reservations r WHERE r.tenant_id=g.tenant_id AND r.id=g.origin_reservation_id
       AND r.status='CONFIRMED' AND r.version=g.origin_version)
     ELSE true END
@@ -299,6 +302,9 @@ BEGIN
    RAISE EXCEPTION 'origem de convite incoerente ou não vigente' USING ERRCODE='23514';
   END IF;
   lim:=least(lim,vp.valid_until);
+  IF vp.reservation_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.reservations x WHERE x.tenant_id=NEW.tenant_id AND x.id=vp.reservation_id AND x.status='CONFIRMED') THEN
+   RAISE EXCEPTION 'convidado de reserva não confirmada' USING ERRCODE='23514';
+  END IF;
   IF mode='HOST_OR_LISTED_GUEST' THEN
    SELECT starts_at,ends_at INTO rs FROM cp.reservations WHERE tenant_id=NEW.tenant_id AND id=vp.reservation_id AND status='CONFIRMED' AND amenity_id=ar.amenity_id;
    IF NOT FOUND THEN RAISE EXCEPTION 'convidado só de reserva confirmada deste espaço' USING ERRCODE='23514'; END IF;
