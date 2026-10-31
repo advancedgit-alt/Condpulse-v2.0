@@ -3018,6 +3018,15 @@ def finance_checks():
     expect(late.returncode == 0 and late.stdout.strip() != "", "evento tardio de cobranca final e registrado")
     expect(error(hook + f"UPDATE cp.finance_charges SET asaas_status='DELETED',version=4 WHERE id='{C1}'", "23514", tenant=TA, actor=None, role="cp_api"),
            "cobranca final nao aceita nem mudanca de status bruto (por isso o webhook so registra o evento)")
+    # Aberta direto para estornada (recebimento e estorno ja no Asaas): exige os dados do pagamento.
+    C5 = "55000000-0000-4000-8000-0000000009a5"
+    query(fin + charge(C5), **as_manager)
+    query(fin + f"UPDATE cp.finance_charges SET state='OPEN',asaas_payment_id='pay_000000000005',version=1 WHERE id='{C5}'", **as_manager)
+    expect(error(hook.replace(C1, C5) + f"UPDATE cp.finance_charges SET state='REFUNDED',version=2 WHERE id='{C5}'", "23514", tenant=TA, actor=None, role="cp_api"),
+           "estornada sem data de pagamento e recusada")
+    query(hook.replace(C1, C5) + f"UPDATE cp.finance_charges SET state='REFUNDED',asaas_status='REFUNDED',paid_at=current_date,paid_cents=15000,version=2 "
+          f"WHERE id='{C5}'", tenant=TA, actor=None, role="cp_api")
+    expect(value(f"select state||':'||paid_cents from cp.finance_charges where id='{C5}'") == "REFUNDED:15000", "aberta vai direto a estornada com o pagamento")
     query(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',cancelled_by='{MGF}',cancel_reason='Lancada por engano',version=1 WHERE id='{C2}'",
           **as_manager)
     expect(value(f"select (cancelled_at is not null)::text from cp.finance_charges where id='{C2}'") == "true", "horario do cancelamento vem do banco")

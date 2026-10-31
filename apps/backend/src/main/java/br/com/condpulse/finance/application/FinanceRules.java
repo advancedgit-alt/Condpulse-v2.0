@@ -13,7 +13,7 @@ public final class FinanceRules {
 
  /**
   * Próxima situação de uma cobrança já emitida, respeitando as transições do banco (V036): OPEN/OVERDUE vão para
-  * OPEN, OVERDUE, PAID ou CANCELLED; PAID só vai para REFUNDED (nunca regride por leitura); CANCELLED e REFUNDED são finais. Status
+  * OPEN, OVERDUE, PAID, REFUNDED ou CANCELLED; PAID só vai para REFUNDED (nunca regride por leitura); CANCELLED e REFUNDED são finais. Status
   * do Asaas sem equivalente (estorno solicitado, chargeback, negativação...) só atualiza o status bruto.
   * {@code payment} nulo significa pagamento inexistente no Asaas (tratado como excluído).
   */
@@ -35,6 +35,9 @@ public final class FinanceRules {
   if("PENDING".equals(raw)) return new Target("OPEN",status,null,null);
   if("OVERDUE".equals(raw)) return new Target("OVERDUE",status,null,null);
   if("REFUNDED".equals(raw) && "PAID".equals(current)) return new Target("REFUNDED",status,currentPaidAt,currentPaidCents);
+  // Recebido e estornado antes de o recebimento chegar aqui: vai direto a REFUNDED com os dados de pagamento do Asaas.
+  if("REFUNDED".equals(raw) && open)
+   return new Target("REFUNDED",status,payment.paymentDate()==null?today:payment.paymentDate(),payment.valueCents());
   return new Target(current,status,currentPaidAt,currentPaidCents);
  }
  /** Cancelada e estornada não mudam mais (gatilho da V036). */

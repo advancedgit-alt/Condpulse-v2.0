@@ -31,7 +31,10 @@ class FinanceRulesTest {
   var stale=FinanceRules.target("PAID",TODAY,15000L,payment("PENDING",false),TODAY);
   assertEquals("PAID",stale.state()); assertEquals(TODAY,stale.paidAt()); assertEquals(15000L,stale.paidCents(),"Leitura antiga não apaga o pagamento");
   assertEquals("PAID",FinanceRules.target("PAID",TODAY,15000L,payment("OVERDUE",false),TODAY).state());
-  assertEquals("OPEN",FinanceRules.target("OPEN",null,null,payment("REFUNDED",false),TODAY).state(),"Estorno de não pago não muda");
+  var refunded=FinanceRules.target("OVERDUE",null,null,payment("REFUNDED",false),TODAY);
+  assertEquals("REFUNDED",refunded.state(),"Recebido e estornado antes do webhook de recebimento não fica aberto");
+  assertEquals(LocalDate.of(2026,10,29),refunded.paidAt()); assertEquals(15000L,refunded.paidCents());
+  assertEquals(TODAY,FinanceRules.target("OPEN",null,null,new AsaasGateway.Payment("pay_1","REFUNDED",null,"PIX",15000,null,null,null,false),TODAY).paidAt());
   var chargeback=FinanceRules.target("PAID",TODAY,15000L,payment("CHARGEBACK_REQUESTED",false),TODAY);
   assertEquals("PAID",chargeback.state()); assertEquals("CHARGEBACK_REQUESTED",chargeback.asaasStatus());
   assertEquals("CANCELLED",FinanceRules.target("CANCELLED",null,null,payment("RECEIVED",false),TODAY).state(),"Cancelada é final");

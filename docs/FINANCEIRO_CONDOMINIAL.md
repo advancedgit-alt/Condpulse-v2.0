@@ -52,7 +52,7 @@ O executor só fala com `https://api-sandbox.asaas.com/v3/webhooks` (GET da list
   R$ 1.000.000,00; vencimento de hoje a dois anos. Nasce `PENDING_ISSUE`; a emissão no Asaas acontece fora da transação,
   com referência externa = id da cobrança e reserva curta (90 s) no banco: antes de criar, procura o pagamento pela
   referência (falha no meio não duplica). Falha deixa `issueError` (`ASAAS_UNAVAILABLE` ou `ASAAS_REJECTED`) e "Emitir"
-  tenta de novo. Situações: `OPEN`, `OVERDUE`, `PAID`, `CANCELLED`, `REFUNDED`; cancelada e estornada são finais.
+  tenta de novo. Situações: `OPEN`, `OVERDUE`, `PAID`, `CANCELLED`, `REFUNDED`; cancelada e estornada são finais. Paga nunca regride por leitura do Asaas; aberta vai direto a estornada quando o Asaas já mostra o estorno.
 - **Recorrente** (`cp.finance_recurring_fees`): taxa mensal com dia 1–28, para uma unidade ou todas com pagador. "Gerar
   competência" (mês atual a 12 meses) cria uma cobrança por unidade e taxa; repetir não duplica (índice único); vencimento
   já passado é pulado; emite até 20 e o resto fica para "Emitir pendentes". Não há geração automática (sem worker).

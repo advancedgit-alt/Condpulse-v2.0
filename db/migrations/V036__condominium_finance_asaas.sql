@@ -130,7 +130,7 @@ CREATE TRIGGER finance_recurring_fees_guard BEFORE INSERT OR UPDATE ON cp.financ
 
 -- Cobrança: nasce PENDING_ISSUE (só no CondPulse); a emissão no Asaas (fora da transação) grava o pagamento e a abre.
 -- Situações: OPEN, OVERDUE, PAID, CANCELLED e REFUNDED, sincronizadas pelo webhook ou pela gestão; CANCELLED e REFUNDED
--- são finais. Valor de R$ 5,00 a R$ 1.000.000,00 (mínimo do boleto no Asaas).
+-- são finais. Aberta vai direto a REFUNDED quando o Asaas já mostra o estorno (recebimento não processado antes). Valor de R$ 5,00 a R$ 1.000.000,00 (mínimo do boleto no Asaas).
 CREATE TABLE cp.finance_charges (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  tenant_id uuid NOT NULL REFERENCES platform.tenants(id),
@@ -229,7 +229,7 @@ BEGIN
     RAISE EXCEPTION 'cancelamento exige autoria e motivo' USING ERRCODE='23514';
    END IF;
    NEW.cancelled_at:=clock_timestamp();
-  ELSIF OLD.state IN ('OPEN','OVERDUE') AND NEW.state IN ('OPEN','OVERDUE','PAID') THEN
+  ELSIF OLD.state IN ('OPEN','OVERDUE') AND NEW.state IN ('OPEN','OVERDUE','PAID','REFUNDED') THEN
    NULL;
   ELSIF OLD.state='PAID' AND NEW.state IN ('REFUNDED','OPEN','OVERDUE') THEN
    NULL;
