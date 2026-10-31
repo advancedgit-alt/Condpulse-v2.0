@@ -360,11 +360,15 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
 
  /** ResponseStatus (statusCode 1 / statusString "ok"): ACK; o efeito é confirmado pela leitura de volta. */
  static OperationResult status(DeviceHttpClient.Response response) {
+  // 5xx não é recusa explícita: o pedido pode ter sido aplicado.
+  if(response.status()>=500) return OperationResult.of(OperationState.UNKNOWN,"HIKVISION_HTTP_"+response.status());
   Map<String,Object> body;
-  try { body=response.body().length==0?Map.of():Json.object(response.text()); }
+  Long code;
+  try { body=response.body().length==0?Map.of():Json.object(response.text()); code=Json.longValue(body,"statusCode"); }
   catch(Json.JsonException e) { return OperationResult.of(response.ok()?OperationState.UNKNOWN:OperationState.FAILED,"INVALID_RESPONSE"); }
-  Long code=Json.longValue(body,"statusCode");
-  if(response.ok() && (code==null || code==1)) return OperationResult.of(OperationState.ACK,null);
+  // ACK só com ResponseStatus explícito (statusCode 1); 2xx sem ele é ininterpretável: incerto.
+  if(response.ok() && code!=null && code==1) return OperationResult.of(OperationState.ACK,null);
+  if(response.ok() && code==null) return OperationResult.of(OperationState.UNKNOWN,"INVALID_RESPONSE");
   String sub=Json.string(body,"subStatusCode");
   return OperationResult.of(OperationState.FAILED,"HIKVISION_"+(sub==null?"HTTP_"+response.status():sub.replaceAll("[^A-Za-z0-9_]","_")));
  }

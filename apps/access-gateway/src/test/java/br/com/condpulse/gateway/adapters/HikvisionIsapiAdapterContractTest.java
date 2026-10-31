@@ -284,4 +284,17 @@ class HikvisionIsapiAdapterContractTest {
    assertEquals(a.personAttributes(nova).orElseThrow(),a.readState("ref-13").personAttributes(),"sem Valid: \"none\" lido de volta");
   }
  }
+
+ // ----- oitava rodada (#131): resposta ininterpretável é incerta -----
+
+ @Test void respostaSemStatusOuServidorComErroEIncerta() throws Exception {
+  for(var reply:List.of(Reply.json("{}"),Reply.text(""),Reply.status(500),Reply.json("{nao-e-json"))) {
+   try(var fake=new FakeDeviceServer()) {
+    var store=new Store(); store.install(fake);
+    fake.on("POST","/ISAPI/AccessControl/UserInfo/Record",reply);
+    var r=adapter(fake).upsertPerson(new PersonSpec("ref-20","Morador 20",null,null));
+    assertEquals(OperationState.UNKNOWN,r.state(),reply.body()+" "+reply.status());
+   }
+  }
+ }
 }
