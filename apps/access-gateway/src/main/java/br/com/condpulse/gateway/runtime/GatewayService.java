@@ -82,6 +82,8 @@ public final class GatewayService {
   var device=config.device(command.deviceId()).orElseThrow(()->new IllegalArgumentException("Equipamento desconhecido."));
   var result=queue.enqueue(command);
   if(command.type().revocation()) {
+   // Revogação mais antiga que a concessão aceita é mensagem velha: não vale nem na fila nem na decisão.
+   if(result.outcome()==LocalCommandQueue.EnqueueOutcome.REJECTED_STALE) return result;
    // Revogação vale na decisão local mesmo se a fila recusar por estar cheia (negativa durável, fail-closed).
    applyToDecisions(command,false);
    if(result.outcome()==LocalCommandQueue.EnqueueOutcome.REJECTED_FULL) {
@@ -142,11 +144,18 @@ public final class GatewayService {
  boolean process(Device device,Entry entry) {
   var command=entry.command();
   var adapter=adapters.get(device.deviceId());
-  if(adapter==null) { queue.mark(command.commandId(),Status.PENDING,null,"ADAPTER_UNAVAILABLE"); return false; }
+  if(adapter==null) {
+   queue.mark(command.commandId(),entry.status()==Status.NEEDS_READBACK?Status.NEEDS_READBACK:Status.PENDING,entry.lastState(),"ADAPTER_UNAVAILABLE");
+   return false;
+  }
   if(!command.type().revocation()) {
    // Gravação só depois de a sonda conferir a identidade desde a (re)conexão; revogação nunca espera.
    String identity=actuationBlock(device.deviceId());
-   if(identity!=null) { queue.mark(command.commandId(),Status.PENDING,null,identity); return false; }
+   if(identity!=null) {
+    // Adiar não apaga a incerteza: comando em NEEDS_READBACK continua exigindo leitura antes de reenviar.
+    queue.mark(command.commandId(),entry.status()==Status.NEEDS_READBACK?Status.NEEDS_READBACK:Status.PENDING,entry.lastState(),identity);
+    return false;
+   }
   }
   if(entry.status()==Status.NEEDS_READBACK) {
    switch(verify(adapter,command)) {
@@ -283,7 +292,9 @@ public final class GatewayService {
   */
  OperationResult revokeAll(AccessProviderAdapter adapter,String subjectRef) {
   var manifest=adapter.manifest();
-  if(manifest.supports(Operation.REMOVE_PERSON) && adapter.removePersonCoversCredentials()) return adapter.removePerson(subjectRef);
+  // Atalho só com cascata declarada de direitos E credenciais; senão cada método é retirado e agregado.
+  if(manifest.supports(Operation.REMOVE_PERSON) && adapter.removePersonCoversCredentials() && adapter.removePersonCoversRights())
+   return adapter.removePerson(subjectRef);
   var states=new ArrayList<OperationResult>();
   if(manifest.supports(Operation.APPLY_RIGHTS) || manifest.supports(Operation.REVOKE_RIGHTS)) states.add(adapter.revokeRights(subjectRef));
   for(CredentialKind k:CredentialKind.values())
