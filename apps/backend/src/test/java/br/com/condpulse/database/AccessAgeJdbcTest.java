@@ -111,6 +111,10 @@ class AccessAgeJdbcTest {
    "Sem chave a data protegida falha fechada");
   assertEquals("AGE_EVIDENCE_SHAPE_INVALID",code(()->ages.record(MANAGER,db.tenantA,AAL2,subjectA,
    new AgeModels.RecordEvidence(UUID.randomUUID(),"AGE_PREDICATE_ATTESTATION",today.minusYears(40),18,null,true,"DOCUMENT_REVIEW","ref:atestado-jdbc-02"))));
+  assertEquals("AGE_EVIDENCE_METHOD_INVALID",code(()->ages.record(MANAGER,db.tenantA,AAL2,subjectA,
+   new AgeModels.RecordEvidence(UUID.randomUUID(),null,null,18,null,true,"DOCUMENT_REVIEW","ref:atestado-jdbc-03"))),"Campo ausente é 400, não 500");
+  assertEquals("AGE_EVIDENCE_VERIFICATION_INVALID",code(()->ages.record(MANAGER,db.tenantA,AAL2,subjectA,
+   new AgeModels.RecordEvidence(UUID.randomUUID(),"AGE_PREDICATE_ATTESTATION",null,18,null,true,null,"ref:atestado-jdbc-04"))));
   assertEquals("AGE_EVIDENCE_STALE",code(()->ages.revoke(MANAGER,db.tenantA,AAL2,id,new AgeModels.RevokeEvidence("Documento contestado",3L))));
   ages.revoke(MANAGER,db.tenantA,AAL2,id,new AgeModels.RevokeEvidence("Documento contestado",recorded.version()));
   assertEquals("UNKNOWN",ages.check(MANAGER,db.tenantA,AAL2,subjectA,18).outcome(),"Revogada não vale");

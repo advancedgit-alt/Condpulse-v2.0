@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** AC-006: anos completos na data civil, critério de 29/02 por condomínio e predicados de atestação. */
 class AgeRuleTest {
  private static final LocalDate BIRTH=LocalDate.of(2008,11,1);
+ private static final LocalDate D0=LocalDate.of(2026,10,31);
 
  @Test void eveAndBirthdayAreDefined() {
   // HAC-031/HAC-032: 17 anos e 364 dias nega; no dia do aniversário (data local) atende.
@@ -36,16 +37,25 @@ class AgeRuleTest {
   // HAC-033: sem evidência, ou com data impossível, é desconhecido.
   assertEquals(UNKNOWN,AgeRule.fromBirthDate(null,LocalDate.of(2026,10,31),MARCH_1,18));
   assertEquals(UNKNOWN,AgeRule.fromBirthDate(LocalDate.of(2030,1,1),LocalDate.of(2026,10,31),MARCH_1,18));
-  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,null,18));
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,null,18,D0,D0));
  }
  @Test void attestationOnlyConcludesWhatItCovers() {
-  assertEquals(MEETS,AgeRule.fromAttestation(18,null,true,18));
-  assertEquals(MEETS,AgeRule.fromAttestation(21,null,true,18));
-  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,true,21),"Atestado de 18+ não prova 21+");
-  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(18,null,false,18));
-  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(16,null,false,18),"Não tem 16 então não tem 18");
-  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,false,16),"Não ter 18 não diz nada sobre 16");
-  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(null,17,true,18),"Até 17 anos");
+  assertEquals(MEETS,AgeRule.fromAttestation(18,null,true,18,D0,D0));
+  assertEquals(MEETS,AgeRule.fromAttestation(21,null,true,18,D0,D0));
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,true,21,D0,D0),"Atestado de 18+ não prova 21+");
+  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(18,null,false,18,D0,D0));
+  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(16,null,false,18,D0,D0),"Não tem 16 então não tem 18");
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,false,16,D0,D0),"Não ter 18 não diz nada sobre 16");
+  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(null,17,true,18,D0,D0),"Até 17 anos");
+ }
+ @Test void upperBoundsAgeWhileLowerBoundsKeepHolding() {
+  // Atestado de 17 anos (não tem 18) não sustenta "não atende" depois que o tempo passa.
+  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(18,null,false,18,D0,D0));
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,false,18,D0,D0.plusDays(1)),"Pode ter feito 18 no dia seguinte");
+  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(null,10,true,18,D0,D0.plusYears(3)),"Até 10 anos há 3 anos: no máximo 14");
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(null,10,true,18,D0,D0.plusYears(8)));
+  assertEquals(MEETS,AgeRule.fromAttestation(18,null,true,18,D0,D0.plusYears(5)),"Limite inferior não envelhece");
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,true,18,D0,D0.minusDays(1)),"Data avaliada antes do atestado");
  }
  @Test void birthDateIsBoundToItsRowAndNeverStoredInClear() {
   byte[] raw=new byte[32]; new SecureRandom().nextBytes(raw);

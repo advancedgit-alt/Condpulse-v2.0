@@ -84,6 +84,8 @@ class AccessSubjectJdbcTest {
   assertEquals("ACCESS_SUBJECT_CONTEXT_ID_CONFLICT",code(()->subjects.addFunctional(MANAGER,db.tenantA,AAL2,resident.subjectId(),
    new SubjectModels.FunctionalAuthorization(functional,"SERVICE_PROVIDER","os:manutencao-jdbc-01",until.plusSeconds(60)))),"Repetição exige o pedido inteiro");
   assertEquals("ACCESS_SUBJECT_CONTEXT_KIND_INVALID",code(()->subjects.addFunctional(MANAGER,db.tenantA,AAL2,resident.subjectId(),
+   new SubjectModels.FunctionalAuthorization(UUID.randomUUID(),null,"os:manutencao-jdbc-03",until))),"Tipo ausente é 400, não 500");
+  assertEquals("ACCESS_SUBJECT_CONTEXT_KIND_INVALID",code(()->subjects.addFunctional(MANAGER,db.tenantA,AAL2,resident.subjectId(),
    new SubjectModels.FunctionalAuthorization(UUID.randomUUID(),"RESIDENT","os:manutencao-jdbc-02",until))));
   assertEquals(2,of(db.accountA).eligibleContextIds().size());
   assertEquals(resident.contexts().getFirst().contextId(),of(db.accountA).eligibleContextIds().getFirst(),"Residência antes do prestador");

@@ -37,17 +37,22 @@ public final class AgeRule {
   return completedYears(birth,on,rule)>=minimumAge?Outcome.MEETS:Outcome.DOES_NOT_MEET;
  }
  /**
-  * Atestação verificada "idade entre mínimo e máximo" (predicado verdadeiro) ou "não atinge o mínimo" (predicado falso).
-  * Só conclui quando o atestado cobre a pergunta; o resto é UNKNOWN.
+  * Atestação verificada em attestedOn, avaliada em on. Limite inferior ("tinha pelo menos N") continua valendo depois,
+  * porque a idade só cresce. Limite superior ("tinha no máximo M", ou "não tinha N", isto é, no máximo N-1) envelhece:
+  * em on a pessoa pode ter até M + anos completos desde attestedOn + 1 (no mesmo dia, M). Só conclui "não atende"
+  * enquanto esse limite ainda ficar abaixo da idade pedida; depois disso é UNKNOWN (pede nova evidência).
   */
- public static Outcome fromAttestation(Integer attestedMinimum,Integer attestedMaximum,Boolean predicate,int minimumAge) {
-  if(predicate==null) return Outcome.UNKNOWN;
-  if(predicate) {
-   if(attestedMinimum!=null && attestedMinimum>=minimumAge) return Outcome.MEETS;
-   if(attestedMaximum!=null && attestedMaximum<minimumAge) return Outcome.DOES_NOT_MEET;
-   return Outcome.UNKNOWN;
+ public static Outcome fromAttestation(Integer attestedMinimum,Integer attestedMaximum,Boolean predicate,int minimumAge,
+   LocalDate attestedOn,LocalDate on) {
+  if(predicate==null || attestedOn==null || on==null || on.isBefore(attestedOn)) return Outcome.UNKNOWN;
+  Integer lower=null,upper=null;
+  if(predicate) { lower=attestedMinimum; upper=attestedMaximum; }
+  else if(attestedMinimum!=null && attestedMaximum==null) upper=attestedMinimum-1;
+  if(lower!=null && lower>=minimumAge) return Outcome.MEETS;
+  if(upper!=null) {
+   int grown=on.equals(attestedOn)?0:completedYears(attestedOn,on,LeapDayRule.MARCH_1)+1;
+   if(upper+grown<minimumAge) return Outcome.DOES_NOT_MEET;
   }
-  if(attestedMinimum!=null && attestedMaximum==null && attestedMinimum<=minimumAge) return Outcome.DOES_NOT_MEET;
   return Outcome.UNKNOWN;
  }
 }

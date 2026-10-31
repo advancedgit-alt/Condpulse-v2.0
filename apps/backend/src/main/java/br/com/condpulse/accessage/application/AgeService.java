@@ -59,8 +59,8 @@ public class AgeService {
  public AgeModels.Evidence record(UUID actor,UUID tenant,AssuranceLevel assurance,UUID subject,AgeModels.RecordEvidence request) {
   if(subject==null) throw notFound();
   if(request==null || request.evidenceId()==null) throw invalid("AGE_EVIDENCE_ID_REQUIRED","Informe o identificador da evidência.");
-  if(!METHODS.contains(request.method())) throw invalid("AGE_EVIDENCE_METHOD_INVALID","Método inválido.");
-  if(!VERIFICATION.contains(request.verificationMethod())) throw invalid("AGE_EVIDENCE_VERIFICATION_INVALID","Informe como a evidência foi conferida.");
+  if(request.method()==null || !METHODS.contains(request.method())) throw invalid("AGE_EVIDENCE_METHOD_INVALID","Método inválido.");
+  if(request.verificationMethod()==null || !VERIFICATION.contains(request.verificationMethod())) throw invalid("AGE_EVIDENCE_VERIFICATION_INVALID","Informe como a evidência foi conferida.");
   if(request.sourceEvidenceRef()==null || !request.sourceEvidenceRef().matches("[A-Za-z0-9._:-]{8,120}"))
    throw invalid("AGE_EVIDENCE_SOURCE_INVALID","Referência da prova: 8 a 120 caracteres sem espaço (nunca o número do documento).");
   boolean attestation="AGE_PREDICATE_ATTESTATION".equals(request.method());
@@ -138,7 +138,11 @@ public class AgeService {
    var row=store.current(tenant,subject);
    if(row==null) return new AgeModels.AgeCheck(subject,minimumAge,AgeRule.Outcome.UNKNOWN.name(),today,context.timeZone().getId(),null,null);
    AgeRule.Outcome outcome;
-   if("AGE_PREDICATE_ATTESTATION".equals(row.method())) outcome=AgeRule.fromAttestation(row.minimumAge(),row.maximumAge(),row.predicate(),minimumAge);
+   if("AGE_PREDICATE_ATTESTATION".equals(row.method())) {
+    // Limite superior atestado envelhece: só conclui "não atende" enquanto ainda for comprovável na data avaliada.
+    LocalDate attestedOn=row.verifiedAt().toInstant().atZone(context.timeZone()).toLocalDate();
+    outcome=AgeRule.fromAttestation(row.minimumAge(),row.maximumAge(),row.predicate(),minimumAge,attestedOn,today);
+   }
    else {
     var rule=AgeRule.LeapDayRule.valueOf(store.settings(tenant).leapDayRule());
     outcome=AgeRule.fromBirthDate(cipher.decrypt(row.ciphertext(),tenant,subject,row.id()),today,rule,minimumAge);
