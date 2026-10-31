@@ -78,10 +78,11 @@ class TechnicalGrantJdbcTest {
   assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MASTER,db.tenantB,AAL2)),"HAC-007: concessão não atravessa condomínio");
   assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MANAGER,db.tenantA,AAL2)),"HAC-009: gestor não tem sessão técnica");
   // O banco confere de novo: escopo publicado só vale se concedido e vigente.
-  assertTrue(technical.execute(MASTER,db.tenantA,AAL2,context->{
+  Boolean granted=technical.execute(MASTER,db.tenantA,AAL2,context->{
    context.require(TechnicalScope.INSTALLATION_BIND_CHANNEL);
    return db.jdbc.queryForObject("select platform.has_technical_scope('installation.bind_channel')",Boolean.class);
-  }));
+  });
+  assertEquals(Boolean.TRUE,granted);
   assertEquals("TECHNICAL_SCOPE_REQUIRED",code(()->technical.execute(MASTER,db.tenantA,AAL2,context->{
    context.require(TechnicalScope.CONNECTOR_ROTATE_SECRET); return null; })));
   db.assertEmptyContext();
