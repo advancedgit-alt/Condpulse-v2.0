@@ -130,6 +130,18 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/units/*/rental","/v1/tenants/*/management/units/*/rental/end",
       "/v1/tenants/*/units/*/rental/invitations","/v1/tenants/*/units/*/rental/invitations/*/revoke",
       "/v1/tenants/*/units/*/rental/occupants/*/remove").authenticated()
+    // Financeiro condominial (ADR-0008): gestão (finance.manage, AAL2) ou vínculo da unidade no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/finance/units","/v1/tenants/*/management/finance/charges",
+      "/v1/tenants/*/management/finance/recurring-fees","/v1/tenants/*/management/finance/delinquency",
+      "/v1/tenants/*/management/finance/report","/v1/tenants/*/units/*/finance/charges",
+      "/v1/tenants/*/units/*/finance/charges/*/payment").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/finance/units/*/payer").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/finance/charges","/v1/tenants/*/management/finance/charges/issue-pending",
+      "/v1/tenants/*/management/finance/charges/*/issue","/v1/tenants/*/management/finance/charges/*/cancel",
+      "/v1/tenants/*/management/finance/charges/*/sync","/v1/tenants/*/management/finance/recurring-fees",
+      "/v1/tenants/*/management/finance/recurring-fees/*/end","/v1/tenants/*/management/finance/recurring-fees/generate").authenticated()
+    // Webhook do Asaas: sem sessão; o token do cabeçalho asaas-access-token é conferido no serviço antes de qualquer leitura.
+    .requestMatchers(HttpMethod.POST,"/v1/finance/asaas/webhook").permitAll()
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/concierge/occurrences").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/concierge/occurrences","/v1/tenants/*/concierge/occurrences/*/resolve").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-credentials",

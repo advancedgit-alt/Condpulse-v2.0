@@ -15,7 +15,9 @@ public enum StaffCapability {
  READ_AUDIT("audit.read"),
  PUBLISH_ANNOUNCEMENTS("announcements.publish"),
  MANAGE_REQUESTS("requests.manage"),
- OPERATE_CONCIERGE("concierge.operate");
+ OPERATE_CONCIERGE("concierge.operate"),
+ /** Financeiro condominial com Asaas (ADR-0008). */
+ MANAGE_FINANCE("finance.manage");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -26,7 +28,7 @@ public enum StaffCapability {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
-    MANAGE_REQUESTS);
+    MANAGE_REQUESTS,MANAGE_FINANCE);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    default -> EnumSet.noneOf(StaffCapability.class);
   };

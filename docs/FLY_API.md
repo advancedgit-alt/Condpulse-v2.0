@@ -73,6 +73,18 @@ lidos de volta e precisam bater exatamente.
 - Depois de gravada, um `apply` sem a chave é recusado (`FLY_STORAGE_KEY_REQUIRED`): o import não remove segredo.
   Desligar anexos exige `flyctl secrets unset` revisado; não há caminho automático.
 
+### Financeiro condominial (chave do Asaas)
+
+- Opcional: secret do GitHub `CP_ASAAS_API_KEY` no Environment `condpulse-database-operations`, somente sandbox
+  (`$aact_hmlg_` + 20 ou mais caracteres `[A-Za-z0-9_:$.=+/-]`; fora disso `FLY_ASAAS_KEY_INVALID`, sem eco). Só o `apply`
+  recebe (nunca `inspect` nem `deploy`).
+- Presente: grava `CP_ASAAS_API_KEY` e `CP_FINANCE_ENABLED=true`. Se a Fly ainda não tem `CP_ASAAS_WEBHOOK_TOKEN`, gera o
+  token no runner, cria/atualiza o webhook no Asaas sandbox com ele (URL fixa da homologação; exige a variável
+  `CP_ASAAS_WEBHOOK_EMAIL`) e só então grava o token na Fly. Nenhum valor é impresso. Detalhes em
+  [FINANCEIRO_CONDOMINIAL.md](FINANCEIRO_CONDOMINIAL.md).
+- Mesmo comportamento do Storage: com o login READY grava só esses segredos (sem tocar no banco) e confere os nomes;
+  depois de gravada, `apply` sem a chave é recusado (`FLY_ASAAS_KEY_REQUIRED`).
+
 Efeito das chaves novas: quando o tráfego for trocado, as sessões web existentes deixam de abrir **uma vez** (cifra do
 BFF diferente) e todos entram de novo; códigos de retirada delegada emitidos pela Vercel deixam de valer na Fly.
 

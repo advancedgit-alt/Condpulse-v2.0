@@ -15,7 +15,9 @@ public final class BffSecurityConfigurer {
   origin=new BffOriginFilter(settings); cookies=new BffCookieAuthenticationFilter(sessions); this.csrf=csrf;
  }
  public void configure(HttpSecurity http) throws Exception {
-  http.csrf(c->c.csrfTokenRepository(csrf).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()));
+  // O webhook do Asaas não usa cookie de sessão (autenticação pelo token do cabeçalho): fora do CSRF.
+  http.csrf(c->c.csrfTokenRepository(csrf).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+   .ignoringRequestMatchers("/v1/finance/asaas/webhook"));
   http.addFilterBefore(origin,CsrfFilter.class);
   http.addFilterBefore(cookies,BearerTokenAuthenticationFilter.class);
  }

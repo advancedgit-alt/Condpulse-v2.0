@@ -11,6 +11,9 @@ import {pathToFileURL} from 'node:url';
  *   da Fly sem eco; confere só os nomes de volta. Nenhum deploy.
  *   Com CP_STORAGE_SERVICE_KEY (secret do GitHub) presente, grava também essa chave e CP_FILES_ENABLED=true; com o
  *   login já READY, grava só esses dois (o login de banco não é tocado).
+ *   Com CP_ASAAS_API_KEY (secret do GitHub, sandbox $aact_hmlg_) presente, grava também a chave, CP_FINANCE_ENABLED=true e,
+ *   se a Fly ainda não tiver CP_ASAAS_WEBHOOK_TOKEN, gera o token no runner e configura o webhook do Asaas (sandbox) com
+ *   ele, pela própria API do Asaas (criar ou atualizar pela URL fixa), antes de gravar na Fly. Nenhum valor é impresso.
  * - deploy: flyctl deploy --remote-only com uma máquina em gru e espera a readiness pública.
  * Nenhum valor de segredo é lido de volta ou impresso: só nomes, códigos e fingerprints.
  */
@@ -50,7 +53,16 @@ export const COPIED=Object.freeze({
 /** Anexos: chave de serviço do Storage (secret do GitHub, opcional) e a flag ligada junto com ela. */
 export const STORAGE=Object.freeze(['CP_FILES_ENABLED','CP_STORAGE_SERVICE_KEY']);
 const STORAGE_KEY=/^sb_secret_[A-Za-z0-9_-]{24,4096}$/;
-const MANAGED=new Set([...REQUIRED,...Object.keys(COPIED),...STORAGE]);
+/** Financeiro condominial (ADR-0008): chave do sandbox do Asaas, token do webhook e a flag ligada junto com a chave. */
+export const FINANCE=Object.freeze(['CP_ASAAS_API_KEY','CP_ASAAS_WEBHOOK_TOKEN','CP_FINANCE_ENABLED']);
+const ASAAS_KEY=/^\$aact_hmlg_[A-Za-z0-9_:$.=+/-]{20,4096}$/;
+/** Somente o sandbox (docs.asaas.com, Autenticação); a API de produção nunca é chamada por este executor. */
+export const ASAAS_API='https://api-sandbox.asaas.com/v3';
+export const WEBHOOK_URL='https://project-rhvdq.vercel.app/v1/finance/asaas/webhook';
+export const WEBHOOK_EVENTS=Object.freeze(['PAYMENT_CREATED','PAYMENT_UPDATED','PAYMENT_CONFIRMED','PAYMENT_RECEIVED','PAYMENT_OVERDUE',
+ 'PAYMENT_DELETED','PAYMENT_REFUNDED']);
+const EMAIL=/^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,180}\.[A-Za-z]{2,24}$/;
+const MANAGED=new Set([...REQUIRED,...Object.keys(COPIED),...STORAGE,...FINANCE]);
 
 /** Ausente (vazia) devolve null; presente fora do formato sb_secret_ aborta sem ecoar o valor. */
 export function storageValues(env){
@@ -58,6 +70,66 @@ export function storageValues(env){
  if(key===undefined||key==='')return null;
  need(typeof key==='string'&&STORAGE_KEY.test(key),'FLY_STORAGE_KEY_INVALID');
  return {CP_FILES_ENABLED:'true',CP_STORAGE_SERVICE_KEY:key};
+}
+/** Ausente (vazia) devolve null; presente fora do formato do sandbox ($aact_hmlg_) aborta sem ecoar o valor. */
+export function financeKey(env){
+ const key=env.CP_ASAAS_API_KEY;
+ if(key===undefined||key==='')return null;
+ need(typeof key==='string'&&ASAAS_KEY.test(key),'FLY_ASAAS_KEY_INVALID');
+ return key;
+}
+
+/** Asaas sandbox somente para webhooks: GET da lista, POST para criar e PUT para atualizar; sem redirecionamento. */
+export function createAsaasRequester(fetcher=globalThis.fetch){
+ return async function request(method,path,key,body){
+  need((method==='GET'&&path==='/webhooks?limit=100&offset=0')||(method==='POST'&&path==='/webhooks')
+   ||(method==='PUT'&&/^\/webhooks\/[A-Za-z0-9_-]{1,64}$/.test(path)),'FLY_ASAAS_DESTINATION_DENIED');
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15_000);
+  try{
+   const response=await fetcher(`${ASAAS_API}${path}`,{method,redirect:'manual',signal:controller.signal,
+    headers:{Accept:'application/json','Content-Type':'application/json','User-Agent':'CondPulse-fly-api/0.1',access_token:key},
+    ...(body===undefined?{}:{body:JSON.stringify(body)})});
+   need(response.status===200,'FLY_ASAAS_HTTP_DENIED');
+   const text=await response.text();need(text.length>0&&text.length<=256*1024,'FLY_ASAAS_RESPONSE_INVALID');
+   return JSON.parse(text);
+  }catch(error){if(error instanceof SafeFailure)throw error;fail('FLY_ASAAS_UNAVAILABLE');}
+  finally{clearTimeout(timer);}
+ };
+}
+
+/** Cria ou atualiza (pela URL fixa) o webhook de cobranças do Asaas com o token novo; idempotente. Devolve só metadados. */
+export async function configureWebhook(request,key,token,email){
+ need(typeof email==='string'&&EMAIL.test(email),'FLY_ASAAS_WEBHOOK_EMAIL_REQUIRED');
+ const list=object(await request('GET','/webhooks?limit=100&offset=0',key),'FLY_ASAAS_RESPONSE_INVALID');
+ need(Array.isArray(list.data)&&list.data.length<=100,'FLY_ASAAS_RESPONSE_INVALID');
+ const matching=list.data.filter(item=>object(item,'FLY_ASAAS_RESPONSE_INVALID').url===WEBHOOK_URL);
+ need(matching.length<=1,'FLY_ASAAS_WEBHOOK_DUPLICATE');
+ const id=matching.length?matching[0].id:null;
+ need(id===null||(typeof id==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(id)),'FLY_ASAAS_RESPONSE_INVALID');
+ const body={name:'CondPulse homologacao',url:WEBHOOK_URL,email,enabled:true,interrupted:false,sendType:'SEQUENTIALLY',apiVersion:3,
+  authToken:token,events:[...WEBHOOK_EVENTS]};
+ const saved=object(id?await request('PUT',`/webhooks/${id}`,key,body):await request('POST','/webhooks',key,body),'FLY_ASAAS_RESPONSE_INVALID');
+ need(saved.url===WEBHOOK_URL&&saved.enabled===true&&saved.interrupted!==true&&saved.hasAuthToken!==false
+  &&typeof saved.id==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(saved.id)&&(id===null||saved.id===id),'FLY_ASAAS_WEBHOOK_UNCONFIRMED');
+ return {webhookId:saved.id,created:id===null};
+}
+
+/**
+ * Valores do financeiro para gravar na Fly: chave + flag sempre que a chave vier; token novo (e webhook configurado com
+ * ele) só quando a Fly ainda não tem o token. Sem chave: nada.
+ */
+async function financeValues(env,deps,names){
+ const key=financeKey(env);
+ if(!key)return null;
+ const values={CP_ASAAS_API_KEY:key,CP_FINANCE_ENABLED:'true'};
+ let webhook=null;
+ if(!names.has('CP_ASAAS_WEBHOOK_TOKEN')){
+  const token=deps.randomBytes(32).toString('base64url');
+  need(/^[A-Za-z0-9_-]{43}$/.test(token),'FLY_ASAAS_TOKEN_INVALID');
+  webhook=await configureWebhook(deps.asaas,key,token,env.CP_ASAAS_WEBHOOK_EMAIL);
+  values.CP_ASAAS_WEBHOOK_TOKEN=token;
+ }
+ return {values,webhook};
 }
 const SHA=/^[a-f0-9]{40}$/, HEX64=/^[a-f0-9]{64}$/;
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -168,7 +240,8 @@ export function flyState(fly){
 export function secretLines(values){
  const lines=[];
  for(const [key,value] of Object.entries(values)){
-  need(MANAGED.has(key)&&typeof value==='string'&&/^[A-Za-z0-9+/=_.:?&%-]{1,8192}$/.test(value),'FLY_SECRET_VALUE_FORMAT_INVALID');
+  // "$" (chave do Asaas) é literal no parser do flyctl 0.4.110 (internal/command/secrets/parser.go: sem expansão).
+  need(MANAGED.has(key)&&typeof value==='string'&&/^[A-Za-z0-9+/=_.:?&%$-]{1,8192}$/.test(value),'FLY_SECRET_VALUE_FORMAT_INVALID');
   lines.push(`${key}=${value}`);
  }
  return lines.join('\n')+'\n';
@@ -277,18 +350,22 @@ export async function execute(env,deps){
  need(fly.secrets.every(s=>MANAGED.has(s.name)),'FLY_UNMANAGED_SECRET');
  // Chave já gravada na Fly não pode ficar órfã por um apply sem ela (import não remove; a flag ficaria ligada).
  need(storage||!names.has('CP_STORAGE_SERVICE_KEY'),'FLY_STORAGE_KEY_REQUIRED');
+ need(financeKey(env)||!names.has('CP_ASAAS_API_KEY'),'FLY_ASAAS_KEY_REQUIRED');
  // Flag que sumiu da Vercel não pode ficar com valor antigo na Fly (import não remove). CP_FILES_ENABLED é
  // regravada como "true" quando a chave do Storage vem neste apply.
  need(Object.keys(COPIED).every(k=>!names.has(k)||Object.hasOwn(vercel,k)||(storage&&Object.hasOwn(storage,k))),'FLY_STALE_COPIED_SECRET');
  if(database.state==='READY'){
   need(REQUIRED.every(k=>names.has(k)),'FLY_SECRETS_INCOMPLETE');
-  if(!storage)return {operation:'apply',alreadyApplied:true,changed:[],secretNames:[...names].sort()};
-  // Login READY: só os dois segredos de anexos, sem tocar no banco; leitura de nomes precisa bater exatamente.
-  deps.fly.importSecrets(secretLines(storage));
-  const expected=[...new Set([...names,...STORAGE])].sort();
+  if(!storage&&!financeKey(env))return {operation:'apply',alreadyApplied:true,changed:[],secretNames:[...names].sort()};
+  // Login READY: só os segredos de anexos e do financeiro, sem tocar no banco; leitura de nomes precisa bater exatamente.
+  const finance=await financeValues(env,deps,names);
+  const staged={...(storage??{}),...(finance?.values??{})};
+  deps.fly.importSecrets(secretLines(staged));
+  const changed=Object.keys(staged).sort();
+  const expected=[...new Set([...names,...changed])].sort();
   const after=flyState(deps.fly);
   need(JSON.stringify(after.secrets.map(s=>s.name))===JSON.stringify(expected),'FLY_SECRETS_READBACK_MISMATCH');
-  return {operation:'apply',alreadyApplied:true,changed:[...STORAGE],secretNames:expected,
+  return {operation:'apply',alreadyApplied:true,changed,secretNames:expected,...(finance?.webhook?{asaasWebhook:finance.webhook}:{}),
    note:'Segredos em stage na Fly: valem no próximo deploy (operação deploy).'};
  }
  // Login novo (ABSENT) com credencial de banco já gravada na Fly seria troca silenciosa de geração.
@@ -296,8 +373,9 @@ export async function execute(env,deps){
  const publishable=env.CP_SUPABASE_PUBLISHABLE_KEY;
  need(typeof publishable==='string'&&/^sb_publishable_[A-Za-z0-9_-]{16,}$/.test(publishable),'FLY_PUBLISHABLE_KEY_INVALID');
  const generated=generateValues(deps.randomBytes);
+ const finance=await financeValues(env,deps,names);
  const values={...vercel,...FIXED_PUBLIC,CP_SUPABASE_PUBLISHABLE_KEY:publishable,CP_VERCEL_DB_CA_BASE64:deps.readCa(),
-  DATABASE_USER:`cp_runtime_${req.generation.replaceAll('-','')}.${PROJECT}`,...generated,...(storage??{})};
+  DATABASE_USER:`cp_runtime_${req.generation.replaceAll('-','')}.${PROJECT}`,...generated,...(storage??{}),...(finance?.values??{})};
  const lines=secretLines(values);
  const expected=[...Object.keys(values)].sort();
  const result=await deps.login.apply(req,database.fingerprint,generated.DATABASE_PASSWORD,async()=>{
@@ -309,7 +387,7 @@ export async function execute(env,deps){
  // Falha na Fly depois do STAGED: o Java já desabilitou o login; os dois códigos vão para o registro.
  if(result.stagedError)fail(`${result.stagedError instanceof SafeFailure?result.stagedError.code:'FLY_SECRETS_STEP_FAILED'};${result.outcome.code||'FLY_RUNTIME_RESULT_UNKNOWN'}`);
  need(result.staged&&result.outcome.code===''&&result.outcome.state==='READY'&&result.outcome.applied===true,result.outcome.code||'FLY_RUNTIME_RESULT_UNKNOWN');
- return {operation:'apply',alreadyApplied:false,changed:expected,databaseLogin:'READY',
+ return {operation:'apply',alreadyApplied:false,changed:expected,databaseLogin:'READY',...(finance?.webhook?{asaasWebhook:finance.webhook}:{}),
   note:'Segredos em stage na Fly: valem no próximo deploy (operação deploy). Sessões web e códigos de retirada delegada emitidos pela Vercel não valem na Fly.'};
 }
 
@@ -334,7 +412,7 @@ export function realDeps(env){
  const binary=join(resolve(env.RUNNER_TEMP||'/nonexistent'),WORK,'flyctl');
  const fly=createFly({binary,token:env.FLY_API_TOKEN});
  const operation=env.CP_FLY_OPERATION||'inspect';
- return {fly,vercel:createVercelRequester(),waitReady:()=>waitReady(),randomBytes:secureRandomBytes,readCa:()=>readCa(),
+ return {fly,vercel:createVercelRequester(),asaas:createAsaasRequester(),waitReady:()=>waitReady(),randomBytes:secureRandomBytes,readCa:()=>readCa(),
   login:operation==='deploy'?null:createLogin(javaInvocation(env))};
 }
 
