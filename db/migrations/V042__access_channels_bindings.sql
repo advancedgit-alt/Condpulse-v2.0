@@ -41,14 +41,8 @@ BEGIN
    OR NEW.version<>OLD.version+1 OR OLD.status='RETIRED' THEN
   RAISE EXCEPTION 'equipamento: instância, conector e condomínio fixos; retirada final' USING ERRCODE='23514';
  END IF;
- -- Equipamento em vínculo ativo ou pendente (controlador ou leitor): só o nome muda; retirada, sentido, hardware, combinação,
- -- papel ou conexão exigem novo vínculo e novo comissionamento.
+ -- Mudança em equipamento de vínculo ativo ou pendente é conferida pela impressão da configuração (gatilho AFTER).
  PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
- IF (NEW.status,NEW.direction,NEW.hardware_revision,NEW.homologation_id,NEW.device_role,NEW.connection_mode)
-   IS DISTINCT FROM (OLD.status,OLD.direction,OLD.hardware_revision,OLD.homologation_id,OLD.device_role,OLD.connection_mode) AND EXISTS(SELECT 1 FROM cp.point_bindings b WHERE b.tenant_id=NEW.tenant_id AND b.status IN ('ACTIVE','PENDING_COMMISSION')
-   AND NEW.id IN (b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id)) THEN
-  RAISE EXCEPTION 'equipamento em vínculo ativo ou pendente: crie novo vínculo' USING ERRCODE='23514';
- END IF;
  NEW.updated_at:=clock_timestamp();
  RETURN NEW;
 END $$;
@@ -113,12 +107,7 @@ BEGIN
   RAISE EXCEPTION 'canal: identidade nativa fixa; retirada final' USING ERRCODE='23514';
  END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
- -- Canal usado por vínculo ativo ou pendente não muda de função nem deixa de estar verificado sem novo vínculo.
- IF (NEW.channel_kind<>OLD.channel_kind OR NEW.status<>'VERIFIED') AND EXISTS(SELECT 1 FROM cp.point_bindings b
-    WHERE b.tenant_id=NEW.tenant_id AND b.status IN ('ACTIVE','PENDING_COMMISSION') AND NEW.id IN (b.actuator_channel_id,b.door_contact_channel_id,
-     b.exit_request_channel_id,b.passage_sensor_channel_id)) THEN
-  RAISE EXCEPTION 'canal em vínculo ativo ou pendente' USING ERRCODE='23514';
- END IF;
+ -- Mudança em canal de vínculo ativo ou pendente é conferida pela impressão da configuração (gatilho AFTER).
  NEW.updated_at:=clock_timestamp();
  RETURN NEW;
 END $$;
@@ -191,6 +180,8 @@ CREATE TABLE cp.point_bindings (
  valid_until timestamptz,
  wiring_evidence_ref text NOT NULL CHECK(wiring_evidence_ref ~ '^[A-Za-z0-9._:/-]{3,120}$'),
  configuration_hash text NOT NULL DEFAULT '',
+ -- Impressão da configuração física (ponto, canais e todos os equipamentos envolvidos) fixada na submissão ao aceite.
+ commissioned_fingerprint text CHECK(commissioned_fingerprint IS NULL OR commissioned_fingerprint ~ '^[0-9a-f]{64}$'),
  created_by uuid NOT NULL REFERENCES platform.accounts(id),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -209,7 +200,8 @@ CREATE TABLE cp.point_bindings (
  FOREIGN KEY(tenant_id,installation_acceptance_id) REFERENCES cp.installation_acceptances(tenant_id,id),
  CHECK((status='ACTIVE')=(valid_from IS NOT NULL AND valid_until IS NULL) OR status IN ('SUPERSEDED','SUSPENDED')),
  CHECK(status NOT IN ('SUPERSEDED','SUSPENDED') OR valid_from IS NULL OR valid_until IS NOT NULL),
- CHECK(status IN ('DRAFT','SUPERSEDED') OR installation_acceptance_id IS NOT NULL)
+ CHECK(status IN ('DRAFT','SUPERSEDED') OR installation_acceptance_id IS NOT NULL),
+ CHECK(status IN ('DRAFT','SUPERSEDED') OR commissioned_fingerprint IS NOT NULL)
 );
 CREATE UNIQUE INDEX point_bindings_one_active_point ON cp.point_bindings(tenant_id,point_id) WHERE status='ACTIVE';
 CREATE UNIQUE INDEX point_bindings_one_active_actuator ON cp.point_bindings(tenant_id,actuator_channel_id) WHERE status='ACTIVE';
@@ -219,6 +211,31 @@ CREATE INDEX point_bindings_point_time ON cp.point_bindings(tenant_id,point_id,v
 CREATE INDEX point_bindings_actuator_time ON cp.point_bindings(tenant_id,actuator_channel_id,valid_from);
 
 CREATE TRIGGER device_channels_guard BEFORE INSERT OR UPDATE ON cp.device_channels FOR EACH ROW EXECUTE FUNCTION cp.device_channels_guard();
+
+-- Impressão única da configuração comissionada: geometria do ponto, todos os canais e todos os equipamentos envolvidos
+-- (controlador, leitores e hospedeiros de contato, botoeira e sensor). Null quando algo não está visível (falha fechada).
+CREATE FUNCTION cp.point_binding_fingerprint(b cp.point_bindings) RETURNS text
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
+ WITH ch AS (SELECT c.* FROM cp.device_channels c WHERE c.tenant_id=b.tenant_id
+   AND c.id IN (b.actuator_channel_id,b.door_contact_channel_id,b.exit_request_channel_id,b.passage_sensor_channel_id)),
+  want_dev AS (SELECT DISTINCT x FROM (SELECT unnest(ARRAY[b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id]) x
+   UNION SELECT device_id FROM ch) s WHERE x IS NOT NULL),
+  dev AS (SELECT d.* FROM cp.access_devices d WHERE d.tenant_id=b.tenant_id AND d.id IN (SELECT x FROM want_dev)),
+  pt AS (SELECT p.* FROM cp.access_points p WHERE p.tenant_id=b.tenant_id AND p.id=b.point_id)
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM pt)
+   OR (SELECT count(*) FROM ch)<>(SELECT count(DISTINCT x) FROM unnest(ARRAY[b.actuator_channel_id,b.door_contact_channel_id,b.exit_request_channel_id,
+    b.passage_sensor_channel_id]) x WHERE x IS NOT NULL)
+   OR (SELECT count(*) FROM dev)<>(SELECT count(*) FROM want_dev) THEN NULL
+  ELSE encode(sha256(convert_to(jsonb_build_object('binding',b.configuration_hash,
+   'point',(SELECT jsonb_build_object('from',from_area_id,'to',to_area_id,'kind',point_kind,'flow',flow_direction,'egress',egress_class) FROM pt),
+   'channels',(SELECT jsonb_agg(jsonb_build_object('id',id,'device',device_id,'namespace',native_namespace,'channel',external_channel,
+     'kind',channel_kind,'status',status,'limits',limits) ORDER BY id) FROM ch),
+   'devices',(SELECT jsonb_agg(jsonb_build_object('id',id,'instance',provisioned_instance_id,'connector',connector_id,'external',external_id,
+     'direction',direction,'status',status,'hardware',hardware_revision,'homologation',homologation_id,'role',device_role,'connection',connection_mode)
+     ORDER BY id) FROM dev))::text,'UTF8')),'hex') END
+$$;
+REVOKE ALL ON FUNCTION cp.point_binding_fingerprint(cp.point_bindings) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.point_binding_fingerprint(cp.point_bindings) TO cp_api;
 
 -- Conferência física do vínculo, repetida na criação, na submissão ao aceite e na ativação: canal e equipamento podem ter
 -- mudado enquanto o vínculo era rascunho. O lock por condomínio serializa com as mudanças de canal e equipamento.
@@ -237,9 +254,10 @@ BEGIN
  END IF;
  -- Falha fechada: ponto e equipamentos precisam estar visíveis e ativos.
  IF NOT EXISTS(SELECT 1 FROM cp.access_points p WHERE p.tenant_id=b.tenant_id AND p.id=b.point_id AND p.status<>'RETIRED')
-   OR (SELECT count(*) FROM cp.access_devices d WHERE d.tenant_id=b.tenant_id AND d.status='ACTIVE'
-    AND d.id IN (b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id))
-    <>(SELECT count(DISTINCT x) FROM unnest(ARRAY[b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id]) x WHERE x IS NOT NULL) THEN
+   OR EXISTS(SELECT 1 FROM (SELECT unnest(ARRAY[b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id]) x
+     UNION SELECT c.device_id FROM cp.device_channels c WHERE c.tenant_id=b.tenant_id
+      AND c.id IN (b.actuator_channel_id,b.door_contact_channel_id,b.exit_request_channel_id,b.passage_sensor_channel_id)) want
+    WHERE want.x IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.access_devices d WHERE d.tenant_id=b.tenant_id AND d.id=want.x AND d.status='ACTIVE')) THEN
   RAISE EXCEPTION 'ponto retirado ou equipamento inativo' USING ERRCODE='23514';
  END IF;
 END $$;
@@ -283,6 +301,15 @@ BEGIN
  -- O conjunto de vínculos de um aceite fecha na assinatura técnica: depois dela nada entra nem sai (salvo rejeição).
  IF NEW.status IN ('PENDING_COMMISSION','ACTIVE') THEN
   PERFORM cp.point_binding_check(NEW);
+ END IF;
+ IF NEW.commissioned_fingerprint IS DISTINCT FROM OLD.commissioned_fingerprint THEN
+  RAISE EXCEPTION 'impressão da configuração é do banco' USING ERRCODE='42501';
+ END IF;
+ IF NEW.status='PENDING_COMMISSION' THEN
+  NEW.commissioned_fingerprint:=cp.point_binding_fingerprint(NEW);
+  IF NEW.commissioned_fingerprint IS NULL THEN RAISE EXCEPTION 'configuração do vínculo não visível' USING ERRCODE='42501'; END IF;
+ ELSIF NEW.status='ACTIVE' AND cp.point_binding_fingerprint(NEW) IS DISTINCT FROM NEW.commissioned_fingerprint THEN
+  RAISE EXCEPTION 'configuração física mudou desde a submissão: crie novo vínculo' USING ERRCODE='23514';
  END IF;
  IF NEW.status='PENDING_COMMISSION' THEN
   SELECT status INTO acceptance_status FROM cp.installation_acceptances WHERE tenant_id=NEW.tenant_id AND id=NEW.installation_acceptance_id
@@ -448,6 +475,7 @@ BEGIN
    OR NEW.version<>OLD.version+1 OR OLD.status='RETIRED' THEN
   RAISE EXCEPTION 'ponto: código fixo, versão sequencial e retirada final' USING ERRCODE='23514';
  END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
  IF NEW.status='COMMISSIONED' AND OLD.status<>'COMMISSIONED' AND NOT EXISTS(SELECT 1 FROM cp.point_bindings b
     JOIN cp.installation_acceptances a ON a.tenant_id=b.tenant_id AND a.id=b.installation_acceptance_id
     WHERE b.tenant_id=NEW.tenant_id AND b.point_id=NEW.id AND b.status='ACTIVE' AND a.status='APPROVED') THEN
@@ -464,6 +492,28 @@ BEGIN
  NEW.updated_at:=clock_timestamp();
  RETURN NEW;
 END $$;
+
+-- Qualquer mudança em ponto, canal ou equipamento de vínculo ativo ou pendente que altere a impressão da configuração é
+-- recusada (o ponto comissionado que muda de geometria já volta a MAPPED e suspende o vínculo ativo no gatilho BEFORE).
+CREATE FUNCTION cp.installation_configuration_guard() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM cp.point_bindings b WHERE b.tenant_id=NEW.tenant_id AND b.status IN ('ACTIVE','PENDING_COMMISSION')
+   AND CASE TG_TABLE_NAME
+    WHEN 'access_points' THEN b.point_id=NEW.id
+    WHEN 'device_channels' THEN NEW.id IN (b.actuator_channel_id,b.door_contact_channel_id,b.exit_request_channel_id,b.passage_sensor_channel_id)
+    ELSE NEW.id IN (b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id) OR EXISTS(SELECT 1 FROM cp.device_channels c
+     WHERE c.tenant_id=b.tenant_id AND c.device_id=NEW.id
+      AND c.id IN (b.actuator_channel_id,b.door_contact_channel_id,b.exit_request_channel_id,b.passage_sensor_channel_id)) END
+   AND cp.point_binding_fingerprint(b) IS DISTINCT FROM b.commissioned_fingerprint) THEN
+  RAISE EXCEPTION 'configuração comissionada mudou: crie novo vínculo e novo aceite' USING ERRCODE='23514';
+ END IF;
+ RETURN NULL;
+END $$;
+REVOKE ALL ON FUNCTION cp.installation_configuration_guard() FROM PUBLIC;
+CREATE TRIGGER access_devices_configuration AFTER UPDATE ON cp.access_devices FOR EACH ROW EXECUTE FUNCTION cp.installation_configuration_guard();
+CREATE TRIGGER device_channels_configuration AFTER UPDATE ON cp.device_channels FOR EACH ROW EXECUTE FUNCTION cp.installation_configuration_guard();
+CREATE TRIGGER access_points_configuration AFTER UPDATE ON cp.access_points FOR EACH ROW EXECUTE FUNCTION cp.installation_configuration_guard();
 
 ALTER TABLE cp.device_channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cp.device_channels FORCE ROW LEVEL SECURITY;
@@ -526,8 +576,8 @@ GRANT UPDATE(status,plant_ref,plant_hash,topology_manifest_ref,topology_hash,cap
 -- Worker/gateway: topologia ativa e revisão, sem referências de projeto.
 GRANT SELECT(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,limits,status) ON cp.device_channels TO cp_worker;
 GRANT SELECT(id,tenant_id,point_id,actuator_channel_id,controller_device_id,entry_reader_device_id,exit_reader_device_id,door_contact_channel_id,
- exit_request_channel_id,passage_sensor_channel_id,homologation_id,binding_revision,direction_map,status,valid_from,valid_until,configuration_hash)
- ON cp.point_bindings TO cp_worker;
+ exit_request_channel_id,passage_sensor_channel_id,homologation_id,binding_revision,direction_map,status,valid_from,valid_until,configuration_hash,
+ commissioned_fingerprint) ON cp.point_bindings TO cp_worker;
 
 -- O comissionamento técnico atualiza o estado do ponto pelo aceite (o gatilho do ponto exige vínculo ativo aprovado).
 DROP POLICY access_points_change ON cp.access_points;

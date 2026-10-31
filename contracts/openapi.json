@@ -29537,6 +29537,7 @@
           "validUntil",
           "wiringEvidenceRef",
           "configurationHash",
+          "commissionedFingerprint",
           "version"
         ],
         "properties": {
@@ -29640,6 +29641,14 @@
           "configurationHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          },
+          "commissionedFingerprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Impressão da configuração física (ponto, canais e equipamentos) fixada pelo banco na submissão; qualquer mudança dela é recusada enquanto o vínculo estiver pendente ou ativo."
           },
           "version": {
             "type": "integer",

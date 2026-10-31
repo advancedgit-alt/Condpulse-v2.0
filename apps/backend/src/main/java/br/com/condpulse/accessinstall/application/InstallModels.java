@@ -30,7 +30,7 @@ public final class InstallModels {
  public record Binding(UUID bindingId,UUID pointId,int bindingRevision,UUID actuatorChannelId,UUID controllerDeviceId,UUID entryReaderDeviceId,
    UUID exitReaderDeviceId,UUID doorContactChannelId,UUID exitRequestChannelId,UUID passageSensorChannelId,UUID homologationId,
    UUID installationAcceptanceId,Directions directions,String status,Instant validFrom,Instant validUntil,String wiringEvidenceRef,
-   String configurationHash,long version) {}
+   String configurationHash,String commissionedFingerprint,long version) {}
  public record BindingPage(List<Binding> bindings) {}
  public record CreateBinding(UUID bindingId,UUID pointId,UUID actuatorChannelId,UUID controllerDeviceId,UUID entryReaderDeviceId,
    UUID exitReaderDeviceId,UUID doorContactChannelId,UUID exitRequestChannelId,UUID passageSensorChannelId,UUID homologationId,

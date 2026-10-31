@@ -3781,7 +3781,7 @@ def binding_checks():
     KA, KB = "42000000-0000-4000-8000-0000000000a1", "42000000-0000-4000-8000-0000000000b1"
     HOK, HNO = "42000000-0000-4000-8000-0000000000c1", "42000000-0000-4000-8000-0000000000c2"
     A1, A2, P1 = "42100000-0000-4000-8000-000000000001", "42100000-0000-4000-8000-000000000002", "42200000-0000-4000-8000-000000000001"
-    D1, D2 = "42300000-0000-4000-8000-000000000001", "42300000-0000-4000-8000-000000000002"
+    D1, D2, D3 = "42300000-0000-4000-8000-000000000001", "42300000-0000-4000-8000-000000000002", "42300000-0000-4000-8000-000000000003"
     CR, CA, CD, CR2 = ("42400000-0000-4000-8000-000000000001", "42400000-0000-4000-8000-000000000002",
                        "42400000-0000-4000-8000-000000000003", "42400000-0000-4000-8000-000000000004")
     B1, B2, B3 = "42500000-0000-4000-8000-000000000001", "42500000-0000-4000-8000-000000000002", "42500000-0000-4000-8000-000000000003"
@@ -3832,7 +3832,7 @@ def binding_checks():
     expect(refused(sup + device(D1, "ctrl-1", by=MS), **as_sup), "HAC-010: suporte so le a instalacao")
     expect(error(tech + device(D1, "ctrl-1", connector=KB), "23503", **as_tech) or error(tech + device(D1, "ctrl-1", connector=KB), "23514", **as_tech),
            "HAC-007: conector de outro condominio")
-    query(tech + device(D1, "ctrl-1") + "; " + device(D2, "leitor-1", role="READER"), **as_tech)
+    query(tech + device(D1, "ctrl-1") + "; " + device(D2, "leitor-1", role="READER") + "; " + device(D3, "modulo-1", role="EXPANSION_MODULE"), **as_tech)
     expect(value(f"select (provisioned_instance_id is not null)::text||':'||version from cp.access_devices where id='{D1}'") == "true:0",
            "instancia provisionada pelo banco")
     expect(error(tech + f"UPDATE cp.access_devices SET external_id='outro',version=1 WHERE id='{D1}'", "42501", **as_tech), "id externo fixo")
@@ -3842,7 +3842,7 @@ def binding_checks():
         return (f"INSERT INTO cp.device_channels(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,status,created_by) "
                 f"VALUES('{identifier}','{TA}','{dev}','relay','{ext}','{kind}','{status}','{MI}')")
     expect(refused(mgr + channel(CR, "1", "ACCESS_ACTUATOR").replace(f"'{MI}')", f"'{MG}')"), **as_mgr), "HAC-009: gestor nao cadastra rele")
-    query(tech + channel(CR, "1", "ACCESS_ACTUATOR") + "; " + channel(CA, "2", "ALARM_OUTPUT") + "; " + channel(CD, "door-1", "DOOR_CONTACT")
+    query(tech + channel(CR, "1", "ACCESS_ACTUATOR") + "; " + channel(CA, "2", "ALARM_OUTPUT") + "; " + channel(CD, "door-1", "DOOR_CONTACT", dev=D3)
           + "; " + channel(CR2, "3", "ACCESS_ACTUATOR"), **as_tech)
     expect(error(tech + channel("42400000-0000-4000-8000-000000000009", "1", "ACCESS_ACTUATOR"), "23505", **as_tech),
            "HAC-021: canal nativo unico por controlador")
@@ -3917,6 +3917,11 @@ def binding_checks():
            "canal em vinculo pendente segue verificado")
     expect(error(tech + f"UPDATE cp.access_devices SET status='RETIRED',version=version+1 WHERE id='{D1}'", "23514", **as_tech),
            "equipamento em vinculo pendente nao e retirado")
+    expect(error(tech + f"UPDATE cp.access_points SET flow_direction='FROM_TO',updated_by='{MI}',version=version+1 WHERE id='{P1}'", "23514", **as_tech),
+           "HAC-027: ponto com vinculo pendente assinado nao muda de geometria")
+    expect(error(tech + f"UPDATE cp.access_devices SET status='RETIRED',version=version+1 WHERE id='{D3}'", "23514", **as_tech),
+           "hospedeiro do contato de porta em vinculo pendente nao e retirado")
+    expect(value(f"select length(commissioned_fingerprint) from cp.point_bindings where id='{B3}'") == "64", "impressao da configuracao fixada na submissao")
     # Aprovacao por quem so tem installation.commission: o ponto precisa ficar comissionado (Codex P2).
     query("SET LOCAL app.technical_scopes='installation.commission'; " + f"UPDATE cp.installation_acceptances SET status='APPROVED',version=3 WHERE id='{I3}'",
           tenant=TA, actor=MC, role="cp_api")
@@ -3927,6 +3932,8 @@ def binding_checks():
            "equipamento de vinculo ativo nao muda conexao sem novo comissionamento")
     expect(error(tech + f"UPDATE cp.access_devices SET hardware_revision='r9',version=version+1 WHERE id='{D2}'", "23514", **as_tech),
            "HAC-096: leitor de vinculo ativo nao muda hardware sem novo comissionamento")
+    expect(error(tech + f"UPDATE cp.access_devices SET hardware_revision='r9',version=version+1 WHERE id='{D3}'", "23514", **as_tech),
+           "hospedeiro do contato de porta de vinculo ativo nao muda hardware")
     query(tech + f"UPDATE cp.access_devices SET label='Controlador renomeado',version=version+1 WHERE id='{D1}'", **as_tech)
     expect(error(tech + f"UPDATE cp.device_channels SET channel_kind='OTHER',version=version+1 WHERE id='{CR}'", "23514", **as_tech),
            "canal em vinculo ativo nao muda de funcao")
@@ -3952,7 +3959,7 @@ def binding_checks():
 def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
     query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM cp.point_bindings WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.installation_acceptances WHERE tenant_id in ('{TA}','{TB}'); "
-          f"DELETE FROM cp.device_channels WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_devices WHERE id in ('{D1}','{D2}'); "
+          f"DELETE FROM cp.device_channels WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_devices WHERE connector_id in ('{KA}','{KB}'); "
           f"DELETE FROM cp.access_connectors WHERE id in ('{KA}','{KB}'); DELETE FROM cp.access_points WHERE id='{P1}'; "
           f"DELETE FROM cp.access_areas WHERE id in ('{A1}','{A2}'); DELETE FROM platform.access_homologations WHERE id in ('{HOK}','{HNO}'); "
           f"DELETE FROM cp.technical_grants WHERE id in ('{G1}','{G2}','42700000-0000-4000-8000-000000000003'); "

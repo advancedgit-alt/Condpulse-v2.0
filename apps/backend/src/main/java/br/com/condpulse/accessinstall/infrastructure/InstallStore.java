@@ -89,7 +89,7 @@ public class InstallStore {
    r.getObject("exit_reader_device_id",UUID.class),r.getObject("door_contact_channel_id",UUID.class),r.getObject("exit_request_channel_id",UUID.class),
    r.getObject("passage_sensor_channel_id",UUID.class),r.getObject("homologation_id",UUID.class),r.getObject("installation_acceptance_id",UUID.class),
    new InstallModels.Directions(r.getString("entry_reader"),r.getString("exit_reader")),r.getString("status"),instant(r.getTimestamp("valid_from")),
-   instant(r.getTimestamp("valid_until")),r.getString("wiring_evidence_ref"),r.getString("configuration_hash"),r.getLong("version"));
+   instant(r.getTimestamp("valid_until")),r.getString("wiring_evidence_ref"),r.getString("configuration_hash"),r.getString("commissioned_fingerprint"),r.getLong("version"));
  }
  public void insertBinding(UUID tenant,InstallModels.CreateBinding b,UUID actor) {
   jdbc.update("""

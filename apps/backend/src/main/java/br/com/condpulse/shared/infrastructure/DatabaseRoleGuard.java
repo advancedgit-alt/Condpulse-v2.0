@@ -242,7 +242,7 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
         and c.attname not in ('status','installation_acceptance_id','version')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.point_bindings') and c.attname in ('status','binding_revision','configuration_hash','valid_from',
-        'valid_until','installation_acceptance_id','version')),false)
+        'valid_until','installation_acceptance_id','commissioned_fingerprint','version')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT,UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.installation_acceptances') and c.attname in ('installation_revision','effective_at','created_at','updated_at')),false)
      or coalesce(has_column_privilege(current_user,to_regclass('cp.installation_acceptances'),'created_by','UPDATE'),false)
