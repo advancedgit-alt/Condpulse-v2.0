@@ -3455,9 +3455,36 @@ def subject_checks():
           f"VALUES('{CV}','{TA}','{SV}','RESIDENT','VISIT_PERMIT','{PV}',now()+interval '30 days','{CO}')", **as_con)
     expect(value(f"select context_kind||':'||(valid_until<now()+interval '2 days') from cp.subject_contexts where id='{CV}'") == "VISITOR:true",
            "HAC-036: convite vira contexto VISITOR com a vigencia do convite")
+    expect(value(mgr + f"select cp.subject_context_current('{TA}','{CV}')", **as_mgr) == "f",
+           "sem a conferencia ligada a gestao nao le o convite")
+    expect(value(mgr + f"SET LOCAL app.subject_context_scan='on'; select cp.subject_context_current('{TA}','{CV}')", **as_mgr) == "t",
+           "com a conferencia da listagem a gestao ve a vigencia do visitante (so o booleano)")
+    expect(value(f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.visit_permits where id='{PV}'", tenant=TA, actor=RS, role="cp_api") == "1"
+           and value(f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.visit_permits", tenant=TA, actor=DP, role="cp_api") == "0",
+           "a conferencia nao abre convites para quem nao e da gestao ou portaria")
     query(f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{RS}',revoked_at=now(),revoke_reason='Cancelado',version=version+1 WHERE id='{PV}'")
     expect(value(con + f"select cp.subject_context_current('{TA}','{CV}')", **as_con) == "f" and current(CRS) == "t",
            "HAC-039: convite revogado derruba o contexto de visita e nao a residencia")
+    # Revogacao de contexto vale ate reautorizacao explicita da gestao; convite revogado nunca volta.
+    CXA, CXR = "38100000-0000-4000-8000-000000000005", "38100000-0000-4000-8000-000000000006"
+    query(mgr + context(CXA, SXA, MXA), **as_mgr)
+    query(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Ordem da gestao',version=1 WHERE id='{CXA}'", **as_mgr)
+    expect(error(mgr + context(CXR, SXA, MXA), "23514", **as_mgr), "origem com contexto revogado nao e recriada sem reautorizacao")
+    reauth = (f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,reauthorizes_context_id,created_by) "
+              f"VALUES('{CXR}','{TA}','{SXA}','RESIDENT','MEMBERSHIP','{MXA}','{CXA}',")
+    expect(error(con + reauth + f"'{CO}')", "42501", **as_con), "portaria nao reautoriza")
+    query(mgr + reauth + f"'{MG}')", **as_mgr)
+    expect(current(CXR) == "t", "reautorizacao explicita da gestao devolve o contexto")
+    query(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Ordem da gestao',version=1 WHERE id='{CV}'", **as_mgr)
+    expect(error(con + f"INSERT INTO cp.subject_contexts(tenant_id,subject_id,context_kind,source_kind,permit_id,created_by) "
+                 f"VALUES('{TA}','{SV}','VISITOR','VISIT_PERMIT','{PV}','{CO}')", "23514", **as_con),
+           "portaria nao desfaz contexto de visitante revogado pela gestao")
+    query(mgr + "INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+          f"VALUES('{TA}','{MG}','SUBJECT_MATERIALIZED','ACCESS_SUBJECT','{TA}',gen_random_uuid())", **as_mgr)
+    expect(value(f"select count(*) from cp.audit_log where actor_id='{MG}' and action='SUBJECT_MATERIALIZED'") == "1", "trilha SUBJECT_* da gestao")
+    expect(error(f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+                 f"VALUES('{TA}','{RS}','SUBJECT_BLOCKED','ACCESS_SUBJECT','{SRS}',gen_random_uuid())", "42501", tenant=TA, actor=RS, role="cp_api"),
+           "morador nao grava trilha de sujeito")
     # Credencial (CP-046): sujeito preenchido pelo banco; nao troca de sujeito.
     query(f"INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{KN}','{TA}','SIMULATED','SUJEITO')")
     query(mgr + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
@@ -3481,6 +3508,7 @@ def subject_checks():
                  "and c.relname in ('access_subjects','subject_contexts') and c.relrowsecurity and c.relforcerowsecurity") == "2",
            "sujeitos e contextos com RLS FORCE")
     query(f"SET session_replication_role=replica; DELETE FROM cp.access_credentials WHERE connector_id='{KN}'; DELETE FROM cp.access_connectors WHERE id='{KN}'; "
+          f"DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{CO}'); "
           f"DELETE FROM cp.subject_contexts WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_subjects WHERE tenant_id in ('{TA}','{TB}'); "
           f"DELETE FROM cp.visit_permits WHERE id='{PV}'; DELETE FROM cp.visitors WHERE id='{VV}'; "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{CO}','{RS}','{DP}','{X}'); "

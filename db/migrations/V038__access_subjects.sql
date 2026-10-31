@@ -49,6 +49,8 @@ CREATE TABLE cp.subject_contexts (
  source_version bigint NOT NULL DEFAULT 0 CHECK(source_version>=0),
  unit_id uuid,
  guardian_subject_id uuid,
+ -- Reautorização explícita da gestão depois de um contexto revogado da mesma origem (a materialização nunca desfaz revogação).
+ reauthorizes_context_id uuid,
  approved_by_account_id uuid REFERENCES platform.accounts(id),
  -- now(): mesmo instante da transação usado por cp.subject_context_current.
  valid_from timestamptz NOT NULL DEFAULT now(),
@@ -66,6 +68,7 @@ CREATE TABLE cp.subject_contexts (
  FOREIGN KEY(tenant_id,permit_id) REFERENCES cp.visit_permits(tenant_id,id),
  FOREIGN KEY(tenant_id,unit_id) REFERENCES cp.units(tenant_id,id),
  FOREIGN KEY(tenant_id,guardian_subject_id) REFERENCES cp.access_subjects(tenant_id,id),
+ FOREIGN KEY(tenant_id,reauthorizes_context_id,subject_id) REFERENCES cp.subject_contexts(tenant_id,id,subject_id),
  -- Exatamente uma origem, coerente com source_kind.
  CHECK((source_kind='MEMBERSHIP')=(membership_id IS NOT NULL) AND (source_kind='VISIT_PERMIT')=(permit_id IS NOT NULL)
   AND (source_kind='FUNCTIONAL_AUTHORIZATION')=(functional_authorization_ref IS NOT NULL)),
@@ -162,10 +165,10 @@ BEGIN
  IF TG_OP='UPDATE' THEN
   IF OLD.status<>'ACTIVE' OR NEW.status='ACTIVE' OR NEW.version<>OLD.version+1
     OR (NEW.id,NEW.tenant_id,NEW.subject_id,NEW.context_kind,NEW.source_kind,NEW.membership_id,NEW.permit_id,
-        NEW.functional_authorization_ref,NEW.source_version,NEW.unit_id,NEW.guardian_subject_id,NEW.approved_by_account_id,
+        NEW.functional_authorization_ref,NEW.source_version,NEW.unit_id,NEW.guardian_subject_id,NEW.reauthorizes_context_id,NEW.approved_by_account_id,
         NEW.valid_from,NEW.valid_until,NEW.created_by,NEW.created_at)
      IS DISTINCT FROM (OLD.id,OLD.tenant_id,OLD.subject_id,OLD.context_kind,OLD.source_kind,OLD.membership_id,OLD.permit_id,
-        OLD.functional_authorization_ref,OLD.source_version,OLD.unit_id,OLD.guardian_subject_id,OLD.approved_by_account_id,
+        OLD.functional_authorization_ref,OLD.source_version,OLD.unit_id,OLD.guardian_subject_id,OLD.reauthorizes_context_id,OLD.approved_by_account_id,
         OLD.valid_from,OLD.valid_until,OLD.created_by,OLD.created_at) THEN
    RAISE EXCEPTION 'contexto só muda de ativo para encerrado' USING ERRCODE='23514';
   END IF;
@@ -209,6 +212,20 @@ BEGIN
    RAISE EXCEPTION 'responsável precisa ser sujeito ativo com conta' USING ERRCODE='23514';
   END IF;
  END IF;
+ -- Revogação de um contexto vale até reautorização explícita: nova linha da mesma origem precisa citar a revogação mais
+ -- recente; convite revogado nunca volta (novo convite é nova origem).
+ IF NEW.source_kind IN ('MEMBERSHIP','VISIT_PERMIT') AND EXISTS(SELECT 1 FROM cp.subject_contexts r WHERE r.tenant_id=NEW.tenant_id
+    AND r.subject_id=NEW.subject_id AND r.status='REVOKED' AND r.membership_id IS NOT DISTINCT FROM NEW.membership_id
+    AND r.permit_id IS NOT DISTINCT FROM NEW.permit_id) THEN
+  IF NEW.source_kind<>'MEMBERSHIP' OR NEW.reauthorizes_context_id IS NULL OR NOT EXISTS(SELECT 1 FROM cp.subject_contexts r
+     WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.reauthorizes_context_id AND r.subject_id=NEW.subject_id AND r.status='REVOKED'
+      AND r.membership_id=NEW.membership_id AND NOT EXISTS(SELECT 1 FROM cp.subject_contexts later WHERE later.tenant_id=r.tenant_id
+       AND later.subject_id=r.subject_id AND later.membership_id=r.membership_id AND later.status='REVOKED' AND later.created_at>r.created_at)) THEN
+   RAISE EXCEPTION 'origem com contexto revogado exige reautorização explícita' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.reauthorizes_context_id IS NOT NULL THEN
+  RAISE EXCEPTION 'reautorização sem contexto revogado da mesma origem' USING ERRCODE='23514';
+ END IF;
  NEW.created_at:=clock_timestamp(); NEW.updated_at:=NEW.created_at;
  RETURN NEW;
 END $$;
@@ -232,12 +249,26 @@ CREATE POLICY tenant_boundary ON cp.subject_contexts TO cp_api,cp_worker
 CREATE POLICY rental_owner_hidden ON cp.subject_contexts AS RESTRICTIVE FOR ALL TO cp_api
  USING(NOT cp.rental_owner_hidden(tenant_id,unit_id)) WITH CHECK(NOT cp.rental_owner_hidden(tenant_id,unit_id));
 
+-- Conferência da vigência de convites na listagem de sujeitos: a API liga app.subject_context_scan só durante a consulta
+-- que devolve booleanos (cp.subject_context_current); a gestão continua sem listar convites fora dela.
+CREATE FUNCTION cp.subject_context_scan() RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT coalesce(current_setting('app.subject_context_scan',true),'')='on' $$;
+REVOKE ALL ON FUNCTION cp.subject_context_scan() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.subject_context_scan() TO cp_api;
+
 CREATE FUNCTION cp.subject_staff() RETURNS boolean
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
 AS $$ SELECT platform.has_capability('memberships.manage') OR platform.has_capability('concierge.operate')
   OR platform.has_technical_scope('person.review') $$;
 REVOKE ALL ON FUNCTION cp.subject_staff() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.subject_staff() TO cp_api;
+DROP POLICY permits_read_scope ON cp.visit_permits;
+CREATE POLICY permits_read_scope ON cp.visit_permits AS RESTRICTIVE FOR SELECT TO cp_api
+ USING(platform.has_capability('concierge.operate') OR cp.visit_member(tenant_id,unit_id,NULL)
+  OR (created_by=platform.current_actor_id() AND cp.visit_member(tenant_id,unit_id,'create'))
+  OR cp.permit_link_open(tenant_id,id) OR cp.reservation_closing(reservation_id)
+  OR (cp.subject_context_scan() AND cp.subject_staff()));
 
 CREATE POLICY access_subjects_read ON cp.access_subjects AS RESTRICTIVE FOR SELECT TO cp_api
  USING(cp.subject_staff() OR account_id=platform.current_actor_id());
@@ -252,7 +283,8 @@ CREATE POLICY subject_contexts_read ON cp.subject_contexts AS RESTRICTIVE FOR SE
  USING(cp.subject_staff() OR EXISTS(SELECT 1 FROM cp.access_subjects s WHERE s.tenant_id=subject_contexts.tenant_id
   AND s.id=subject_contexts.subject_id AND s.account_id=platform.current_actor_id()));
 CREATE POLICY subject_contexts_create ON cp.subject_contexts AS RESTRICTIVE FOR INSERT TO cp_api
- WITH CHECK(created_by=platform.current_actor_id() AND (
+ WITH CHECK(created_by=platform.current_actor_id()
+ AND (reauthorizes_context_id IS NULL OR platform.has_capability('memberships.manage')) AND (
   (source_kind IN ('MEMBERSHIP','FUNCTIONAL_AUTHORIZATION') AND (platform.has_capability('memberships.manage') OR platform.has_technical_scope('person.review'))
    AND (source_kind='MEMBERSHIP' OR approved_by_account_id=platform.current_actor_id()))
   OR (source_kind='VISIT_PERMIT' AND platform.has_capability('concierge.operate'))));
@@ -264,15 +296,16 @@ GRANT SELECT ON cp.access_subjects,cp.subject_contexts TO cp_api;
 GRANT INSERT(id,tenant_id,origin_kind,account_id,visitor_id) ON cp.access_subjects TO cp_api;
 GRANT UPDATE(status,restriction_epoch,blocked_reason,blocked_by,version) ON cp.access_subjects TO cp_api;
 GRANT INSERT(id,tenant_id,subject_id,context_kind,source_kind,membership_id,permit_id,functional_authorization_ref,
- guardian_subject_id,approved_by_account_id,valid_from,valid_until,created_by) ON cp.subject_contexts TO cp_api;
+ guardian_subject_id,reauthorizes_context_id,approved_by_account_id,valid_from,valid_until,created_by) ON cp.subject_contexts TO cp_api;
 GRANT UPDATE(status,status_reason,version) ON cp.subject_contexts TO cp_api;
 -- Worker: leitura mínima para o compilador de direitos (fatias seguintes); nada de escrita.
 GRANT SELECT(id,tenant_id,status,restriction_epoch,external_ref) ON cp.access_subjects TO cp_worker;
 GRANT SELECT(id,tenant_id,subject_id,context_kind,unit_id,valid_from,valid_until,status) ON cp.subject_contexts TO cp_worker;
 
 -- Trilha da gestão para sujeitos e contextos.
+-- Prefixo SUBJECT_ (ACCESS_ já é do registro manual da portaria, V014).
 CREATE POLICY audit_subject_actions ON cp.audit_log AS RESTRICTIVE FOR INSERT TO cp_api
- WITH CHECK(action NOT LIKE 'ACCESS\_SUBJECT\_%' OR (actor_id=platform.current_actor_id() AND cp.subject_staff()
+ WITH CHECK(action NOT LIKE 'SUBJECT\_%' OR (actor_id=platform.current_actor_id() AND cp.subject_staff()
   AND resource_type IN ('ACCESS_SUBJECT','SUBJECT_CONTEXT')));
 
 -- Compatibilidade da credencial (CP-046): sujeito sempre o da conta do vínculo da credencial, preenchido pelo banco na

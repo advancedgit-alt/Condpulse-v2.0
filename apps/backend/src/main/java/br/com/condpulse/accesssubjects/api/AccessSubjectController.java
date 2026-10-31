@@ -59,6 +59,12 @@ public class AccessSubjectController {
   subjects.closeContext(account(jwt),tenantId,assurance(jwt),contextId,request);
   return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
  }
+ @PostMapping("/v1/tenants/{tenantId}/management/subject-contexts/{contextId}/reauthorize")
+ public ResponseEntity<Void> reauthorize(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,@PathVariable UUID contextId,
+   @RequestBody SubjectModels.Reauthorize request) {
+  subjects.reauthorize(account(jwt),tenantId,assurance(jwt),contextId,request);
+  return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+ }
  static UUID account(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
  static AssuranceLevel assurance(Jwt jwt) { return AssuranceLevel.fromClaim(jwt.getClaims().get("aal")); }
 }

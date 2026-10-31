@@ -14543,7 +14543,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Cria, de forma idempotente, o sujeito de cada conta com vínculo de acesso físico (morador, responsável, dependente, proprietário e portaria) e um contexto por vínculo; contexto com origem alterada é substituído. Gestão e suporte não geram contexto físico.",
+        "description": "Cria, de forma idempotente, o sujeito de cada conta com vínculo de acesso físico (morador, responsável, dependente, proprietário e portaria) e um contexto por vínculo; contexto com origem alterada é substituído. Gestão e suporte não geram contexto físico. Origem com contexto revogado não é recriada (revokedKept): só a reautorização explícita da gestão devolve o contexto.",
         "parameters": [
           {
             "name": "tenantId",
@@ -14613,7 +14613,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Portaria (concierge.operate, AAL2): sujeito de cada visitante com convite vigente e contexto VISITOR (ou SERVICE_PROVIDER, quando o convite vem de regra de prestador) com a vigência do convite. Idempotente.",
+        "description": "Portaria (concierge.operate, AAL2): sujeito de cada visitante com convite vigente e contexto VISITOR (ou SERVICE_PROVIDER, quando o convite vem de regra de prestador) com a vigência do convite. Idempotente. Origem com contexto revogado não é recriada (revokedKept): só a reautorização explícita da gestão devolve o contexto.",
         "parameters": [
           {
             "name": "tenantId",
@@ -15016,6 +15016,94 @@
           },
           "409": {
             "description": "ACCESS_SUBJECT_STALE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/subject-contexts/{contextId}/reauthorize": {
+      "post": {
+        "operationId": "managementReauthorizeSubjectContext",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Reautorização explícita pela gestão do último contexto de vínculo revogado: novo contexto da mesma origem, se ela ainda vale. Contexto de convite revogado não volta (novo convite é nova origem). Repetir não duplica.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "contextId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectContextReauthorize"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alteração aplicada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_SUBJECT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_SUBJECT_NOT_REAUTHORIZABLE"
           },
           "422": {
             "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
@@ -24097,7 +24185,8 @@
         "required": [
           "subjectsCreated",
           "contextsCreated",
-          "contextsSuperseded"
+          "contextsSuperseded",
+          "revokedKept"
         ],
         "properties": {
           "subjectsCreated": {
@@ -24111,6 +24200,11 @@
           "contextsSuperseded": {
             "type": "integer",
             "minimum": 0
+          },
+          "revokedKept": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Origens com contexto revogado que não são recriadas sem reautorização explícita."
           }
         }
       },
@@ -24194,6 +24288,20 @@
           "validUntil": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "SubjectContextReauthorize": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
           }
         }
       }

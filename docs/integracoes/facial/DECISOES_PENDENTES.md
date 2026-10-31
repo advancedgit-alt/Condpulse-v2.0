@@ -34,6 +34,7 @@ aplicado em banco, Fly ou Vercel; a aplicação fica com o executor protegido.
 | P6 | Cartão, QR e PIN | mesmas regras de área que a face | Fatias V043/V044 |
 | P8 | Proprietário (`OWNER`) como contexto de acesso | `RESIDENT` quando a unidade não está alugada; `OWNER_NONRESIDENT` com locação em vigor (V034). A troca de situação invalida o contexto materializado até a próxima materialização | `cp.membership_context_kind` (V038) |
 | P9 | Quem materializa sujeitos | Gestão para contas com vínculo físico (morador, responsável, dependente, proprietário, portaria); portaria para visitantes de convites vigentes (a gestão não lê convites). `MANAGER` e `SUPPORT` não geram contexto físico | `POST .../management/access-subjects/materialize` e `.../concierge/access-subjects/materialize` |
+| P10 | Revogação de contexto | Vale até reautorização explícita da gestão (`/subject-contexts/{id}/reauthorize`); a materialização nunca a desfaz. Contexto de convite revogado não volta: novo convite é nova origem | V038 (gatilho e `reauthorizes_context_id`) |
 | P7 | Gestor (MANAGER) | sem herança de escopo técnico; capacidades de regra (`area.manage`, `policy.edit`, `policy.publish`, `person.review`) entram nas fatias que as usam (V041/V043) | `StaffCapability` |
 
 ## Perguntas ainda abertas

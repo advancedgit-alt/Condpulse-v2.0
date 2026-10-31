@@ -39,7 +39,7 @@ class AccessSubjectJdbcTest {
  }
  @BeforeEach void reset() throws Exception { db.restoreActiveFixtures(); db.assertEmptyContext(); }
  @AfterEach void clear() throws Exception {
-  db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and action like 'ACCESS\\_SUBJECT\\_%'",db.tenantA,db.tenantB);
+  db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and action like 'SUBJECT\\_%'",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.subject_contexts where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_subjects where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.visit_permits where tenant_id in (?,?)",db.tenantA,db.tenantB);
@@ -57,7 +57,7 @@ class AccessSubjectJdbcTest {
   var first=subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
   assertEquals(3,first.subjectsCreated(),"Moradores A e C e a portaria; gestão não vira sujeito físico");
   assertEquals(3,first.contextsCreated());
-  assertEquals(new SubjectModels.Materialized(0,0,0),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2),"Repetir não duplica");
+  assertEquals(new SubjectModels.Materialized(0,0,0,0),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2),"Repetir não duplica");
   assertTrue(subjects.list(MANAGER,db.tenantA,AAL2).subjects().stream().noneMatch(s->MANAGER.equals(s.accountId())),"HAC-011");
   var resident=of(db.accountA);
   assertEquals("RESIDENT",resident.contexts().getFirst().contextKind());
@@ -68,7 +68,7 @@ class AccessSubjectJdbcTest {
   // Origem mudou: o contexto antigo é substituído na próxima materialização, sem job.
   db.adminUpdate("update cp.memberships set version=version+1 where tenant_id=? and account_id=?",db.tenantA,db.accountA);
   assertTrue(of(db.accountA).eligibleContextIds().isEmpty(),"Projeção desatualizada não vale");
-  assertEquals(new SubjectModels.Materialized(0,1,1),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2));
+  assertEquals(new SubjectModels.Materialized(0,1,1,0),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2));
   assertEquals(1,of(db.accountA).eligibleContextIds().size());
   db.assertEmptyContext();
  }
@@ -106,17 +106,35 @@ class AccessSubjectJdbcTest {
   db.assertEmptyContext();
  }
 
+ @Test void revokedContextStaysRevokedUntilExplicitReauthorization() throws Exception {
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  var residence=of(db.accountA).contexts().getFirst();
+  subjects.closeContext(MANAGER,db.tenantA,AAL2,residence.contextId(),new SubjectModels.CloseContext("Ordem da gestao",residence.version()));
+  assertEquals(new SubjectModels.Materialized(0,0,0,1),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2),
+   "Materialização não desfaz a revogação");
+  assertTrue(of(db.accountA).eligibleContextIds().isEmpty());
+  assertEquals("STAFF_ACCESS_DENIED",code(()->subjects.reauthorize(CONCIERGE,db.tenantA,AAL2,residence.contextId(),new SubjectModels.Reauthorize("Volta"))));
+  subjects.reauthorize(MANAGER,db.tenantA,AAL2,residence.contextId(),new SubjectModels.Reauthorize("Decisao da assembleia"));
+  subjects.reauthorize(MANAGER,db.tenantA,AAL2,residence.contextId(),new SubjectModels.Reauthorize("Decisao da assembleia"));
+  assertEquals(1,of(db.accountA).eligibleContextIds().size(),"Reautorização explícita devolve um contexto, sem duplicar");
+  assertEquals("ACCESS_SUBJECT_NOT_REAUTHORIZABLE",code(()->subjects.reauthorize(MANAGER,db.tenantA,AAL2,UUID.randomUUID(),
+   new SubjectModels.Reauthorize("Volta"))));
+  db.assertEmptyContext();
+ }
+
  @Test void conciergeMaterializesVisitorsOfCurrentInvitations() throws Exception {
   UUID visitor=UUID.randomUUID(),permit=UUID.randomUUID();
   db.adminUpdate("insert into cp.visitors(id,tenant_id,full_name,created_by) values(?,?,'VISITANTE JDBC',?)",visitor,db.tenantA,db.accountA);
   db.adminUpdate("insert into cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until) values(?,?,?,?,?,now(),now()+interval '1 day')",
    permit,db.tenantA,visitor,db.unitA,db.accountA);
   assertEquals("STAFF_ACCESS_DENIED",code(()->subjects.materializePermits(MANAGER,db.tenantA,AAL2)),"Gestão não lê convites");
-  assertEquals(new SubjectModels.Materialized(1,1,0),subjects.materializePermits(CONCIERGE,db.tenantA,AAL2));
-  assertEquals(new SubjectModels.Materialized(0,0,0),subjects.materializePermits(CONCIERGE,db.tenantA,AAL2));
+  assertEquals(new SubjectModels.Materialized(1,1,0,0),subjects.materializePermits(CONCIERGE,db.tenantA,AAL2));
+  assertEquals(new SubjectModels.Materialized(0,0,0,0),subjects.materializePermits(CONCIERGE,db.tenantA,AAL2));
   var listed=subjects.list(MANAGER,db.tenantA,AAL2).subjects().stream().filter(s->visitor.equals(s.visitorId())).findFirst().orElseThrow();
   assertEquals("VISITOR",listed.contexts().getFirst().contextKind());
   assertEquals(permit,listed.contexts().getFirst().permitId());
+  assertTrue(listed.contexts().getFirst().current(),"A gestão vê a vigência do visitante sem ler o convite");
+  assertEquals(1,listed.eligibleContextIds().size());
   db.assertEmptyContext();
  }
 }

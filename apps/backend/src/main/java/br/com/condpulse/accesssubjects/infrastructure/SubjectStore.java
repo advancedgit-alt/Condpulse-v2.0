@@ -42,6 +42,13 @@ public class SubjectStore {
  public Map<UUID,List<SubjectModels.SubjectContext>> contexts(UUID tenant,List<UUID> subjects) {
   var result=new LinkedHashMap<UUID,List<SubjectModels.SubjectContext>>();
   if(subjects.isEmpty()) return result;
+  // Só durante esta consulta a conferência de convites fica liberada (devolve booleanos, nunca dados do convite).
+  jdbc.queryForObject("select set_config('app.subject_context_scan','on',true)",String.class);
+  try { scanContexts(tenant,subjects,result); }
+  finally { jdbc.queryForObject("select set_config('app.subject_context_scan','',true)",String.class); }
+  return result;
+ }
+ private void scanContexts(UUID tenant,List<UUID> subjects,Map<UUID,List<SubjectModels.SubjectContext>> result) {
   jdbc.query("""
    select c.subject_id,c.id,c.context_kind,c.source_kind,c.membership_id,c.permit_id,c.unit_id,c.guardian_subject_id,c.valid_from,
     c.valid_until,c.status,cp.subject_context_current(c.tenant_id,c.id) as current,c.version
@@ -49,7 +56,6 @@ public class SubjectStore {
    """,(ResultSet r)->{
     result.computeIfAbsent(r.getObject("subject_id",UUID.class),k->new ArrayList<>()).add(context(r));
    },tenant,subjects.toArray(UUID[]::new));
-  return result;
  }
  private static SubjectModels.SubjectContext context(ResultSet r) throws SQLException {
   return new SubjectModels.SubjectContext(r.getObject("id",UUID.class),r.getString("context_kind"),r.getString("source_kind"),
@@ -90,10 +96,14 @@ public class SubjectStore {
  }
  /**
   * Contexto ativo da origem: mantém se ainda corresponde à origem; marca SUPERSEDED e recria se a origem mudou.
-  * Devolve 0 (mantido), 1 (criado) ou 2 (substituído e recriado). Origem que não gera contexto (o banco recusa) devolve -1.
+  * Devolve 0 (mantido), 1 (criado), 2 (substituído e recriado) ou -2 (origem com contexto revogado: não recria).
   */
  public int ensureContext(UUID tenant,UUID subject,String sourceKind,UUID source,UUID actor) {
   String column="MEMBERSHIP".equals(sourceKind)?"membership_id":"permit_id";
+  // Revogação explícita vale até reautorização: a materialização não recria a origem.
+  Integer revoked=jdbc.queryForObject("select count(*) from cp.subject_contexts where tenant_id=? and subject_id=? and "+column+"=? and status='REVOKED'",
+   Integer.class,tenant,subject,source);
+  if(revoked!=null && revoked>0) return -2;
   var existing=jdbc.query("select id,version,cp.subject_context_current(tenant_id,id) as current from cp.subject_contexts "
    +"where tenant_id=? and subject_id=? and "+column+"=? and status='ACTIVE' for update",
    (r,n)->new Object[]{r.getObject("id",UUID.class),r.getLong("version"),r.getBoolean("current")},tenant,subject,source);
@@ -107,6 +117,26 @@ public class SubjectStore {
   jdbc.update("insert into cp.subject_contexts(tenant_id,subject_id,context_kind,source_kind,"+column+",valid_until,created_by) "
    +"values(?,?,'RESIDENT',?,?,now()+interval '1 day',?)",tenant,subject,sourceKind,source,actor);
   return outcome;
+ }
+ /** [sujeito, vínculo] do contexto de vínculo revogado mais recente daquela origem; null se não for o caso. */
+ public UUID[] revokedMembershipContext(UUID tenant,UUID context) {
+  var rows=jdbc.query("""
+   select r.subject_id,r.membership_id from cp.subject_contexts r where r.tenant_id=? and r.id=? and r.status='REVOKED' and r.source_kind='MEMBERSHIP'
+    and not exists(select 1 from cp.subject_contexts later where later.tenant_id=r.tenant_id and later.subject_id=r.subject_id
+     and later.membership_id=r.membership_id and later.status='REVOKED' and later.created_at>r.created_at)
+   """,(r,n)->new UUID[]{r.getObject(1,UUID.class),r.getObject(2,UUID.class)},tenant,context);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
+ public boolean reauthorizedBy(UUID tenant,UUID context) {
+  Integer count=jdbc.queryForObject("select count(*) from cp.subject_contexts where tenant_id=? and reauthorizes_context_id=? and status='ACTIVE'",
+   Integer.class,tenant,context);
+  return count!=null && count>0;
+ }
+ public UUID insertReauthorized(UUID tenant,UUID subject,UUID membership,UUID revoked,UUID actor) {
+  return jdbc.queryForObject("""
+   insert into cp.subject_contexts(tenant_id,subject_id,context_kind,source_kind,membership_id,reauthorizes_context_id,created_by)
+   values(?,?,'RESIDENT','MEMBERSHIP',?,?,?) returning id
+   """,UUID.class,tenant,subject,membership,revoked,actor);
  }
  public boolean changeSubjectState(UUID tenant,UUID subject,long expected,String status,String reason,UUID actor) {
   return jdbc.update("""

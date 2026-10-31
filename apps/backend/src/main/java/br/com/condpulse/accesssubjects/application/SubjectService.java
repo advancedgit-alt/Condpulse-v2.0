@@ -50,15 +50,15 @@ public class SubjectService {
  public SubjectModels.Materialized materializeMemberships(UUID actor,UUID tenant,AssuranceLevel assurance) {
   return mapped(()->transactions.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.MANAGE_MEMBERSHIPS);
-   int subjects=0,created=0,superseded=0;
+   int subjects=0,created=0,superseded=0,kept=0;
    for(var membership:store.physicalMemberships(tenant)) {
     var subject=store.ensureSubject(tenant,"ACCOUNT",membership.accountId());
     if((Boolean)subject[1]) subjects++;
     int outcome=store.ensureContext(tenant,(UUID)subject[0],"MEMBERSHIP",membership.membershipId(),actor);
-    if(outcome==1) created++; else if(outcome==2) { created++; superseded++; }
+    if(outcome==1) created++; else if(outcome==2) { created++; superseded++; } else if(outcome==-2) kept++;
    }
-   var result=new SubjectModels.Materialized(subjects,created,superseded);
-   if(subjects+created>0) audit.record(tenant,actor,"ACCESS_SUBJECT_MATERIALIZED","ACCESS_SUBJECT",tenant,summary(result));
+   var result=new SubjectModels.Materialized(subjects,created,superseded,kept);
+   if(subjects+created>0) audit.record(tenant,actor,"SUBJECT_MATERIALIZED","ACCESS_SUBJECT",tenant,summary(result));
    return result;
   }));
  }
@@ -67,15 +67,15 @@ public class SubjectService {
  public SubjectModels.Materialized materializePermits(UUID actor,UUID tenant,AssuranceLevel assurance) {
   return mapped(()->transactions.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.OPERATE_CONCIERGE);
-   int subjects=0,created=0,superseded=0;
+   int subjects=0,created=0,superseded=0,kept=0;
    for(var permit:store.currentPermits(tenant)) {
     var subject=store.ensureSubject(tenant,"VISITOR",permit.visitorId());
     if((Boolean)subject[1]) subjects++;
     int outcome=store.ensureContext(tenant,(UUID)subject[0],"VISIT_PERMIT",permit.permitId(),actor);
-    if(outcome==1) created++; else if(outcome==2) { created++; superseded++; }
+    if(outcome==1) created++; else if(outcome==2) { created++; superseded++; } else if(outcome==-2) kept++;
    }
-   var result=new SubjectModels.Materialized(subjects,created,superseded);
-   if(subjects+created>0) audit.record(tenant,actor,"ACCESS_SUBJECT_MATERIALIZED","ACCESS_SUBJECT",tenant,summary(result));
+   var result=new SubjectModels.Materialized(subjects,created,superseded,kept);
+   if(subjects+created>0) audit.record(tenant,actor,"SUBJECT_MATERIALIZED","ACCESS_SUBJECT",tenant,summary(result));
    return result;
   }));
  }
@@ -84,11 +84,11 @@ public class SubjectService {
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0) throw versionRequired();
   String reason=DisplayText.normalize(request.reason(),300);
   if(reason==null || reason.length()<3) throw new BusinessProblem("ACCESS_SUBJECT_REASON_REQUIRED",400,"Informe o motivo do bloqueio (3 a 300 caracteres).");
-  change(actor,tenant,assurance,subject,request.expectedVersion(),"BLOCKED",reason,"ACCESS_SUBJECT_BLOCKED");
+  change(actor,tenant,assurance,subject,request.expectedVersion(),"BLOCKED",reason,"SUBJECT_BLOCKED");
  }
  public void unblock(UUID actor,UUID tenant,AssuranceLevel assurance,UUID subject,SubjectModels.Unblock request) {
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0) throw versionRequired();
-  change(actor,tenant,assurance,subject,request.expectedVersion(),"ACTIVE",null,"ACCESS_SUBJECT_UNBLOCKED");
+  change(actor,tenant,assurance,subject,request.expectedVersion(),"ACTIVE",null,"SUBJECT_UNBLOCKED");
  }
  private void change(UUID actor,UUID tenant,AssuranceLevel assurance,UUID subject,long expected,String status,String reason,String action) {
   if(subject==null) throw notFound();
@@ -112,7 +112,26 @@ public class SubjectService {
    if(store.contextSubject(tenant,contextId)==null) throw notFound();
    if(!store.closeContext(tenant,contextId,request.expectedVersion(),reason))
     throw new BusinessProblem("ACCESS_SUBJECT_STALE",409,"O contexto mudou ou já foi encerrado. Atualize e tente de novo.");
-   audit.record(tenant,actor,"ACCESS_SUBJECT_CONTEXT_REVOKED","SUBJECT_CONTEXT",contextId,reason);
+   audit.record(tenant,actor,"SUBJECT_CONTEXT_REVOKED","SUBJECT_CONTEXT",contextId,reason);
+   return null;
+  }));
+ }
+
+ /**
+  * Reautorização explícita de um contexto de vínculo revogado: novo contexto da mesma origem, se ela ainda vale. Convite
+  * revogado não volta (novo convite é nova origem). Repetir não duplica.
+  */
+ public void reauthorize(UUID actor,UUID tenant,AssuranceLevel assurance,UUID contextId,SubjectModels.Reauthorize request) {
+  if(contextId==null) throw notFound();
+  String reason=request==null?null:DisplayText.normalize(request.reason(),300);
+  if(reason==null || reason.length()<3) throw new BusinessProblem("ACCESS_SUBJECT_REASON_REQUIRED",400,"Informe o motivo (3 a 300 caracteres).");
+  mapped(()->transactions.execute(actor,tenant,assurance,context->{
+   context.requireCapability(StaffCapability.MANAGE_MEMBERSHIPS);
+   var revoked=store.revokedMembershipContext(tenant,contextId);
+   if(revoked==null) throw new BusinessProblem("ACCESS_SUBJECT_NOT_REAUTHORIZABLE",409,"Só o último contexto de vínculo revogado pode ser reautorizado.");
+   if(store.reauthorizedBy(tenant,contextId)) return null;
+   UUID created=store.insertReauthorized(tenant,revoked[0],revoked[1],contextId,actor);
+   audit.record(tenant,actor,"SUBJECT_CONTEXT_REAUTHORIZED","SUBJECT_CONTEXT",created,reason);
    return null;
   }));
  }
@@ -137,13 +156,14 @@ public class SubjectService {
     throw new BusinessProblem("ACCESS_SUBJECT_CONTEXT_ID_CONFLICT",409,"Este identificador já foi usado para outro contexto.");
    }
    store.insertFunctional(tenant,request.contextId(),subject,request.contextKind(),request.reference(),until,actor);
-   audit.record(tenant,actor,"ACCESS_SUBJECT_CONTEXT_ADDED","SUBJECT_CONTEXT",request.contextId(),null);
+   audit.record(tenant,actor,"SUBJECT_CONTEXT_ADDED","SUBJECT_CONTEXT",request.contextId(),null);
    return null;
   }));
  }
 
  private static String summary(SubjectModels.Materialized result) {
-  return "sujeitos="+result.subjectsCreated()+" contextos="+result.contextsCreated()+" substituidos="+result.contextsSuperseded();
+  return "sujeitos="+result.subjectsCreated()+" contextos="+result.contextsCreated()+" substituidos="+result.contextsSuperseded()
+   +" revogados_mantidos="+result.revokedKept();
  }
  private static <T> T mapped(Supplier<T> action) {
   try { return action.get(); }
