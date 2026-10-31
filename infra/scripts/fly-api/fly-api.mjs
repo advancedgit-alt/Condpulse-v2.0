@@ -356,10 +356,13 @@ export async function execute(env,deps){
  need(Object.keys(COPIED).every(k=>!names.has(k)||Object.hasOwn(vercel,k)||(storage&&Object.hasOwn(storage,k))),'FLY_STALE_COPIED_SECRET');
  if(database.state==='READY'){
   need(REQUIRED.every(k=>names.has(k)),'FLY_SECRETS_INCOMPLETE');
-  if(!storage&&!financeKey(env))return {operation:'apply',alreadyApplied:true,changed:[],secretNames:[...names].sort()};
-  // Login READY: só os segredos de anexos e do financeiro, sem tocar no banco; leitura de nomes precisa bater exatamente.
-  const finance=await financeValues(env,deps,names);
-  const staged={...(storage??{}),...(finance?.values??{})};
+  // Login READY: sem tocar no banco, grava as flags copiadas da Vercel que ainda não existem na Fly (valores
+  // públicos, formato fechado) e, quando vierem, os segredos de anexos e do financeiro; leitura de nomes precisa
+  // bater exatamente. Anexos vêm depois das flags: com a chave do Storage, CP_FILES_ENABLED fica "true".
+  const missingFlags=Object.fromEntries(Object.entries(vercel).filter(([k])=>!names.has(k)));
+  const finance=storage||financeKey(env)?await financeValues(env,deps,names):undefined;
+  const staged={...missingFlags,...(storage??{}),...(finance?.values??{})};
+  if(Object.keys(staged).length===0)return {operation:'apply',alreadyApplied:true,changed:[],secretNames:[...names].sort()};
   deps.fly.importSecrets(secretLines(staged));
   const changed=Object.keys(staged).sort();
   const expected=[...new Set([...names,...changed])].sort();
