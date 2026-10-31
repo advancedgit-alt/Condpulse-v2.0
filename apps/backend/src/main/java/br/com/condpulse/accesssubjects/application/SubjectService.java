@@ -11,6 +11,7 @@ import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.application.DisplayText;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
+import br.com.condpulse.shared.infrastructure.SensitiveViewRecorder;
 import br.com.condpulse.shared.infrastructure.SqlStates;
 import br.com.condpulse.tenancy.application.StaffCapability;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
@@ -26,8 +27,12 @@ public class SubjectService {
  private final TenantTransactionExecutor transactions;
  private final SubjectStore store;
  private final AuditRecorder audit;
+ private final SensitiveViewRecorder views;
  public SubjectService(TenantTransactionExecutor transactions,SubjectStore store,AuditRecorder audit) {
-  this.transactions=transactions; this.store=store; this.audit=audit;
+  this(transactions,store,audit,SensitiveViewRecorder.disabled());
+ }
+ public SubjectService(TenantTransactionExecutor transactions,SubjectStore store,AuditRecorder audit,SensitiveViewRecorder views) {
+  this.transactions=transactions; this.store=store; this.audit=audit; this.views=java.util.Objects.requireNonNull(views);
  }
 
  public SubjectModels.SubjectPage list(UUID actor,UUID tenant,AssuranceLevel assurance) {
@@ -37,6 +42,8 @@ public class SubjectService {
    boolean truncated=rows.size()>SubjectStore.PAGE;
    var page=truncated?rows.subList(0,SubjectStore.PAGE):rows;
    var contexts=store.contexts(tenant,page.stream().map(SubjectStore.SubjectRow::id).toList());
+   // Cadastro de pessoas lido pela gestão (CPX-011): SENSITIVE_VIEWED na mesma transação.
+   views.record(tenant,"MANAGEMENT","PERSON_REGISTRY",null,null,null,java.util.Map.of("count",page.size(),"truncated",truncated));
    Instant now=Instant.now();
    return new SubjectModels.SubjectPage(page.stream().map(row->{
     var own=contexts.getOrDefault(row.id(),List.of());

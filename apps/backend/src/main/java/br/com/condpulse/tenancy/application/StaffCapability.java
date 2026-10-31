@@ -28,7 +28,15 @@ public enum StaffCapability {
   * Zeladoria (MAINTENANCE, V046): lê e registra o andamento somente dos pedidos atribuídos ao próprio vínculo; nenhum
   * financeiro, cadastro, vínculo, encomenda, visita ou acesso.
   */
- OPERATE_MAINTENANCE("maintenance.operate");
+ OPERATE_MAINTENANCE("maintenance.operate"),
+ /** Log de Segurança do próprio condomínio (CPX-009, V049; PRD complementar 4.4): gestão local, sempre com AAL2. */
+ READ_SECURITY_LOG_TENANT("security.log.read.tenant"),
+ /**
+  * Log da carteira (SECURITY_LEAD, PARTNER_ADMIN) e exportação com manifesto (SECURITY_LEAD). Já valem nas políticas da V049;
+  * nenhum papel de condomínio as recebe: a hierarquia de parceiros (CPX-001/CPX-003) as publica, sem mudar o schema.
+  */
+ READ_SECURITY_LOG("security.log.read"),
+ EXPORT_SECURITY_LOG("security.log.export");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -39,7 +47,7 @@ public enum StaffCapability {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
-    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES);
+    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES,READ_SECURITY_LOG_TENANT);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    case "MAINTENANCE" -> EnumSet.of(OPERATE_MAINTENANCE);
    default -> EnumSet.noneOf(StaffCapability.class);

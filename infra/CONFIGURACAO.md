@@ -28,6 +28,9 @@ Tempo real (CP-036): CP_REALTIME_ENABLED=false por padrao. Ajustes: CP_REALTIME_
 CP_REALTIME_LIFETIME_SECONDS (300, abaixo do tempo maximo de requisicao do hospedeiro),
 CP_REALTIME_MAX_STREAMS (40 por instancia) e CP_REALTIME_MAX_PER_ACCOUNT (3). Ver docs/TEMPO_REAL.md.
 
+Log de Seguranca (V049, CPX-006 a CPX-011): CP_SECURITY_LOG_ENABLED=false por padrao (API: busca, integridade,
+exportacao e SENSITIVE_VIEWED; worker: ancora diaria). A gravacao pelas fontes e do banco. Ver docs/LOG_SEGURANCA.md.
+
 BFF: CP_BFF_ENABLED=false por padrao. Para habilitar depois da homologacao:
 - CP_BFF_ORIGIN: origem HTTPS exata da web, sem caminho/barra final.
 - CP_SUPABASE_PUBLISHABLE_KEY: chave publica do proprio projeto/ambiente.

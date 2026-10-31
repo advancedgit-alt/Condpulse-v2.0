@@ -10,12 +10,14 @@ import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.application.DisplayText;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
+import br.com.condpulse.shared.infrastructure.SensitiveViewRecorder;
 import br.com.condpulse.shared.infrastructure.SqlStates;
 import br.com.condpulse.tenancy.application.StaffCapability;
 import br.com.condpulse.tenancy.application.TenantContext;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import br.com.condpulse.visits.infrastructure.AccessStore;
 import br.com.condpulse.visits.infrastructure.VisitStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
@@ -35,14 +37,22 @@ public class AccessService {
  private final VisitStore visits;
  private final AccessStore store;
  private final AuditRecorder audit;
+ private final SensitiveViewRecorder views;
  public AccessService(TenantTransactionExecutor transactions,VisitStore visits,AccessStore store,AuditRecorder audit) {
-  this.transactions=transactions; this.visits=visits; this.store=store; this.audit=audit;
+  this(transactions,visits,store,audit,SensitiveViewRecorder.disabled());
+ }
+ @Autowired
+ public AccessService(TenantTransactionExecutor transactions,VisitStore visits,AccessStore store,AuditRecorder audit,SensitiveViewRecorder views) {
+  this.transactions=transactions; this.visits=visits; this.store=store; this.audit=audit; this.views=java.util.Objects.requireNonNull(views);
  }
 
  public AccessModels.RecordPage records(UUID actor,UUID tenant,AssuranceLevel assurance) {
   return execute(actor,tenant,assurance,Map.of(),context->{
    context.requireCapability(StaffCapability.OPERATE_CONCIERGE);
-   return store.recent(tenant);
+   var page=store.recent(tenant);
+   // Histórico de acesso do condomínio lido pela equipe (CPX-011): SENSITIVE_VIEWED na mesma transação.
+   views.record(tenant,"CONCIERGE","ACCESS_HISTORY",null,null,null,Map.of("count",page.records().size()));
+   return page;
   });
  }
  /** Histórico da unidade (adulto ou dependente com permissão de decidir), sem contas da equipe. */

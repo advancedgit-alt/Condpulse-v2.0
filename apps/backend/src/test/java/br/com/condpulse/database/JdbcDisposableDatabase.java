@@ -97,6 +97,23 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("update cp.units set status='ACTIVE' where tenant_id in (?,?)",tenantA,tenantB);
   adminUpdate("update platform.tenants set active=true where id in (?,?)",tenantA,tenantB);
  }
+ /**
+  * Log de Segurança (V049) só acrescenta: nem o dono apaga com gatilhos ligados. Só no banco descartável, antes de remover o
+  * condomínio da fixture, o log, a cabeça e as âncoras saem com os gatilhos desligados (session_replication_role=replica).
+  */
+ static void deleteSecurityLog(Connection connection,UUID...tenants) throws SQLException {
+  for(UUID tenant:tenants) {
+   update(connection,"set session_replication_role=replica");
+   try {
+    update(connection,"delete from cp.security_log where tenant_id=?",tenant);
+    update(connection,"delete from cp.security_log_heads where tenant_id=?",tenant);
+    update(connection,"delete from platform.security_log_anchors where tenant_id=?",tenant);
+   } finally { update(connection,"set session_replication_role=origin"); }
+  }
+ }
+ void adminDeleteSecurityLog(UUID...tenants) throws SQLException {
+  try(Connection connection=admin()) { deleteSecurityLog(connection,tenants); }
+ }
  void adminUpdate(String sql,Object...args) throws SQLException {
   try(Connection connection=admin()) { update(connection,sql,args); }
  }
@@ -220,6 +237,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
     +"delete from cp.memberships where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB);
    update(connection,"delete from cp.units where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.blocks where tenant_id in (?,?)",tenantA,tenantB);
+   deleteSecurityLog(connection,tenantA,tenantB);
    update(connection,"delete from platform.tenants where id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.accounts where id in (?,?,?)",accountA,accountB,accountC);
    for(UUID extra:extraAccounts) update(connection,"delete from platform.accounts where id=?",extra);

@@ -4,6 +4,7 @@ import br.com.condpulse.accessage.application.AgeService;
 import br.com.condpulse.accessage.application.BirthDateCipher;
 import br.com.condpulse.accessage.infrastructure.AgeStore;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
+import br.com.condpulse.shared.infrastructure.SensitiveViewRecorder;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,7 +25,8 @@ public class AccessAgeConfiguration {
    @Value("${condpulse.facial-access.age-evidence-key-version:v1}") String version) {
   return BirthDateCipher.fromBase64(key,version);
  }
- @Bean AgeService ageService(TenantTransactionExecutor transactions,AgeStore store,BirthDateCipher cipher,AuditRecorder audit) {
-  return new AgeService(transactions,store,cipher,audit);
+ @Bean AgeService ageService(TenantTransactionExecutor transactions,AgeStore store,BirthDateCipher cipher,AuditRecorder audit,
+   SensitiveViewRecorder views) {
+  return new AgeService(transactions,store,cipher,audit,views);
  }
 }

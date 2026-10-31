@@ -50,6 +50,7 @@ class PlatformTenantCreationJdbcTest {
    db.adminUpdate("delete from cp.units where tenant_id=?",tenant);
    db.adminUpdate("delete from platform.platform_audit_log where tenant_id=?",tenant);
    db.adminUpdate("delete from platform.tenant_creations where tenant_id=?",tenant);
+   db.adminDeleteSecurityLog(tenant);
    db.adminUpdate("delete from platform.tenants where id=?",tenant);
   }
   created.clear();

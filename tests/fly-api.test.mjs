@@ -249,6 +249,10 @@ test('conjuntos de segredos: obrigatórios, gerados e copiados não se sobrepõe
   assert.equal(FIXED_PUBLIC.DB_POOL_SIZE,'2');
   const yaml=read('apps/backend/src/main/resources/application.yaml');
   for(const key of Object.keys(COPIED))assert.match(yaml,new RegExp(`\\$\\{${key}:`),key);
+  // Log de Segurança (V049): flag copiada da Vercel só como true/false, padrão false na imagem; nenhum executor a liga.
+  assert.equal(String(COPIED.CP_SECURITY_LOG_ENABLED),String(/^(?:true|false)$/));
+  assert.match(yaml,/\$\{CP_SECURITY_LOG_ENABLED:false\}/);
+  assert.ok(!read('infra/scripts/runtime-flags/apply.mjs').includes('CP_SECURITY_LOG_ENABLED'),'runtime-flags não liga o log');
 });
 
 const STORAGE_SECRET='sb_secret_SYNTHETIC_STORAGE_KEY_NOT_REAL_0123456789';

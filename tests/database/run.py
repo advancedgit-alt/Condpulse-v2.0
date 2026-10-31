@@ -3127,9 +3127,9 @@ def rental_checks():
                    "service_requests", "visit_permits", "visit_rules"]
     expect(value("select coalesce((select string_agg(c.relname,',' order by c.relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace "
                  "where n.nspname='cp' and c.relkind='r' and exists(select 1 from pg_attribute a where a.attrelid=c.oid and a.attname='unit_id' "
-                 "and not a.attisdropped) and c.relname not in ('memberships','membership_invitations','unit_rentals') "
+                 "and not a.attisdropped) and c.relname not in ('memberships','membership_invitations','unit_rentals','security_log') "
                  "and not exists(select 1 from pg_policy p where p.polrelid=c.oid and p.polname='rental_owner_hidden' and not p.polpermissive "
-                 "and p.polcmd='*')),'NENHUMA')") == "NENHUMA", "toda tabela com unit_id (exceto vinculos/convites) tem a barreira de locacao")
+                 "and p.polcmd='*')),'NENHUMA')") == "NENHUMA", "toda tabela com unit_id (exceto vinculos/convites e o log de seguranca, lido so com capacidade de equipe) tem a barreira de locacao")
     start = (f"INSERT INTO cp.unit_rentals(tenant_id,unit_id,owner_membership_id,owner_account_id,started_by) "
              f"VALUES('{TA}','{{unit}}','{{membership}}','{TEN}','{{actor}}')")
     expect(error(start.format(unit=UA, membership=MOWN, actor=OWN), "42501", **as_owner), "proprietario nao marca a propria unidade como alugada")
@@ -4820,6 +4820,172 @@ def tenant_module_checks():
     query(f"DELETE FROM platform.tenant_modules WHERE tenant_id='{TA}'; DELETE FROM platform.platform_audit_log WHERE actor_id='{PL}'; "
           f"DELETE FROM platform.accounts WHERE id='{PL}'")
 
+def security_log_checks():
+    """V049 (CPX-006 a CPX-011): Log de Seguranca so acrescenta, seq sem buracos e cadeia SHA-256 por condominio
+    calculadas no banco, ancora diaria, verificacao que detecta adulteracao, isolamento e falha do log desfaz a operacao."""
+    S1, S2, S3 = ("00000000-0000-4000-8000-0000000049a1", "00000000-0000-4000-8000-0000000049a2", "00000000-0000-4000-8000-0000000049a3")
+    MG, CO, RS = ("10000000-0000-4000-8000-0000000049b1", "10000000-0000-4000-8000-0000000049b2", "10000000-0000-4000-8000-0000000049b3")
+    US = "20000000-0000-4000-8000-0000000049c1"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{CO}','ACTIVE'),('{RS}','ACTIVE');
+        INSERT INTO platform.tenants(id,name,active) VALUES('{S1}','FICTICIO LOG 1',true),('{S2}','FICTICIO LOG 2',true),('{S3}','FICTICIO LOG 3',true);
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{US}','{S1}','LOG 101');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          ('{S1}','{MG}',NULL,'GESTAO LOG','MANAGER','ACTIVE'),('{S1}','{CO}',NULL,'PORTARIA LOG','CONCIERGE','ACTIVE'),
+          ('{S1}','{RS}','{US}','MORADOR LOG','RESIDENT','ACTIVE'),('{S2}','{MG}',NULL,'GESTAO LOG 2','MANAGER','ACTIVE'),
+          ('{S3}','{MG}',NULL,'GESTAO LOG 3','MANAGER','ACTIVE');
+    """)
+    reader = "SET LOCAL app.capabilities='security.log.read.tenant'; "
+    def viewed(tenant, details="{}"):
+        return (f"INSERT INTO cp.security_log(tenant_id,event_type,severity,source,subject_type,details) "
+                f"VALUES('{tenant}','SENSITIVE_VIEWED','INFO','MANAGEMENT','SECURITY_LOG','{details}')")
+    count = lambda tenant: value(f"select count(*) from cp.security_log where tenant_id='{tenant}'")
+    expect(count(S1) == "3", "vinculos ativos criados na mesma transacao geram ROLE_GRANTED no COMMIT")
+    expect(value(f"select string_agg(seq::text,',' order by seq) from cp.security_log where tenant_id='{S1}'") == "1,2,3",
+           "seq do condominio comeca em 1 e nao tem buracos")
+    expect(value(f"select prev_hash from cp.security_log where tenant_id='{S1}' and seq=1") == "0" * 64,
+           "primeiro evento encadeia no hash zero")
+    query(viewed(S1, '{"view":"SECURITY_LOG"}'), tenant=S1, actor=MG, role="cp_api")
+    row = value(f"select actor_account_id||'|'||actor_role||'|'||(recorded_at=occurred_at)||'|'||seq from cp.security_log where tenant_id='{S1}' and event_type='SENSITIVE_VIEWED'")
+    expect(row == f"{MG}|MANAGER|true|4", "autoria, papel, horarios e seq vem do banco, nunca do cliente")
+    # Forma canonica documentada (docs/LOG_SEGURANCA.md): sha256("cpsl1|" + prev_hash + "|" + array JSON) recalculada fora do banco.
+    canon = value(f"""select prev_hash||'#'||hash||'#'||jsonb_build_array(id,tenant_id,partner_id,seq,
+        to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),to_char(recorded_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+        clock_skew_ms,event_type,severity,source,actor_account_id,actor_role,session_id,subject_type,subject_id,unit_id,point_id,device_id,
+        reason,evidence_ref,correlation_id,trace_id,corrects_id,details)::text from cp.security_log where tenant_id='{S1}' and seq=4""")
+    prev, stored, payload = canon.split("#", 2)
+    expect(hashlib.sha256(f"cpsl1|{prev}|{payload}".encode()).hexdigest() == stored, "hash recalculado fora do banco confere com a forma canonica")
+    expect(error(f"INSERT INTO cp.security_log(tenant_id,seq,event_type,severity,source) VALUES('{S1}',99,'SENSITIVE_VIEWED','INFO','MANAGEMENT')",
+                 "42501", tenant=S1, actor=MG, role="cp_api"), "R5.1: runtime nao escolhe seq (grant por coluna)")
+    for column in ("hash", "prev_hash", "recorded_at", "actor_account_id", "actor_role"):
+        expect(value(f"select has_column_privilege('cp_api','cp.security_log','{column}','INSERT')") == "f", f"runtime sem INSERT em {column}")
+    for role in ("cp_api", "cp_worker", "cp_onboarding"):
+        expect(value(f"select has_any_column_privilege('{role}','cp.security_log','UPDATE') or has_table_privilege('{role}','cp.security_log','DELETE,TRUNCATE')") == "f",
+               f"R5.1: {role} sem UPDATE, DELETE ou TRUNCATE no log")
+    expect(error("UPDATE cp.security_log SET reason='x'", "42501", tenant=S1, actor=MG, role="cp_api"), "aplicacao nao altera o log")
+    expect(error("DELETE FROM cp.security_log", "42501", tenant=S1, actor=MG, role="cp_api"), "aplicacao nao apaga o log")
+    expect(error(f"UPDATE cp.security_log SET reason='adulterado' WHERE tenant_id='{S1}'", "42501"), "nem o dono altera o log (gatilho)")
+    expect(error(f"DELETE FROM cp.security_log WHERE tenant_id='{S1}'", "42501"), "nem o dono apaga o log (gatilho)")
+    expect(error("TRUNCATE cp.security_log CASCADE", "42501"), "TRUNCATE do log recusado")
+    expect(error(f"UPDATE cp.security_log_heads SET last_seq=last_seq+2 WHERE tenant_id='{S1}'", "42501", tenant=S1, actor=MG, role="cp_api"),
+           "cabeca so avanca um evento por vez")
+    expect(error(viewed(S1, '{"faceTemplate":"AAAA"}'), "23514", tenant=S1, actor=MG, role="cp_api"), "R5.9: chave biometrica recusada em details")
+    expect(error(viewed(S1, '{"a":{"b":[{"Biometria":1}]}}'), "23514", tenant=S1, actor=MG, role="cp_api"), "R5.9: biometria aninhada recusada")
+    expect(error(viewed(S1, '{"x":"' + "a" * 4100 + '"}'), "23514", tenant=S1, actor=MG, role="cp_api"), "details acima de 4 KB recusado")
+    expect(error(f"INSERT INTO cp.security_log(tenant_id,event_type,severity,source,corrects_id) VALUES('{S1}','EVENT_CORRECTED','INFO','CONCIERGE',gen_random_uuid())",
+                 "23514", tenant=S1, actor=CO, role="cp_api"), "R5.2: correcao sem motivo recusada")
+    expect(error(f"INSERT INTO cp.security_log(tenant_id,event_type,severity,source) VALUES('{S1}','LOG_EXPORTED','INFO','MANAGEMENT')",
+                 "23514", tenant=S1, actor=MG, role="cp_api"), "R5.7: exportacao sem motivo recusada")
+    expect(error(viewed(S2), "42501", tenant=S1, actor=MG, role="cp_api"), "nao grava no log de outro condominio")
+    expect(error(viewed(S1), "42501", actor=MG, role="cp_api"), "sem condominio no contexto nao grava")
+    expect(error(f"INSERT INTO cp.security_log(tenant_id,event_type,severity,source) VALUES('{S1}','SENSITIVE_VIEWED','INFO','PLATFORM')",
+                 "42501", actor=MG, role="cp_api") and error(
+           f"SET LOCAL app.platform_capabilities='technical_grants.manage'; " + viewed(S1), "42501", actor=MG, role="cp_api"),
+           "excecao da plataforma vale so para concessao tecnica com technical_grants.manage")
+    # Leitura: so com capacidade publicada (AAL2), do proprio condominio.
+    query(viewed(S2), tenant=S2, actor=MG, role="cp_api")
+    expect(value("select count(*) from cp.security_log", tenant=S1, actor=MG, role="cp_api") == "0", "sem capacidade a gestao nao le o log")
+    expect(value("select count(*) from cp.security_log", tenant=S1, actor=RS, role="cp_api") == "0", "morador nao le o log")
+    expect(value(reader + "select count(*) from cp.security_log", tenant=S1, actor=MG, role="cp_api") == count(S1),
+           "security.log.read.tenant le todo o log do proprio condominio")
+    expect(value(reader + f"select count(*) from cp.security_log where tenant_id='{S2}'", tenant=S1, actor=MG, role="cp_api") == "0",
+           "isolamento: leitor do condominio 1 nao ve o log do 2")
+    expect(value("SET LOCAL app.capabilities='security.log.read.shift'; select count(*) from cp.security_log", tenant=S1, actor=MG, role="cp_api") == "0",
+           "leitura de turno ainda nao ligada (depende da escala, CPX-002)")
+    expect(value("select count(*) from cp.security_log", tenant=S1, actor=None, role="cp_worker") == count(S1)
+           and error("select details from cp.security_log", "42501", tenant=S1, actor=None, role="cp_worker"),
+           "worker le so seq/hash/horario do proprio condominio")
+    # Concorrencia: 40 gravacoes simultaneas (1 em 4 desfeita) mantem seq contigua e cadeia integra.
+    def record_concurrently(index):
+        body = f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.actor_id='{MG}'; SET LOCAL app.tenant_id='{S1}'; {viewed(S1)}; "
+        body += "ROLLBACK;" if index % 4 == 0 else "COMMIT;"
+        return subprocess.run(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-c", body], text=True, capture_output=True, timeout=60)
+    before = int(count(S1))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=40) as pool:
+        results = list(pool.map(record_concurrently, range(40)))
+    expect(all(r.returncode == 0 for r in results), "40 gravacoes concorrentes no mesmo condominio terminam sem erro")
+    expect(value(f"select count(*)||':'||max(seq)||':'||count(distinct seq) from cp.security_log where tenant_id='{S1}'") == f"{before+30}:{before+30}:{before+30}",
+           "seq sem buracos sob concorrencia, inclusive com transacoes desfeitas")
+    verify = lambda tenant: value(f"select intact||':'||coalesce(problem,'-')||':'||coalesce(broken_seq::text,'-')||':'||anchors_checked "
+                                  f"from cp.security_log_verify('{tenant}')")
+    expect(verify(S1) == "true:-:-:0", "cadeia integra depois da concorrencia")
+    expect(value(reader + f"select intact from cp.security_log_verify('{S1}')", tenant=S1, actor=MG, role="cp_api") == "t",
+           "gestao com capacidade verifica a integridade")
+    # CPX-007: falha do log desfaz a operacao. Cabeca recuada fora da regra (intervencao) faz o seq colidir no COMMIT.
+    query(f"SET session_replication_role=replica; UPDATE cp.security_log_heads SET last_seq=last_seq-1 WHERE tenant_id='{S3}'")
+    occurrence = ("SET LOCAL app.capabilities='requests.manage'; INSERT INTO cp.concierge_occurrences(tenant_id,category,title,description) "
+                  f"VALUES('{S3}','SECURITY','Portao aberto','Portao ficticio encontrado aberto')")
+    expect(error(occurrence, "23505", tenant=S3, actor=MG, role="cp_api"), "R5.4: log que falha no COMMIT faz a operacao falhar")
+    expect(value(f"select count(*) from cp.concierge_occurrences where tenant_id='{S3}'") == "0", "R5.4: ocorrencia desfeita junto com o log")
+    expect(verify(S3).startswith("false:HEAD_MISMATCH"), "cabeca adulterada aparece na verificacao")
+    # CPX-008: adulteracao manual (gatilhos desligados) detectada.
+    query(f"SET session_replication_role=replica; UPDATE cp.security_log SET reason='adulterado' WHERE tenant_id='{S1}' AND seq=5")
+    expect(verify(S1) == "false:HASH_MISMATCH:5:0", "alteracao de campo detectada no evento exato")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.security_log WHERE tenant_id='{S2}' AND seq=1")
+    expect(verify(S2) == "false:SEQ_GAP:1:0", "evento apagado detectado como buraco na sequencia")
+    # Ancora: eventos de dias anteriores (cadeia recalculada pelo superusuario so para simular o relogio), depois um de hoje.
+    S4 = "00000000-0000-4000-8000-0000000049a4"
+    query(f"""INSERT INTO platform.tenants(id,name,active) VALUES('{S4}','FICTICIO LOG 4',true);
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{S4}','{MG}',NULL,'GESTAO LOG 4','MANAGER','ACTIVE')""")
+    for _ in range(3):
+        query(viewed(S4), tenant=S4, actor=MG, role="cp_api")
+    query(f"""SET session_replication_role=replica;
+        UPDATE cp.security_log SET recorded_at=recorded_at-interval '3 days',occurred_at=occurred_at-interval '3 days' WHERE tenant_id='{S4}';
+        DO $$ DECLARE r cp.security_log; prev text:=repeat('0',64); BEGIN
+          FOR r IN SELECT * FROM cp.security_log WHERE tenant_id='{S4}' ORDER BY seq LOOP
+            r.prev_hash:=prev; r.hash:=cp.security_log_digest(prev,r);
+            UPDATE cp.security_log SET prev_hash=r.prev_hash,hash=r.hash WHERE id=r.id; prev:=r.hash;
+          END LOOP;
+          UPDATE cp.security_log_heads SET last_hash=prev WHERE tenant_id='{S4}';
+        END $$;""")
+    query(viewed(S4), tenant=S4, actor=MG, role="cp_api")
+    expect(verify(S4) == "true:-:-:0", "cadeia de dias anteriores integra antes da ancora")
+    expect(error("select platform.security_log_anchor_days()", "42501", actor=None, role="cp_worker"), "ancora exige condominio no contexto")
+    expect(value("select platform.security_log_anchor_days()", tenant=S4, actor=None, role="cp_worker") == "3",
+           "worker ancora os 3 dias fechados com eventos (fuso America/Sao_Paulo)")
+    expect(value("select platform.security_log_anchor_days()", tenant=S4, actor=None, role="cp_worker") == "0", "ancora e idempotente")
+    expect(value(f"select count(*) from platform.security_log_anchors where tenant_id='{S4}' and last_seq=4") == "3",
+           "ancora guarda o ultimo evento de cada dia, nunca o de hoje")
+    today = "(clock_timestamp() AT TIME ZONE 'America/Sao_Paulo')::date"
+    expect(error(f"INSERT INTO platform.security_log_anchors(tenant_id,anchor_date,last_seq,last_hash) SELECT tenant_id,{today},seq,hash "
+                 f"FROM cp.security_log WHERE tenant_id='{S4}' AND seq=5", "23514", tenant=S4, actor=None, role="cp_worker"), "dia aberto nao e ancorado")
+    expect(error(f"INSERT INTO platform.security_log_anchors(tenant_id,anchor_date,last_seq,last_hash) VALUES('{S4}',{today}-10,1,repeat('a',64))",
+                 "23514", tenant=S4, actor=None, role="cp_worker"), "ancora com hash que nao esta no log e recusada")
+    expect(error(f"UPDATE platform.security_log_anchors SET last_hash=repeat('b',64) WHERE tenant_id='{S4}'", "42501", tenant=S4, actor=None, role="cp_worker")
+           and error(f"DELETE FROM platform.security_log_anchors WHERE tenant_id='{S4}'", "42501"), "ancora so acrescenta")
+    expect(value(f"select count(*) from platform.security_log_anchors where tenant_id='{S4}'", tenant=S1, actor=None, role="cp_worker") == "0",
+           "worker de outro condominio nao ve a ancora")
+    expect(verify(S4) == "true:-:-:3", "verificacao confere as ancoras")
+    # Reescrita do fim da cadeia, coerente consigo mesma e com a cabeca, ainda e pega pela ancora.
+    query(f"""SET session_replication_role=replica; DELETE FROM cp.security_log WHERE tenant_id='{S4}' AND seq>=3;
+        UPDATE cp.security_log_heads h SET last_seq=2,last_hash=s.hash FROM cp.security_log s WHERE h.tenant_id='{S4}' AND s.tenant_id=h.tenant_id AND s.seq=2""")
+    expect(verify(S4) == "false:ANCHOR_MISMATCH:4:1", "reescrita do fim do log detectada pela ancora diaria")
+    # Fontes: entrada/saida/correcao (V014) ja gravadas nas verificacoes de acesso; correcao aponta para o evento corrigido.
+    expect(value("select count(*) from cp.security_log c join cp.security_log e on e.tenant_id=c.tenant_id and e.id=c.corrects_id "
+                 "where c.event_type='EVENT_CORRECTED' and c.subject_type='ACCESS_EVENT' and c.reason is not null "
+                 "and e.event_type in ('ENTRY_RECORDED','EXIT_RECORDED')") != "0",
+           "V014: correcao vira EVENT_CORRECTED com motivo, apontando para o evento de entrada/saida corrigido")
+    expect(value("select count(*) from cp.security_log where subject_type='ACCESS_EVENT' and id<>subject_id") == "0",
+           "V014: evento do log usa o id do registro de acesso")
+    expect(value("select count(*) from cp.security_log where event_type='EXIT_RECORDED' and source='CONCIERGE'") != "0", "V014: saida registrada")
+    for event, table in (("OCCURRENCE_RECORDED", "cp.concierge_occurrences"), ("CREDENTIAL_PUBLISHED", "cp.access_credentials"),
+                         ("TECH_GRANT_ISSUED", "cp.technical_grants"), ("RIGHTS_REVOKED", "cp.revocation_markers"),
+                         ("RIGHTS_PUBLICATION_QUEUED", "cp.rights_publications"), ("EDGE_REPORT_RECEIVED", "cp.edge_reports")):
+        expect(value(f"select count(*) from cp.security_log where event_type='{event}'") != "0",
+               f"fonte {table} gravou {event} nas verificacoes anteriores (o log fica mesmo depois da limpeza das fixtures)")
+    expect(value("select count(*) from cp.security_log where source='DEVICE' and event_type in ('ACCESS_AUTHORIZED','PASSAGE_DETECTED','DEVICE_EVENT_QUARANTINED')") != "0",
+           "V027: evento do equipamento com origem DEVICE")
+    expect(value("select count(*) from cp.security_log l join cp.device_events d on d.id=l.subject_id where l.occurred_at<>d.occurred_at") == "0",
+           "R5.5: horario do equipamento preservado em occurred_at, gravacao do servidor em recorded_at")
+    expect(value("select count(*) from cp.security_log where event_type in ('DEVICE_ONLINE','DEVICE_OFFLINE') and source='SYSTEM'") != "0",
+           "V028: mudanca de saude do equipamento registrada")
+    expect(value("select count(*) from cp.security_log where event_type='TECH_GRANT_ISSUED' and actor_role='PLATFORM_ADMIN'") != "0",
+           "V037: concessao pela plataforma gravada sem condominio no contexto, com o papel da plataforma")
+    expect(value("select count(*) from cp.security_log where event_type in ('ROLE_GRANTED','ROLE_REVOKED')") != "0", "vinculos geram ROLE_GRANTED/ROLE_REVOKED")
+    expect(value("select count(*) from platform.tenants t where exists(select 1 from cp.security_log s where s.tenant_id=t.id) "
+                 f"and t.id not in ('{S1}','{S2}','{S3}','{S4}') and not (select intact from cp.security_log_verify(t.id))") == "0",
+           "todas as demais cadeias gravadas pelas fontes estao integras")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -4956,6 +5122,7 @@ def main():
     edge_checks()
     maintenance_checks()
     tenant_module_checks()
+    security_log_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
