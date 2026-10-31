@@ -71,6 +71,8 @@ public final class LocalCommandQueue implements AutoCloseable {
  private final Map<String,Entry> byId=new LinkedHashMap<>();
  private final Map<String,String> byKey=new HashMap<>();
  private final Map<String,Long> revokedVersion=new HashMap<>();
+ /** Maior versão de aplicação aceita por escopo: versão anterior que chega depois é recusada (não restaura estado antigo). */
+ private final Map<String,Long> acceptedVersion=new HashMap<>();
  private long sequence;
  private final List<String> lastSuperseded=new ArrayList<>();
 
@@ -136,6 +138,9 @@ public final class LocalCommandQueue implements AutoCloseable {
   return byId.values().stream().filter(e->e.terminal() && !e.reported()).toList();
  }
 
+ /** Todas as entradas na ordem de chegada (reconciliação na recuperação). */
+ public synchronized List<Entry> all() { return List.copyOf(byId.values()); }
+
  public synchronized Optional<Entry> get(String commandId) { return Optional.ofNullable(byId.get(commandId)); }
 
  /** Pendências visíveis do equipamento (inclusive quando ele está fora do ar). */
@@ -166,7 +171,10 @@ public final class LocalCommandQueue implements AutoCloseable {
    String reason=null;
    if(!command.type().revocation()) {
     long revoked=Math.max(revokedVersion.getOrDefault(key(command,"ALL"),0L),revokedVersion.getOrDefault(key(command,command.scope()),0L));
+    long accepted=acceptedVersion.getOrDefault(key(command,command.scope()),0L);
     if(command.desiredVersion()<=revoked) { status=Status.REJECTED_STALE; reason="STALE_VERSION_AFTER_REVOCATION"; }
+    else if(command.desiredVersion()<=accepted) { status=Status.REJECTED_STALE; reason="STALE_VERSION"; }
+    else acceptedVersion.put(key(command,command.scope()),command.desiredVersion());
    } else {
     revokedVersion.merge(key(command,command.scope()),command.desiredVersion(),Math::max);
    }

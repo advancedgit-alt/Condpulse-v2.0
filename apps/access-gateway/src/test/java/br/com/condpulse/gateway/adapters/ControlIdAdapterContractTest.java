@@ -343,4 +343,44 @@ class ControlIdAdapterContractTest {
   assertEquals(0,a.pushAwaitingResults());
   assertEquals(0,endpoint.handle(req("POST","/result",Map.of("deviceId","1","uuid","u5"),"{\"response\":{}}"),ctx(false)).body().length);
  }
+
+ // ----- terceira rodada (#130) -----
+
+ @Test void fotoQueEstouraORequestDeDoisMbERecusadaSemEnviar() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   store.objects.computeIfAbsent("users",k->new ArrayList<>()).add(new LinkedHashMap<>(Map.of("id",7L,"registration","ref-7","name","M")));
+   var a=lan(fake,new TestSupport.TestClock(),null);
+   byte[] big=new byte[1_600_000];
+   big[0]=(byte)0xFF; big[1]=(byte)0xD8;
+   var r=a.enrollFace(new FaceSpec("ref-7",big));
+   assertEquals("PHOTO_TOO_LARGE_FOR_REQUEST",r.reasonCode(),"1,6 MB vira ~2,1 MB em base64");
+   assertEquals(0,fake.requests("/user_set_image_list.fcgi").size());
+  }
+ }
+
+ @Test void idDaSecBoxValidoPelaFaixaDe64Bits() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   fake.on("POST","/login.fcgi",Reply.json("{\"session\":\"s\"}"));
+   fake.on("POST","/execute_actions.fcgi",Reply.text(""));
+   var clock=new TestSupport.TestClock();
+   var a=lan(fake,clock,null);
+   assertEquals(OpenOutcome.ACCEPTED,a.open(new OpenAction("o1","c1","1","sec_box:id=122641794705017745,reason=3",clock.instant().plusSeconds(5))).outcome());
+   assertEquals("{\"actions\":[{\"action\":\"sec_box\",\"parameters\":\"id=122641794705017745, reason=3\"}]}",fake.requests("/execute_actions.fcgi").getLast().text());
+   assertEquals(OpenOutcome.NOT_SENT,a.open(new OpenAction("o2","c1","1","sec_box:id=18446744073709551616,reason=3",clock.instant().plusSeconds(5))).outcome());
+   assertEquals(1,fake.requests("/execute_actions.fcgi").size());
+  }
+ }
+
+ @Test void leituraDaPessoaTrazOsCamposAplicados() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=lan(fake,new TestSupport.TestClock(),null);
+   var person=new PersonSpec("ref-20","Morador 20",null,null);
+   a.upsertPerson(person);
+   assertEquals(a.personAttributes(person).orElseThrow(),a.readState("ref-20").personAttributes());
+   a.upsertPerson(new PersonSpec("ref-20","Morador 20 B",null,null));
+   assertNotEquals(a.personAttributes(person).orElseThrow(),a.readState("ref-20").personAttributes());
+  }
+ }
 }

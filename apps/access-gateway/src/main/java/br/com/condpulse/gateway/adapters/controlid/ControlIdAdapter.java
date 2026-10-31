@@ -41,6 +41,9 @@ import br.com.condpulse.gateway.spi.Spi.*;
  */
 public final class ControlIdAdapter extends BaseAdapter {
  static final String ADAPTER_VERSION="controlid-1.0.0";
+ /** 2 MB por requisição (CI-FACE), em bytes decimais por segurança. */
+ static final int MAX_FACE_REQUEST_BYTES=2_000_000;
+ private static final java.math.BigInteger U64_MAX=new java.math.BigInteger("18446744073709551615");
  static final String DOCS="https://www.controlid.com.br/docs/access-api-en/";
  static final Source LOGIN=new Source("CI-LOGIN",DOCS+"session-management/do-login/","POST /login.fcgi");
  static final Source SESSION=new Source("CI-SESSION",DOCS+"session-management/check-session-validity/","POST /session_is_valid.fcgi");
@@ -141,6 +144,9 @@ public final class ControlIdAdapter extends BaseAdapter {
   catch(ControlIdTransport.ControlIdHttpError e) { return OperationResult.of(OperationState.FAILED,"CONTROLID_HTTP_"+e.status); }
  }
 
+ /** Campos gravados por upsertPerson: só o nome (validade da pessoa não é gravada; unidade não documentada). */
+ @Override public Optional<Map<String,String>> personAttributes(PersonSpec person) { return Optional.of(Map.of("name",person.displayName())); }
+
  @Override public OperationResult removePerson(String subjectRef) {
   return destroy("users",Map.of("users",Map.of("registration",subjectRef)));
  }
@@ -155,7 +161,10 @@ public final class ControlIdAdapter extends BaseAdapter {
    image.put("user_id",id);
    image.put("timestamp",context.clock().instant().getEpochSecond());
    image.put("image",Base64.getEncoder().encodeToString(face.jpeg()));
-   var response=transport.call("user_set_image_list",Map.of("match",true,"user_images",List.of(image)),false,null);
+   var body=Map.<String,Object>of("match",true,"user_images",List.of(image));
+   // CI-FACE: limite de 2 MB por requisição vale para o corpo inteiro (base64 incluso); medido já serializado.
+   if(Json.write(body).getBytes(StandardCharsets.UTF_8).length>MAX_FACE_REQUEST_BYTES) return OperationResult.of(OperationState.FAILED,"PHOTO_TOO_LARGE_FOR_REQUEST");
+   var response=transport.call("user_set_image_list",body,false,null);
    var results=Json.list(response.get("results"));
    if(results==null || results.isEmpty()) return OperationResult.of(OperationState.APPLIED_UNVERIFIED,"NO_INDIVIDUAL_RESULT");
    var r=Json.map(results.getFirst());
@@ -287,14 +296,17 @@ public final class ControlIdAdapter extends BaseAdapter {
 
  @Override public AppliedState readState(String subjectRef) {
   try {
-   Long id=userId(subjectRef);
-   if(id==null) return new AppliedState(OperationState.CONFIRMED,null,false,Set.of(),Map.of(CredentialKind.CARD,0,CredentialKind.PIN,0,CredentialKind.QR,0),false);
+   var users=load("users",Map.of("users",Map.of("registration",subjectRef)));
+   if(users.isEmpty()) return new AppliedState(OperationState.CONFIRMED,null,false,Set.of(),Map.of(CredentialKind.CARD,0,CredentialKind.PIN,0,CredentialKind.QR,0),false);
+   if(users.size()>1) return AppliedState.unavailable(OperationState.UNKNOWN,"DUPLICATE_REGISTRATION");
+   Long id=Json.longValue(users.getFirst(),"id");
+   String name=Json.string(users.getFirst(),"name");
    var keys=new HashSet<String>();
    for(var row:load("user_access_rules",Map.of("user_access_rules",Map.of("user_id",id)))) keys.add("rule:"+Json.longValue(row,"access_rule_id"));
    for(var row:load("user_groups",Map.of("user_groups",Map.of("user_id",id)))) keys.add("group:"+Json.longValue(row,"group_id"));
    var counts=new EnumMap<CredentialKind,Integer>(CredentialKind.class);
    for(CredentialKind k:CredentialKind.values()) counts.put(k,load(object(k),Map.of(object(k),Map.of("user_id",id))).size());
-   return new AppliedState(OperationState.CONFIRMED,null,true,keys,counts,null);
+   return new AppliedState(OperationState.CONFIRMED,null,true,keys,counts,null,name==null?null:Map.of("name",name));
   } catch(DeviceCallException e) {
    return AppliedState.unavailable(e.failure()==br.com.condpulse.gateway.http.DeviceHttpClient.Failure.NOT_SENT?OperationState.FAILED:OperationState.UNKNOWN,e.getMessage());
   } catch(ControlIdTransport.ControlIdHttpError e) { return AppliedState.unavailable(OperationState.FAILED,"CONTROLID_HTTP_"+e.status); }
@@ -311,9 +323,11 @@ public final class ControlIdAdapter extends BaseAdapter {
   String parameters;
   String action;
   if(nativeOpenAction.matches("door:door=\\d{1,2}")) { action="door"; parameters=nativeOpenAction.substring(5); }
-  else if(nativeOpenAction.matches("sec_box:id=\\d{1,10},reason=\\d{1,2}")) {
+  else if(nativeOpenAction.matches("sec_box:id=\\d{1,20},reason=\\d{1,2}")) {
    action="sec_box";
    String[] p=nativeOpenAction.substring(8).split(",");
+   // id da SecBox validado pela faixa de inteiro sem sinal de 64 bits (CI-OPEN mostra ids de 18 dígitos).
+   if(new java.math.BigInteger(p[0].substring(3)).compareTo(U64_MAX)>0) return Optional.empty();
    parameters=p[0]+", "+p[1];
   }
   else if(nativeOpenAction.matches("catra:allow=(clockwise|anticlockwise|both)")) { action="catra"; parameters=nativeOpenAction.substring(6); }

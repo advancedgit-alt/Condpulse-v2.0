@@ -32,6 +32,8 @@ public interface AccessProviderAdapter {
   * comparar o valor (só contar não basta para confirmar substituição).
   */
  default Optional<Boolean> credentialPresent(CredentialSpec credential) { return Optional.empty(); }
+ /** Campos da pessoa que {@link #upsertPerson} grava, para comparar com a leitura de volta. Vazio: não comparável. */
+ default Optional<java.util.Map<String,String>> personAttributes(PersonSpec person) { return Optional.empty(); }
  /** Chaves nativas que {@link #applyRights} gravaria, para comparar com a leitura de volta. Vazio se não representável. */
  Optional<Set<String>> rightKeys(RightsSpec rights);
  OpenResult open(OpenAction action);
