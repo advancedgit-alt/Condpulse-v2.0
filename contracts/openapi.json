@@ -18627,7 +18627,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Simula cenário sintético numa passagem de ingresso da área. Não grava decisão, não cria comando nem autorização reutilizável (simulated=true, hardwareCommandCreated=false). Sujeito real entra com os direitos (V044).",
+        "description": "Simula cenário sintético ou sujeito real (V044: fatos atuais do cadastro, evidência de idade, direito derivado e revogações) numa passagem de ingresso da área. Não grava decisão, não cria comando nem autorização reutilizável (simulated=true, hardwareCommandCreated=false).",
         "parameters": [
           {
             "name": "tenantId",
@@ -18914,6 +18914,339 @@
           },
           "422": {
             "description": "POLICY_INVALID ou POLICY_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-policies/{policyId}/grants/derive": {
+      "post": {
+        "operationId": "managementDeriveAccessGrants",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Deriva direitos (memberships.manage + policy.publish, AAL2) de uma revisão aprovada: varre os ativos da área (expira, marca o que deixou de valer na origem, substitui outra revisão) e cria um direito por contexto elegível e origem, com vigência finita. Mesma derivação não duplica; derivação revogada não volta. Não aciona porta.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeriveAccessGrants"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGrantDerivation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), GRANT_FORBIDDEN"
+          },
+          "503": {
+            "description": "GRANT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "GRANT_VERSION_REQUIRED"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, POLICY_NOT_FOUND ou POLICY_VERSION_NOT_FOUND"
+          },
+          "409": {
+            "description": "GRANT_VERSION_NOT_APPROVED, GRANT_POLICY_BLOCKED, GRANT_AREA_NOT_ACTIVE, GRANT_TOO_MANY_CONTEXTS, GRANT_STALE ou GRANT_CONFLICT"
+          },
+          "422": {
+            "description": "GRANT_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-grants": {
+      "get": {
+        "operationId": "managementListAccessGrants",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Direitos derivados (memberships.manage, AAL2), filtráveis por sujeito e área; até 500.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "areaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGrantPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), GRANT_FORBIDDEN"
+          },
+          "503": {
+            "description": "GRANT_UNAVAILABLE"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-grants/{grantId}/revoke": {
+      "post": {
+        "operationId": "managementRevokeAccessGrant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Revoga um direito (memberships.manage + policy.publish, AAL2) com marca durável que cobre face, cartão, PIN, QR e direitos em plataforma intermediária. Repetição devolve o mesmo resultado.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeAccessGrant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), GRANT_FORBIDDEN"
+          },
+          "503": {
+            "description": "GRANT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "GRANT_REASON_REQUIRED ou GRANT_VERSION_REQUIRED"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou GRANT_NOT_FOUND"
+          },
+          "409": {
+            "description": "GRANT_STALE"
+          },
+          "422": {
+            "description": "GRANT_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/{subjectId}/revocation-markers": {
+      "get": {
+        "operationId": "managementListRevocationMarkers",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Marcas de revogação do sujeito (memberships.manage, AAL2), na ordem do diário. externalDurabilityStatus fica PENDING até a barreira de recuperação (V050).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationMarkerPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), GRANT_FORBIDDEN"
+          },
+          "503": {
+            "description": "GRANT_UNAVAILABLE"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
           }
         }
       }
@@ -31761,13 +32094,15 @@
           "mode",
           "policyVersionId",
           "pointId",
-          "subject",
           "at"
         ],
         "properties": {
           "mode": {
             "type": "string",
-            "const": "SYNTHETIC"
+            "enum": [
+              "SYNTHETIC",
+              "AUTHORIZED_EXISTING_SUBJECT"
+            ]
           },
           "policyVersionId": {
             "type": "string",
@@ -31783,8 +32118,19 @@
           "at": {
             "type": "string",
             "format": "date-time"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Só em AUTHORIZED_EXISTING_SUBJECT (exige memberships.manage)."
+          },
+          "contextId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Só em AUTHORIZED_EXISTING_SUBJECT."
           }
-        }
+        },
+        "description": "SYNTHETIC exige subject; AUTHORIZED_EXISTING_SUBJECT exige subjectId e contextId reais e não aceita subject."
       },
       "AccessPolicySimulation": {
         "type": "object",
@@ -31913,6 +32259,327 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "AccessGrant": {
+        "type": "object",
+        "required": [
+          "grantId",
+          "subjectId",
+          "contextId",
+          "areaId",
+          "policyId",
+          "policyVersionId",
+          "originKind",
+          "originVersion",
+          "validFrom",
+          "validUntil",
+          "generation",
+          "subjectRestrictionEpoch",
+          "status",
+          "current",
+          "version"
+        ],
+        "properties": {
+          "grantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contextId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originKind": {
+            "type": "string",
+            "enum": [
+              "MEMBERSHIP",
+              "VISIT_PERMIT",
+              "RESERVATION",
+              "FUNCTIONAL_AUTHORIZATION"
+            ]
+          },
+          "originId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectRestrictionEpoch": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED",
+              "EXPIRED",
+              "SUPERSEDED"
+            ]
+          },
+          "statusReasonCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revocationMarkerId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "Vale agora (origem, contexto, sujeito, revisão e revogações conferidos pelo banco). Não é confirmação nas portas."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AccessGrantPage": {
+        "type": "object",
+        "required": [
+          "grants",
+          "truncated"
+        ],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessGrant"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DeriveAccessGrants": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policyVersionId"
+        ],
+        "properties": {
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AccessGrantDerivation": {
+        "type": "object",
+        "required": [
+          "policyVersionId",
+          "created",
+          "unchanged",
+          "superseded",
+          "expired",
+          "revoked",
+          "skippedByReason",
+          "skippedSample"
+        ],
+        "properties": {
+          "policyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created": {
+            "type": "integer"
+          },
+          "unchanged": {
+            "type": "integer"
+          },
+          "superseded": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "integer"
+          },
+          "revoked": {
+            "type": "integer"
+          },
+          "skippedByReason": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "skippedSample": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "contextId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RevokeAccessGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "RevocationMarker": {
+        "type": "object",
+        "required": [
+          "markerId",
+          "targetKind",
+          "subjectId",
+          "coveredMethods",
+          "revokedThroughGeneration",
+          "subjectRestrictionEpoch",
+          "effectiveAt",
+          "reasonCode",
+          "journalSequence",
+          "externalDurabilityStatus"
+        ],
+        "properties": {
+          "markerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "SUBJECT",
+              "CONTEXT",
+              "GRANT"
+            ]
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contextId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "grantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "coveredMethods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "FACE",
+                "CARD",
+                "PIN",
+                "QR",
+                "INTERMEDIARY_GRANT"
+              ]
+            }
+          },
+          "revokedThroughGeneration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectRestrictionEpoch": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "journalSequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "externalDurabilityStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "CONFIRMED",
+              "UNVERIFIED"
+            ]
+          }
+        }
+      },
+      "RevocationMarkerPage": {
+        "type": "object",
+        "required": [
+          "markers",
+          "truncated"
+        ],
+        "properties": {
+          "markers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevocationMarker"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       }

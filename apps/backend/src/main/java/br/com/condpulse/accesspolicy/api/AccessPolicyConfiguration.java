@@ -1,6 +1,7 @@
 package br.com.condpulse.accesspolicy.api;
 
 import br.com.condpulse.accesspolicy.application.PolicyService;
+import br.com.condpulse.accesspolicy.application.SubjectFactsPort;
 import br.com.condpulse.accesspolicy.infrastructure.PolicyStore;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
@@ -15,5 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
 public class AccessPolicyConfiguration {
  @Bean PolicyStore policyStore(JdbcTemplate jdbc) { return new PolicyStore(jdbc); }
- @Bean PolicyService policyService(TenantTransactionExecutor tenants,PolicyStore store,AuditRecorder audit) { return new PolicyService(tenants,store,audit); }
+ @Bean PolicyService policyService(TenantTransactionExecutor tenants,PolicyStore store,AuditRecorder audit,SubjectFactsPort subjects) {
+  return new PolicyService(tenants,store,audit,subjects);
+ }
 }

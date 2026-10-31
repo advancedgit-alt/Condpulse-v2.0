@@ -100,13 +100,22 @@ final class FacialInstallationFixture {
  /** Remove a instalação do condomínio A sem desligar gatilhos (ordem das referências). */
  void clear() throws Exception {
   db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and (action like 'POLICY\\_%' or action like 'DEVICE\\_%' or action like 'CHANNEL\\_%' "
-   +"or action like 'BINDING\\_%' or action like 'INSTALLATION\\_%' or action like 'AREA\\_%' or action like 'POINT\\_%')",db.tenantA,db.tenantB);
+   +"or action like 'BINDING\\_%' or action like 'INSTALLATION\\_%' or action like 'RIGHTS\\_%' or action like 'SUBJECT\\_%' or action like 'AREA\\_%' or action like 'POINT\\_%')",db.tenantA,db.tenantB);
+  db.adminUpdate("with g as (delete from cp.access_grants where tenant_id in (?,?)) delete from cp.revocation_markers where tenant_id in (?,?)",
+   db.tenantA,db.tenantB,db.tenantA,db.tenantB);
   db.adminUpdate("with v as (delete from cp.access_policy_validations where tenant_id in (?,?)) delete from cp.access_policy_versions where tenant_id in (?,?)",
    db.tenantA,db.tenantB,db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_policies where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.point_bindings where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.installation_acceptances where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.device_channels where tenant_id in (?,?)",db.tenantA,db.tenantB);
+  // Credenciais criadas nos conectores fictícios (e o evento da revogação em cascata), antes dos conectores.
+  db.adminUpdate("delete from cp.outbox where tenant_id in (?,?) and aggregate_id in (select c.id from cp.access_credentials c join cp.access_connectors k "
+   +"on k.tenant_id=c.tenant_id and k.id=c.connector_id where k.label like '%ficticio JDBC')",db.tenantA,db.tenantB);
+  db.adminUpdate("delete from cp.credential_syncs where credential_id in (select c.id from cp.access_credentials c join cp.access_connectors k "
+   +"on k.tenant_id=c.tenant_id and k.id=c.connector_id where k.label like '%ficticio JDBC')");
+  db.adminUpdate("delete from cp.access_credentials where connector_id in (select id from cp.access_connectors where tenant_id in (?,?) and label like '%ficticio JDBC')",
+   db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_devices where connector_id in (select id from cp.access_connectors where tenant_id in (?,?) and label like '%ficticio JDBC')",
    db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_connectors where tenant_id in (?,?) and label like '%ficticio JDBC'",db.tenantA,db.tenantB);

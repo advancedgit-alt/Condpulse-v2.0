@@ -1,0 +1,161 @@
+package br.com.condpulse.database;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.UUID;
+import br.com.condpulse.accessage.application.BirthDateCipher;
+import br.com.condpulse.accessage.infrastructure.AgeStore;
+import br.com.condpulse.accessgrants.application.GrantModels;
+import br.com.condpulse.accessgrants.application.GrantService;
+import br.com.condpulse.accessgrants.infrastructure.GrantStore;
+import br.com.condpulse.accesspolicy.application.PolicyModels;
+import br.com.condpulse.accesspolicy.application.PolicyService;
+import br.com.condpulse.accesspolicy.infrastructure.PolicyStore;
+import br.com.condpulse.accesssubjects.application.SubjectModels;
+import br.com.condpulse.accesssubjects.application.SubjectService;
+import br.com.condpulse.accesssubjects.infrastructure.SubjectStore;
+import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.shared.infrastructure.AuditRecorder;
+import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * V044 com PostgreSQL real e o login da API, tudo pelos fluxos reais (instalação, política aprovada, sujeitos materializados
+ * pela gestão): derivação, repetição sem duplicar, simulação com sujeito real, bloqueio que revoga direito e cartão,
+ * reativação em geração nova e revogação manual que vence a derivação seguinte.
+ */
+@EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
+class AccessGrantJdbcTest {
+ private static final AssuranceLevel AAL1=AssuranceLevel.AAL1,AAL2=AssuranceLevel.AAL2;
+ private static final UUID MANAGER=UUID.randomUUID(),MASTER=UUID.randomUUID();
+ private static final List<String> APPROVED=List.of("faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity");
+ private static JdbcDisposableDatabase db;
+ private static PolicyService policies;
+ private static GrantService grants;
+ private static SubjectService subjects;
+ private static FacialInstallationFixture fixture;
+
+ @BeforeAll static void setup() throws Exception {
+  db=new JdbcDisposableDatabase();
+  var tenants=new TenantTransactionExecutor(db.jdbc,db.manager);
+  var audit=new AuditRecorder(db.jdbc);
+  var policyStore=new PolicyStore(db.jdbc);
+  grants=new GrantService(tenants,new GrantStore(db.jdbc),policyStore,new AgeStore(db.jdbc),BirthDateCipher.fromBase64("","v1"),audit);
+  policies=new PolicyService(tenants,policyStore,audit,grants);
+  subjects=new SubjectService(tenants,new SubjectStore(db.jdbc),audit);
+  fixture=new FacialInstallationFixture(db);
+  db.extraAccounts.add(MANAGER); db.extraAccounts.add(MASTER);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE'),(?,'ACTIVE')",MANAGER,MASTER);
+  db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'GESTAO DIREITOS JDBC','MANAGER','ACTIVE')",db.tenantA,MANAGER);
+ }
+ @BeforeEach void reset() throws Exception {
+  fixture.clear(); db.restoreActiveFixtures(); db.assertEmptyContext();
+  fixture.grantMaster(MASTER);
+ }
+ @AfterEach void clear() throws Exception { fixture.clear(); }
+ @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }
+ private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
+ private static PolicyModels.PolicyDocument rule(String zone,UUID area) {
+  return new PolicyModels.PolicyDocument("1.0","Academia moradores",area,zone,"ALL",List.of("RESIDENT"),"DENY",null,true,
+   List.of(new PolicyModels.WeeklyWindow(List.of("MON","TUE","WED","THU","FRI","SAT","SUN"),"06:00","22:00",false)),List.of(),"HOLIDAY_OVERRIDES_WEEKLY",
+   new PolicyModels.ReservationRule("NOT_REQUIRED",0,0),new PolicyModels.CompanionRule("NONE",0),
+   new PolicyModels.OfflineRule("SAFE_LOCAL_SUBSET",300,true),new PolicyModels.FailureRule("DENY","DENY"),"OFF",null,true,null,"DENY");
+ }
+ private static SubjectModels.Subject subjectOf(UUID account) {
+  return subjects.list(MANAGER,db.tenantA,AAL2).subjects().stream().filter(s->account.equals(s.accountId())).findFirst().orElseThrow();
+ }
+ private static List<GrantModels.Grant> grantsOf(UUID subject) {
+  return grants.grants(MANAGER,db.tenantA,AAL2,subject,null).grants();
+ }
+
+ @Test void derivedRightsFollowOriginsAndRevocationAlwaysWins() throws Exception {
+  var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.4.1");
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  UUID policyId=UUID.randomUUID(),versionId=UUID.randomUUID();
+  policies.createPolicy(MANAGER,db.tenantA,AAL2,new PolicyModels.CreatePolicy(policyId,inst.area(),"Academia"));
+  policies.createVersion(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.CreateVersion(versionId,rule(zone,inst.area()),"Regra de direitos ficticia"));
+  var derive=new GrantModels.DeriveRequest(versionId);
+  assertEquals("GRANT_VERSION_NOT_APPROVED",code(()->grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive)),"Rascunho não gera direito");
+  assertEquals("VALIDATED",policies.validate(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.ValidateRequest(versionId)).status());
+  long v=policies.versions(MANAGER,db.tenantA,AAL2,policyId).versions().getFirst().version();
+  policies.approve(MANAGER,db.tenantA,AAL2,policyId,versionId,new PolicyModels.VersionAction(v));
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+
+  assertEquals("MFA_REQUIRED",code(()->grants.derive(MANAGER,db.tenantA,AAL1,policyId,derive)));
+  assertEquals("STAFF_ACCESS_DENIED",code(()->grants.derive(db.accountA,db.tenantA,AAL2,policyId,derive)),"Morador não deriva");
+  var first=grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive);
+  assertEquals(2,first.created(),first.toString());
+  var again=grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive);
+  assertEquals(0,again.created()); assertEquals(2,again.unchanged(),"Mesmos fatos: nada duplicado");
+
+  var a=subjectOf(db.accountA);
+  UUID contextA=a.eligibleContextIds().getFirst();
+  var grantA=grantsOf(a.subjectId()).getFirst();
+  assertTrue(grantA.current()); assertEquals("MEMBERSHIP",grantA.originKind());
+  assertTrue(grantA.validUntil().isBefore(Instant.now().plus(java.time.Duration.ofDays(31))),"Direito derivado nunca é infinito");
+
+  // Simulação com o sujeito real: mesma regra, mais direito e revogações; nunca cria comando.
+  // Próximas 10:00 no fuso do condomínio (dentro da janela 06:00-22:00 e da vigência do direito).
+  ZonedDateTime ten=ZonedDateTime.now(ZoneId.of(zone)).withHour(10).withMinute(0).withSecond(0).withNano(0);
+  Instant probe=(ten.toInstant().isAfter(Instant.now())?ten:ten.plusDays(1)).toInstant();
+  var real=new PolicyModels.SimulateRequest("AUTHORIZED_EXISTING_SUBJECT",versionId,inst.point(),null,probe,a.subjectId(),contextA);
+  var allowed=policies.simulate(MANAGER,db.tenantA,AAL2,policyId,real);
+  assertEquals("ALLOW",allowed.result(),String.join(",",allowed.reasonCodes()));
+  assertFalse(allowed.hardwareCommandCreated());
+  assertEquals("POLICY_SIMULATION_SUBJECT_INVALID",code(()->policies.simulate(MANAGER,db.tenantA,AAL2,policyId,
+   new PolicyModels.SimulateRequest("AUTHORIZED_EXISTING_SUBJECT",versionId,inst.point(),null,probe,null,null))));
+
+  // Cartão do morador A; bloqueio: marca do sujeito, direito e cartão revogados na mesma transação.
+  UUID card=UUID.randomUUID();
+  UUID membershipA=UUID.fromString(db.adminString("select id::text from cp.memberships where tenant_id=? and account_id=? and role='RESIDENT'",db.tenantA,db.accountA));
+  db.adminUpdate("insert into cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) values(?,?,?,?,?,'CARD','Cartao JDBC',?)",
+   card,db.tenantA,inst.connector(),membershipA,db.unitA,MANAGER);
+  subjects.block(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.Block("Ordem ficticia da gestao",a.version()));
+  var revoked=grantsOf(a.subjectId()).getFirst();
+  assertEquals("REVOKED",revoked.status()); assertEquals("SUBJECT_BLOCKED",revoked.statusReasonCode()); assertFalse(revoked.current());
+  assertEquals("REVOKED",db.adminString("select desired_state from cp.access_credentials where id=?",card),"Revogação alcança o cartão");
+  var markers=grants.markers(MANAGER,db.tenantA,AAL2,a.subjectId()).markers();
+  assertEquals("SUBJECT",markers.getFirst().targetKind());
+  assertEquals(List.of("FACE","CARD","PIN","QR","INTERMEDIARY_GRANT"),markers.getFirst().coveredMethods());
+  assertEquals("PENDING",markers.getFirst().externalDurabilityStatus(),"Confirmação externa só na barreira de recuperação");
+  var denied=policies.simulate(MANAGER,db.tenantA,AAL2,policyId,real);
+  assertEquals("DENY",denied.result()); assertTrue(denied.reasonCodes().contains("SUBJECT_BLOCKED"),denied.reasonCodes().toString());
+  assertEquals(1,grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive).skippedByReason().getOrDefault("SUBJECT_BLOCKED",0),"Sujeito bloqueado não recebe direito");
+
+  // Desbloqueio: nova época, nova geração acima da marca.
+  var blocked=subjectOf(db.accountA);
+  subjects.unblock(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.Unblock(blocked.version()));
+  assertEquals(1,grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive).created());
+  var renewed=grantsOf(a.subjectId()).stream().filter(GrantModels.Grant::current).findFirst().orElseThrow();
+  assertTrue(renewed.generation()>markers.getFirst().revokedThroughGeneration());
+  assertEquals(2,renewed.subjectRestrictionEpoch());
+
+  // Revogação manual do direito de C: vence a derivação seguinte (mesmos fatos).
+  var c=subjectOf(db.accountC);
+  var grantC=grantsOf(c.subjectId()).getFirst();
+  assertEquals("GRANT_REASON_REQUIRED",code(()->grants.revoke(MANAGER,db.tenantA,AAL2,grantC.grantId(),new GrantModels.RevokeGrant("",grantC.version()))));
+  var manual=grants.revoke(MANAGER,db.tenantA,AAL2,grantC.grantId(),new GrantModels.RevokeGrant("Pedido ficticio da gestao",grantC.version()));
+  assertEquals("REVOKED",manual.status()); assertEquals("MANUAL_REVOCATION",manual.statusReasonCode());
+  assertEquals(manual,grants.revoke(MANAGER,db.tenantA,AAL2,grantC.grantId(),new GrantModels.RevokeGrant("Pedido ficticio da gestao",grantC.version())),"Repetição");
+  var after=grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive);
+  assertEquals(0,after.created()); assertEquals(1,after.skippedByReason().getOrDefault("REVOKED_KEEPS",0),"Revogação vence a derivação dos mesmos fatos");
+
+  // Vínculo revogado na origem: o direito deixa de valer na hora e a varredura grava a marca.
+  db.adminUpdate("update cp.memberships set status='REVOKED',version=version+1 where id=?",membershipA);
+  assertFalse(grantsOf(a.subjectId()).stream().anyMatch(GrantModels.Grant::current),"Origem revogada derruba o direito sem esperar job");
+  var swept=grants.derive(MANAGER,db.tenantA,AAL2,policyId,derive);
+  assertEquals(1,swept.revoked());
+  assertEquals("ORIGIN_CHANGED",grantsOf(a.subjectId()).stream().filter(g->g.grantId().equals(renewed.grantId())).findFirst().orElseThrow().statusReasonCode());
+  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.grants(MANAGER,db.tenantB,AAL2,null,null)),"HAC-007");
+  db.assertEmptyContext();
+ }
+}
