@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   button: { minHeight: touch, borderRadius: 10, backgroundColor: colors.teal, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   dimmed: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: colors.onAction, fontSize: 16, fontWeight: '700' },
   secondaryText: { color: colors.navy },
   notice: { padding: 12, borderRadius: 10, fontSize: 15 },
   error: { backgroundColor: colors.errorBg, color: colors.error },
@@ -232,5 +232,5 @@ const styles = StyleSheet.create({
   chip: { minHeight: touch, paddingHorizontal: 14, borderRadius: 24, borderWidth: 1, borderColor: colors.line, justifyContent: 'center', backgroundColor: colors.surface },
   chipSelected: { backgroundColor: colors.teal, borderColor: colors.teal },
   chipText: { color: colors.navy, fontSize: 15 },
-  chipTextSelected: { color: '#fff', fontWeight: '700' },
+  chipTextSelected: { color: colors.onAction, fontWeight: '700' },
 });
