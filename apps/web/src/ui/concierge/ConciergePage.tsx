@@ -14,7 +14,7 @@ import { ArrivalDesk } from './Arrivals';
 import { OccurrenceSection } from './Occurrences';
 import { ConciergeMoves } from '../Moves';
 import { AccessHealthSection, ConciergeDeviceEvents, ConciergePendingRevocations } from '../AccessCredentials';
-import { ENTRY_PATH, conciergePath, condoOf, sectionEnabled } from '../shell/paths';
+import { ENTRY_PATH, conciergePath, condoOf, panelEnabled, sectionEnabled } from '../shell/paths';
 import '../management/Management.css';
 
 export type ConciergeSection = 'encomendas' | 'visitas' | 'ocorrencias';
@@ -70,7 +70,13 @@ function ConciergeGate({ scope, section }: { scope: ManagementScope; section: Co
         : 'Recebimentos, retiradas e anulações ficam registrados com o seu acesso. O aviso ao morador segue em fila e nunca condiciona o registro.'} Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão da portaria</span></div></div></div>
     <SectionTabs label="Seções da portaria" current={section} items={conciergeSections.filter((item) => sectionEnabled(condo, 'portaria', item.id)).map((item) => ({ id: item.id, label: item.label, to: conciergePath(scope.tenantId, item.id) }))} />
-    {section === 'ocorrencias' ? <OccurrenceSection canPickUnit /> : section === 'visitas' ? <><ArrivalDesk /><ConciergePendingRevocations /><AccessHealthSection /><ConciergeDeviceEvents /><ConciergeMoves /></> : <><ReceiveParcel /><ParcelQueue /></>}
+    {section === 'ocorrencias' ? <OccurrenceSection canPickUnit /> : section === 'visitas' ? <>
+      {/* Cada painel segue o próprio módulo: chegadas (visitas), credenciais e equipamentos, mudanças (pedidos). */}
+      {panelEnabled(condo, 'portaria.visitas.chegadas') ? <ArrivalDesk /> : null}
+      {panelEnabled(condo, 'portaria.visitas.revogacoes') ? <ConciergePendingRevocations /> : null}
+      {panelEnabled(condo, 'portaria.visitas.saude') ? <AccessHealthSection /> : null}
+      {panelEnabled(condo, 'portaria.visitas.eventos') ? <ConciergeDeviceEvents /> : null}
+      {panelEnabled(condo, 'portaria.visitas.mudancas') ? <ConciergeMoves /> : null}</> : <><ReceiveParcel /><ParcelQueue /></>}
   </ManagementProvider>;
 }
 

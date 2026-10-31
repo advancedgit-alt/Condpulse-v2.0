@@ -57,36 +57,62 @@ export type AreaId = 'inicio' | 'morador' | 'portaria' | 'zeladoria' | 'gestao' 
 export interface Area { id: AreaId; label: string; disabled: boolean }
 
 /**
- * Módulos de cada seção (qualquer um basta), na mesma regra das rotas do servidor (@RequiresTenantModule). Seção fora da
- * tabela não depende de módulo. As áreas inteiras de zeladoria e implantação dependem de um módulo só.
+ * Fonte única de módulo por painel: cada painel é um conjunto de chamadas à API e leva o módulo das rotas do servidor
+ * (@RequiresTenantModule) que ele consulta; null marca painel que não depende de módulo. A chave é área, área.seção ou
+ * área.seção.painel. Menu, guarda de rota e painéis leem esta tabela: uma seção fica liberada quando algum painel dela
+ * está, e uma área (portaria, zeladoria, implantação) só fica desabilitada quando nenhum painel dela está. Seção sem
+ * painel na tabela não depende de módulo.
  */
-export const sectionModules: Partial<Record<AreaId, Record<string, readonly TenantModuleId[]>>> = {
-  morador: { reservas: ['reservations'], encomendas: ['parcels'], acessos: ['visits'], financeiro: ['finance'] },
-  portaria: { encomendas: ['parcels'], visitas: ['visits'], ocorrencias: ['visits'] },
-  gestao: { reservas: ['reservations'], areas: ['reservations'], avisos: ['announcements'], pedidos: ['requests'], mudancas: ['requests'],
-    acesso: ['access_credentials'], 'mapa-acesso': ['facial_access'], ocorrencias: ['visits'], financeiro: ['finance'] },
-};
-const areaModules: Partial<Record<AreaId, readonly TenantModuleId[]>> = {
-  portaria: ['parcels', 'visits'], zeladoria: ['requests'], implantacao: ['facial_access'],
-};
+export const panelModules = {
+  'morador.inicio.caixa': null, 'morador.inicio.avisos': 'announcements', 'morador.inicio.pedidos': 'requests', 'morador.inicio.mudancas': 'requests',
+  'morador.inicio.reservas': 'reservations', 'morador.inicio.financeiro': 'finance',
+  'morador.reservas': 'reservations', 'morador.encomendas': 'parcels', 'morador.financeiro': 'finance',
+  'morador.acessos.visitas': 'visits', 'morador.acessos.equipamentos': 'access_credentials',
+  'portaria.encomendas': 'parcels', 'portaria.ocorrencias': 'visits',
+  'portaria.visitas.chegadas': 'visits', 'portaria.visitas.revogacoes': 'access_credentials', 'portaria.visitas.saude': 'access_credentials',
+  'portaria.visitas.eventos': 'access_credentials', 'portaria.visitas.mudancas': 'requests',
+  'zeladoria': 'requests',
+  'gestao.pendencias.pessoas': null, 'gestao.pendencias.reservas': 'reservations',
+  'gestao.reservas': 'reservations', 'gestao.areas': 'reservations', 'gestao.avisos': 'announcements', 'gestao.pedidos': 'requests',
+  'gestao.mudancas': 'requests', 'gestao.acesso': 'access_credentials', 'gestao.mapa-acesso': 'facial_access', 'gestao.ocorrencias': 'visits',
+  'gestao.financeiro': 'finance',
+  'implantacao': 'facial_access',
+} as const satisfies Record<string, TenantModuleId | null>;
+export type PanelId = keyof typeof panelModules;
+const panelIds = Object.keys(panelModules) as PanelId[];
 export const conciergeSectionOrder = ['encomendas', 'visitas', 'ocorrencias'] as const;
 
 /** Módulo liberado no condomínio; sem informação do servidor, liberado (a API confere de novo). */
 export function moduleEnabled(condo: Pick<Condo, 'modules'> | undefined, module: TenantModuleId): boolean {
   return !condo || condo.modules === null || condo.modules.includes(module);
 }
-const anyEnabled = (condo: Pick<Condo, 'modules'> | undefined, modules: readonly TenantModuleId[] | undefined) =>
-  !modules || modules.some((module) => moduleEnabled(condo, module));
+/** O painel pode aparecer: não depende de módulo ou o módulo dele está liberado. */
+export function panelEnabled(condo: Pick<Condo, 'modules'> | undefined, panel: PanelId): boolean {
+  const module: TenantModuleId | null = panelModules[panel];
+  return module === null || moduleEnabled(condo, module);
+}
+/** Painéis de uma área (section omitida) ou de uma seção: chave da área inteira, da seção ou de painel da seção. */
+function panelsOf(area: AreaId, section?: string): PanelId[] {
+  return panelIds.filter((id) => id === area || (section === undefined ? id.startsWith(`${area}.`)
+    : id === `${area}.${section}` || id.startsWith(`${area}.${section}.`)));
+}
 
-/** Módulos exigidos pelo lugar (área e seção); null quando não depende de módulo. */
+/** Módulos dos painéis do lugar (área e seção), sem repetição; null quando o lugar não depende de módulo. */
 export function placeModules(area: AreaId | '', section: string): readonly TenantModuleId[] | null {
   if (!area) return null;
-  if (area === 'zeladoria' || area === 'implantacao') return areaModules[area]!;
-  return sectionModules[area]?.[section] ?? null;
+  const panels = panelsOf(area, section);
+  if (panels.length === 0 || panels.some((panel) => panelModules[panel] === null)) return null;
+  return [...new Set(panels.map((panel) => panelModules[panel] as TenantModuleId))];
 }
-/** A seção da área está liberada para o condomínio. */
+/** A seção da área está liberada: sem painel dependente de módulo ou com algum painel liberado. */
 export function sectionEnabled(condo: Pick<Condo, 'modules'> | undefined, area: AreaId, section: string): boolean {
-  return anyEnabled(condo, placeModules(area, section) ?? undefined);
+  const panels = panelsOf(area, section);
+  return panels.length === 0 || panels.some((panel) => panelEnabled(condo, panel));
+}
+/** Área só de painéis dependentes de módulo (portaria, zeladoria, implantação) com todos eles desligados. */
+function areaOff(condo: Pick<Condo, 'modules'> | undefined, area: AreaId): boolean {
+  const panels = panelsOf(area);
+  return panels.length > 0 && !panels.some((panel) => panelEnabled(condo, panel));
 }
 /** Primeira seção liberada da portaria (encomendas, visitas, ocorrências); a primeira quando nenhuma está. */
 export function conciergeHome(condo: Pick<Condo, 'modules'> | undefined): string {
@@ -102,7 +128,7 @@ export function conciergeHome(condo: Pick<Condo, 'modules'> | undefined): string
 export function condoAreas(condo: Condo | undefined, technical: boolean): Area[] {
   const roles = condo?.roles ?? [];
   const has = (...wanted: Role[]) => wanted.some((role) => roles.includes(role));
-  const off = (id: AreaId) => !anyEnabled(condo, areaModules[id]);
+  const off = (id: AreaId) => areaOff(condo, id);
   const areas: Area[] = [];
   if (condo) areas.push({ id: 'inicio', label: 'Início', disabled: false });
   if (condo && condo.unitIds.length > 0) areas.push({ id: 'morador', label: 'Morador', disabled: false });

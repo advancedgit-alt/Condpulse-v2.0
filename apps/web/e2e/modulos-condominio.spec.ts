@@ -96,3 +96,50 @@ test('403 MODULE_DISABLED no meio do uso: estado próprio, sem perder o vínculo
   await expect(page.getByText('Este contexto deixou de estar disponível')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Sua unidade, em dia.', exact: true })).toBeVisible();
 });
+
+/** Conta só de portaria no condomínio A com os módulos informados; registra as chamadas da portaria. */
+async function installConcierge(page: Page, enabled: string[]) {
+  const calls: string[] = [];
+  await page.route('**/v1/me', async (route) => {
+    await json(route, 200, { accountId: ACCOUNT, memberships: [{ membershipId: '50000000-0000-4000-8000-000000000031', tenantId: TENANT_A,
+      tenantName: 'Condomínio Sintético A', timeZone: 'America/Sao_Paulo', unitId: null, role: 'CONCIERGE' }], tenantModules: [{ tenantId: TENANT_A, enabled }] });
+  });
+  await page.route(`**/v1/tenants/${TENANT_A}/concierge/**`, async (route) => {
+    const path = new URL(route.request().url()).pathname.replace(`/v1/tenants/${TENANT_A}/concierge`, '');
+    calls.push(path);
+    if (path === '/moves') { await json(route, 200, { moves: [], truncated: false }); return; }
+    await moduleDisabled(route);
+  });
+  await page.route(`**/v1/tenants/${TENANT_A}/access-health`, async (route) => { calls.push('/access-health'); await moduleDisabled(route); });
+  return calls;
+}
+
+test('portaria com visitas desligadas e pedidos ligados mantém as mudanças em Visitas, sem consultar chegadas', async ({ page }) => {
+  await installSyntheticApi(page);
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const calls = await installConcierge(page, ['requests']);
+  await signIn(page);
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/visitas$`));
+  const tabs = page.getByRole('navigation', { name: 'Seções da portaria' });
+  await expect(tabs.getByRole('link')).toHaveText(['Visitas']);
+  await expect(page.getByRole('heading', { name: 'Mudanças aprovadas' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Módulo desligado pela administradora' })).toHaveCount(0);
+  expect(calls.every((path) => path.startsWith('/moves'))).toBe(true);
+  await page.goto(`/c/${TENANT_A}/portaria/ocorrencias`);
+  await expect(page.getByRole('heading', { name: 'Módulo desligado pela administradora' })).toBeVisible();
+  await expect(page.getByText('Visitas e acessos não está liberado para este condomínio.')).toBeVisible();
+});
+
+test('portaria com todos os módulos dela desligados fica desabilitada no condomínio', async ({ page }) => {
+  await installSyntheticApi(page);
+  await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  const calls = await installConcierge(page, ['reservations', 'announcements', 'finance']);
+  await signIn(page);
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/inicio$`));
+  const cards = page.getByRole('list', { name: 'Áreas do condomínio' });
+  await expect(cards).toContainText('Desligado pela administradora');
+  await expect(cards.getByRole('link', { name: /Portaria/ })).toHaveCount(0);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
+  await expect(page.getByRole('heading', { name: 'Módulo desligado pela administradora' })).toBeVisible();
+  expect(calls).toEqual([]);
+});

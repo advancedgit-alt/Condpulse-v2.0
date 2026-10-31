@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { Membership, TenantModuleId } from '../../api/types';
-import { activeResidentUnits, conciergeHome, condoAreas, condominiums, entryDecision, legacyTarget, placeModules, placeOf, principalPath, sectionEnabled } from './paths';
+import { activeResidentUnits, conciergeHome, condoAreas, condominiums, entryDecision, legacyTarget, panelEnabled, panelModules, placeModules, placeOf, principalPath,
+  sectionEnabled } from './paths';
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
@@ -86,6 +87,31 @@ describe('módulos desligados pela administradora', () => {
     expect(placeModules('inicio', '')).toBeNull();
     expect(placeModules('', '')).toBeNull();
   });
+  it('cada painel segue o próprio módulo: visitas desligadas com pedidos ligados mantêm as mudanças da portaria', () => {
+    const [condo] = condominiums([membership(A, 'CONCIERGE')], modules('requests'));
+    expect(panelEnabled(condo, 'portaria.visitas.chegadas')).toBe(false);
+    expect(panelEnabled(condo, 'portaria.visitas.mudancas')).toBe(true);
+    expect(panelEnabled(condo, 'portaria.visitas.revogacoes')).toBe(false);
+    expect(sectionEnabled(condo, 'portaria', 'visitas')).toBe(true);
+    expect(sectionEnabled(condo, 'portaria', 'ocorrencias')).toBe(false);
+    expect(condoAreas(condo, false).find((area) => area.id === 'portaria')?.disabled).toBe(false);
+    expect(conciergeHome(condo)).toBe('visitas');
+    const [credentials] = condominiums([membership(A, 'CONCIERGE'), membership(A, 'RESIDENT', U1)], modules('access_credentials'));
+    expect(sectionEnabled(credentials, 'portaria', 'visitas')).toBe(true);
+    expect(sectionEnabled(credentials, 'morador', 'acessos')).toBe(true);
+    expect(panelEnabled(credentials, 'morador.acessos.visitas')).toBe(false);
+    expect(placeModules('portaria', 'visitas')).toEqual(['visits', 'access_credentials', 'requests']);
+    // Início do morador e pendências da gestão têm painel sem módulo: nunca ficam desligados.
+    const [none] = condominiums([membership(A, 'MANAGER'), membership(A, 'RESIDENT', U1)], modules());
+    expect(sectionEnabled(none, 'morador', 'inicio')).toBe(true);
+    expect(sectionEnabled(none, 'gestao', 'pendencias')).toBe(true);
+    expect(panelEnabled(none, 'gestao.pendencias.reservas')).toBe(false);
+    expect(placeModules('gestao', 'pendencias')).toBeNull();
+  });
+  it('tabela única: todo painel aponta para um módulo conhecido ou para nenhum', () => {
+    const known = new Set(['reservations', 'parcels', 'visits', 'announcements', 'requests', 'finance', 'access_credentials', 'facial_access', null]);
+    expect(Object.values(panelModules).every((module) => known.has(module))).toBe(true);
+  });
   it('área com todos os módulos desligados fica desabilitada e deixa de ser a principal', () => {
     const [condo] = condominiums([membership(A, 'CONCIERGE'), membership(A, 'MAINTENANCE'), membership(A, 'RESIDENT', U1)], modules('visits'));
     expect(condoAreas(condo, true).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['morador', false],
@@ -95,6 +121,13 @@ describe('módulos desligados pela administradora', () => {
     expect(principalPath(A, condo)).toBe(`/c/${A}/portaria/visitas`);
     const [none] = condominiums([membership(A, 'CONCIERGE'), membership(A, 'MAINTENANCE'), membership(A, 'RESIDENT', U1)], modules());
     expect(condoAreas(none, false).find((area) => area.id === 'portaria')?.disabled).toBe(true);
+    // Portaria só desliga quando nenhum painel dela (encomendas, visitas, credenciais, pedidos) está liberado.
+    for (const module of ['parcels', 'visits', 'access_credentials', 'requests'] as const) {
+      const [one] = condominiums([membership(A, 'CONCIERGE')], modules(module));
+      expect(condoAreas(one, false).find((area) => area.id === 'portaria')?.disabled).toBe(false);
+    }
+    const [others] = condominiums([membership(A, 'CONCIERGE')], modules('reservations', 'announcements', 'finance', 'facial_access'));
+    expect(condoAreas(others, false).find((area) => area.id === 'portaria')?.disabled).toBe(true);
     expect(principalPath(A, none)).toBe(`/c/${A}/morador`);
     const [maintenance] = condominiums([membership(A, 'MAINTENANCE')], modules());
     expect(principalPath(A, maintenance)).toBe(`/c/${A}/inicio`);

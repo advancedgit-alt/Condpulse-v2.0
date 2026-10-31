@@ -19,7 +19,7 @@ import { OccurrenceSection } from '../concierge/Occurrences';
 import { FinanceSection } from './Finance';
 import { AccessMapSection } from './AccessMap';
 import { ManagementProvider, type ManagementScope } from './shared';
-import { ENTRY_PATH, condoOf, moduleEnabled, sectionEnabled, type Condo } from '../shell/paths';
+import { ENTRY_PATH, condoOf, panelEnabled, sectionEnabled, type Condo } from '../shell/paths';
 import './Management.css';
 
 export const managementSections = [
@@ -113,7 +113,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
 
 /** Pendências: reservas só com o módulo liberado pela administradora; vínculos não dependem de módulo. */
 function Overview({ condo }: { condo: Condo | undefined }) {
-  const reservations = moduleEnabled(condo, 'reservations');
+  const reservations = panelEnabled(condo, 'gestao.pendencias.reservas');
   return <div className="management-columns">
     {reservations ? <section className="management-section" aria-labelledby="pending-reservations-title">
       <div className="section-heading"><div><span className="section-index">01 / RESERVAS</span><h2 id="pending-reservations-title">Pedidos aguardando decisão</h2></div></div>
