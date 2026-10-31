@@ -23,10 +23,16 @@ public enum PlatformCapability {
  /** Acesso facial (AC-019, V040): cria dossiê de homologação da combinação técnica e consulta o catálogo. */
  MANAGE_ACCESS_CATALOG("access_catalog.manage"),
  /** Acesso facial (AC-019, V040): decide ensaio, bancada, piloto, produção, reprovação e suspensão. */
- APPROVE_HOMOLOGATION("homologation.approve");
+ APPROVE_HOMOLOGATION("homologation.approve"),
+ /** Hierarquia de parceiro (V049, ADR-0011): lê parceiros, equipes, contratos e escalas. */
+ READ_PARTNERS("partners.read"),
+ /** Cria e suspende parceiros, vincula/desvincula condomínios e gerencia equipe e escala; nunca abre portão. */
+ MANAGE_PARTNERS("partners.manage");
 
  /** Capacidades que só aparecem na sessão do painel com CP_FACIAL_ACCESS_ENABLED ligada. */
  public boolean facialAccess() { return this==MANAGE_TECHNICAL_GRANTS || this==MANAGE_ACCESS_CATALOG || this==APPROVE_HOMOLOGATION; }
+ /** Capacidades que só aparecem na sessão do painel com CP_PARTNERS_ENABLED ligada. */
+ public boolean partners() { return this==READ_PARTNERS || this==MANAGE_PARTNERS; }
 
  private final String key;
  PlatformCapability(String key) { this.key=key; }

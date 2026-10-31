@@ -130,6 +130,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  void clearPlatformFixtures() throws SQLException {
   clearBillingFixtures();
+  try(Connection connection=admin()) { deletePartners(connection); }
   adminUpdate("delete from platform.tenant_modules where tenant_id in (?,?)",tenantA,tenantB);
   adminUpdate("delete from platform.access_homologation_decisions where decided_by in (?,?,?) or homologation_id in "
    +"(select id from platform.access_homologations where requested_by in (?,?,?))",accountA,accountB,accountC,accountA,accountB,accountC);
@@ -138,6 +139,15 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    accountA,accountB,accountC,tenantA,tenantB);
   adminUpdate("delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
   adminUpdate("delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
+ }
+ /** Parceiros (V049) criados pelas contas desta fixture ou ligados aos condomínios dela; ordem das chaves estrangeiras. */
+ private void deletePartners(Connection connection) throws SQLException {
+  String partners="(select id from platform.partners where created_by in (?,?,?))";
+  update(connection,"delete from cp.operator_schedules where tenant_id in (?,?) or partner_id in "+partners,tenantA,tenantB,accountA,accountB,accountC);
+  update(connection,"delete from platform.partner_tenant_contracts where tenant_id in (?,?) or partner_id in "+partners,
+   tenantA,tenantB,accountA,accountB,accountC);
+  update(connection,"delete from platform.partner_members where partner_id in "+partners,accountA,accountB,accountC);
+  update(connection,"delete from platform.partners where created_by in (?,?,?)",accountA,accountB,accountC);
  }
  /** Financeiro (V011) das contas e condomínios desta fixture; ordem respeita as chaves estrangeiras. */
  void clearBillingFixtures() throws SQLException {
@@ -189,7 +199,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  int backendPid() { return jdbc.queryForObject("select pg_backend_pid()",Integer.class); }
  void assertEmptyContext() {
   for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities","app.invitation_hash",
-    "app.recovery_hash","app.recovery_purge","app.platform_capabilities","app.occupancy_scan","app.finance_webhook_charge","app.technical_scopes","app.subject_context_scan","app.policy_destination_scan"}) {
+    "app.recovery_hash","app.recovery_purge","app.platform_capabilities","app.occupancy_scan","app.finance_webhook_charge","app.technical_scopes","app.subject_context_scan","app.policy_destination_scan","app.partner_id"}) {
    String value=jdbc.queryForObject("select coalesce(current_setting(?,true),'')",String.class,setting);
    org.junit.jupiter.api.Assertions.assertEquals("",value,"Contexto não pode sobreviver à devolução ao pool: "+setting);
   }
@@ -200,6 +210,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.recovery_attempts where account_id in (?,?,?)",accountA,accountB,accountC);
    deleteBilling(connection);
+   deletePartners(connection);
    update(connection,"delete from platform.tenant_modules where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.access_homologation_decisions where decided_by in (?,?,?) or homologation_id in "
     +"(select id from platform.access_homologations where requested_by in (?,?,?))",accountA,accountB,accountC,accountA,accountB,accountC);

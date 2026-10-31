@@ -16,7 +16,8 @@ class PlatformContextTest {
   assertEquals(Set.of(PlatformCapability.READ_TENANTS,PlatformCapability.MANAGE_TENANTS,PlatformCapability.READ_AUDIT,
    PlatformCapability.READ_BILLING,PlatformCapability.MANAGE_BILLING,PlatformCapability.OPERATE_OUTBOX,
    PlatformCapability.MANAGE_TECHNICAL_GRANTS,PlatformCapability.MANAGE_ACCESS_CATALOG,PlatformCapability.APPROVE_HOMOLOGATION,
-   PlatformCapability.MANAGE_TENANT_MODULES),aal2.effectiveCapabilities());
+   PlatformCapability.MANAGE_TENANT_MODULES,PlatformCapability.READ_PARTNERS,PlatformCapability.MANAGE_PARTNERS),aal2.effectiveCapabilities());
+  assertEquals("partners.manage",PlatformCapability.MANAGE_PARTNERS.key());
   assertEquals("tenant_modules.manage",PlatformCapability.MANAGE_TENANT_MODULES.key());
   assertEquals("outbox.operate",PlatformCapability.OPERATE_OUTBOX.key());
   assertTrue(new PlatformContext(ACCOUNT,"PLATFORM_ADMIN",AssuranceLevel.AAL1).effectiveCapabilities().isEmpty());

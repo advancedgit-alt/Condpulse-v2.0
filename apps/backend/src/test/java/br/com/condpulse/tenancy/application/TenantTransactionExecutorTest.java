@@ -75,7 +75,7 @@ class TenantTransactionExecutorTest {
   order.verify(jdbc).queryForObject("select set_config('app.capabilities','',true)",String.class);
   order.verify(jdbc).query(contains("from cp.memberships"),any(RowMapper.class),eq(tenant),eq(account));
   order.verify(jdbc).queryForObject("select set_config('app.capabilities',?,true)",String.class,
-   "amenities.manage,announcements.publish,area.manage,audit.read,finance.manage,memberships.manage,policy.edit,policy.publish,requests.manage,reservations.decide,units.manage");
+   "amenities.manage,announcements.publish,area.manage,audit.read,finance.manage,memberships.manage,policy.edit,policy.publish,requests.manage,reservations.decide,security.blocklist.approve,security.log.read.tenant,units.manage");
   assertEquals(List.of("begin","commit"),events);
  }
  @Test void aal1ManagerNeverPublishesCapabilitiesToTheDatabaseContext() {
@@ -109,6 +109,40 @@ class TenantTransactionExecutorTest {
    .execute(account,tenant,context->{callback.set(true);return null;}));
   assertEquals("TENANT_ACCESS_DENIED",error.code()); assertEquals(404,error.status());
   assertFalse(callback.get()); assertEquals(List.of("begin","rollback"),events);
+ }
+ @Test void partnerStaffWithoutMembershipEntersOnlyByTheDatabaseReachAndPublishesPartnerCapabilities() {
+  allow("America/Sao_Paulo",List.of());
+  when(jdbc.queryForList(contains("platform.partner_reach()"),eq(String.class),eq(tenant))).thenReturn(List.of("REMOTE_OPERATOR"));
+  var executor=new TenantTransactionExecutor(jdbc,manager);
+  executor.execute(account,tenant,AssuranceLevel.AAL2,context->{
+   assertTrue(context.memberships().isEmpty()); assertEquals(java.util.Set.of("REMOTE_OPERATOR"),context.partnerRoles());
+   assertTrue(context.effectiveCapabilities().isEmpty(),"papel de parceiro não ganha capacidade de equipe do condomínio");
+   context.requirePartnerCapability(br.com.condpulse.partners.application.PartnerCapability.OPEN_REMOTE);
+   assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->context.requireCapability(StaffCapability.OPERATE_CONCIERGE)).code());
+   return null;
+  });
+  var order=inOrder(jdbc);
+  order.verify(jdbc).query(contains("from cp.memberships"),any(RowMapper.class),eq(tenant),eq(account));
+  order.verify(jdbc).queryForList(contains("platform.partner_reach()"),eq(String.class),eq(tenant));
+  order.verify(jdbc).queryForObject("select set_config('app.capabilities',?,true)",String.class,"ops.remote.open,ops.remote.operate");
+  assertEquals(List.of("begin","commit"),events);
+ }
+ @Test void partnerStaffOutsideContractOrScheduleGets403WithoutCallback() {
+  allow("America/Sao_Paulo",List.of());
+  when(jdbc.queryForList(contains("platform.partner_reach()"),eq(String.class),eq(tenant))).thenReturn(List.of());
+  when(jdbc.queryForObject(contains("from platform.partner_members"),eq(Boolean.class),eq(account))).thenReturn(true);
+  var callback=new AtomicBoolean();
+  var error=assertThrows(BusinessProblem.class,()->new TenantTransactionExecutor(jdbc,manager)
+   .execute(account,tenant,AssuranceLevel.AAL2,context->{callback.set(true);return null;}));
+  assertEquals("PARTNER_ACCESS_DENIED",error.code()); assertEquals(403,error.status());
+  assertFalse(callback.get()); assertEquals(List.of("begin","rollback"),events);
+  verify(jdbc,never()).queryForObject(eq("select set_config('app.capabilities',?,true)"),eq(String.class),any(Object[].class));
+ }
+ @Test void partnerStaffAgainstInvisibleTenantAlsoGets403() {
+  when(jdbc.queryForObject(contains("count(*)"),eq(Integer.class),eq(account))).thenReturn(1);
+  when(jdbc.queryForObject(contains("from platform.partner_members"),eq(Boolean.class),eq(account))).thenReturn(true);
+  var error=assertThrows(BusinessProblem.class,()->new TenantTransactionExecutor(jdbc,manager).execute(account,tenant,context->null));
+  assertEquals("PARTNER_ACCESS_DENIED",error.code());
  }
  @Test void invalidTenantTimeZoneFailsClosedBeforeBusinessCallback() {
   allow("invalid/time-zone",memberships());

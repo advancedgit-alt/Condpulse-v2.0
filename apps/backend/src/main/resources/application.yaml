@@ -66,6 +66,9 @@ condpulse:
     # Chave AES-256 (base64) da data de nascimento protegida; opcional (sem ela só a atestação funciona). Só no servidor.
     age-evidence-key: ${CP_AGE_EVIDENCE_KEY:}
     age-evidence-key-version: ${CP_AGE_EVIDENCE_KEY_VERSION:v1}
+  partners:
+    # Hierarquia de parceiro (V049, ADR-0011). Desligada por padrão; fatia nova até o portão da Onda 0.
+    enabled: ${CP_PARTNERS_ENABLED:false}
   realtime:
     enabled: ${CP_REALTIME_ENABLED:false}
     tick-seconds: ${CP_REALTIME_TICK_SECONDS:5}
