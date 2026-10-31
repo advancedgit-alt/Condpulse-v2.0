@@ -19,8 +19,12 @@ public class CurrentIdentityQuery {
  private final TenantModuleFlags flags;
  /** Sem flags conhecidas nenhum módulo aparece como liberado (falha fechada no menu). */
  public CurrentIdentityQuery(JdbcTemplate jdbc) { this(jdbc,new TenantModuleFlags(java.util.EnumSet.noneOf(TenantModule.class))); }
- @Autowired
  public CurrentIdentityQuery(JdbcTemplate jdbc,TenantModuleFlags flags) { this.jdbc=jdbc; this.flags=flags; }
+ /** Flags lidas do próprio ambiente: não depende da configuração web (contextos parciais continuam válidos). */
+ @Autowired
+ public CurrentIdentityQuery(JdbcTemplate jdbc,org.springframework.core.env.Environment environment) {
+  this(jdbc,TenantModuleFlags.from(environment));
+ }
  @Transactional(readOnly=true)
  public CurrentIdentity execute(UUID accountId) {
   jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());

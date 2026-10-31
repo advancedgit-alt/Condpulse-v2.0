@@ -33,6 +33,11 @@ public class TenantModuleService {
  public TenantModuleService(PlatformTransactionExecutor platform,PlatformStore platformStore,TenantModuleStore store,TenantModuleFlags flags) {
   this.platform=platform; this.platformStore=platformStore; this.store=store; this.flags=flags;
  }
+ @org.springframework.beans.factory.annotation.Autowired
+ public TenantModuleService(PlatformTransactionExecutor platform,PlatformStore platformStore,TenantModuleStore store,
+   org.springframework.core.env.Environment environment) {
+  this(platform,platformStore,store,TenantModuleFlags.from(environment));
+ }
 
  public TenantModuleModels.TenantModulePage list(UUID actor,AssuranceLevel assurance,UUID tenantId) {
   if(tenantId==null) throw notFound();

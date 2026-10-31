@@ -8,7 +8,6 @@ import br.com.condpulse.tenancy.application.TenantModuleFlags;
 import br.com.condpulse.tenancy.application.TenantModuleGate;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
@@ -26,8 +25,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class TenantModuleWebConfiguration implements WebMvcConfigurer {
  private final TenantModuleFlags flags;
  public TenantModuleWebConfiguration(Environment environment) { flags=TenantModuleFlags.from(environment); }
-
- @Bean TenantModuleFlags tenantModuleFlags() { return flags; }
 
  @Override public void addInterceptors(InterceptorRegistry registry) {
   registry.addInterceptor(new ModuleInterceptor(flags));
