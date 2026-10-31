@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** V035 com PostgreSQL real: criação de condomínio pelo painel master, convite do primeiro gestor e isolamento. */
+/** V034 com PostgreSQL real: criação de condomínio pelo painel master, convite do primeiro gestor e isolamento. */
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class PlatformTenantCreationJdbcTest {
  private static final AssuranceLevel AAL2=AssuranceLevel.AAL2;
@@ -194,6 +194,40 @@ class PlatformTenantCreationJdbcTest {
   assertEquals(0,tenantA.usage().activeManagers()); assertNull(tenantA.origin());
   assertNotNull(tenantA.usage().lastActivityAt());
   assertEquals("TENANT_NOT_FOUND",assertThrows(BusinessProblem.class,()->platform.tenant(db.accountA,AAL2,UUID.randomUUID())).code());
+  db.assertEmptyContext();
+ }
+ @Test void reissueWaitingOnAnAcceptanceInProgressSeesTheNewManagerAndRefuses() throws Exception {
+  db.grantPlatformAdmin(db.accountA);
+  var result=create(key(),request("CONDOMINIO CORRIDA JDBC",null));
+  UUID tenant=result.tenant().tenantId();
+  UUID manager=newAccount();
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",manager);
+  // Aceite em andamento (sessão administrativa própria): trava o convite, cria o gestor e só confirma depois.
+  try(var accept=db.adminSession()) {
+   accept.setAutoCommit(false);
+   try(var lock=accept.prepareStatement("select id from platform.manager_invitations where tenant_id=? and status='PENDING' for update")) {
+    lock.setObject(1,tenant); lock.executeQuery().close();
+   }
+   var reissue=java.util.concurrent.CompletableFuture.supplyAsync(()->{
+    try {
+     platform.issueManagerInvitation(db.accountA,AAL2,tenant,new PlatformModels.IssueManagerInvitation("OUTRA PESSOA","outra@example.invalid",3,"Corrida"));
+     return "ISSUED";
+    } catch(BusinessProblem problem) { return problem.code(); }
+   });
+   Thread.sleep(500);
+   assertFalse(reissue.isDone(),"A emissão espera o aceite que trava o convite");
+   UUID membership=UUID.randomUUID();
+   try(var insert=accept.prepareStatement("insert into cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) values(?,?,?,null,'GESTORA FICTICIA JDBC','MANAGER','ACTIVE')")) {
+    insert.setObject(1,membership); insert.setObject(2,tenant); insert.setObject(3,manager); insert.executeUpdate();
+   }
+   try(var done=accept.prepareStatement("update platform.manager_invitations set status='ACCEPTED',accepted_by=?,accepted_at=now(),membership_id=? where tenant_id=? and status='PENDING'")) {
+    done.setObject(1,manager); done.setObject(2,membership); done.setObject(3,tenant); done.executeUpdate();
+   }
+   accept.commit();
+   assertEquals("TENANT_MANAGER_EXISTS",reissue.get(10,java.util.concurrent.TimeUnit.SECONDS));
+  }
+  assertEquals("0",db.adminString("select count(*) from platform.manager_invitations where tenant_id=? and status='PENDING'",tenant),
+   "Nenhum convite novo depois do aceite concorrente");
   db.assertEmptyContext();
  }
 }

@@ -201,7 +201,7 @@ test('administrador cria condomínio pelo painel, recebe o link do convite uma v
   await form.getByLabel('Unidades (uma por linha)').fill('101\n 102 ');
   await form.getByRole('button', { name: 'Criar condomínio' }).click();
   await expect(page.getByText('Condomínio "Condomínio Sintético C" criado com 2 unidade(s)', { exact: false })).toBeVisible();
-  await expect(page.getByLabel('Link do convite')).toHaveValue(/\/convite-gestor#token=T{43}$/);
+  await expect(page.getByLabel('Link do convite', { exact: true })).toHaveValue(/\/convite-gestor#token=T{43}$/);
   expect(platform.created).toHaveLength(1);
   expect(platform.created[0]!.key).toMatch(/^web:/);
   expect(platform.created[0]!.body).toEqual({ name: 'Condomínio Sintético C', timeZone: 'America/Sao_Paulo', units: ['101', '102'],
@@ -213,5 +213,5 @@ test('administrador cria condomínio pelo painel, recebe o link do convite uma v
   await expect(page.getByText('Convite de gestor emitido para Gestora Sintética (7 dia(s))')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Convites de gestor' }).getByText('Pendente', { exact: true })).toBeVisible();
   // O link do convite não aparece de novo na ficha.
-  await expect(page.getByLabel('Link do convite')).toHaveCount(0);
+  await expect(page.getByLabel('Link do convite', { exact: true })).toHaveCount(0);
 });

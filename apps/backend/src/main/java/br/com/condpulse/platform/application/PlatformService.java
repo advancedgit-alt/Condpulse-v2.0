@@ -90,7 +90,7 @@ public class PlatformService {
     details.put("units",Integer.toString(input.units().size()));
     details.put("amenities",input.amenity()==null?"0":"1");
     store.audit(actor,"TENANT_CREATED",tenantId,input.reason(),details);
-    var issued=invite(actor,tenantId,input.managerName(),input.managerEmail(),input.validDays(),input.reason());
+    var issued=invite(actor,tenantId,input.managerName(),input.managerEmail(),input.validDays(),input.reason(),false);
     var created=store.tenant(tenantId);
     if(created==null) throw new IllegalStateException("Condomínio criado não foi encontrado na mesma transação.");
     return new PlatformModels.TenantCreated(withBilling(context,java.util.List.of(created)).getFirst(),true,
@@ -100,6 +100,7 @@ public class PlatformService {
    // Outra requisição com a mesma chave venceu a corrida: relê como repetição depois do rollback desta.
    if(!"23505".equals(SqlStates.of(error))) throw translate(error);
    return execute(actor,assurance,context->{
+    context.require(PlatformCapability.MANAGE_TENANTS);
     var replay=replay(context,actor,input);
     if(replay==null) throw new BusinessProblem("TENANT_CREATION_CONFLICT",409,"Os dados conflitam com um cadastro existente. Atualize e confira.");
     return replay;
@@ -133,7 +134,7 @@ public class PlatformService {
    if(!tenant.active()) throw new BusinessProblem("TENANT_SUSPENDED",409,"Reative o condomínio antes de convidar o gestor.");
    if(store.tenantHasActiveManager(tenantId))
     throw new BusinessProblem("TENANT_MANAGER_EXISTS",409,"O condomínio já tem gestor vigente; novos vínculos seguem pela gestão local.");
-   return invite(actor,tenantId,manager.name(),manager.email(),manager.days(),reason);
+   return invite(actor,tenantId,manager.name(),manager.email(),manager.days(),reason,true);
   });
  }
  public PlatformModels.TenantDetail revokeManagerInvitation(UUID actor,AssuranceLevel assurance,UUID tenantId,UUID invitationId,
@@ -150,8 +151,14 @@ public class PlatformService {
   });
   return tenant(actor,assurance,tenantId);
  }
- private PlatformModels.ManagerInvitationIssued invite(UUID actor,UUID tenantId,String name,String email,int days,String reason) {
+ private PlatformModels.ManagerInvitationIssued invite(UUID actor,UUID tenantId,String name,String email,int days,String reason,
+   boolean requireNoManager) {
+  // A revogação trava o convite pendente e espera um aceite em andamento (que também trava o convite). Só depois a
+  // ausência de gestor é conferida de novo: um aceite confirmado nesse intervalo aparece aqui (READ COMMITTED) e a
+  // emissão é recusada; um aceite que chegar depois encontra o convite revogado.
   UUID previous=store.revokePendingInvitation(tenantId,actor,reason);
+  if(requireNoManager && store.tenantHasActiveManager(tenantId))
+   throw new BusinessProblem("TENANT_MANAGER_EXISTS",409,"O condomínio já tem gestor vigente; novos vínculos seguem pela gestão local.");
   if(previous!=null)
    store.audit(actor,"TENANT_MANAGER_INVITATION_REVOKED",tenantId,reason,java.util.Map.of("invitationId",previous.toString(),
     "replaced","true"));

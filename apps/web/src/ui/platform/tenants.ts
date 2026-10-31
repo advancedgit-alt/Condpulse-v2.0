@@ -33,7 +33,7 @@ export function validTimeZone(zone: string): boolean {
 
 const plural = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`;
 
-/** Resumo de uso para a lista e a ficha; API anterior a V035 não informa o uso. */
+/** Resumo de uso para a lista e a ficha; API anterior a V034 não informa o uso. */
 export function usageText(tenant: PlatformTenant, zone: string): string {
   const usage = tenant.usage;
   if (!usage) return 'Uso não informado por esta versão da API.';

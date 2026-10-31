@@ -13967,7 +13967,7 @@
           },
           "usage": {
             "$ref": "#/components/schemas/PlatformTenantUsage",
-            "description": "Uso agregado sem conteúdo residencial (V035)."
+            "description": "Uso agregado sem conteúdo residencial (V034)."
           },
           "billing": {
             "oneOf": [

@@ -24,7 +24,7 @@ export function InvitationLinkNotice({ token, expiresAt, manager }: { token: str
   async function copy() {
     try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); }
   }
-  return <div className="panel invitation-link" role="group" aria-label="Link do convite de gestor">
+  return <div className="panel invitation-link" role="group" aria-label="Convite de gestor emitido">
     <Notice tone="warning">Este link aparece só agora. Envie a <bdi>{manager}</bdi> por um canal privado: ele vale uma única vez, para o e-mail
       informado, até {formatWhen(expiresAt, PLATFORM_ZONE)}. Quem aceitar entra com a própria conta do CondPulse (e-mail confirmado).</Notice>
     <label htmlFor="manager-invitation-link">Link do convite</label>

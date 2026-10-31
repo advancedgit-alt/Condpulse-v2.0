@@ -2,7 +2,7 @@
 
 Flag: `CP_PLATFORM_ENABLED` (padrão `false`). Com a flag desligada as rotas `/v1/platform/*`, o aceite do convite
 de gestor (`/v1/manager-invitations/accept`) e o primeiro acesso do gestor (`/auth/manager-invitation/accept`, que
-exige também `CP_BFF_ENABLED`) não existem. A situação de cada migration por ambiente fica em `STATUS.md`; a V035
+exige também `CP_BFF_ENABLED`) não existem. A situação de cada migration por ambiente fica em `STATUS.md`; a V034
 (criação de condomínio pelo painel) **não foi aplicada a nenhum banco remoto** e exige revisão e autorização próprias.
 
 ## O que o painel faz
@@ -12,7 +12,7 @@ exige também `CP_BFF_ENABLED`) não existem. A situação de cada migration por
 | Papel da própria conta (e se falta o segundo fator) | `GET /v1/platform/session` | papel vigente |
 | Catálogo de condomínios: nome, fuso, estado, versão, origem, recibo do onboarding, uso agregado e assinatura; busca opcional `q` | `GET /v1/platform/tenants` | `tenants.read` (assinatura: `billing.read` e financeiro ligado) |
 | Ficha do condomínio: dados, uso, assinatura, gestores, convites de gestor e 10 eventos recentes da plataforma | `GET /v1/platform/tenants/{id}` | `tenants.read` (eventos: `platform.audit.read`) |
-| Criar condomínio, unidades, área inicial opcional e convite do primeiro gestor (V035) | `POST /v1/platform/tenants` + `Idempotency-Key` | `tenants.manage` |
+| Criar condomínio, unidades, área inicial opcional e convite do primeiro gestor (V034) | `POST /v1/platform/tenants` + `Idempotency-Key` | `tenants.manage` |
 | Novo convite de primeiro gestor (revoga o pendente anterior) | `POST /v1/platform/tenants/{id}/manager-invitations` | `tenants.manage` |
 | Revogar convite de gestor pendente, com motivo | `POST /v1/platform/tenants/{id}/manager-invitations/{convite}/revoke` | `tenants.manage` |
 | Renomear, suspender ou reativar pela versão lida, com motivo | `PUT /v1/platform/tenants/{id}` | `tenants.manage` |
@@ -49,7 +49,7 @@ exige também `CP_BFF_ENABLED`) não existem. A situação de cada migration por
   (`404 TENANT_ACCESS_DENIED`) na próxima requisição de moradores e gestão local. Não apaga dados, sessões ou
   reservas e não é automática por atraso de pagamento (fase 5).
 
-## Criação de condomínio pelo painel (V035)
+## Criação de condomínio pelo painel (V034)
 
 Substitui o manifesto manual para o caso comum (condomínio novo, unidades, primeiro gestor e, opcionalmente, uma área),
 com o mesmo rigor: papel `PLATFORM_ADMIN` com AAL2, motivo obrigatório, trilha da plataforma e idempotência. O
@@ -65,7 +65,7 @@ onboarding operacional (`OPERACAO_ONBOARDING.md`) continua disponível para lote
   `409 TENANT_CREATION_KEY_REUSED`; corrida entre duas requisições iguais: a perdedora relê e devolve a repetição.
 - **Transação única**: registro da criação → condomínio (ativo, versão 0) → unidades → área → convite → eventos
   `TENANT_CREATED` e `TENANT_MANAGER_INVITED`. Resposta `201` com o token do convite, mostrado só nesta resposta.
-- **Banco (V035)**: o INSERT em `platform.tenants`, e as políticas restritivas de INSERT em `cp.units`/`cp.amenities`
+- **Banco (V034)**: o INSERT em `platform.tenants`, e as políticas restritivas de INSERT em `cp.units`/`cp.amenities`
   (V006), só aceitam o condomínio cujo registro em `tenant_creations` foi gravado **nesta mesma transação**
   (`creation_xid = pg_current_xact_id()`) pela mesma conta e com `tenants.manage` publicada. Assim a plataforma não
   insere unidade ou área em condomínio existente, nem condomínio sem registro. Um gatilho de restrição diferido exige,
@@ -106,7 +106,7 @@ atividade conhecida (maior data entre a atualização do condomínio, de víncul
 `billing` (somente com `CP_PLATFORM_BILLING_ENABLED` e `billing.read`) traz assinatura ativa, cobranças em aberto e
 vencidas — vencida não bloqueia acesso. `origin` diz se o condomínio veio do onboarding ou do painel.
 
-**Decisão a confirmar pelo responsável**: para contar vínculos e listar gestores, a V035 abre leitura de `cp.units` e
+**Decisão a confirmar pelo responsável**: para contar vínculos e listar gestores, a V034 abre leitura de `cp.units` e
 `cp.memberships` de todos os condomínios para a sessão com `tenants.read` (papel `PLATFORM_ADMIN` + AAL2). A API
 devolve só contagens e o nome/situação/início dos gestores, mas o banco não restringe colunas por política: com
 `tenants.read` publicada, a role runtime enxergaria nome, papel, unidade e situação dos vínculos. Alternativas mais
@@ -186,8 +186,8 @@ e quem aprovou em `STATUS.md`. Gestão local não implica papel de plataforma.
 
 ## Pendências
 
-- Aplicação remota da V035 (criação pelo painel), com aprovação explícita, e republicação da API.
-- Decisão do responsável sobre a leitura agregada de `cp.units`/`cp.memberships` pela sessão de plataforma (V035).
+- Aplicação remota da V034 (criação pelo painel), com aprovação explícita, e republicação da API.
+- Decisão do responsável sobre a leitura agregada de `cp.units`/`cp.memberships` pela sessão de plataforma (V034).
 - Envio do link do convite por e-mail (SMTP ainda pendente): hoje a administração copia e envia por canal privado.
 - Ensaio com Supabase Auth real do aceite do convite de gestor (e-mail confirmado, conta nova e conta existente).
 - Suporte temporário justificado (OPS-01). Contratos/planos e situação financeira: ver
