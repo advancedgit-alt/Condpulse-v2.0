@@ -129,7 +129,8 @@ export interface TotpEnrollment {
 export interface InvitationAccepted {
   tenantId: UUID;
   membershipId: UUID;
-  status: 'PENDING';
+  /** PENDING: convite da gestão (aguarda aprovação); ACTIVE: convite de primeiro gestor emitido pela plataforma. */
+  status: 'PENDING' | 'ACTIVE';
 }
 
 /** Primeiro acesso por convite: sem sessão (sessionStarted=false) o convidado entra depois pelo login comum. */

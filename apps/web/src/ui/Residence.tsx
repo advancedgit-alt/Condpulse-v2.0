@@ -59,8 +59,10 @@ export function ContextPage() {
   const managed = memberships.filter(membership => membership.role === 'MANAGER' && membership.unitId === null);
   const concierge = memberships.filter(membership => membership.role === 'CONCIERGE' && membership.unitId === null);
   const invitation = storedInvitation();
+  const managerInvitation = storedInvitation('manager');
   return <div className="context-page"><div className="page-intro"><span className="eyebrow">SEU ACESSO</span><h1>Escolha seu espaço.</h1><p>Você verá apenas os condomínios e as unidades vinculados ao seu cadastro.</p></div>
     {invitation ? <Notice>Há um convite aberto nesta janela. <Link to="/convite">Concluir o aceite do convite</Link></Notice> : null}
+    {managerInvitation ? <Notice>Há um convite de gestor aberto nesta janela. <Link to="/convite-gestor">Concluir o aceite como gestor</Link></Notice> : null}
     {managed.length > 0 ? <section className="panel management-context" aria-labelledby="management-access-title"><span className="section-index">GESTÃO</span><h2 id="management-access-title">Gestão do condomínio</h2>
       <p>Ações de gestão exigem o segundo fator de autenticação e ficam registradas na auditoria.</p>
       <div className="button-row">{managed.map(membership => <Link key={membership.membershipId} className="button button-secondary" to={`/gestao/${membership.tenantId}/pendencias`}>Abrir gestão · {membership.tenantName}<Icon name="arrow" /></Link>)}</div></section> : null}

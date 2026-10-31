@@ -33,7 +33,7 @@ public class PlatformTransactionExecutor {
   Objects.requireNonNull(assurance); Objects.requireNonNull(action);
   return tx.execute(status->{
    for(String setting:new String[]{"app.session_hash","app.capabilities","app.invitation_hash","app.tenant_id",
-     "app.platform_capabilities","app.recovery_hash","app.recovery_purge"})
+     "app.platform_capabilities","app.recovery_hash","app.recovery_purge","app.manager_invitation_hash"})
     jdbc.queryForObject("select set_config(?,'',true)",String.class,setting);
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());
    Integer active=jdbc.queryForObject("select count(*) from platform.accounts where id=? and status='ACTIVE'",Integer.class,accountId);

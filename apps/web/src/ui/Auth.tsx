@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from 'react-router-dom';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, type InvitationKind } from '../api/client';
 import type { CurrentIdentity, InvitationFirstAccess } from '../api/types';
 import { Brand, ErrorState, Icon, Loading, Notice, RateLimitNotice, errorMessage } from './primitives';
 import { useCooldown } from './cooldown';
@@ -15,7 +15,7 @@ interface AuthValue {
   error: unknown;
   login(email: string, password: string): Promise<void>;
   /** Primeiro acesso por convite: entra e aceita o convite na mesma operação (conta local ainda inexistente). */
-  acceptInvitation(email: string, password: string, token: string): Promise<InvitationFirstAccess>;
+  acceptInvitation(email: string, password: string, token: string, kind?: InvitationKind): Promise<InvitationFirstAccess>;
   logout(): Promise<void>;
   recheck(): void;
 }
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw failure;
     }
   }
-  async function acceptInvitation(email: string, password: string, token: string): Promise<InvitationFirstAccess> {
+  async function acceptInvitation(email: string, password: string, token: string, kind: InvitationKind = 'membership'): Promise<InvitationFirstAccess> {
     // Conta sem espelho local termina o login comum em "bloqueado" (ACCOUNT_INACTIVE): o primeiro acesso é a saída.
     if (status !== 'anonymous' && status !== 'blocked') throw new ApiError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'O serviço de acesso está temporariamente indisponível.');
     const epoch = ++authEpoch.current;
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let accepted = false;
     try {
       await queries.cancelQueries(); queries.clear(); api.clearSession();
-      const result = await api.acceptInvitationWithLogin({ email, password, token }); accepted = true;
+      const result = await api.acceptInvitationWithLogin({ email, password, token, kind }); accepted = true;
       // Aceite gravado: o resultado volta à tela mesmo se a identidade não puder ser lida agora (nova consulta depois).
       if (epoch !== authEpoch.current) return result;
       if (!result.sessionStarted) { setMode('anonymous'); return result; }
@@ -147,6 +147,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
   if (auth.status === 'blocked') return <SessionPage><span className="eyebrow">ACESSO EM VALIDAÇÃO</span><h1>Seu cadastro precisa ser validado.</h1>
     <p>Procure a gestão do condomínio para confirmar seu acesso e seus vínculos.</p>
     {storedInvitation() ? <Notice>Há um convite aberto nesta janela. <Link to="/convite">Concluir o primeiro acesso pelo convite</Link></Notice> : null}
+    {storedInvitation('manager') ? <Notice>Há um convite de gestor aberto nesta janela. <Link to="/convite-gestor">Concluir o primeiro acesso como gestor</Link></Notice> : null}
     <div className="button-row"><button className="button" onClick={auth.recheck}>Verificar acesso</button><button className="button button-secondary" onClick={() => void auth.logout()}>Sair</button></div></SessionPage>;
   if (auth.status === 'unavailable') return <SessionPage><h1>Não foi possível verificar seu acesso.</h1><ErrorState error={auth.error} retry={auth.recheck} /><button className="button button-secondary" onClick={() => void auth.logout()}>Sair</button></SessionPage>;
   if (auth.status === 'anonymous') return <Navigate to="/entrar" replace />;

@@ -46,4 +46,16 @@ describe('convite guardado só nesta aba', () => {
     expect(storedInvitation()).toBeNull();
     expect(() => forgetInvitation()).not.toThrow();
   });
+  it('convite de gestor usa chave própria e a saída da conta descarta os dois', () => {
+    const storage = new MemoryStorage(); storage.setItem('condpulse:invitation', token);
+    browser(`#token=${'M'.repeat(43)}`, storage);
+    expect(captureInvitationFromLocation('manager')).toBe('M'.repeat(43));
+    expect(storedInvitation('manager')).toBe('M'.repeat(43));
+    expect(storedInvitation()).toBe(token);
+    forgetInvitation('manager');
+    expect(storedInvitation('manager')).toBeNull(); expect(storedInvitation()).toBe(token);
+    storage.setItem('condpulse:manager-invitation', 'M'.repeat(43));
+    forgetInvitation();
+    expect(storedInvitation()).toBeNull(); expect(storedInvitation('manager')).toBeNull();
+  });
 });

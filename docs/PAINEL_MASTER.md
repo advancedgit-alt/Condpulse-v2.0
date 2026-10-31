@@ -1,16 +1,22 @@
 # Painel master (fase 4, OPS-01)
 
-Flag: `CP_PLATFORM_ENABLED` (padrão `false`, inclusive na Vercel). Com a flag desligada as rotas
-`/v1/platform/*` não existem. V010 não foi aplicada a nenhum banco remoto: o executor de migrations
-continua fixado em V003–V005 e qualquer aplicação exige revisão e autorização próprias.
+Flag: `CP_PLATFORM_ENABLED` (padrão `false`). Com a flag desligada as rotas `/v1/platform/*`, o aceite do convite
+de gestor (`/v1/manager-invitations/accept`) e o primeiro acesso do gestor (`/auth/manager-invitation/accept`, que
+exige também `CP_BFF_ENABLED`) não existem. A situação de cada migration por ambiente fica em `STATUS.md`; a V035
+(criação de condomínio pelo painel) **não foi aplicada a nenhum banco remoto** e exige revisão e autorização próprias.
 
 ## O que o painel faz
 
 | Operação | Rota | Capacidade |
 | --- | --- | --- |
 | Papel da própria conta (e se falta o segundo fator) | `GET /v1/platform/session` | papel vigente |
-| Catálogo de condomínios: nome, fuso, estado, versão, contagens do onboarding; busca opcional `q` | `GET /v1/platform/tenants` | `tenants.read` |
+| Catálogo de condomínios: nome, fuso, estado, versão, origem, recibo do onboarding, uso agregado e assinatura; busca opcional `q` | `GET /v1/platform/tenants` | `tenants.read` (assinatura: `billing.read` e financeiro ligado) |
+| Ficha do condomínio: dados, uso, assinatura, gestores, convites de gestor e 10 eventos recentes da plataforma | `GET /v1/platform/tenants/{id}` | `tenants.read` (eventos: `platform.audit.read`) |
+| Criar condomínio, unidades, área inicial opcional e convite do primeiro gestor (V035) | `POST /v1/platform/tenants` + `Idempotency-Key` | `tenants.manage` |
+| Novo convite de primeiro gestor (revoga o pendente anterior) | `POST /v1/platform/tenants/{id}/manager-invitations` | `tenants.manage` |
+| Revogar convite de gestor pendente, com motivo | `POST /v1/platform/tenants/{id}/manager-invitations/{convite}/revoke` | `tenants.manage` |
 | Renomear, suspender ou reativar pela versão lida, com motivo | `PUT /v1/platform/tenants/{id}` | `tenants.manage` |
+| Aceite do convite pela conta convidada (sessão já aberta / primeiro acesso web) | `POST /v1/manager-invitations/accept` / `POST /auth/manager-invitation/accept` | própria conta, mesmo e-mail |
 | Auditoria da plataforma, por cursor | `GET /v1/platform/audit-events` | `platform.audit.read` |
 | Fila de tarefas por condomínio, com alerta de fila antiga (V032) | `GET /v1/platform/outbox` | `outbox.operate` e `tenants.read` |
 | Tarefas com falha ou ignoradas (sem conteúdo) | `GET /v1/platform/outbox/tasks?state=&tenantId=` | `outbox.operate` |
@@ -43,22 +49,98 @@ continua fixado em V003–V005 e qualquer aplicação exige revisão e autoriza�
   (`404 TENANT_ACCESS_DENIED`) na próxima requisição de moradores e gestão local. Não apaga dados, sessões ou
   reservas e não é automática por atraso de pagamento (fase 5).
 
+## Criação de condomínio pelo painel (V035)
+
+Substitui o manifesto manual para o caso comum (condomínio novo, unidades, primeiro gestor e, opcionalmente, uma área),
+com o mesmo rigor: papel `PLATFORM_ADMIN` com AAL2, motivo obrigatório, trilha da plataforma e idempotência. O
+onboarding operacional (`OPERACAO_ONBOARDING.md`) continua disponível para lotes com moradores e vínculos.
+
+- **Pedido**: nome (até 160 code points, mesma regra do PUT), fuso IANA (aceito pelo Java **e** por
+  `pg_timezone_names` na mesma transação), de 1 a 250 unidades (1 a 40 caracteres, sem repetição ignorando maiúsculas),
+  primeiro gestor (nome, e-mail e validade do convite de 1 a 14 dias, padrão 7), área inicial opcional (mesma validação
+  da gestão local: `AmenityManagementModels.validate`, regra versão 1, área ativa) e motivo (até 500).
+- **Idempotência**: cabeçalho `Idempotency-Key` (`[A-Za-z0-9._:-]{16,128}`), único por conta em
+  `platform.tenant_creations`, com o SHA-256 do pedido normalizado. Mesma chave e mesmo pedido: `200` com
+  `applied=false`, o condomínio já criado e **sem** token (nada é gravado de novo); mesma chave com outro pedido:
+  `409 TENANT_CREATION_KEY_REUSED`; corrida entre duas requisições iguais: a perdedora relê e devolve a repetição.
+- **Transação única**: registro da criação → condomínio (ativo, versão 0) → unidades → área → convite → eventos
+  `TENANT_CREATED` e `TENANT_MANAGER_INVITED`. Resposta `201` com o token do convite, mostrado só nesta resposta.
+- **Banco (V035)**: o INSERT em `platform.tenants`, e as políticas restritivas de INSERT em `cp.units`/`cp.amenities`
+  (V006), só aceitam o condomínio cujo registro em `tenant_creations` foi gravado **nesta mesma transação**
+  (`creation_xid = pg_current_xact_id()`) pela mesma conta e com `tenants.manage` publicada. Assim a plataforma não
+  insere unidade ou área em condomínio existente, nem condomínio sem registro. Um gatilho de restrição diferido exige,
+  no COMMIT, o evento `TENANT_CREATED` do mesmo ator na trilha da plataforma (a falta aborta com 23514). Nenhuma
+  credencial Auth Admin, DDL, `BYPASSRLS` ou `SECURITY DEFINER`.
+
+### Primeiro gestor: convite de uso único (sem e-mail→UUID no servidor)
+
+A API runtime **não** recebe a chave Auth Admin (privilegiada, só do job de onboarding — ADR-0007) e, sem ela, não há
+caminho seguro para resolver e-mail → UUID do Auth. Também foi descartado colar o UUID do Auth no painel: a API não
+consegue conferir se a conta existe, tem e-mail confirmado ou está banida. Escolha: o **mecanismo de convite já
+existente** (token opaco de 32 bytes em base64url, só o SHA-256 no banco, e-mail só como SHA-256 de
+`<id>:<e-mail normalizado>` — o mesmo desenho do convite CP-020 e do link CP-037), em tabela própria
+`platform.manager_invitations`:
+
+- A plataforma emite o convite (na criação ou depois, pela ficha) e entrega o link `/<origem>/convite-gestor#token=…`
+  por canal privado. O token vai só no fragmento: não chega a servidores nem a logs de acesso; a web guarda o token só
+  no `sessionStorage` da aba, com chave própria (`condpulse:manager-invitation`).
+- O gestor aceita com a **própria conta Auth** (login com senha, que no Supabase exige e-mail confirmado): o claim
+  `email` do token precisa bater com o hash do convite. O aceite cria o espelho local da conta (se faltar), o vínculo
+  `MANAGER` **ativo** sem unidade (a decisão foi da plataforma ao emitir, com AAL2 e auditoria) e registra
+  `MANAGER_INVITATION_ACCEPTED` na auditoria do condomínio. É o único caminho da API em que um vínculo nasce ativo.
+- O banco confere o mesmo que o serviço: política `membership_manager_invitation_insert` exige a própria conta,
+  `MANAGER`/`ACTIVE`/sem unidade, condomínio do contexto local, convite pendente e dentro do prazo pelo hash local da
+  transação (`app.manager_invitation_hash`), mesmo nome do convite e condomínio ativo. O aceite marca o convite como
+  `ACCEPTED` somente se o vínculo da própria conta existir. Respostas negativas são neutras
+  (`INVITATION_NOT_AVAILABLE`): token inválido, expirado, revogado, já usado, outro e-mail ou condomínio suspenso.
+- Um convite pendente por condomínio (índice parcial); emitir outro revoga o anterior na mesma transação. Novo convite só
+  para condomínio **ativo** e **sem gestor vigente** (`TENANT_MANAGER_EXISTS`): depois do primeiro gestor, outros
+  vínculos (inclusive gestores) seguem pela gestão local. A plataforma não aprova, suspende nem revoga vínculos.
+- Limites herdados do convite CP-020: `email_verified` não é conferido no claim (a prova é o login no provedor, que
+  exige e-mail confirmado na configuração do projeto) e o hash do e-mail não usa HMAC.
+
+### Uso agregado e assinatura no catálogo
+
+`usage` traz unidades ativas, vínculos vigentes (`ACTIVE` dentro da vigência), gestores vigentes e a última
+atividade conhecida (maior data entre a atualização do condomínio, de vínculos, de unidades e a trilha da plataforma).
+`billing` (somente com `CP_PLATFORM_BILLING_ENABLED` e `billing.read`) traz assinatura ativa, cobranças em aberto e
+vencidas — vencida não bloqueia acesso. `origin` diz se o condomínio veio do onboarding ou do painel.
+
+**Decisão a confirmar pelo responsável**: para contar vínculos e listar gestores, a V035 abre leitura de `cp.units` e
+`cp.memberships` de todos os condomínios para a sessão com `tenants.read` (papel `PLATFORM_ADMIN` + AAL2). A API
+devolve só contagens e o nome/situação/início dos gestores, mas o banco não restringe colunas por política: com
+`tenants.read` publicada, a role runtime enxergaria nome, papel, unidade e situação dos vínculos. Alternativas mais
+fechadas (contadores mantidos por gatilho ou função `SECURITY DEFINER` com dono sem acesso de escrita) ficam para
+decisão própria.
+
 ## Tela web (`/master`)
 
 Sem link na escolha de contexto: a administração acessa `/master` diretamente. A tela consulta
 `/v1/platform/session`; conta sem papel vê "Área restrita" sem nenhum dado da plataforma; flag desligada mostra
 "Painel indisponível"; sem AAL2 a tela cadastra/verifica o autenticador antes de qualquer outra rota. Seções:
-Condomínios (lista com estado, fuso, versão e recibo do onboarding; alterar nome ou estado com motivo, pela
-versão lida ao abrir, com aviso e recarga quando outra pessoa mudou o condomínio) e Auditoria (por cursor,
-horários em America/Sao_Paulo). Repetição natural aparece como informação, nunca como sucesso; `403
+Condomínios (lista com estado, fuso, versão, origem, recibo do onboarding, uso agregado e assinatura; "Novo
+condomínio"; "Abrir ficha"; alterar nome ou estado com motivo, pela versão lida ao abrir, com aviso e recarga quando
+outra pessoa mudou o condomínio) e Auditoria (por cursor, horários em America/Sao_Paulo). A ficha
+(`/master/condominios/{id}`) mostra dados, uso, assinatura, gestores, convites (emitir/revogar) e eventos recentes, e
+permite suspender ou reativar com motivo.
+
+- **Novo condomínio**: a chave de operação nasce com o formulário. Resultado incerto (rede ou 5xx depois do envio)
+  trava os campos e oferece "Reenviar os mesmos dados" (mesma chave: devolve o condomínio já criado, sem duplicar) ou
+  descartar e conferir a lista. O link do convite aparece uma única vez, com botão de copiar; repetição não mostra link.
+- **Aceite**: `/convite-gestor#token=…` reaproveita a tela de convite (`InvitationPage kind="manager"`): quem já tem
+  sessão confirma; quem ainda não tem conta local entra com e-mail e senha no primeiro acesso.
+- A web pode ser publicada antes da API: sem `usage`/`billing`/`origin` na resposta, a lista mostra "uso não informado"
+  em vez de falhar. Repetição natural aparece como informação, nunca como sucesso; `403
 PLATFORM_ACCESS_DENIED` em qualquer consulta remove os dados da tela.
 
 ## O que o painel não faz
 
-- Não cria condomínio. O cadastro segue pelo onboarding operacional (`OPERACAO_ONBOARDING.md`), que confere as
-  contas no Auth com credencial administrativa que a API não recebe (ADR-0007).
-- Não lê dados de negócio dos condomínios (unidades, moradores, reservas, auditoria local): as políticas
-  `tenant_boundary` do schema `cp` continuam fechadas sem condomínio no contexto.
+- Não usa a credencial Auth Admin nem consulta o Auth por e-mail: o primeiro gestor prova a conta ao aceitar o convite.
+  Lotes com moradores e vínculos continuam no onboarding operacional (`OPERACAO_ONBOARDING.md`).
+- Não mostra conteúdo residencial (moradores, reservas, encomendas, auditoria local); só contagens e gestores (ver a
+  decisão a confirmar acima sobre a leitura de `cp.units`/`cp.memberships` no banco).
+- Não aprova, suspende ou revoga vínculos, não cria moradores e não convida gestor adicional quando já há gestor
+  vigente (isso é da gestão local).
 - Não age em nome de outra conta, não concede papel de plataforma e não dá poder de plataforma a `MANAGER`.
   Suporte temporário com finalidade, vigência e escopo (OPS-01) continua pendente.
 
@@ -104,7 +186,10 @@ e quem aprovou em `STATUS.md`. Gestão local não implica papel de plataforma.
 
 ## Pendências
 
-- Aplicação remota da V010 e concessão do primeiro papel, com aprovação explícita.
+- Aplicação remota da V035 (criação pelo painel), com aprovação explícita, e republicação da API.
+- Decisão do responsável sobre a leitura agregada de `cp.units`/`cp.memberships` pela sessão de plataforma (V035).
+- Envio do link do convite por e-mail (SMTP ainda pendente): hoje a administração copia e envia por canal privado.
+- Ensaio com Supabase Auth real do aceite do convite de gestor (e-mail confirmado, conta nova e conta existente).
 - Suporte temporário justificado (OPS-01). Contratos/planos e situação financeira: ver
   [FINANCEIRO_PLATAFORMA.md](FINANCEIRO_PLATAFORMA.md) (fase 5).
 - Ensaio com Supabase Auth real (AAL2) e aceite do painel em navegador com dados reais.

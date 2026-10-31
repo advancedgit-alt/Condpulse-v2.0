@@ -79,7 +79,8 @@ class PlatformSecurityIntegrationTest {
   return new String[]{response.getCookie("__Host-cp_csrf").getValue(),matcher.group(1)};
  }
  private PlatformModels.Tenant tenant(boolean active,long version) {
-  return new PlatformModels.Tenant(TENANT,"Condomínio Fictício","America/Sao_Paulo",active,version,NOW,NOW,null);
+  return new PlatformModels.Tenant(TENANT,"Condomínio Fictício","America/Sao_Paulo",active,version,NOW,NOW,null,"PLATFORM",
+   new PlatformModels.TenantUsage(2,1,1,NOW),null);
  }
 
  @Test void sessionAndCatalogPassAccountAndAssuranceWithoutCache() throws Exception {
@@ -156,17 +157,67 @@ class PlatformSecurityIntegrationTest {
    .content("{\"name\":null,\"active\":false,\"expectedVersion\":0,\"reason\":\"Anônimo\"}")).andReturn().getResponse().getStatus();
   assertTrue(anonymousPut==401 || anonymousPut==403,"PUT anônimo é recusado antes do serviço: "+anonymousPut);
   String raw=session("aal2"); var csrf=csrf();
-  // Criar condomínio pela API não existe: o cadastro segue pelo onboarding operacional.
-  assertEquals(403,mvc.perform(post("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).header("Origin",ORIGIN)
-   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
-   .contentType(MediaType.APPLICATION_JSON).content("{}")).andReturn().getResponse().getStatus());
+  // Criação sem sessão não chega ao serviço.
+  int anonymousPost=mvc.perform(post("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1]).header("Idempotency-Key","k".repeat(20))
+   .contentType(MediaType.APPLICATION_JSON).content("{}")).andReturn().getResponse().getStatus();
+  assertTrue(anonymousPost==401 || anonymousPost==403,"POST anônimo é recusado antes do serviço: "+anonymousPost);
   String route="/v1/platform/tenants/"+TENANT;
   assertEquals(403,mvc.perform(delete(route).servletPath(route).secure(true).header("Origin",ORIGIN)
    .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1]))
    .andReturn().getResponse().getStatus());
-  assertEquals(403,mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw)))
+  String nested=route+"/memberships";
+  assertEquals(403,mvc.perform(get(nested).servletPath(nested).secure(true).cookie(new Cookie(BffCookies.SESSION,raw)))
    .andReturn().getResponse().getStatus());
   verifyNoInteractions(platform());
+ }
+ @Test void creationRequiresCsrfAndPassesTheIdempotencyKeyAndAssurance() throws Exception {
+  start(true);
+  String raw=session("aal2");
+  String body="{\"name\":\"Residencial Sol\",\"timeZone\":\"America/Sao_Paulo\",\"units\":[\"101\",\"102\"],"
+   +"\"manager\":{\"displayName\":\"Gestora Ficticia\",\"email\":\"gestora@example.invalid\",\"validDays\":7},"
+   +"\"amenity\":null,\"reason\":\"Contrato assinado\"}";
+  var noCsrf=mvc.perform(post("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw)).header("Idempotency-Key","k".repeat(20)).contentType(MediaType.APPLICATION_JSON).content(body))
+   .andReturn().getResponse();
+  assertEquals(403,noCsrf.getStatus()); verifyNoInteractions(platform());
+  var request=new PlatformModels.CreateTenant("Residencial Sol","America/Sao_Paulo",List.of("101","102"),
+   new PlatformModels.ManagerInput("Gestora Ficticia","gestora@example.invalid",7),null,"Contrato assinado");
+  UUID invitation=UUID.fromString("33333333-3333-4333-8333-333333333333");
+  when(platform().createTenant(ACCOUNT,AssuranceLevel.AAL2,"k".repeat(20),request)).thenReturn(
+   new PlatformModels.TenantCreated(tenant(true,0),true,invitation,"T".repeat(43),NOW.plusSeconds(604800)));
+  when(platform().createTenant(ACCOUNT,AssuranceLevel.AAL2,"r".repeat(20),request)).thenReturn(
+   new PlatformModels.TenantCreated(tenant(true,0),false,null,null,null));
+  var csrf=csrf();
+  var created=mvc.perform(post("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .header("Idempotency-Key","k".repeat(20)).contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+  assertEquals(201,created.getStatus()); assertEquals("no-store",created.getHeader("Cache-Control"));
+  assertTrue(created.getContentAsString().contains("\"invitationToken\":\""+"T".repeat(43)));
+  var replay=mvc.perform(post("/v1/platform/tenants").servletPath("/v1/platform/tenants").secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .header("Idempotency-Key","r".repeat(20)).contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+  assertEquals(200,replay.getStatus()); assertTrue(replay.getContentAsString().contains("\"applied\":false"));
+  verify(platform()).createTenant(ACCOUNT,AssuranceLevel.AAL2,"k".repeat(20),request);
+ }
+ @Test void detailAndManagerInvitationRoutesReachTheService() throws Exception {
+  start(true);
+  String raw=session("aal2");
+  String route="/v1/platform/tenants/"+TENANT;
+  when(platform().tenant(ACCOUNT,AssuranceLevel.AAL2,TENANT)).thenReturn(new PlatformModels.TenantDetail(tenant(true,0),List.of(),List.of(),List.of()));
+  var detail=mvc.perform(get(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))).andReturn().getResponse();
+  assertEquals(200,detail.getStatus()); assertTrue(detail.getContentAsString().contains("\"activeUnits\":2"));
+  var request=new PlatformModels.IssueManagerInvitation("Gestor","gestor@example.invalid",3,"Troca de síndico");
+  when(platform().issueManagerInvitation(ACCOUNT,AssuranceLevel.AAL2,TENANT,request)).thenReturn(
+   new PlatformModels.ManagerInvitationIssued(TENANT,"T".repeat(43),NOW));
+  var csrf=csrf();
+  String invite=route+"/manager-invitations";
+  var issued=mvc.perform(post(invite).servletPath(invite).secure(true).header("Origin",ORIGIN)
+   .cookie(new Cookie(BffCookies.SESSION,raw),new Cookie("__Host-cp_csrf",csrf[0])).header("X-CSRF-Token",csrf[1])
+   .contentType(MediaType.APPLICATION_JSON)
+   .content("{\"displayName\":\"Gestor\",\"email\":\"gestor@example.invalid\",\"validDays\":3,\"reason\":\"Troca de síndico\"}"))
+   .andReturn().getResponse();
+  assertEquals(201,issued.getStatus()); verify(platform()).issueManagerInvitation(ACCOUNT,AssuranceLevel.AAL2,TENANT,request);
  }
  @Test void routesStayAbsentWhileTheFlagIsOff() throws Exception {
   start(false);
