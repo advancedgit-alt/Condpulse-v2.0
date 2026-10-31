@@ -170,10 +170,10 @@ documentada (`REVOGACAO_SEM_DOCUMENTACAO`), **NS** `NAO_SUPORTADO_SEM_DOCUMENTAC
 | Retirar direitos | I — `destroy_objects user_access_rules/user_groups` | I — via exclusão da pessoa (§16) | NS | NS |
 | Consultar estado (leitura de volta) | I — regras, grupos, cartões, PIN, QR (face: null) | I — pessoa, `doorRight`, `RightPlan`, `Valid`; dado faltante = desconhecido, nunca vazio (cartão/face: null) | NS | NS |
 | Abertura pontual | I — `execute_actions.fcgi` (`door`/`sec_box`/`catra`) | NS (RemoteControl/door fora de HK12) | I — `accessControl.cgi?action=openDoor` | NS |
-| Eventos por busca (backfill) | I — `load_objects access_logs` | NS (AcsEvent fora de HK12) | I — `recordFinder.cgi AccessControlCardRec` | NS (só fluxo ao vivo) |
-| Eventos recebidos (push/fluxo) | NS (Monitor não consultado) | NS | NS | I — `eventManager.cgi attach`; `POST` do modo online |
+| Eventos por busca (backfill) | I — `load_objects access_logs` | NS (AcsEvent fora de HK12) | I — `recordFinder.cgi AccessControlCardRec` (segundo com > 1024 registros: `SAME_SECOND_PAGE_FULL`, sem pular) | NS (só fluxo ao vivo) |
+| Eventos recebidos (push/fluxo) | NS (Monitor não consultado) | NS | NS | I — assinatura contínua `eventManager.cgi attach` com fila local e reconexão (lacuna = `STREAM_GAP`); `POST` do modo online |
 | Decisão antes do relé (online) | I — modo Pro `new_user_identified.fcgi` | NS (`remoteCheck` fora de HK12) | NS | I — modo online, resposta `auth` |
-| Saúde | I — `session_is_valid.fcgi` / último `GET /push` | I — `UserInfo/Count` (§3) | I — `recordFinder` `count=1` | I — `eventManager` com `heartbeat=1` |
+| Saúde | I — `session_is_valid.fcgi` / último `GET /push` | I — `UserInfo/Count` (§3) | I — `recordFinder` `count=1` | I — assinatura conectada e heartbeat recente |
 
 Fontes:
 
@@ -225,7 +225,8 @@ com `CLOCK_UNTRUSTED`).
   `monitor/introduction-to-monitor/`.
 - Hikvision: abertura (`RemoteControl/door`), eventos (`AcsEvent`), `deviceInfo`, `remoteCheck`, face por binário,
   PIN, QR, ISUP/EHome. Obter guia TPP aplicável por série (HK10) e resolver divergências de capacidade (manual 22.1).
-- Dahua: atualização/remoção de registro e face, pessoa, direitos, leitura de estado, autenticação, auto-registro.
+- Dahua: a fonte não prevê offset nem cursor por RecNo; um segundo com mais de 1024 registros fica parado em
+  `SAME_SECOND_PAGE_FULL` (nada é pulado) até tratamento manual. Atualização/remoção de registro e face, pessoa, direitos, leitura de estado, autenticação, auto-registro.
   Sem retirada documentada, cartão e face ficam bloqueados.
 - Intelbras: cadastro de pessoa, face, cartão, PIN, QR, direitos, remoção, abertura, leitura de estado, backfill. A
   página oficial "Cadastrar Faces" existe mas foi recusada por robots nesta sessão; documento v1.3 (2020) e "API Bio-T"

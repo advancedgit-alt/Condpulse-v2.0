@@ -33,7 +33,8 @@ class DahuaIntelbrasAdapterContractTest {
    fake.on("GET","/cgi-bin/recordUpdater.cgi",Reply.text("RecNo=12345\r\n"));
    fake.on("POST","/cgi-bin/FaceInfoManager.cgi",Reply.text("OK"));
    fake.on("GET","/cgi-bin/accessControl.cgi",Reply.text("OK"));
-   var a=dahua(fake,new TestSupport.TestClock());
+   var clock=new TestSupport.TestClock();
+   var a=dahua(fake,clock);
    var card=a.setCredential(new CredentialSpec("ref-1",CredentialKind.CARD,"12345"));
    assertEquals(OperationState.APPLIED_UNVERIFIED,card.state());
    assertEquals("12345",card.nativeRef());
@@ -42,8 +43,12 @@ class DahuaIntelbrasAdapterContractTest {
    var face=Json.object(fake.requests("/cgi-bin/FaceInfoManager.cgi").getLast().text());
    assertEquals("ref-1",face.get("UserID"));
    assertEquals(1,Json.list(Json.map(face.get("Info")).get("PhotoData")).size());
-   assertEquals(OpenOutcome.ACCEPTED,a.open(new OpenAction("o","c1","1",null,Instant.now().plusSeconds(5))).outcome());
+   assertEquals(OpenOutcome.ACCEPTED,a.open(new OpenAction("o","c1","1",null,clock.instant().plusSeconds(5))).outcome());
    assertEquals("action=openDoor&channel=1&Type=Remote",fake.requests("/cgi-bin/accessControl.cgi").getLast().query());
+   int opens=fake.requests("/cgi-bin/accessControl.cgi").size();
+   var expired=a.open(new OpenAction("o2","c1","1",null,clock.instant()));
+   assertEquals("EXPIRED_BEFORE_SEND",expired.reasonCode());
+   assertEquals(opens,fake.requests("/cgi-bin/accessControl.cgi").size(),"vencida não chega ao equipamento");
    int before=fake.requests().size();
    assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.removeCredential("ref-1",CredentialKind.CARD).state());
    assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.removeFace("ref-1").state());
@@ -101,32 +106,59 @@ class DahuaIntelbrasAdapterContractTest {
   return new IntelbrasCgiAdapter(ctx);
  }
 
- @Test void intelbrasFluxoDeEventosNormalizaComEvidenciaExplicita() throws Exception {
+ private static java.util.List<EdgeEvent> drain(IntelbrasCgiAdapter a,int expected,java.util.List<String> reasons) throws InterruptedException {
+  var out=new ArrayList<EdgeEvent>();
+  for(int i=0;i<300 && out.size()<expected;i++) {
+   var page=a.fetchEvents(null,100);
+   out.addAll(page.events());
+   if(page.reasonCode()!=null) reasons.add(page.reasonCode());
+   if(out.size()<expected) Thread.sleep(20);
+  }
+  return out;
+ }
+
+ @Test void intelbrasAssinaturaContinuaNormalizaComEvidenciaExplicita() throws Exception {
   try(var fake=new FakeDeviceServer().requireDigest("intelbras-sintetico")) {
    fake.on("GET","/cgi-bin/eventManager.cgi",r->new Reply(200,"multipart/x-mixed-replace; boundary=myboundary",STREAM,Map.of(),0));
    var a=intelbras(fake,ConnectionMode.LOCAL);
-   var page=a.fetchEvents(null,100);
-   assertEquals(OperationState.CONFIRMED,page.state());
-   assertEquals(3,page.events().size());
-   assertEquals(1,page.unmapped(),"ManagerLog não é evento de acesso");
-   var allowed=page.events().get(0);
-   assertEquals(EventKind.ACCESS_ALLOWED,allowed.kind());
-   assertEquals("INTELBRAS_ERROR_0_METHOD_15",allowed.evidence().nativeKind());
-   assertEquals(Instant.ofEpochSecond(1893456000L),allowed.occurredAt());
-   assertEquals("c1",allowed.deviceChannelId());
-   assertEquals(EventKind.ACCESS_DENIED,page.events().get(1).kind());
-   assertEquals(EventKind.DOOR_FORCED,page.events().get(2).kind());
-   var again=a.fetchEvents(null,100);
-   assertEquals(allowed.eventId(),again.events().getFirst().eventId(),"mesma chave composta, mesmo eventId");
-   String q=fake.requests("/cgi-bin/eventManager.cgi").getLast().query();
-   assertTrue(q.startsWith("action=attach&codes="),q);
-   int before=fake.requests().size();
-   assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.upsertPerson(new PersonSpec("r","n",null,null)).state());
-   assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.enrollFace(new FaceSpec("r",TestSupport.syntheticJpeg())).state());
-   assertEquals(OpenOutcome.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.open(new OpenAction("o","c1","0",null,Instant.now().plusSeconds(5))).outcome());
-   assertEquals(before,fake.requests().size());
-   assertFalse(a.manifest().documented().get(CapabilityName.offlineRestriction),"offline: todos VIP 24/7 (IB-ONLINE)");
+   try {
+    var reasons=new ArrayList<String>();
+    var events=drain(a,3,reasons);
+    assertEquals(3,events.size());
+    var allowed=events.get(0);
+    assertEquals(EventKind.ACCESS_ALLOWED,allowed.kind());
+    assertEquals("INTELBRAS_ERROR_0_METHOD_15",allowed.evidence().nativeKind());
+    assertEquals(Instant.ofEpochSecond(1893456000L),allowed.occurredAt());
+    assertEquals("c1",allowed.deviceChannelId());
+    assertEquals(EventKind.ACCESS_DENIED,events.get(1).kind());
+    assertEquals(EventKind.DOOR_FORCED,events.get(2).kind());
+    String q=fake.requests("/cgi-bin/eventManager.cgi").getLast().query();
+    assertTrue(q.startsWith("action=attach&codes="),q);
+    assertTrue(q.endsWith("heartbeat=5"),q);
+    // O servidor falso fecha o fluxo: a assinatura reconecta, sinaliza a lacuna e não duplica o que já entregou.
+    for(int i=0;i<300 && fake.requests("/cgi-bin/eventManager.cgi").stream().filter(r->r.authorization()!=null).count()<2;i++) Thread.sleep(20);
+    var more=drain(a,1,reasons);
+    assertTrue(more.isEmpty(),"mesmos eventos após reconexão não são reenfileirados");
+    assertTrue(reasons.contains("STREAM_GAP"),"reconexão aparece como lacuna possível");
+    int before=fake.requests().size();
+    assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.upsertPerson(new PersonSpec("r","n",null,null)).state());
+    assertEquals(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.enrollFace(new FaceSpec("r",TestSupport.syntheticJpeg())).state());
+    assertEquals(OpenOutcome.NAO_SUPORTADO_SEM_DOCUMENTACAO,a.open(new OpenAction("o","c1","0",null,Instant.now().plusSeconds(5))).outcome());
+    assertTrue(fake.requests().size()-before<=1,"nenhum endpoint inventado (só eventual reconexão da assinatura)");
+    assertFalse(a.manifest().documented().get(CapabilityName.offlineRestriction),"offline: todos VIP 24/7 (IB-ONLINE)");
+   } finally { a.shutdown(); }
   }
+ }
+
+ @Test void intelbrasSemFluxoNaoEstaNoAr() throws Exception {
+  var device=TestSupport.device("ib2",Brand.INTELBRAS,ConnectionMode.LOCAL,DecisionMode.DEVICE_LOCAL_ACL,java.net.URI.create("http://127.0.0.1:1"),
+   List.of(TestSupport.channel("c1","0",null)),Map.of(),Map.of(),false);
+  var a=new IntelbrasCgiAdapter(TestSupport.context(device,new TestSupport.TestClock()));
+  try {
+   var h=a.health();
+   assertFalse(h.reachable());
+   assertEquals("STREAM_DISCONNECTED",h.reasonCode());
+  } finally { a.shutdown(); }
  }
 
  @Test void intelbrasModoOnlineResponde_authComDecisaoLocal() {
@@ -158,5 +190,51 @@ class DahuaIntelbrasAdapterContractTest {
 
  @Test void consultaDoServidorDeEntradaDecodificaFormulario() {
   assertEquals(Map.of("user_id","7","portal_id","1"),InboundServer.parseQuery("user_id=7&portal_id=1"));
+ }
+
+ // ----- achados de revisão (#132) -----
+
+ private static String sameSecond(long t,int total,int count) {
+  var lines=new ArrayList<String>();
+  int n=Math.min(total,count);
+  lines.add("totalCount="+total); lines.add("found="+n);
+  for(int i=0;i<n;i++) { lines.add("records["+i+"].RecNo="+(i+1)); lines.add("records["+i+"].CreateTime="+t); lines.add("records["+i+"].Status=1"); }
+  return String.join("\r\n",lines);
+ }
+
+ @Test void dahuaSegundoQueEncheAPaginaRepeteComCountDocumentadoSemPerder() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var clock=new TestSupport.TestClock();
+   long t=clock.instant().getEpochSecond()-100;
+   fake.on("GET","/cgi-bin/recordFinder.cgi",r->{
+    int count=Integer.parseInt(r.query().replaceAll(".*count=(\\d+).*","$1"));
+    return Reply.text(sameSecond(t,300,count));
+   });
+   var a=dahua(fake,clock);
+   var page=a.fetchEvents(t+":-1",100);
+   assertEquals(300,page.events().size(),"segundo cheio repetido com count=1024");
+   assertNull(page.reasonCode());
+   assertEquals(t+":300",page.nextCursor());
+   assertTrue(fake.requests("/cgi-bin/recordFinder.cgi").getLast().query().contains("count=1024"));
+  }
+ }
+
+ @Test void dahuaSegundoAcimaDoLimiteNaoAvancaAlemDoVistoESinaliza() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var clock=new TestSupport.TestClock();
+   long t=clock.instant().getEpochSecond()-100;
+   fake.on("GET","/cgi-bin/recordFinder.cgi",r->{
+    int count=Integer.parseInt(r.query().replaceAll(".*count=(\\d+).*","$1"));
+    return Reply.text(sameSecond(t,1500,count));
+   });
+   var a=dahua(fake,clock);
+   var page=a.fetchEvents(t+":-1",100);
+   assertEquals("SAME_SECOND_PAGE_FULL",page.reasonCode());
+   assertEquals(1024,page.events().size());
+   var again=a.fetchEvents(page.nextCursor(),100);
+   assertEquals("SAME_SECOND_PAGE_FULL",again.reasonCode());
+   assertEquals(page.nextCursor(),again.nextCursor(),"cursor não pula registros que não vieram");
+   assertEquals(0,again.events().size());
+  }
  }
 }

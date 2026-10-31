@@ -45,14 +45,28 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  static final String P_EVENTS="/cgi-bin/eventManager.cgi";
  static final String BOUNDARY="myboundary";
 
+ static final int BUFFER_LIMIT=10_000, RECENT_IDS=2_000, MAX_PENDING_CHARS=1024*1024;
+
  private final DeviceHttpClient http;
- private final Duration streamWindow;
+ private final int heartbeatSeconds;
+ // Assinatura contínua (LOCAL): uma linha de execução mantém eventManager.cgi?action=attach aberto e enfileira.
+ private final java.util.concurrent.ConcurrentLinkedQueue<EdgeEvent> buffer=new java.util.concurrent.ConcurrentLinkedQueue<>();
+ private final java.util.concurrent.atomic.AtomicInteger buffered=new java.util.concurrent.atomic.AtomicInteger();
+ private final java.util.concurrent.atomic.AtomicLong dropped=new java.util.concurrent.atomic.AtomicLong();
+ private final java.util.concurrent.atomic.AtomicInteger gaps=new java.util.concurrent.atomic.AtomicInteger();
+ private final java.util.concurrent.atomic.AtomicInteger unmappedSinceDrain=new java.util.concurrent.atomic.AtomicInteger();
+ private final java.util.concurrent.atomic.AtomicBoolean started=new java.util.concurrent.atomic.AtomicBoolean();
+ private final java.util.LinkedHashSet<String> recent=new java.util.LinkedHashSet<>();
+ private volatile boolean running=true, connected;
+ private volatile Instant lastData;
+ private volatile DeviceHttpClient.OpenStream current;
+ private volatile Thread worker;
 
  public IntelbrasCgiAdapter(DeviceContext context) {
   super(context);
   this.http=context.device().connectionMode()==ConnectionMode.LOCAL?context.http(Set.of(P_EVENTS)):null;
-  String w=context.device().param("intelbras.streamWindowMillis");
-  this.streamWindow=Duration.ofMillis(w!=null && w.matches("\\d{3,5}")?Long.parseLong(w):3000);
+  String h=context.device().param("intelbras.heartbeatSeconds");
+  this.heartbeatSeconds=h!=null && h.matches("[1-5]")?Integer.parseInt(h):5; // IB-EVM: heartbeat de 1 a 5
  }
 
  @Override public Manifest manifest() {
@@ -60,9 +74,9 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   var caps=new EnumMap<CapabilityName,Boolean>(CapabilityName.class);
   if(http!=null) {
    ops.put(Operation.FETCH_EVENTS,OperationSupport.implemented(Operation.FETCH_EVENTS,List.of(EVM,PARAM),
-    "Fluxo ao vivo lido por janela curta: sem backfill; eventos ocorridos com o gateway desconectado não são recuperados.",
+    "Assinatura contínua com fila local e reconexão; sem backfill: eventos ocorridos com o fluxo desconectado não são recuperados (STREAM_GAP).",
     "Sem identificador nativo de evento: chave composta (UTC, porta, usuário, método, erro, índice); tentativas idênticas no mesmo segundo colapsam."));
-   ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,List.of(EVM),"Conexão ao fluxo com heartbeat=1 dentro da janela."));
+   ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,List.of(EVM),"Assinatura conectada e heartbeat recente (heartbeat de 1 a 5 s)."));
   }
   ops.put(Operation.RECEIVE_EVENTS,OperationSupport.implemented(Operation.RECEIVE_EVENTS,List.of(ONLINE,ONLINE_CFG,PARAM),
    "Modo online: eventos chegam por POST no caminho configurado no equipamento (contém o token do equipamento)."));
@@ -78,29 +92,107 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   return new Manifest(Brand.INTELBRAS,ADAPTER_VERSION,device().connectionMode(),ops,caps);
  }
 
+ /**
+  * Entrega o que a assinatura contínua já enfileirou. A assinatura começa na primeira chamada e reconecta sozinha;
+  * cada reconexão é uma lacuna possível (o fluxo não tem backfill) e aparece como STREAM_GAP no resultado.
+  */
  @Override public EventPage fetchEvents(String cursor,int limit) {
   if(http==null) return super.fetchEvents(cursor,limit);
-  var q=new LinkedHashMap<String,String>();
-  q.put("action","attach");
-  q.put("codes","[AccessControl,BreakIn,DoorNotClosed]");
-  q.put("heartbeat","1");
-  try {
-   var response=http.stream(P_EVENTS,q,streamWindow,1024*1024);
-   if(response.status()!=200) return EventPage.unavailable(OperationState.FAILED,"INTELBRAS_HTTP_"+response.status(),cursor);
-   var parsed=events(new String(response.body(),StandardCharsets.UTF_8));
-   return new EventPage(OperationState.CONFIRMED,null,parsed.events(),cursor,parsed.unmapped());
-  } catch(DeviceCallException e) {
-   return EventPage.unavailable(e.failure()==DeviceHttpClient.Failure.NOT_SENT?OperationState.FAILED:OperationState.UNKNOWN,e.getMessage(),cursor);
+  ensureSubscribed();
+  var out=new ArrayList<EdgeEvent>();
+  EdgeEvent e;
+  while(out.size()<limit && (e=buffer.poll())!=null) { buffered.decrementAndGet(); out.add(e); }
+  int gap=gaps.getAndSet(0);
+  return new EventPage(OperationState.CONFIRMED,gap>0?"STREAM_GAP":null,out,cursor,unmappedSinceDrain.getAndSet(0));
+ }
+
+ /** Alcance: assinatura conectada e dado (evento ou heartbeat) recebido dentro de 3 heartbeats. */
+ @Override public HealthReport health() {
+  if(http==null) return super.health();
+  ensureSubscribed();
+  var seen=lastData;
+  boolean recent=connected && seen!=null && Duration.between(seen,context.clock().instant()).getSeconds()<=3L*heartbeatSeconds;
+  return new HealthReport(recent,recent?null:connected?"NO_RECENT_HEARTBEAT":"STREAM_DISCONNECTED",null,null,null);
+ }
+
+ public long droppedEvents() { return dropped.get(); }
+
+ private void ensureSubscribed() {
+  if(!started.compareAndSet(false,true)) return;
+  var t=new Thread(this::subscribe,"intelbras-events-"+device().deviceId());
+  t.setDaemon(true);
+  worker=t;
+  t.start();
+ }
+
+ private void subscribe() {
+  long backoff=1000;
+  boolean everConnected=false;
+  while(running) {
+   var q=new LinkedHashMap<String,String>();
+   q.put("action","attach");
+   q.put("codes","[AccessControl,BreakIn,DoorNotClosed]");
+   q.put("heartbeat",String.valueOf(heartbeatSeconds));
+   try(var stream=http.openStream(P_EVENTS,q)) {
+    current=stream;
+    if(stream.status()==200) {
+     connected=true;
+     if(everConnected) gaps.incrementAndGet();
+     everConnected=true;
+     backoff=1000;
+     read(stream.body());
+    }
+   } catch(DeviceCallException|java.io.IOException|RuntimeException e) {
+    // Desconexão: tenta de novo com espera crescente; a lacuna é sinalizada na próxima entrega.
+   } finally {
+    connected=false;
+    current=null;
+   }
+   if(!running) break;
+   try { Thread.sleep(backoff); } catch(InterruptedException e) { Thread.currentThread().interrupt(); break; }
+   backoff=Math.min(backoff*2,30_000);
   }
  }
 
- @Override public HealthReport health() {
-  if(http==null) return super.health();
-  try {
-   var response=http.stream(P_EVENTS,Map.of("action","attach","codes","[All]","heartbeat","1"),Duration.ofMillis(2500),64*1024);
-   boolean ok=response.status()==200;
-   return new HealthReport(ok,ok?null:"INTELBRAS_HTTP_"+response.status(),null,null,null);
-  } catch(DeviceCallException e) { return new HealthReport(false,e.getMessage(),null,null,null); }
+ private void read(java.io.InputStream in) throws java.io.IOException {
+  var reader=new java.io.InputStreamReader(in,StandardCharsets.UTF_8);
+  var pending=new StringBuilder();
+  char[] chunk=new char[8192];
+  int n;
+  String boundary="--"+BOUNDARY;
+  while(running && (n=reader.read(chunk))>=0) {
+   lastData=context.clock().instant();
+   pending.append(chunk,0,n);
+   int last=pending.lastIndexOf(boundary);
+   if(last>0) {
+    // Tudo antes do último delimitador está completo; o resto espera o próximo pedaço.
+    accept(pending.substring(0,last));
+    pending.delete(0,last);
+   }
+   if(pending.length()>MAX_PENDING_CHARS) { pending.setLength(0); unmappedSinceDrain.incrementAndGet(); }
+  }
+  if(pending.length()>0) accept(pending.toString());
+ }
+
+ private void accept(String complete) {
+  var parsed=events(complete);
+  unmappedSinceDrain.addAndGet(parsed.unmapped());
+  for(var e:parsed.events()) {
+   synchronized(recent) {
+    if(!recent.add(e.nativeEventId())) continue;
+    if(recent.size()>RECENT_IDS) { var it=recent.iterator(); it.next(); it.remove(); }
+   }
+   buffer.add(e);
+   if(buffered.incrementAndGet()>BUFFER_LIMIT && buffer.poll()!=null) { buffered.decrementAndGet(); dropped.incrementAndGet(); }
+  }
+ }
+
+ @Override public void shutdown() {
+  running=false;
+  var s=current;
+  if(s!=null) s.close();
+  var t=worker;
+  if(t!=null) t.interrupt();
  }
 
  record Parsed(List<EdgeEvent> events,int unmapped) {}

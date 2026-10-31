@@ -38,6 +38,7 @@ public final class GatewayRuntime implements AutoCloseable {
  private final br.com.condpulse.gateway.central.DecisionOutbox decisionOutbox;
  private final GatewayService service;
  private final InboundServer inbound;
+ private final java.util.Map<String,AccessProviderAdapter> adapters;
  private final ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(2,r->{ var t=new Thread(r,"gateway-loop"); t.setDaemon(false); return t; });
 
  public GatewayRuntime(GatewayConfig config,SecretProvider secrets,CentralApiClient central,Path dataDir,Clock clock) throws IOException {
@@ -46,8 +47,9 @@ public final class GatewayRuntime implements AutoCloseable {
   lock=lockChannel.tryLock();
   if(lock==null) { lockChannel.close(); throw new IllegalStateException("Outro processo do gateway usa este diretório de dados."); }
   var registry=new CapabilityRegistry(config.profiles());
-  var adapters=new HashMap<String,AccessProviderAdapter>();
-  for(var d:config.devices()) AdapterFactory.create(config,d,secrets,clock).ifPresent(a->adapters.put(d.deviceId(),a));
+  var created=new HashMap<String,AccessProviderAdapter>();
+  for(var d:config.devices()) AdapterFactory.create(config,d,secrets,clock).ifPresent(a->created.put(d.deviceId(),a));
+  adapters=java.util.Map.copyOf(created);
   queue=new LocalCommandQueue(dataDir,clock,config.limits().queueSoftLimit(),config.limits().queueHardLimit());
   opens=new OpenDispatcher(dataDir,clock,config,registry,id->java.util.Optional.ofNullable(adapters.get(id)));
   outbox=new EventOutbox(dataDir,clock,50_000);
@@ -76,6 +78,7 @@ public final class GatewayRuntime implements AutoCloseable {
  @Override public void close() {
   scheduler.shutdownNow();
   if(inbound!=null) inbound.close();
+  adapters.values().forEach(AccessProviderAdapter::shutdown);
   queue.close(); opens.close(); outbox.close(); decisions.close(); decisionOutbox.close();
   try { lock.release(); lockChannel.close(); } catch(IOException ignored) {}
  }

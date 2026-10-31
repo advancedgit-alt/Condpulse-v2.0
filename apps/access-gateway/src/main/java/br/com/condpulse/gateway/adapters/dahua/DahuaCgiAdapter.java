@@ -57,7 +57,7 @@ public final class DahuaCgiAdapter extends BaseAdapter {
    "Sem remoção documentada: bloqueado pelo núcleo (REVOGACAO_SEM_DOCUMENTACAO)."));
   ops.put(Operation.OPEN,OperationSupport.implemented(Operation.OPEN,List.of(OPEN),"Resposta OK = aceite; não comprova porta aberta."));
   ops.put(Operation.FETCH_EVENTS,OperationSupport.implemented(Operation.FETCH_EVENTS,List.of(RECORDS),
-   "Paginação por CreateTime com deduplicação por RecNo, como a fonte orienta.","UserID é referência nativa: subjectRef fica null."));
+   "Paginação por CreateTime com deduplicação por RecNo, como a fonte orienta; sem offset documentado: segundo com mais de 1024 registros fica SAME_SECOND_PAGE_FULL, sem pular.","UserID é referência nativa: subjectRef fica null."));
   ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,List.of(RECORDS),"Sonda por consulta de registros com count=1."));
   for(Operation op:List.of(Operation.UPSERT_PERSON,Operation.REMOVE_PERSON,Operation.REMOVE_FACE,Operation.REMOVE_CARD,Operation.SET_PIN,
       Operation.REMOVE_PIN,Operation.SET_QR,Operation.REMOVE_QR,Operation.APPLY_RIGHTS,Operation.REVOKE_RIGHTS,Operation.READ_STATE,
@@ -102,6 +102,8 @@ public final class DahuaCgiAdapter extends BaseAdapter {
  @Override public OpenResult open(OpenAction action) {
   if(http==null) return super.open(action);
   if(!action.nativeChannel().matches("\\d{1,2}")) return new OpenResult(OpenOutcome.NOT_SENT,"OPEN_CHANNEL_NOT_COMMISSIONED");
+  // Prazo revalidado imediatamente antes do envio.
+  if(action.expiresAt()!=null && !context.clock().instant().isBefore(action.expiresAt())) return new OpenResult(OpenOutcome.NOT_SENT,"EXPIRED_BEFORE_SEND");
   var q=new LinkedHashMap<String,String>();
   q.put("action","openDoor");
   q.put("channel",action.nativeChannel());
@@ -113,9 +115,14 @@ public final class DahuaCgiAdapter extends BaseAdapter {
   } catch(DeviceCallException e) { return openFailure(e); }
  }
 
+ /** Maior página pedida quando um segundo inteiro enche a página: o "count" padrão da fonte (1024). */
+ static final int SAME_SECOND_COUNT=1024;
+
  /**
-  * Cursor {@code <CreateTime>:<maior RecNo nesse segundo>}. A fonte orienta repetir com StartTime = último
-  * CreateTime e deduplicar, porque registros do mesmo segundo se sobrepõem.
+  * Cursor {@code <CreateTime>:<maior RecNo nesse segundo>}. A fonte (DH-INT-V1.0) orienta repetir com StartTime =
+  * último CreateTime e deduplicar; não prevê offset nem cursor por RecNo. Se a página vier cheia só com registros do
+  * segundo do cursor, a consulta é repetida com count=1024 (padrão documentado). Se ainda assim o segundo não couber,
+  * o cursor não avança (nada é pulado) e o resultado traz SAME_SECOND_PAGE_FULL para tratamento manual.
   */
  @Override public EventPage fetchEvents(String cursor,int limit) {
   if(http==null) return super.fetchEvents(cursor,limit);
@@ -123,43 +130,61 @@ public final class DahuaCgiAdapter extends BaseAdapter {
   long start; long lastRec;
   if(cursor==null) { start=now-Duration.ofHours(1).getSeconds(); lastRec=-1; }
   else { String[] p=cursor.split(":"); start=Long.parseLong(p[0]); lastRec=Long.parseLong(p[1]); }
+  try {
+   var page=page(start,lastRec,now,limit);
+   if(page.full() && !page.passedStart()) {
+    var larger=page(start,lastRec,now,Math.max(limit,SAME_SECOND_COUNT));
+    if(larger.ok()) page=larger;
+    if(page.full() && !page.passedStart()) {
+     String next=page.maxTime()==start && page.maxRec()==lastRec?cursor:page.maxTime()+":"+page.maxRec();
+     return new EventPage(OperationState.CONFIRMED,"SAME_SECOND_PAGE_FULL",page.events(),next,page.unmapped());
+    }
+   }
+   if(!page.ok()) return EventPage.unavailable(OperationState.FAILED,page.reason(),cursor);
+   String next=page.maxTime()==start && page.maxRec()==lastRec?cursor:page.maxTime()+":"+page.maxRec();
+   return new EventPage(OperationState.CONFIRMED,null,page.events(),next,page.unmapped());
+  } catch(DeviceCallException e) {
+   return EventPage.unavailable(e.failure()==DeviceHttpClient.Failure.NOT_SENT?OperationState.FAILED:OperationState.UNKNOWN,e.getMessage(),cursor);
+  } catch(NumberFormatException e) { return EventPage.unavailable(OperationState.FAILED,"INVALID_RESPONSE",cursor); }
+ }
+
+ record Page(boolean ok,String reason,List<EdgeEvent> events,long maxTime,long maxRec,int unmapped,boolean full,boolean passedStart) {}
+
+ private Page page(long start,long lastRec,long now,int count) throws DeviceCallException {
   var q=new LinkedHashMap<String,String>();
   q.put("action","find");
   q.put("name","AccessControlCardRec");
   q.put("StartTime",String.valueOf(start));
   q.put("EndTime",String.valueOf(now));
-  q.put("count",String.valueOf(limit));
-  try {
-   var response=http.call("GET",P_FINDER,q,null,null,false);
-   if(!response.ok()) return EventPage.unavailable(OperationState.FAILED,"DAHUA_HTTP_"+response.status(),cursor);
-   var kv=KeyValueText.lines(response.text());
-   int found=kv.get("found")==null?0:Integer.parseInt(kv.get("found"));
-   var events=new ArrayList<EdgeEvent>();
-   long maxTime=start, maxRec=lastRec;
-   int unmapped=0;
-   for(int i=0;i<found;i++) {
-    String p="records["+i+"].";
-    String rec=kv.get(p+"RecNo"), created=kv.get(p+"CreateTime");
-    if(rec==null || created==null || !rec.matches("\\d{1,18}") || !created.matches("\\d{1,12}")) { unmapped++; continue; }
-    long recNo=Long.parseLong(rec), time=Long.parseLong(created);
-    if(time<start || (time==start && recNo<=lastRec)) continue;
-    if(time>maxTime) { maxTime=time; maxRec=recNo; } else if(time==maxTime) maxRec=Math.max(maxRec,recNo);
-    String status=kv.get(p+"Status");
-    EventKind kind="1".equals(status)?EventKind.ACCESS_ALLOWED:"0".equals(status)?EventKind.ACCESS_DENIED:null;
-    if(kind==null) { unmapped++; continue; }
-    String type=kv.get(p+"Type");
-    Direction direction="Entry".equals(type)?Direction.IN:"Exit".equals(type)?Direction.OUT:Direction.UNKNOWN;
-    String door=kv.get(p+"Door");
-    String method=kv.get(p+"Method");
-    String nativeKind="DAHUA_STATUS_"+status+(method!=null && method.matches("\\d{1,3}")?"_METHOD_"+method:"");
-    events.add(event(rec,kind,Instant.ofEpochSecond(time),direction,TimeQuality.DEVICE_UNVERIFIED,null,nativeKind,
-     door!=null && door.matches("\\d{1,3}")?door:null));
-   }
-   String next=maxTime==start && maxRec==lastRec?cursor:maxTime+":"+maxRec;
-   return new EventPage(OperationState.CONFIRMED,null,events,next,unmapped);
-  } catch(DeviceCallException e) {
-   return EventPage.unavailable(e.failure()==DeviceHttpClient.Failure.NOT_SENT?OperationState.FAILED:OperationState.UNKNOWN,e.getMessage(),cursor);
-  } catch(NumberFormatException e) { return EventPage.unavailable(OperationState.FAILED,"INVALID_RESPONSE",cursor); }
+  q.put("count",String.valueOf(count));
+  var response=http.call("GET",P_FINDER,q,null,null,false);
+  if(!response.ok()) return new Page(false,"DAHUA_HTTP_"+response.status(),List.of(),start,lastRec,0,false,false);
+  var kv=KeyValueText.lines(response.text());
+  int found=kv.get("found")==null?0:Integer.parseInt(kv.get("found"));
+  var events=new ArrayList<EdgeEvent>();
+  long maxTime=start, maxRec=lastRec;
+  int unmapped=0;
+  boolean passedStart=false;
+  for(int i=0;i<found;i++) {
+   String p="records["+i+"].";
+   String rec=kv.get(p+"RecNo"), created=kv.get(p+"CreateTime");
+   if(rec==null || created==null || !rec.matches("\\d{1,18}") || !created.matches("\\d{1,12}")) { unmapped++; continue; }
+   long recNo=Long.parseLong(rec), time=Long.parseLong(created);
+   if(time>start) passedStart=true;
+   if(time<start || (time==start && recNo<=lastRec)) continue;
+   if(time>maxTime) { maxTime=time; maxRec=recNo; } else if(time==maxTime) maxRec=Math.max(maxRec,recNo);
+   String status=kv.get(p+"Status");
+   EventKind kind="1".equals(status)?EventKind.ACCESS_ALLOWED:"0".equals(status)?EventKind.ACCESS_DENIED:null;
+   if(kind==null) { unmapped++; continue; }
+   String type=kv.get(p+"Type");
+   Direction direction="Entry".equals(type)?Direction.IN:"Exit".equals(type)?Direction.OUT:Direction.UNKNOWN;
+   String door=kv.get(p+"Door");
+   String method=kv.get(p+"Method");
+   String nativeKind="DAHUA_STATUS_"+status+(method!=null && method.matches("\\d{1,3}")?"_METHOD_"+method:"");
+   events.add(event(rec,kind,Instant.ofEpochSecond(time),direction,TimeQuality.DEVICE_UNVERIFIED,null,nativeKind,
+    door!=null && door.matches("\\d{1,3}")?door:null));
+  }
+  return new Page(true,null,events,maxTime,maxRec,unmapped,found>=count,passedStart);
  }
 
  @Override public HealthReport health() {

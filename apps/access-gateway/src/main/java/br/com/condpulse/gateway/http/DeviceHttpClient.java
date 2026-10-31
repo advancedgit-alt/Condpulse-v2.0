@@ -142,6 +142,36 @@ public final class DeviceHttpClient {
   }
  }
 
+ /** Fluxo contínuo aberto (assinatura de eventos). Quem chama lê e fecha; nada é executado no equipamento. */
+ public record OpenStream(int status,InputStream body) implements AutoCloseable {
+  @Override public void close() { try { body.close(); } catch(IOException ignored) {} }
+ }
+
+ /** Abre um fluxo de leitura sem prazo de resposta (assinatura contínua), com Digest. */
+ public OpenStream openStream(String path,Map<String,String> query) throws DeviceCallException {
+  URI uri=uri(path,query);
+  try {
+   var builder=HttpRequest.newBuilder(uri).GET();
+   if(digest!=null) builder.header("Authorization",authorization("GET",uri));
+   var response=shared.send(builder.build(),HttpResponse.BodyHandlers.ofInputStream());
+   if(response.statusCode()==401 && credential!=null) {
+    response.body().close();
+    var challenge=DigestAuth.fromChallenge(response.headers().firstValue("WWW-Authenticate").orElse(null));
+    if(challenge==null) return new OpenStream(401,InputStream.nullInputStream());
+    digest=challenge;
+    response=shared.send(HttpRequest.newBuilder(uri).GET().header("Authorization",authorization("GET",uri)).build(),HttpResponse.BodyHandlers.ofInputStream());
+   }
+   return new OpenStream(response.statusCode(),response.body());
+  } catch(HttpConnectTimeoutException|ConnectException|UnresolvedAddressException e) {
+   throw new DeviceCallException(Failure.NOT_SENT,"DEVICE_UNREACHABLE");
+  } catch(IOException e) {
+   throw new DeviceCallException(Failure.AMBIGUOUS,"RESPONSE_NOT_RECEIVED");
+  } catch(InterruptedException e) {
+   Thread.currentThread().interrupt();
+   throw new DeviceCallException(Failure.AMBIGUOUS,"INTERRUPTED");
+  }
+ }
+
  private HttpResponse<InputStream> send(HttpClient client,String method,URI uri,String contentType,byte[] body,String authorization) throws IOException,InterruptedException {
   if(!method.equals("GET") && !method.equals("POST") && !method.equals("PUT")) throw new IllegalArgumentException("Método não permitido.");
   var builder=HttpRequest.newBuilder(uri).timeout(timeout)
