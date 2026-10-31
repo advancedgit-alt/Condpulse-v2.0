@@ -13515,17 +13515,17 @@
         ],
         "x-feature-flag": "CP_FINANCE_ENABLED",
         "parameters": [
-            {
-              "name": "Idempotency-Key",
-              "in": "header",
-              "required": true,
-              "schema": {
-                "type": "string",
-                "minLength": 16,
-                "maxLength": 200,
-                "pattern": "^[A-Za-z0-9._:-]{16,200}$"
-              }
-            },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9._:-]{16,200}$"
+            }
+          },
           {
             "name": "tenantId",
             "in": "path",
@@ -14098,6 +14098,374 @@
           },
           "503": {
             "description": "FINANCE_ASAAS_UNAVAILABLE ou FINANCE_DEPENDENCY_UNAVAILABLE (o Asaas reenvia)"
+          }
+        }
+      }
+    },
+    "/v1/platform/tenants/{tenantId}/technical-grants": {
+      "get": {
+        "operationId": "platformListTechnicalGrants",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Concessões técnicas (MASTER de implantação e suporte técnico) do condomínio, ativas, vencidas e revogadas (technical_grants.manage, AAL2). Sem segredo, e-mail ou dado residencial.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalGrantPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND"
+          },
+          "503": {
+            "description": "TECHNICAL_GRANT_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "platformIssueTechnicalGrant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Emite concessão técnica por condomínio para OUTRA conta (nunca a si próprio), com escopos da lista fechada, validade de 1 até o máximo configurado (CP_TECHNICAL_GRANT_MAX_DAYS, teto 90 dias) e evento TECHNICAL_GRANT_ISSUED exigido pelo banco. grantId gerado pelo cliente: o mesmo pedido devolve 200 com applied=false. Sem escopos, o MASTER_IMPLANTACAO recebe os escopos padrão de implantação. Não concede uso físico de áreas.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueTechnicalGrant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalGrantIssued"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalGrantIssued"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "TECHNICAL_GRANT_ID_REQUIRED, TECHNICAL_GRANT_ACCOUNT_REQUIRED, TECHNICAL_GRANT_ROLE_INVALID, TECHNICAL_GRANT_SCOPES_INVALID, TECHNICAL_GRANT_VALIDITY_INVALID, TECHNICAL_GRANT_ACCOUNT_UNKNOWN ou AUDIT_REASON_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), TECHNICAL_GRANT_SELF ou TECHNICAL_GRANT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND"
+          },
+          "409": {
+            "description": "TECHNICAL_GRANT_ID_CONFLICT"
+          },
+          "422": {
+            "description": "TECHNICAL_GRANT_INVALID"
+          },
+          "503": {
+            "description": "TECHNICAL_GRANT_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/tenants/{tenantId}/technical-grants/{grantId}/revoke": {
+      "post": {
+        "operationId": "platformRevokeTechnicalGrant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Revoga concessão técnica ativa pela versão lida, com motivo e evento TECHNICAL_GRANT_REVOKED. Revogação é final e vale na próxima instrução, mesmo para sessão já aberta.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeTechnicalGrant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "TECHNICAL_GRANT_VERSION_REQUIRED ou AUDIT_REASON_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND"
+          },
+          "409": {
+            "description": "TECHNICAL_GRANT_STALE"
+          },
+          "503": {
+            "description": "TECHNICAL_GRANT_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/session": {
+      "get": {
+        "operationId": "technicalSession",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Escopos técnicos vigentes da própria conta no condomínio (MASTER de implantação). Exige concessão vigente, conta e condomínio ativos e AAL2; não usa vínculo residencial.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalSession"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED (sem concessão técnica vigente neste condomínio)"
+          },
+          "503": {
+            "description": "TENANT_CONFIGURATION_INVALID ou TECHNICAL_GRANT_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/technical-grants": {
+      "get": {
+        "operationId": "managementListTechnicalGrants",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Consulta, pela gestão (memberships.manage, AAL2), de quem tem concessão técnica no próprio condomínio. Somente leitura: o gestor não emite, não revoga e não recebe escopo técnico.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalGrantPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "TECHNICAL_GRANT_UNAVAILABLE"
           }
         }
       }
@@ -22727,6 +23095,247 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "IssueTechnicalGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grantId",
+          "accountId",
+          "roleCode",
+          "validDays",
+          "reason"
+        ],
+        "properties": {
+          "grantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roleCode": {
+            "type": "string",
+            "enum": [
+              "MASTER_IMPLANTACAO",
+              "TECHNICAL_SUPPORT"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "installation.read",
+                "installation.manage",
+                "installation.bind_channel",
+                "installation.commission",
+                "connector.rotate_secret",
+                "gateway.manage",
+                "homologation.request",
+                "person.review",
+                "access.request_open",
+                "audit.export"
+              ]
+            },
+            "description": "TECHNICAL_SUPPORT aceita só installation.read e homologation.request."
+          },
+          "validDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "RevokeTechnicalGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "TechnicalGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grantId",
+          "tenantId",
+          "accountId",
+          "roleCode",
+          "scopes",
+          "validFrom",
+          "validUntil",
+          "grantedVia",
+          "status",
+          "current",
+          "revokedAt",
+          "version"
+        ],
+        "properties": {
+          "grantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roleCode": {
+            "type": "string",
+            "enum": [
+              "MASTER_IMPLANTACAO",
+              "TECHNICAL_SUPPORT"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "installation.read",
+                "installation.manage",
+                "installation.bind_channel",
+                "installation.commission",
+                "connector.rotate_secret",
+                "gateway.manage",
+                "homologation.request",
+                "person.review",
+                "access.request_open",
+                "audit.export"
+              ]
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "grantedVia": {
+            "type": "string",
+            "enum": [
+              "PLATFORM_API",
+              "OPERATIONS"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ]
+          },
+          "current": {
+            "type": "boolean",
+            "description": "Ativa e dentro da validade agora (vencimento não depende de job)."
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "TechnicalGrantIssued": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant",
+          "applied"
+        ],
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/TechnicalGrant"
+          },
+          "applied": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TechnicalGrantPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grants"
+        ],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/TechnicalGrant"
+            }
+          }
+        }
+      },
+      "TechnicalSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "scopes",
+          "validUntil"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "installation.read",
+                "installation.manage",
+                "installation.bind_channel",
+                "installation.commission",
+                "connector.rotate_secret",
+                "gateway.manage",
+                "homologation.request",
+                "person.review",
+                "access.request_open",
+                "audit.export"
+              ]
+            }
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

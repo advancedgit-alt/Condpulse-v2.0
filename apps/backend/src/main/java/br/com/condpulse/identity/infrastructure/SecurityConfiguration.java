@@ -125,6 +125,11 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-connectors","/v1/tenants/*/management/access-credentials",
       "/v1/tenants/*/concierge/pending-revocations","/v1/tenants/*/units/*/access-credentials","/v1/tenants/*/units/*/device-events",
       "/v1/tenants/*/concierge/device-events","/v1/tenants/*/access-health").authenticated()
+    // Acesso facial (AC-003, V037): plataforma (technical_grants.manage, AAL2), concessão técnica vigente (AAL2) ou gestão
+    // (memberships.manage, AAL2), no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*/technical-grants","/v1/tenants/*/technical/session",
+      "/v1/tenants/*/management/technical-grants").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/platform/tenants/*/technical-grants","/v1/platform/tenants/*/technical-grants/*/revoke").authenticated()
     // Proprietário × inquilino (V034): gestão (AAL2) ou vínculo OWNER com locação em vigor, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/rentals","/v1/tenants/*/units/*/rental").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/units/*/rental","/v1/tenants/*/management/units/*/rental/end",

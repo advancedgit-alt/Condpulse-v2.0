@@ -15,7 +15,9 @@ public enum PlatformCapability {
  READ_BILLING("billing.read"),
  MANAGE_BILLING("billing.manage"),
  /** Fila de tarefas (CP-034): estado e erro saneado de todos os condomínios, sem conteúdo; devolve FAILED/SKIPPED à fila. */
- OPERATE_OUTBOX("outbox.operate");
+ OPERATE_OUTBOX("outbox.operate"),
+ /** Acesso facial (AC-003, V037): emite e revoga o MASTER de implantação por condomínio; não dá uso físico de áreas. */
+ MANAGE_TECHNICAL_GRANTS("technical_grants.manage");
 
  private final String key;
  PlatformCapability(String key) { this.key=key; }

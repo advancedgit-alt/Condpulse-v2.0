@@ -14,7 +14,8 @@ class PlatformContextTest {
  @Test void capabilitiesOnlyExistForThePlatformRoleWithAal2() {
   var aal2=new PlatformContext(ACCOUNT,"PLATFORM_ADMIN",AssuranceLevel.AAL2);
   assertEquals(Set.of(PlatformCapability.READ_TENANTS,PlatformCapability.MANAGE_TENANTS,PlatformCapability.READ_AUDIT,
-   PlatformCapability.READ_BILLING,PlatformCapability.MANAGE_BILLING,PlatformCapability.OPERATE_OUTBOX),aal2.effectiveCapabilities());
+   PlatformCapability.READ_BILLING,PlatformCapability.MANAGE_BILLING,PlatformCapability.OPERATE_OUTBOX,
+   PlatformCapability.MANAGE_TECHNICAL_GRANTS),aal2.effectiveCapabilities());
   assertEquals("outbox.operate",PlatformCapability.OPERATE_OUTBOX.key());
   assertTrue(new PlatformContext(ACCOUNT,"PLATFORM_ADMIN",AssuranceLevel.AAL1).effectiveCapabilities().isEmpty());
   assertTrue(new PlatformContext(ACCOUNT,"MANAGER",AssuranceLevel.AAL2).effectiveCapabilities().isEmpty());

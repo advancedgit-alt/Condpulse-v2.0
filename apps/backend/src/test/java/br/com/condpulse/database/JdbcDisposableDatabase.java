@@ -149,7 +149,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
    connection.setAutoCommit(false);
-   for(String table:new String[]{"finance_webhook_events","finance_charges","finance_recurring_fees","finance_payers","concierge_occurrences","device_events","device_event_cursors","access_device_health","access_connector_health","credential_syncs","access_credentials","access_devices","access_connectors","import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","move_requests","move_rules","reservation_waitlist","reservations","amenities"})
+   for(String table:new String[]{"technical_grants","finance_webhook_events","finance_charges","finance_recurring_fees","finance_payers","concierge_occurrences","device_events","device_event_cursors","access_device_health","access_connector_health","credential_syncs","access_credentials","access_devices","access_connectors","import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","move_requests","move_rules","reservation_waitlist","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    connection.commit();
   }
@@ -180,7 +180,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  int backendPid() { return jdbc.queryForObject("select pg_backend_pid()",Integer.class); }
  void assertEmptyContext() {
   for(String setting:new String[]{"app.actor_id","app.tenant_id","app.session_hash","app.capabilities","app.invitation_hash",
-    "app.recovery_hash","app.recovery_purge","app.platform_capabilities","app.occupancy_scan","app.finance_webhook_charge"}) {
+    "app.recovery_hash","app.recovery_purge","app.platform_capabilities","app.occupancy_scan","app.finance_webhook_charge","app.technical_scopes"}) {
    String value=jdbc.queryForObject("select coalesce(current_setting(?,true),'')",String.class,setting);
    org.junit.jupiter.api.Assertions.assertEquals("",value,"Contexto não pode sobreviver à devolução ao pool: "+setting);
   }
@@ -195,7 +195,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
     accountA,accountB,accountC,tenantA,tenantB);
    update(connection,"delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
-   for(String table:new String[]{"finance_webhook_events","finance_charges","finance_recurring_fees","finance_payers","concierge_occurrences","device_events","device_event_cursors","access_device_health","access_connector_health","credential_syncs","access_credentials","access_devices","access_connectors","import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","move_requests","move_rules","reservation_waitlist","reservations","amenities"})
+   for(String table:new String[]{"technical_grants","finance_webhook_events","finance_charges","finance_recurring_fees","finance_payers","concierge_occurrences","device_events","device_event_cursors","access_device_health","access_connector_health","credential_syncs","access_credentials","access_devices","access_connectors","import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","move_requests","move_rules","reservation_waitlist","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.unit_rentals where tenant_id in (?,?)",tenantA,tenantB);
    // Convites e vínculos se referenciam (membership_id/invitation_id): apagar os dois na mesma instrução.

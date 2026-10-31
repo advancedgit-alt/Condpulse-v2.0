@@ -58,6 +58,11 @@ condpulse:
     enabled: ${CP_REQUESTS_ENABLED:false}
   access-credentials:
     enabled: ${CP_ACCESS_CREDENTIALS_ENABLED:false}
+  facial-access:
+    # Acesso facial (pacote v1.1, docs/integracoes/facial). Desligado por padrão; ligar só com OK do responsável.
+    enabled: ${CP_FACIAL_ACCESS_ENABLED:false}
+    # Validade máxima da concessão técnica emitida pelo painel da plataforma (1 a 90 dias).
+    technical-grant-max-days: ${CP_TECHNICAL_GRANT_MAX_DAYS:30}
   realtime:
     enabled: ${CP_REALTIME_ENABLED:false}
     tick-seconds: ${CP_REALTIME_TICK_SECONDS:5}
