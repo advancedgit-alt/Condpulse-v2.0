@@ -128,6 +128,49 @@ class InfrastructureTest {
   }
  }
 
+ /**
+  * Servidor que lê o pedido inteiro e fecha a conexão sem responder: é o caso em que o HttpClient do JDK reenvia
+  * GET/PUT sozinho. Conta quantos pedidos chegaram.
+  */
+ static final class DropAfterRequestServer implements AutoCloseable {
+  final java.net.ServerSocket socket=new java.net.ServerSocket(0,50,java.net.InetAddress.getLoopbackAddress());
+  final java.util.concurrent.atomic.AtomicInteger received=new java.util.concurrent.atomic.AtomicInteger();
+  final Thread loop;
+  DropAfterRequestServer() throws java.io.IOException {
+   loop=new Thread(()->{
+    while(!socket.isClosed()) {
+     try(var client=socket.accept()) {
+      var in=client.getInputStream();
+      var head=new StringBuilder();
+      int b;
+      while((b=in.read())>=0) { head.append((char)b); if(head.toString().endsWith("\r\n\r\n")) break; }
+      var m=java.util.regex.Pattern.compile("(?i)content-length: *(\\d+)").matcher(head);
+      if(m.find()) in.readNBytes(Integer.parseInt(m.group(1)));
+      if(head.length()>0) received.incrementAndGet();
+     } catch(java.io.IOException ignored) {}
+    }
+   },"drop-after-request");
+   loop.setDaemon(true); loop.start();
+  }
+  URI base() { return URI.create("http://127.0.0.1:"+socket.getLocalPort()); }
+  @Override public void close() throws java.io.IOException { socket.close(); }
+ }
+
+ @Test void escritaEAcaoFisicaNaoSaoReenviadasQuandoAConexaoCaiAntesDaResposta() throws Exception {
+  try(var server=new DropAfterRequestServer()) {
+   var http=new DeviceHttpClient(server.base(),Duration.ofSeconds(2),null,Set.of("/abrir.cgi","/gravar"));
+   for(String[] c:new String[][]{{"GET","true"},{"PUT","false"},{"POST","false"},{"POST","true"}}) {
+    int before=server.received.get();
+    byte[] body="GET".equals(c[0])?null:"{}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    String path="GET".equals(c[0])?"/abrir.cgi":"/gravar";
+    var e=assertThrows(DeviceCallException.class,()->http.call(c[0],path,Map.of("channel","1"),body==null?null:"application/json",body,Boolean.parseBoolean(c[1])));
+    assertEquals(DeviceHttpClient.Failure.AMBIGUOUS,e.failure(),"pedido entregue sem resposta é incerto: "+c[0]);
+    Thread.sleep(300);
+    assertEquals(before+1,server.received.get(),"exatamente um pedido no equipamento, sem reenvio automático: "+c[0]+" actuation="+c[1]);
+   }
+  }
+ }
+
  @Test void clienteDoEquipamentoSoUsaCaminhosDaListaENaoRepete() throws Exception {
   try(var fake=new FakeDeviceServer()) {
    fake.on("POST","/ok.cgi",Reply.text("OK")).on("POST","/lento.cgi",Reply.text("OK").delayed(1500));
