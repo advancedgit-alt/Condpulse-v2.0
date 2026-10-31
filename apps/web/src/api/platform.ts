@@ -16,7 +16,7 @@ export interface TenantBilling { activeSubscription: boolean; openCharges: numbe
 export interface PlatformTenant {
   tenantId: UUID; name: string; timeZone: string; active: boolean; version: number; createdAt: ISODateTime;
   updatedAt: ISODateTime; onboarding: OnboardingReceipt | null; origin: 'ONBOARDING' | 'PLATFORM' | null;
-  /** null: API anterior a V034 (a web publica antes da API): a tela mostra "não informado". */
+  /** null: API anterior a V035 (a web publica antes da API): a tela mostra "não informado". */
   usage: TenantUsage | null;
   billing: TenantBilling | null;
 }

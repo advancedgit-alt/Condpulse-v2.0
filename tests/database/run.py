@@ -2920,6 +2920,177 @@ def occurrence_checks():
     query(f"SET session_replication_role=replica; DELETE FROM cp.concierge_occurrences WHERE id in ('{O1}','{O2}'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{CO}','{MG}','{RO}'); DELETE FROM platform.accounts WHERE id in ('{CO}','{MG}','{RO}')")
 
+def rental_checks():
+    """V034: proprietario x inquilino. Proprietario (OWNER) de unidade alugada perde a visao de todas as tabelas da unidade
+    (mesmo que tivesse vinculo de ocupante), so ve/revoga ocupantes e so convida/revoga inquilino da propria unidade
+    alugada; inquilino nao administra o proprietario; so a gestao (memberships.manage) inicia e encerra a locacao."""
+    OWN, OWN2, OWN3, TEN, DEP, MGR = (f"10000000-0000-4000-8000-0000000008a{i}" for i in range(1, 7))
+    MOWN, MOWN2, MOWN3, MTEN, MDEP, MBYP = (f"51000000-0000-4000-8000-0000000008a{i}" for i in range(1, 7))
+    UO, UX = "20000000-0000-4000-8000-0000000008a1", "20000000-0000-4000-8000-0000000008a2"
+    MOO, MOX, MXR = "51000000-0000-4000-8000-0000000008b1", "51000000-0000-4000-8000-0000000008b2", "51000000-0000-4000-8000-0000000008b3"
+    CRED, K1 = "45000000-0000-4000-8000-0000000008a1", "43000000-0000-4000-8000-0000000002c1"
+    I1, I2, I3 = (f"52000000-0000-4000-8000-0000000008a{i}" for i in range(1, 4))
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{OWN}','ACTIVE'),('{OWN2}','ACTIVE'),('{OWN3}','ACTIVE'),('{TEN}','ACTIVE'),
+          ('{DEP}','ACTIVE'),('{MGR}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UO}','{TA}','ALUGUEL PROPRIA'),('{UX}','{TA}','ALUGUEL OUTRA');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          ('{MOWN}','{TA}','{OWN}','{UA}','PROPRIETARIO FICTICIO','OWNER','ACTIVE'),
+          ('{MOO}','{TA}','{OWN}','{UO}','PROPRIETARIO FICTICIO','OWNER','ACTIVE'),
+          ('{MOX}','{TA}','{OWN2}','{UX}','OUTRO PROPRIETARIO','OWNER','ACTIVE'),
+          ('{MXR}','{TA}','{OWN2}','{UX}','OUTRO PROPRIETARIO MORA','RESIDENT','ACTIVE'),
+          ('{MOWN3}','{TA}','{OWN3}','{UA}','COPROPRIETARIO FICTICIO','OWNER','PENDING'),
+          ('{MTEN}','{TA}','{TEN}','{UA}','INQUILINO FICTICIO','RESPONSIBLE','ACTIVE'),
+          ('{MDEP}','{TA}','{DEP}','{UA}','DEPENDENTE DO INQUILINO','DEPENDENT','ACTIVE'),
+          (gen_random_uuid(),'{TA}','{MGR}',NULL,'GESTAO LOCACAO','MANAGER','ACTIVE');
+        INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by)
+          VALUES('{CRED}','{TA}','{K1}','{MTEN}','{UA}','CARD','Cartao do inquilino','{MGR}');
+    """)
+    manage = "SET LOCAL app.capabilities='memberships.manage'; "
+    as_owner = dict(tenant=TA, actor=OWN, role="cp_api")
+    as_tenant = dict(tenant=TA, actor=TEN, role="cp_api")
+    as_manager = dict(tenant=TA, actor=MGR, role="cp_api")
+    unit_tables = ["access_credentials", "access_events", "arrival_requests", "concierge_occurrences", "device_events", "import_rows",
+                   "move_requests", "notifications", "parcel_delegations", "parcels", "permit_links", "reservation_waitlist", "reservations",
+                   "service_requests", "visit_permits", "visit_rules"]
+    expect(value("select coalesce((select string_agg(c.relname,',' order by c.relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace "
+                 "where n.nspname='cp' and c.relkind='r' and exists(select 1 from pg_attribute a where a.attrelid=c.oid and a.attname='unit_id' "
+                 "and not a.attisdropped) and c.relname not in ('memberships','membership_invitations','unit_rentals') "
+                 "and not exists(select 1 from pg_policy p where p.polrelid=c.oid and p.polname='rental_owner_hidden' and not p.polpermissive "
+                 "and p.polcmd='*')),'NENHUMA')") == "NENHUMA", "toda tabela com unit_id (exceto vinculos/convites) tem a barreira de locacao")
+    start = (f"INSERT INTO cp.unit_rentals(tenant_id,unit_id,owner_membership_id,owner_account_id,started_by) "
+             f"VALUES('{TA}','{{unit}}','{{membership}}','{TEN}','{{actor}}')")
+    expect(error(start.format(unit=UA, membership=MOWN, actor=OWN), "42501", **as_owner), "proprietario nao marca a propria unidade como alugada")
+    tenant_start = query(start.format(unit=UA, membership=MOWN, actor=TEN), check=False, **as_tenant)
+    expect(tenant_start.returncode != 0 and ("42501" in tenant_start.stderr or "23514" in tenant_start.stderr),
+           "inquilino nao marca locacao (nem enxerga o vinculo do proprietario)")
+    expect(error(manage + start.format(unit=UA, membership=MOWN, actor=OWN), "42501", **as_manager), "gestao inicia em nome da propria conta")
+    expect(error(manage + start.format(unit=UA, membership=MTEN, actor=MGR), "23514", **as_manager), "locacao exige vinculo OWNER da unidade")
+    expect(error(manage + start.format(unit=UO, membership=MOWN, actor=MGR), "23514", **as_manager), "vinculo OWNER de outra unidade e recusado")
+    expect(error(manage + start.format(unit=UX, membership=MOX, actor=MGR), "23514", **as_manager),
+           "proprietario que mora na unidade nao a aluga sem encerrar o vinculo de ocupante")
+    # Antes da locacao o proprietario (so OWNER) e publico dos avisos e nao ve ocupantes.
+    audience = f"select cp.announcement_audience_member('{TA}','UNITS',ARRAY['{UA}']::uuid[])"
+    expect(value(audience, **as_owner) == "t", "antes da locacao o proprietario e publico de avisos")
+    occupants = f"select count(*) from cp.memberships where unit_id='{UA}' and role in ('RESIDENT','RESPONSIBLE','DEPENDENT')"
+    expect(value(occupants, **as_owner) == "0", "sem locacao o proprietario nao ve os ocupantes")
+    query(manage + start.format(unit=UA, membership=MOWN, actor=MGR), **as_manager)
+    expect(value(f"select owner_account_id||':'||(ended_at is null) from cp.unit_rentals where owner_membership_id='{MOWN}'") == f"{OWN}:true",
+           "conta do proprietario vem do vinculo (nao do cliente)")
+    expect(error(manage + start.format(unit=UA, membership=MOWN, actor=MGR), "23505", **as_manager), "uma locacao em vigor por proprietario")
+    expect(value("select count(*) from cp.unit_rentals", **as_owner) == "1", "proprietario ve a propria locacao")
+    expect(value("select count(*) from cp.unit_rentals", **as_tenant) == "0", "inquilino nao ve a locacao do proprietario")
+    expect(value("select count(*) from cp.unit_rentals", tenant=TA, actor=AA, role="cp_api") == "0", "morador comum nao ve locacoes")
+    expect(value("select count(*) from cp.unit_rentals", tenant=TB, actor=OWN, role="cp_api") == "0", "locacao nao atravessa condominio")
+    # Defesa em profundidade: mesmo com vinculo de ocupante gravado fora das regras, nada da unidade aparece ao proprietario.
+    expect(error(f"INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) "
+                 f"VALUES('{MBYP}','{TA}','{OWN}','{UA}','PROPRIETARIO MORADOR','RESIDENT','PENDING')", "23514"),
+           "proprietario de unidade alugada nao recebe vinculo de ocupante nela (nem pendente)")
+    query(f"SET session_replication_role=replica; INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) "
+          f"VALUES('{MBYP}','{TA}','{OWN}','{UA}','PROPRIETARIO MORADOR','RESIDENT','ACTIVE')")
+    expect(error(manage + f"UPDATE cp.memberships SET status='SUSPENDED' WHERE id='{MBYP}'", "23514", **as_manager),
+           "gestao nao reativa nem altera vinculo de ocupante do proprietario de unidade alugada")
+    hidden = {t: value(f"select count(*) from cp.{t} where unit_id='{UA}'", **as_owner) for t in unit_tables}
+    expect(all(count == "0" for count in hidden.values()), f"proprietario de unidade alugada nao le nenhuma tabela da unidade: {hidden}")
+    expect(int(value(f"select count(*) from cp.reservations where unit_id<>'{UA}'", **as_owner)) > 0,
+           "o resto do condominio continua com a regra existente (reservas de outras unidades)")
+    expect(value(f"select count(*) from cp.parcel_handoffs h join cp.parcels p on p.tenant_id=h.tenant_id and p.id=h.parcel_id "
+                 f"where p.unit_id='{UA}'", **as_owner) == "0", "entrega de encomenda da unidade (via linha-mae) tambem some")
+    expect(error(reservation(unit=UA, start="20:00", end="21:00", actor=OWN), "42501", **as_owner), "proprietario nao grava reserva da unidade alugada")
+    scan = "SET LOCAL app.occupancy_scan='on'; "
+    blocking = f"select count(*) from cp.reservations where unit_id='{UA}' and status in ('HELD','PENDING_APPROVAL','CONFIRMED')"
+    expect(int(value(blocking)) > 0 and value(scan + blocking, **as_owner) == value(blocking),
+           "consulta anonima de ocupacao continua vendo os horarios ocupados da unidade alugada")
+    expect(value(scan + f"select count(*) from cp.reservations where unit_id='{UA}' and status not in ('HELD','PENDING_APPROVAL','CONFIRMED')",
+                 **as_owner) == "0", "a leitura de ocupacao nao revela reservas encerradas da unidade alugada")
+    expect(error(scan + f"UPDATE cp.reservations SET version=version+1 WHERE unit_id='{UA}' AND status='CONFIRMED'", "42501", **as_owner),
+           "a leitura de ocupacao nao libera escrita na unidade alugada")
+    expect(value(f"WITH u AS (UPDATE cp.parcels SET version=version+1 WHERE unit_id='{UA}' RETURNING id) SELECT count(*) FROM u", **as_owner) == "0",
+           "proprietario nao altera encomenda da unidade alugada")
+    expect(value(audience, **as_owner) == "f", "vinculo OWNER de unidade alugada deixa de ser publico de avisos")
+    expect(int(value(manage + f"select count(*) from cp.reservations where unit_id='{UA}'", **as_owner)) > 0,
+           "contexto de equipe (capacidade AAL2) nao e escondido")
+    # Unica capacidade: ocupantes da propria unidade alugada.
+    expect(value(occupants, **as_owner) == value(occupants) and int(value(occupants)) >= 3, "proprietario ve os ocupantes da unidade alugada (inclusive o vinculo indevido)")
+    expect(value(f"select count(*) from cp.memberships where unit_id<>'{UA}' and account_id<>'{OWN}'", **as_owner) == "0",
+           "proprietario nao ve vinculos de outras unidades")
+    expect(value(f"select count(*) from cp.memberships where id='{MOWN3}'", **as_owner) == "0", "proprietario nao ve outros proprietarios")
+    expect(error(f"UPDATE cp.memberships SET status='ACTIVE',version=version+1 WHERE id='{MTEN}'", "42501", **as_owner),
+           "proprietario so revoga: nao reativa nem suspende ocupante")
+    expect(value(f"WITH u AS (UPDATE cp.memberships SET status='REVOKED' WHERE id in ('{MXR}','{MOX}','{MOWN3}') RETURNING id) "
+                 f"SELECT count(*) FROM u", **as_owner) == "0", "proprietario nao revoga vinculos de outras unidades nem proprietarios")
+    expect(value(f"select count(*) from cp.access_credentials where id='{CRED}'", **as_owner) == "0",
+           "credencial de ocupante vigente fica invisivel ao proprietario")
+    expect(value(f"WITH u AS (UPDATE cp.access_credentials SET desired_state='REVOKED',desired_version=desired_version+1,version=version+1,"
+                 f"revoked_by='{OWN}',revoke_reason='x' WHERE id='{CRED}' RETURNING id) SELECT count(*) FROM u", **as_owner) == "0",
+           "proprietario nao revoga credencial de ocupante vigente")
+    query(f"UPDATE cp.memberships SET status='REVOKED',updated_at=clock_timestamp(),version=version+1 WHERE id='{MTEN}'", **as_owner)
+    expect(value(f"select status from cp.memberships where id='{MTEN}'") == "REVOKED", "proprietario remove o inquilino da propria unidade alugada")
+    query(f"UPDATE cp.access_credentials SET desired_state='REVOKED',desired_version=desired_version+1,version=version+1,"
+          f"revoked_by='{OWN}',revoke_reason='Inquilino removido pelo proprietario' WHERE id='{CRED}'", **as_owner)
+    expect(value(f"select desired_state from cp.access_credentials where id='{CRED}'") == "REVOKED",
+           "credencial do inquilino removido e revogada na mesma operacao")
+    audit = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+             f"VALUES('{TA}','{{actor}}','{{action}}','{{kind}}','{{resource}}',gen_random_uuid())")
+    query(audit.format(actor=OWN, action="CREDENTIAL_REVOKED", kind="ACCESS_CREDENTIAL", resource=CRED), **as_owner)
+    expect(error(audit.format(actor=OWN, action="CREDENTIAL_CREATED", kind="ACCESS_CREDENTIAL", resource=CRED), "42501", **as_owner),
+           "proprietario so registra a revogacao da credencial")
+    expect(error(audit.format(actor=OWN, action="UNIT_RENTAL_ENDED", kind="UNIT", resource=UA), "42501", **as_owner),
+           "trilha de locacao e exclusiva da gestao")
+    # Convites: inquilino (RESIDENT/RESPONSIBLE) somente para a propria unidade alugada.
+    def invite(identifier, unit=UA, role_name="RESPONSIBLE", creator=OWN):
+        return (f"INSERT INTO cp.membership_invitations(id,tenant_id,unit_id,role,display_name,email_hash,token_hash,expires_at,created_by) "
+                f"VALUES('{identifier}','{TA}','{unit}','{role_name}','NOVO INQUILINO',repeat('a',64),md5('{identifier}')||md5('{identifier}x'),"
+                f"now()+interval '7 days','{creator}')")
+    query(invite(I1), **as_owner)
+    expect(value(f"select count(*) from cp.membership_invitations where id='{I1}'", **as_owner) == "1", "proprietario ve o convite do inquilino")
+    for label, statement in [("papel DEPENDENT", invite(I2, role_name="DEPENDENT")), ("papel OWNER", invite(I2, role_name="OWNER")),
+                             ("unidade nao alugada", invite(I2, unit=UO)), ("unidade de outro", invite(I2, unit=UX)),
+                             ("autoria de outra conta", invite(I2, creator=MGR))]:
+        expect(error(statement, "42501", **as_owner), f"proprietario nao convida: {label}")
+    query(manage + invite(I3, unit=UX, role_name="RESIDENT", creator=MGR), **as_manager)
+    expect(value(f"WITH u AS (UPDATE cp.membership_invitations SET status='REVOKED' WHERE id='{I3}' RETURNING id) SELECT count(*) FROM u", **as_owner) == "0",
+           "proprietario nao revoga convite de outra unidade")
+    query(f"UPDATE cp.membership_invitations SET status='REVOKED',updated_at=clock_timestamp(),version=version+1 WHERE id='{I1}'", **as_owner)
+    expect(value(f"select status from cp.membership_invitations where id='{I1}'") == "REVOKED", "proprietario revoga convite pendente do inquilino")
+    # Inquilino nao administra o proprietario.
+    query(f"UPDATE cp.memberships SET status='ACTIVE' WHERE id='{MTEN}'".replace("UPDATE", "SET session_replication_role=replica; UPDATE"))
+    expect(value(f"select count(*) from cp.memberships where id in ('{MOWN}','{MOWN3}')", **as_tenant) == "0", "inquilino nao ve o proprietario")
+    expect(value(f"WITH u AS (UPDATE cp.memberships SET status='REVOKED' WHERE id='{MOWN}' RETURNING id) SELECT count(*) FROM u", **as_tenant) == "0",
+           "inquilino nao revoga o proprietario")
+    expect(error(invite(I2, role_name="OWNER", creator=TEN), "42501", **as_tenant), "inquilino nao convida proprietario")
+    expect(value(f"WITH u AS (UPDATE cp.unit_rentals SET ended_by='{TEN}' RETURNING id) SELECT count(*) FROM u", **as_tenant) == "0",
+           "inquilino nao encerra a locacao")
+    expect(int(value(f"select count(*) from cp.reservations where unit_id='{UA}'", **as_tenant)) > 0, "inquilino tem a visao de morador da unidade")
+    # Coproprietario aprovado durante a locacao tambem perde a visao; revogado encerra a propria linha.
+    query(manage + f"UPDATE cp.memberships SET status='ACTIVE',version=version+1 WHERE id='{MOWN3}'", **as_manager)
+    expect(value(f"select count(*) from cp.unit_rentals where owner_membership_id='{MOWN3}' and ended_at is null and started_by='{MGR}'") == "1",
+           "coproprietario aprovado entra na locacao em vigor")
+    query(manage + f"UPDATE cp.memberships SET status='REVOKED',version=version+1 WHERE id='{MOWN3}'", **as_manager)
+    expect(value(f"select count(*) from cp.unit_rentals where owner_membership_id='{MOWN3}' and ended_at is not null and ended_by='{MGR}'") == "1",
+           "proprietario revogado encerra a propria locacao")
+    # Encerramento pela gestao: uma vez; o proprietario volta a ver o que o vinculo dele permite.
+    end = f"UPDATE cp.unit_rentals SET ended_by='{{actor}}' WHERE owner_membership_id='{MOWN}' AND ended_at IS NULL"
+    expect(value(f"WITH u AS ({end.format(actor=OWN)} RETURNING id) SELECT count(*) FROM u", **as_owner) == "0", "proprietario nao encerra a locacao")
+    expect(error(manage + end.format(actor=OWN), "42501", **as_manager), "gestao encerra em nome da propria conta")
+    query(manage + end.format(actor=MGR), **as_manager)
+    expect(error(manage + f"UPDATE cp.unit_rentals SET ended_by='{MGR}' WHERE owner_membership_id='{MOWN}'", "23514", **as_manager),
+           "locacao encerrada nao reabre nem e encerrada de novo")
+    query(manage + audit.format(actor=MGR, action="UNIT_RENTAL_ENDED", kind="UNIT", resource=UA), **as_manager)
+    visible = {t: value(f"select count(*) from cp.{t} where unit_id='{UA}'", **as_owner) for t in unit_tables}
+    expect(sum(count != "0" for count in visible.values()) >= 5,
+           f"controle: sem locacao o mesmo vinculo indevido volta a ver a unidade, provando que a barreira e a locacao: {visible}")
+    expect(value(occupants, **as_owner) == "1", "sem locacao o proprietario volta a nao administrar ocupantes (so o proprio vinculo)")
+    expect(value(audience, **as_owner) == "t", "sem locacao o proprietario volta a ser publico de avisos")
+    expect(error("select count(*) from cp.unit_rentals", "42501", tenant=TA, role="cp_worker"), "worker nao le locacoes")
+    expect(error(manage + f"DELETE FROM cp.unit_rentals WHERE owner_membership_id='{MOWN}'", "42501", **as_manager), "locacao nao e apagada")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id in ('{OWN}','{MGR}'); "
+          f"DELETE FROM cp.access_credentials WHERE id='{CRED}'; DELETE FROM cp.unit_rentals WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.membership_invitations WHERE id in ('{I1}','{I2}','{I3}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{OWN}','{OWN2}','{OWN3}','{TEN}','{DEP}','{MGR}'); "
+          f"DELETE FROM cp.units WHERE id in ('{UO}','{UX}'); "
+          f"DELETE FROM platform.accounts WHERE id in ('{OWN}','{OWN2}','{OWN3}','{TEN}','{DEP}','{MGR}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -3042,6 +3213,7 @@ def main():
     credential_checks()
     device_event_checks()
     device_health_checks()
+    rental_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

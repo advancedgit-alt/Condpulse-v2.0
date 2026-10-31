@@ -168,7 +168,7 @@ public class PlatformStore {
  }
  /**
   * Registro de criação, condomínio e unidades na transação da plataforma; o banco só aceita condomínio e unidades da
-  * criação registrada nesta mesma transação pela mesma conta (V034). O contexto local passa a ser o condomínio novo.
+  * criação registrada nesta mesma transação pela mesma conta (V035). O contexto local passa a ser o condomínio novo.
   */
  public void insertTenant(UUID actor,String key,String requestHash,UUID tenant,String name,String zone,java.util.List<String> units,
    int amenities) {

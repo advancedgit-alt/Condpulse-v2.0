@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** V034 com PostgreSQL real: criação de condomínio pelo painel master, convite do primeiro gestor e isolamento. */
+/** V035 com PostgreSQL real: criação de condomínio pelo painel master, convite do primeiro gestor e isolamento. */
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class PlatformTenantCreationJdbcTest {
  private static final AssuranceLevel AAL2=AssuranceLevel.AAL2;

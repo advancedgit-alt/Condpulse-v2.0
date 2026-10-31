@@ -11882,6 +11882,600 @@
         }
       }
     },
+    "/v1/tenants/{tenantId}/management/rentals": {
+      "get": {
+        "operationId": "managementListRentals",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Locações em vigor do condomínio (memberships.manage, AAL2).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ManagedRental"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/units/{unitId}/rental": {
+      "post": {
+        "operationId": "managementStartRental",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Marca a unidade como alugada: cada vínculo OWNER não revogado perde a visão da unidade e passa a só convidar e remover o inquilino. Exige proprietário cadastrado (RENTAL_OWNER_REQUIRED) que não seja ocupante da unidade (RENTAL_OWNER_IS_OCCUPANT). Auditoria UNIT_RENTAL_STARTED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRental"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/units/{unitId}/rental/end": {
+      "post": {
+        "operationId": "managementEndRental",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Encerra a locação (RENTAL_NOT_ACTIVE se não houver). Os vínculos do inquilino continuam; a gestão os revoga separadamente. Auditoria UNIT_RENTAL_ENDED.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Locação encerrada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "Conflito de versão, nome duplicado ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/rental": {
+      "get": {
+        "operationId": "ownerRentalView",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Visão do proprietário da unidade: se alugada, só os ocupantes (sem conta/e-mail) e os convites de inquilino.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerRentalView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (sem vínculo OWNER vigente na unidade) ou recurso fora da unidade"
+          },
+          "409": {
+            "description": "RENTAL_NOT_ACTIVE (unidade não marcada como alugada), versão ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/rental/invitations": {
+      "post": {
+        "operationId": "ownerInviteTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Proprietário de unidade alugada convida inquilino (RESIDENT/RESPONSIBLE). O aceite cria vínculo PENDING; a gestão ativa.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantInvitation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (sem vínculo OWNER vigente na unidade) ou recurso fora da unidade"
+          },
+          "409": {
+            "description": "RENTAL_NOT_ACTIVE (unidade não marcada como alugada), versão ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/rental/invitations/{invitationId}/revoke": {
+      "post": {
+        "operationId": "ownerRevokeTenantInvitation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Revoga convite pendente de inquilino da própria unidade alugada.",
+        "responses": {
+          "204": {
+            "description": "Convite revogado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (sem vínculo OWNER vigente na unidade) ou recurso fora da unidade"
+          },
+          "409": {
+            "description": "RENTAL_NOT_ACTIVE (unidade não marcada como alugada), versão ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/rental/occupants/{membershipId}/remove": {
+      "post": {
+        "operationId": "ownerRemoveOccupant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_MANAGEMENT_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Proprietário de unidade alugada remove ocupante pela versão lida, com motivo: vínculo REVOKED, credenciais de acesso revogadas e evento MEMBERSHIP_REVOKED na mesma transação.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OccupantRemoval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RentalOccupant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Acesso negado"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED (sem vínculo OWNER vigente na unidade) ou recurso fora da unidade"
+          },
+          "409": {
+            "description": "RENTAL_NOT_ACTIVE (unidade não marcada como alugada), versão ou estado alterado"
+          },
+          "503": {
+            "description": "Dependência ou configuração indisponível"
+          }
+        }
+      }
+    },
     "/v1/platform/tenants/{tenantId}/manager-invitations": {
       "post": {
         "operationId": "invitePlatformTenantManager",
@@ -13967,7 +14561,7 @@
           },
           "usage": {
             "$ref": "#/components/schemas/PlatformTenantUsage",
-            "description": "Uso agregado sem conteúdo residencial (V034)."
+            "description": "Uso agregado sem conteúdo residencial (V035)."
           },
           "billing": {
             "oneOf": [
@@ -19514,6 +20108,199 @@
           "truncated": {
             "type": "boolean",
             "description": "Há mensagens ainda mais antigas."
+          }
+        }
+      },
+      "RentalChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "ManagedRental": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "unitLabel",
+          "startedAt",
+          "owners"
+        ],
+        "description": "Locação em vigor: proprietários (nome do vínculo) que perderam a visão da unidade.",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RentalOccupant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "membershipId",
+          "displayName",
+          "role",
+          "status",
+          "validFrom",
+          "version"
+        ],
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "RESPONSIBLE",
+              "DEPENDENT"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "SUSPENDED",
+              "REVOKED"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "OwnerRentalView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "unitLabel",
+          "rented",
+          "rentedSince",
+          "occupants",
+          "invitations"
+        ],
+        "description": "Visão do proprietário (OWNER). Sem locação em vigor: rented=false e listas vazias. Nenhum outro dado da unidade.",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rented": {
+            "type": "boolean"
+          },
+          "rentedSince": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "occupants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RentalOccupant"
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManagedInvitation"
+            }
+          }
+        }
+      },
+      "TenantInvitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "displayName",
+          "email"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "RESPONSIBLE"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "validDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 14,
+            "default": 7
+          }
+        }
+      },
+      "OccupantRemoval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 250
           }
         }
       },

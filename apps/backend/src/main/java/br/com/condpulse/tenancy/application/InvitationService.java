@@ -125,6 +125,7 @@ public class InvitationService {
    if("23505".equals(SqlStates.of(error)))
     throw new BusinessProblem("MEMBERSHIP_ALREADY_EXISTS",409,"Você já possui este vínculo no condomínio.");
    if("42501".equals(SqlStates.of(error))) throw notAvailable();
+   if("23514".equals(SqlStates.of(error))) throw MembershipManagementService.rentalConflict();
    throw new BusinessProblem("INVITATION_DEPENDENCY_UNAVAILABLE",503,"Não foi possível concluir o convite. Tente novamente.");
   }
  }

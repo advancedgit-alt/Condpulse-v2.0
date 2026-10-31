@@ -74,12 +74,13 @@ public class AnnouncementStore {
    """,to,tenant,announcement,from,expectedVersion)==1;
  }
 
- /** Vínculo vigente ligado à unidade ativa (morador, responsável, dependente ou proprietário). */
+ /** Vínculo vigente ligado à unidade ativa (morador, responsável, dependente ou proprietário), fora de unidade que o ator alugou (V034). */
  public boolean unitMember(UUID tenant,UUID unit) {
   return Boolean.TRUE.equals(jdbc.queryForObject("""
    select exists(select 1 from cp.memberships m join cp.units u on u.tenant_id=m.tenant_id and u.id=m.unit_id and u.status='ACTIVE'
     where m.tenant_id=? and m.unit_id=? and m.account_id=platform.current_actor_id() and m.status='ACTIVE'
-     and m.role in('RESIDENT','RESPONSIBLE','DEPENDENT','OWNER') and m.valid_from<=now() and(m.valid_until is null or m.valid_until>now()))
+     and m.role in('RESIDENT','RESPONSIBLE','DEPENDENT','OWNER') and m.valid_from<=now() and(m.valid_until is null or m.valid_until>now())
+     and not cp.rental_owner_unit(m.tenant_id,m.unit_id))
    """,Boolean.class,tenant,unit));
  }
  /** Publicados para a unidade (condomínio, a própria unidade ou o bloco dela), do mais recente, sem o texto. */

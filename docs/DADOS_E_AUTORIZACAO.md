@@ -50,3 +50,8 @@ Login e senha de execução são provisionados no cofre e associados ao grupo ne
 Migrador é separado; runtime nunca usa dono das tabelas nem credencial service_role.
 Privilégios de tabelas futuras são concedidos explicitamente.
 Toda tabela cp usa ENABLE/FORCE RLS, inclusive evidências e filas.
+
+## Proprietário de unidade alugada (V034)
+Enquanto a gestão mantiver a unidade marcada como alugada (`cp.unit_rentals`), o vínculo OWNER perde a visão de todas
+as tabelas com `unit_id` daquela unidade (política RESTRICTIVE `rental_owner_hidden`) e dos avisos, e só administra os
+ocupantes e os convites de inquilino dela. Detalhes em `docs/PROPRIETARIO_INQUILINO.md`.
