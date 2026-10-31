@@ -130,7 +130,11 @@ public class ReservationStore {
   * transicao real, porque a oferta ao proximo da fila ainda nao existe.
   */
  public List<ReservationModels.BlockedInterval> blockedIntervals(UUID tenant,UUID amenity,Instant from,Instant until) {
-  var rows=jdbc.query("""
+  // V034: a ocupação anônima inclui a unidade que o ator alugou (como proprietário); a leitura liberada vale só aqui.
+  jdbc.queryForObject("select set_config('app.occupancy_scan','on',true)",String.class);
+  List<ReservationModels.BlockedInterval> rows;
+  try {
+  rows=jdbc.query("""
    select greatest(occupied_from,?) as occupied_from,least(occupied_until,?) as occupied_until
    from cp.reservations where tenant_id=? and amenity_id=?
     and status in ('HELD','PENDING_APPROVAL','CONFIRMED')
@@ -140,6 +144,9 @@ public class ReservationStore {
    """,(r,n)->new ReservationModels.BlockedInterval(r.getTimestamp("occupied_from").toInstant(),
     r.getTimestamp("occupied_until").toInstant()),Timestamp.from(from),Timestamp.from(until),tenant,amenity,
     Timestamp.from(from),Timestamp.from(until));
+  } finally {
+   jdbc.queryForObject("select set_config('app.occupancy_scan','',true)",String.class);
+  }
   // Nunca devolver disponibilidade parcial: uma pagina incompleta poderia sugerir horario livre.
   if(rows.size()>1000)
    throw new BusinessProblem("AMENITY_AVAILABILITY_UNAVAILABLE",503,"Reduza o periodo para consultar a ocupacao desta area.");

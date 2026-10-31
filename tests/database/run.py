@@ -2997,6 +2997,14 @@ def rental_checks():
     expect(value(f"select count(*) from cp.parcel_handoffs h join cp.parcels p on p.tenant_id=h.tenant_id and p.id=h.parcel_id "
                  f"where p.unit_id='{UA}'", **as_owner) == "0", "entrega de encomenda da unidade (via linha-mae) tambem some")
     expect(error(reservation(unit=UA, start="20:00", end="21:00", actor=OWN), "42501", **as_owner), "proprietario nao grava reserva da unidade alugada")
+    scan = "SET LOCAL app.occupancy_scan='on'; "
+    blocking = f"select count(*) from cp.reservations where unit_id='{UA}' and status in ('HELD','PENDING_APPROVAL','CONFIRMED')"
+    expect(int(value(blocking)) > 0 and value(scan + blocking, **as_owner) == value(blocking),
+           "consulta anonima de ocupacao continua vendo os horarios ocupados da unidade alugada")
+    expect(value(scan + f"select count(*) from cp.reservations where unit_id='{UA}' and status not in ('HELD','PENDING_APPROVAL','CONFIRMED')",
+                 **as_owner) == "0", "a leitura de ocupacao nao revela reservas encerradas da unidade alugada")
+    expect(error(scan + f"UPDATE cp.reservations SET version=version+1 WHERE unit_id='{UA}' AND status='CONFIRMED'", "42501", **as_owner),
+           "a leitura de ocupacao nao libera escrita na unidade alugada")
     expect(value(f"WITH u AS (UPDATE cp.parcels SET version=version+1 WHERE unit_id='{UA}' RETURNING id) SELECT count(*) FROM u", **as_owner) == "0",
            "proprietario nao altera encomenda da unidade alugada")
     expect(value(audience, **as_owner) == "f", "vinculo OWNER de unidade alugada deixa de ser publico de avisos")

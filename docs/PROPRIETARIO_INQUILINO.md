@@ -31,6 +31,9 @@ Gatilhos:
   sincronização de credencial) dependem da linha-mãe, já escondida. Fora de contexto de equipe: com capacidade
   publicada (AAL2) a gestão e a portaria seguem as próprias políticas. O harness confere que toda tabela nova com
   `unit_id` recebe a barreira.
+- **Ocupação anônima**: em `cp.reservations`, a consulta de disponibilidade da área (só intervalos, sem unidade) liga
+  `app.occupancy_scan` apenas durante a leitura; assim o proprietário que mora em outra unidade continua vendo o horário
+  ocupado pelo inquilino. A exceção vale só para reservas que ocupam horário e nunca para escrita.
 - **Avisos**: vínculo na unidade alugada pelo próprio ator deixa de contar como público (inclusive avisos do condomínio
   inteiro; vínculos em outras unidades continuam valendo).
 - **Única capacidade**: ver os ocupantes da unidade (nome, papel, situação, versão), revogá-los (só `REVOKED`), ver,

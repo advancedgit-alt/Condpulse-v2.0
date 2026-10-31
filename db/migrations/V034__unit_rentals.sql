@@ -121,12 +121,24 @@ DECLARE table_name text;
 BEGIN
  FOREACH table_name IN ARRAY ARRAY[
   'access_events','arrival_requests','concierge_occurrences','device_events','import_rows','move_requests','notifications',
-  'parcel_delegations','parcels','permit_links','reservation_waitlist','reservations','service_requests','visit_permits','visit_rules'
+  'parcel_delegations','parcels','permit_links','reservation_waitlist','service_requests','visit_permits','visit_rules'
  ] LOOP
   EXECUTE format('CREATE POLICY rental_owner_hidden ON cp.%I AS RESTRICTIVE FOR ALL TO cp_api '
    'USING(NOT cp.rental_owner_hidden(tenant_id,unit_id)) WITH CHECK(NOT cp.rental_owner_hidden(tenant_id,unit_id))',table_name);
  END LOOP;
 END $$;
+-- Reservas: idem, exceto a leitura anônima de ocupação (consulta de disponibilidade da área, que devolve só intervalos sem
+-- unidade): o proprietário que também mora em outra unidade continua vendo o horário como ocupado. A API liga
+-- app.occupancy_scan somente durante essa consulta; escrita segue recusada.
+CREATE FUNCTION cp.occupancy_scan() RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT coalesce(current_setting('app.occupancy_scan',true),'')='on' $$;
+REVOKE ALL ON FUNCTION cp.occupancy_scan() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.occupancy_scan() TO cp_api;
+CREATE POLICY rental_owner_hidden ON cp.reservations AS RESTRICTIVE FOR ALL TO cp_api
+ USING(NOT cp.rental_owner_hidden(tenant_id,unit_id)
+  OR (cp.occupancy_scan() AND status IN ('HELD','PENDING_APPROVAL','CONFIRMED')))
+ WITH CHECK(NOT cp.rental_owner_hidden(tenant_id,unit_id));
 -- Credenciais: idem, exceto as de ocupante já revogado, que o proprietário revoga ao remover o inquilino.
 CREATE POLICY rental_owner_hidden ON cp.access_credentials AS RESTRICTIVE FOR ALL TO cp_api
  USING(NOT cp.rental_owner_hidden(tenant_id,unit_id) OR cp.rental_removed_occupant(tenant_id,unit_id,membership_id))
