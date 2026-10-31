@@ -27,9 +27,11 @@ import br.com.condpulse.gateway.config.SecretProvider.DeviceCredential;
  * <ul>
  * <li>host e porta vêm só da configuração; o caminho precisa estar na lista fechada do adaptador; parâmetros são
  * codificados — o gateway não executa URL, método ou comando arbitrário;</li>
- * <li>sem repetição implícita: ação física ({@code actuation}) usa conexão nova, para que o cliente não reenvie a
- * requisição numa conexão reaproveitada que caiu; a única segunda tentativa é a resposta ao desafio 401 Digest, que
- * comprova que o pedido anterior não foi executado;</li>
+ * <li>sem repetição implícita: escrita (POST/PUT) e ação física ({@code actuation}, inclusive por GET) vão por
+ * {@link SingleShotHttp} — uma requisição, uma conexão, sem o reenvio automático que o {@code HttpClient} do JDK faz
+ * em métodos idempotentes quando a conexão cai antes dos cabeçalhos; o {@code HttpClient} fica só com leituras GET.
+ * A única segunda tentativa é a resposta ao desafio 401 Digest, que comprova que o pedido anterior não foi
+ * executado;</li>
  * <li>falha antes do envio vira {@link Failure#NOT_SENT}; qualquer outra, {@link Failure#AMBIGUOUS};</li>
  * <li>nenhum log contém URL (o Control iD leva a sessão na query), corpo, foto ou credencial.</li>
  * </ul>
@@ -75,7 +77,10 @@ public final class DeviceHttpClient {
   */
  public Response call(String method,String path,Map<String,String> query,String contentType,byte[] body,boolean actuation) throws DeviceCallException {
   URI uri=uri(path,query);
-  var client=actuation?newClient():shared;
+  if(!method.equals("GET") && !method.equals("POST") && !method.equals("PUT")) throw new IllegalArgumentException("Método não permitido.");
+  // Escrita (POST/PUT) e ação física (inclusive por GET): uma requisição, uma conexão, nenhum reenvio automático.
+  if(actuation || !"GET".equals(method)) return singleShot(method,uri,contentType,body);
+  var client=shared;
   try {
    var response=send(client,method,uri,contentType,body,digest==null?null:authorization(method,uri));
    if(response.statusCode()==401 && credential!=null) {
@@ -96,8 +101,26 @@ public final class DeviceHttpClient {
   } catch(InterruptedException e) {
    Thread.currentThread().interrupt();
    throw new DeviceCallException(Failure.AMBIGUOUS,"INTERRUPTED");
-  } finally {
-   if(actuation) client.close();
+  }
+ }
+
+ private Response singleShot(String method,URI uri,String contentType,byte[] body) throws DeviceCallException {
+  try {
+   var result=SingleShotHttp.exchange(uri,method,contentType,body,digest==null?null:authorization(method,uri),timeout,MAX_RESPONSE_BYTES,STREAM_CLOSER);
+   if(result.status()==401 && credential!=null) {
+    var challenge=DigestAuth.fromChallenge(result.header("WWW-Authenticate"));
+    if(challenge!=null) {
+     digest=challenge;
+     // 401 comprova que o pedido não foi executado; este é o único reenvio permitido.
+     result=SingleShotHttp.exchange(uri,method,contentType,body,authorization(method,uri),timeout,MAX_RESPONSE_BYTES,STREAM_CLOSER);
+    }
+   }
+   return new Response(result.status(),result.header("Content-Type"),result.body());
+  } catch(SingleShotHttp.NotSentException e) {
+   throw new DeviceCallException(Failure.NOT_SENT,"DEVICE_UNREACHABLE");
+  } catch(IOException e) {
+   LOG.log(System.Logger.Level.WARNING,"Chamada ao equipamento sem resposta conclusiva: {0}",e.getClass().getSimpleName());
+   throw new DeviceCallException(Failure.AMBIGUOUS,"RESPONSE_NOT_RECEIVED");
   }
  }
 
