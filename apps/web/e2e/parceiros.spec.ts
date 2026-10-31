@@ -19,13 +19,14 @@ async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) });
 }
 
-interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean }
+interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean; deniedOnCursor?: boolean }
 async function installPartner(page: Page, api: ApiState, options: Options) {
   const requests: string[] = [];
   await page.route('**/auth/mfa', async (route) => { await json(route, 200, { assuranceLevel: 'AAL2', factors: [] }); });
   await page.route('**/v1/**', async (route) => {
     if (!api.authenticated) { await route.fallback(); return; }
-    const path = new URL(route.request().url()).pathname;
+    const url = new URL(route.request().url());
+    const path = url.pathname;
     if (path === '/v1/me') { await json(route, 200, { accountId: ACCOUNT, memberships: [], tenantModules: [], partnerContexts: options.contexts }); return; }
     if (path === '/v1/platform/session') { await json(route, 403, { code: 'PLATFORM_ACCESS_DENIED', status: 403 }); return; }
     if (path.startsWith('/v1/partners/')) {
@@ -41,10 +42,14 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
     if (path.startsWith(`/v1/tenants/${TENANT_A}/security-log`)) {
       requests.push(path);
       if (!options.securityLogOn) { await json(route, 404, { status: 404, error: 'Not Found' }); return; }
+      // Contrato encerrado entre uma página e outra: o servidor passa a recusar o condomínio.
+      if (options.deniedOnCursor && url.searchParams.has('beforeSeq')) {
+        await json(route, 404, { status: 404, code: 'TENANT_ACCESS_DENIED', detail: 'Condomínio não disponível para este acesso.' }); return;
+      }
       await json(route, 200, { events: [{ eventId: '90000000-0000-4000-8000-000000000001', seq: 1, occurredAt: '2026-10-31T12:00:00Z', recordedAt: '2026-10-31T12:00:00Z',
         clockSkewMs: null, eventType: 'ACCESS_ENTRY', severity: 'INFO', source: 'CONCIERGE', partnerId: null, actorAccountId: null, actorRole: 'CONCIERGE',
         subjectType: null, subjectId: null, unitId: null, pointId: null, deviceId: null, reason: null, evidenceRef: null, correlationId: null, traceId: null,
-        correctsId: null, details: {}, prevHash: '0'.repeat(64), hash: '1'.padStart(64, '0') }], nextBeforeSeq: null });
+        correctsId: null, details: {}, prevHash: '0'.repeat(64), hash: '1'.padStart(64, '0') }], nextBeforeSeq: options.deniedOnCursor ? 1 : null });
       return;
     }
     await route.fallback();
@@ -104,4 +109,16 @@ test('endereço de painel sem papel ativo mostra aviso e caminho de volta', asyn
   await page.goto(`/p/${PARTNER}/console`);
   await expect(page.getByRole('heading', { name: 'Painel não disponível' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Voltar para meus acessos' })).toBeVisible();
+});
+
+test('condomínio recusado na página seguinte tira os eventos já carregados da tela', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  await installPartner(page, api, { contexts: [lead], partnersOn: true, securityLogOn: true, deniedOnCursor: true });
+  await signIn(page);
+  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/log$`));
+  await page.getByRole('button', { name: 'Consultar log' }).click();
+  await expect(page.getByText('#1 · ACCESS_ENTRY')).toBeVisible();
+  await page.getByRole('button', { name: 'Carregar eventos anteriores' }).click();
+  await expect(page.getByRole('heading', { name: 'Acesso não disponível' })).toBeVisible();
+  await expect(page.getByText('#1 · ACCESS_ENTRY')).toHaveCount(0);
 });

@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { securityLog, securitySeverities, type SecurityLogExport, type SecurityLogFilter, type SecuritySeverity } from '../../api/securityLog';
 import { Empty, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import { FailureState, usePartnerAccessGuard, usePartnerScope } from './PartnerPage';
-import { exportBody, exportFileName, integrityProblems, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
+import { exportBody, exportFileName, failureKind, integrityProblems, logAccessFailure, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
 
 const OFF_TEXT = 'O Log de Segurança está desligado no servidor deste ambiente (CP_SECURITY_LOG_ENABLED). Quando for ligado, esta seção passa a funcionar sem mudança na tela.';
 const severityTone: Record<SecuritySeverity, string> = { INFO: 'status-neutral', ATTENTION: 'status-pending', CRITICAL: 'status-overdue' };
@@ -41,8 +41,21 @@ function TenantLog({ tenantId, tenantName, timeZone, canExport }: { tenantId: st
     getNextPageParam: (last) => last.nextBeforeSeq ?? undefined, refetchOnWindowFocus: false });
   const integrity = useQuery({ queryKey: securityLogKey(accountId, tenantId, 'integrity'), enabled: checking, refetchOnWindowFocus: false,
     queryFn: ({ signal }) => securityLog.integrity(tenantId, signal) });
-  const guarded = usePartnerAccessGuard(pages.error ?? integrity.error);
+  const queries = useQueryClient();
+  const [lost, setLost] = useState<unknown>(null);
+  const access = logAccessFailure({ pages: request !== null, integrity: checking }, pages.error, integrity.error);
+  // Condomínio recusado (contrato encerrado, fora da escala): as páginas já carregadas saem da tela e do cache.
+  const deniedNow = failureKind(access) === 'denied' ? access : null;
+  useEffect(() => {
+    if (!deniedNow) return;
+    setLost(deniedNow); setRequest(null); setChecking(false);
+    const prefix = securityLogKey(accountId, tenantId);
+    void queries.cancelQueries({ queryKey: prefix }); queries.removeQueries({ queryKey: prefix });
+  }, [deniedNow, queries, accountId, tenantId]);
+  const guarded = usePartnerAccessGuard(access);
   if (guarded) return null;
+  const refused = lost ?? deniedNow;
+  if (refused) return <FailureState error={refused} retry={() => setLost(null)} off={OFF_TEXT} subject="Log de Segurança" />;
   function search(event: FormEvent) {
     event.preventDefault();
     const next = logFilter(draft);

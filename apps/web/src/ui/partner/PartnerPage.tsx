@@ -85,6 +85,8 @@ function PartnerGate({ accountId, context, section }: { accountId: string; conte
       setDemanded(false);
       void queries.invalidateQueries({ queryKey: mfaStatusKey(accountId) });
       void queries.invalidateQueries({ queryKey: partnerKey(accountId, context.partnerId) });
+      // Consultas do log guardam o MFA_REQUIRED anterior: saem do cache para não reabrir o segundo fator.
+      queries.removeQueries({ queryKey: ['private', accountId, 'security-log'] });
     }} />;
   }
   return <PartnerScopeProvider value={value}><PartnerConsole section={section} /></PartnerScopeProvider>;

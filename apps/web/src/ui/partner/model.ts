@@ -101,6 +101,15 @@ export const logRequest = (current: LogRequest | null, filter: SecurityLogFilter
 export const logRequestKey = (accountId: string, tenantId: string, request: LogRequest | null) =>
   securityLogKey(accountId, tenantId, 'page', request?.filter ?? null, request?.run ?? 0);
 
+/**
+ * Falha de autorização que muda a tela do log (segundo fator ou acesso recusado), considerando só as consultas pedidas
+ * nesta montagem: erro antigo em cache de consulta não pedida (ex.: integridade antes do MFA) não reabre o segundo fator.
+ */
+export function logAccessFailure(requested: { pages: boolean; integrity: boolean }, pagesError: unknown, integrityError: unknown): unknown {
+  const errors = [requested.pages ? pagesError : null, requested.integrity ? integrityError : null];
+  return errors.find((error) => error !== null && ['denied', 'mfa'].includes(failureKind(error))) ?? null;
+}
+
 export interface ExportDraft { reason: string; fromSeq: string; toSeq: string }
 export function exportBody(draft: ExportDraft): { reason: string; fromSeq?: number; toSeq?: number } | string {
   const reason = displayText(draft.reason, 500);

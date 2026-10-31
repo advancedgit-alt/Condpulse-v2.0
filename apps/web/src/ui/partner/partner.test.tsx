@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import type { PartnerContext } from '../../api/types';
 import { FailureState, PartnerConsole, PartnerScopeProvider } from './PartnerPage';
-import { exportBody, failureKind, logFilter, logRequest, logRequestKey, memberBody, scheduleBody } from './model';
+import { exportBody, failureKind, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, scheduleBody } from './model';
 
 const own = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -97,6 +97,17 @@ describe('regras locais dos painéis', () => {
     expect(logRequestKey(own, tenant, again)).not.toEqual(logRequestKey(own, tenant, first));
     expect(logRequestKey(own, tenant, first)).toEqual(logRequestKey(own, tenant, { ...first }));
     expect(logRequestKey(own, tenant.toUpperCase(), first)).toEqual(logRequestKey(own, tenant, first));
+  });
+  it('só consulta pedida derruba a tela do log; recusa do condomínio e MFA vencem falha transitória', () => {
+    const mfa = new ApiError(403, 'MFA_REQUIRED', '');
+    const denied = new ApiError(404, 'TENANT_ACCESS_DENIED', '');
+    const down = new ApiError(503, 'SECURITY_LOG_DEPENDENCY_UNAVAILABLE', '');
+    // Integridade com MFA_REQUIRED antigo em cache, não pedida nesta montagem: não reabre o segundo fator.
+    expect(logAccessFailure({ pages: false, integrity: false }, null, mfa)).toBeNull();
+    expect(logAccessFailure({ pages: false, integrity: true }, null, mfa)).toBe(mfa);
+    // Página seguinte recusada depois de páginas carregadas: a recusa é devolvida para limpar a tela.
+    expect(logAccessFailure({ pages: true, integrity: false }, denied, null)).toBe(denied);
+    expect(logAccessFailure({ pages: true, integrity: true }, down, null)).toBeNull();
   });
   it('filtro do log e exportação', () => {
     expect(logFilter({ type: ' access_entry ', severity: 'CRITICAL' })).toEqual({ type: 'ACCESS_ENTRY', severity: 'CRITICAL' });
