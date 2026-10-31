@@ -627,19 +627,24 @@ function invitationFirstAccess(value: unknown, expected: InvitationAccepted['sta
     expiresAt: value.expiresAt as string | null };
 }
 
-function membership(value: unknown): Membership {
+const MEMBERSHIP_ROLES = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER', 'SUPPORT'] as const;
+
+/** Vínculo válido; null quando o papel é novo e esta versão da web ainda não o conhece (fica de fora, sem derrubar os demais). */
+function membership(value: unknown): Membership | null {
   if (!record(value) || !isUUID(value.membershipId) || !isUUID(value.tenantId)
       || !isString(value.tenantName) || !isString(value.timeZone)
       || !(value.unitId === null || isUUID(value.unitId))
-      || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER', 'SUPPORT']))
+      || typeof value.role !== 'string' || !/^[A-Z][A-Z_]{1,39}$/.test(value.role))
     throw invalidResponse();
+  if (!oneOf(value.role, MEMBERSHIP_ROLES)) return null;
   return { membershipId: value.membershipId, tenantId: value.tenantId, tenantName: value.tenantName,
     timeZone: value.timeZone, unitId: value.unitId, role: value.role };
 }
 
 function identity(value: unknown): CurrentIdentity {
   if (!record(value) || !isUUID(value.accountId) || !Array.isArray(value.memberships)) throw invalidResponse();
-  return { accountId: value.accountId, memberships: value.memberships.map(membership) };
+  return { accountId: value.accountId,
+    memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null) };
 }
 
 function unit(value: unknown): Unit {

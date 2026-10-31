@@ -15,7 +15,7 @@ import { acceptance, waitlistEntry, waitlistPage, type JoinWaitlist, type Waitli
  */
 export interface Membership {
   membershipId: string; tenantId: string; tenantName: string; timeZone: string; unitId: string | null;
-  role: 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MANAGER' | 'SUPPORT';
+  role: 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE' | 'MANAGER' | 'SUPPORT';
 }
 export interface Identity { accountId: string; memberships: Membership[] }
 
@@ -29,7 +29,8 @@ export interface TokenSource {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ROLES = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MANAGER', 'SUPPORT'] as const;
+const ROLES = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER', 'SUPPORT'] as const;
+const ROLE_SHAPE = /^[A-Z][A-Z_]{1,39}$/;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const invalid = (uncertain = false) => new ApiError(502, 'INVALID_API_RESPONSE', uncertain
   ? 'Não foi possível confirmar o resultado. Atualize e confira antes de tentar de novo.'
@@ -38,14 +39,18 @@ const invalid = (uncertain = false) => new ApiError(502, 'INVALID_API_RESPONSE',
 export function identity(value: unknown): Identity {
   if (!record(value) || typeof value.accountId !== 'string' || !UUID.test(value.accountId) || !Array.isArray(value.memberships)
       || value.memberships.length > 200) throw invalid();
-  return { accountId: value.accountId, memberships: value.memberships.map((item): Membership => {
+  const memberships: Membership[] = [];
+  for (const item of value.memberships) {
     if (!record(item) || typeof item.membershipId !== 'string' || !UUID.test(item.membershipId) || typeof item.tenantId !== 'string'
         || !UUID.test(item.tenantId) || typeof item.tenantName !== 'string' || typeof item.timeZone !== 'string'
         || !(item.unitId === null || (typeof item.unitId === 'string' && UUID.test(item.unitId)))
-        || !ROLES.includes(item.role as Membership['role'])) throw invalid();
-    return { membershipId: item.membershipId, tenantId: item.tenantId, tenantName: item.tenantName, timeZone: item.timeZone,
-      unitId: item.unitId as string | null, role: item.role as Membership['role'] };
-  }) };
+        || typeof item.role !== 'string' || !ROLE_SHAPE.test(item.role)) throw invalid();
+    // Papel novo do servidor que este aplicativo ainda não conhece: o vínculo fica de fora, sem derrubar os demais.
+    if (!ROLES.includes(item.role as Membership['role'])) continue;
+    memberships.push({ membershipId: item.membershipId, tenantId: item.tenantId, tenantName: item.tenantName, timeZone: item.timeZone,
+      unitId: item.unitId as string | null, role: item.role as Membership['role'] });
+  }
+  return { accountId: value.accountId, memberships };
 }
 
 const messages: Record<string, string> = {

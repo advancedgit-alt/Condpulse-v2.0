@@ -20,7 +20,7 @@ import { useUnitEvents } from './UnitEvents';
 
 const roleLabels: Record<Membership['role'], string> = {
   RESIDENT: 'Morador', RESPONSIBLE: 'Responsável pela unidade', DEPENDENT: 'Dependente', OWNER: 'Proprietário',
-  CONCIERGE: 'Portaria', MANAGER: 'Gestão', SUPPORT: 'Suporte',
+  CONCIERGE: 'Portaria', MAINTENANCE: 'Zeladoria', MANAGER: 'Gestão', SUPPORT: 'Suporte',
 };
 const message = (error: unknown) => error instanceof Error && error.name !== 'Error' ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 

@@ -81,6 +81,19 @@ describe('cliente BFF same-origin', () => {
     expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get('Idempotency-Key')).toBe(key);
   });
 
+  it('zeladoria e papel ainda desconhecido em /v1/me não derrubam os demais vínculos', async () => {
+    const base = { tenantId: tenant, tenantName: 'CONDOMÍNIO FICTÍCIO', timeZone: 'America/Sao_Paulo' };
+    const resident = { ...base, membershipId: '51000000-0000-4000-8000-000000000001', unitId: unit, role: 'RESIDENT' };
+    const maintenance = { ...base, membershipId: '51000000-0000-4000-8000-000000000002', unitId: null, role: 'MAINTENANCE' };
+    const future = { ...base, membershipId: '51000000-0000-4000-8000-000000000003', unitId: null, role: 'FUTURE_STAFF' };
+    const fetcher = mockFetch();
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [resident, maintenance, future] }));
+    const parsed = await new CondPulseApi({ fetch: fetcher }).currentIdentity();
+    expect(parsed.memberships.map((item) => item.role)).toEqual(['RESIDENT', 'MAINTENANCE']);
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [{ ...resident, role: 42 }] }));
+    await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toBeInstanceOf(ApiError);
+  });
+
   it('faz refresh singleflight para consultas concorrentes e repete cada consulta uma vez', async () => {
     const fetcher = mockFetch(); const refreshed = deferred<Response>(); let reads = 0; let refreshes = 0;
     fetcher.mockImplementation(async (path) => {
