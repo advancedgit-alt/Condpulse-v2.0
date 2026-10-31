@@ -38,7 +38,12 @@ class ControlIdAdapterContractTest {
     if(expireSessionOnce) { expireSessionOnce=false; return Reply.status(401); }
     var b=Json.object(r.text());
     String o=Json.string(b,"object");
-    var rows=filter(o,Json.map(b.get("where")));
+    List<Map<String,Object>> rows=new ArrayList<>(filter(o,Json.map(b.get("where"))));
+    var order=Json.list(b.get("order"));
+    if(order!=null && order.contains("id")) {
+     rows.sort(java.util.Comparator.comparingLong(x->((Number)x.get("id")).longValue()));
+     if(order.contains("descending")) java.util.Collections.reverse(rows);
+    } else java.util.Collections.reverse(rows); // sem ordem pedida, o simulador devolve fora de ordem
     Long limit=Json.longValue(b,"limit");
     if(limit!=null && rows.size()>limit) rows=rows.subList(0,limit.intValue());
     return Reply.json(Json.write(Map.of(o,rows)));
@@ -183,7 +188,7 @@ class ControlIdAdapterContractTest {
   }
  }
 
- @Test void eventosDoRegistroDeAcessoComJanelaDeIds() throws Exception {
+ @Test void eventosPorIdCrescenteSaltamLacunasSemPular() throws Exception {
   try(var fake=new FakeDeviceServer()) {
    var store=new Store(); store.install(fake);
    store.objects.put("users",new ArrayList<>(List.of(new LinkedHashMap<>(Map.of("id",7L,"registration","ref-7")))));
@@ -191,10 +196,10 @@ class ControlIdAdapterContractTest {
    logs.add(new LinkedHashMap<>(Map.of("id",1L,"event",7L,"user_id",7L,"portal_id",1L,"time",1L)));
    logs.add(new LinkedHashMap<>(Map.of("id",2L,"event",6L,"user_id",0L,"portal_id",1L,"time",1L)));
    logs.add(new LinkedHashMap<>(Map.of("id",3L,"event",11L,"user_id",0L,"portal_id",1L,"time",1L)));
-   logs.add(new LinkedHashMap<>(Map.of("id",250L,"event",3L,"user_id",0L,"portal_id",0L,"time",1L)));
+   logs.add(new LinkedHashMap<>(Map.of("id",250000L,"event",3L,"user_id",0L,"portal_id",0L,"time",1L)));
    store.objects.put("access_logs",logs);
    var a=lan(fake,new TestSupport.TestClock(),null);
-   var page=a.fetchEvents(null,100);
+   var page=a.fetchEvents(null,3);
    assertEquals(2,page.events().size());
    assertEquals(1,page.unmapped(),"botoeira (11) não tem tipo normalizado");
    assertEquals("3",page.nextCursor());
@@ -204,14 +209,26 @@ class ControlIdAdapterContractTest {
    assertEquals("c1",first.deviceChannelId());
    assertNull(first.occurredAt(),"unidade de time não documentada");
    assertEquals(EvidenceLevel.DEVICE_REPORTED,first.evidence().level());
-   var empty=a.fetchEvents("3",100);
-   assertEquals("103",empty.nextCursor(),"janela vazia com id maior existente avança");
-   assertEquals("203",a.fetchEvents("103",100).nextCursor());
-   var last=a.fetchEvents("203",100);
-   assertEquals("250",last.nextCursor());
-   assertEquals(EventKind.ACCESS_DENIED,last.events().getFirst().kind());
-   assertNull(last.events().getFirst().deviceChannelId());
-   assertEquals(a.fetchEvents("3",100).events().size(),0);
+   var jump=a.fetchEvents("3",3);
+   assertEquals("250000",jump.nextCursor(),"lacuna saltada direto ao menor id existente");
+   assertEquals(EventKind.ACCESS_DENIED,jump.events().getFirst().kind());
+   assertNull(jump.events().getFirst().deviceChannelId());
+   var body=Json.object(fake.requests("/load_objects.fcgi").stream().filter(r->r.text().contains("access_logs")).findFirst().orElseThrow().text());
+   assertEquals(List.of("id","ascending"),body.get("order"));
+   var empty=a.fetchEvents("250000",3);
+   assertEquals("250000",empty.nextCursor());
+   assertTrue(empty.events().isEmpty());
+  }
+ }
+
+ @Test void ordemNaoRespeitadaNaoAvancaOCursor() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   fake.on("POST","/login.fcgi",Reply.json("{\"session\":\"s\"}"));
+   fake.on("POST","/load_objects.fcgi",Reply.json("{\"access_logs\":[{\"id\":9,\"event\":7},{\"id\":5,\"event\":7}]}"));
+   var page=lan(fake,new TestSupport.TestClock(),null).fetchEvents("4",10);
+   assertEquals(OperationState.UNKNOWN,page.state());
+   assertEquals("ORDER_NOT_HONORED",page.reasonCode());
+   assertEquals("4",page.nextCursor());
   }
  }
 
