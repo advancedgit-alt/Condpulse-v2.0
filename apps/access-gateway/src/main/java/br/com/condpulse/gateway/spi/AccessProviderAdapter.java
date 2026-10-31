@@ -41,6 +41,9 @@ public interface AccessProviderAdapter {
  EventPage fetchEvents(String cursor,int limit);
  HealthReport health();
 
+ /** Libera recursos de fundo (ex.: assinatura contínua de eventos). */
+ default void shutdown() {}
+
  /** Ponto de entrada para chamadas iniciadas pelo próprio equipamento (modo online/push/nuvem), quando houver. */
  default Optional<InboundEndpoint> inbound() { return Optional.empty(); }
 
