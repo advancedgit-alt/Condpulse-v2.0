@@ -115,7 +115,7 @@ Parâmetros por equipamento (`devices[]`):
 | `enabled`, `openEnabled`, `openOrigins` | começam desligados |
 | `phase` | `BANCADA` (capacidade documentada basta) ou `PRODUCAO` (exige observada **e** aprovada no perfil) |
 | `installationRevision` | revisão da instalação conferida na abertura |
-| `channels[]` | `channelId`, `pointId`, `bindingRevision`, `nativeChannel` (porta/portal nativo), `nativeOpenAction`, `direction` |
+| `channels[]` | `channelId`, `pointId`, `bindingRevision`, `nativeChannel` (porta/portal nativo, único por equipamento; repetido é recusado no carregamento), `nativeOpenAction`, `direction` |
 | `nativeSchedules` | faixa CondPulse → valor nativo (Control iD: `access_rules.id` quando há um canal; Hikvision: `planTemplateNo`) |
 | `params` | Control iD: `rule.<channelId>.<scheduleRef>` = `access_rules.id`; Hikvision: `hikvision.deleteProgressPolls`; Intelbras: `intelbras.heartbeatSeconds` (1–5), `intelbras.bufferLimit`, `intelbras.keepAliveSeconds` (nuvem/online) |
 
@@ -172,7 +172,7 @@ documentada (`REVOGACAO_SEM_DOCUMENTACAO`), **NS** `NAO_SUPORTADO_SEM_DOCUMENTAC
 | Cartão: gravar / retirar | I / I — `cards` | I / I — CardInfo Record/Delete (§21, §23) | I\* / NS — `recordUpdater.cgi insert AccessControlCard` | NS / NS |
 | PIN: gravar / retirar | I / I — `pins` (substituição por `modify_objects`, `user_id` único) | NS / NS | NS / NS | NS / NS |
 | QR: gravar / retirar | I / I — `qrcodes` (só modo alfanumérico) | NS / NS | NS / NS | NS / NS |
-| Aplicar direitos por ponto e horário | I — `user_access_rules` (regras comissionadas) | I — `doorRight` + `RightPlan` + `Valid` início/fim no mesmo Modify (§15); validade parcial recusada; sem prazo com `Valid` anterior: recusado (`VALIDITY_CLEAR_NOT_DOCUMENTED`) | NS | NS |
+| Aplicar direitos por ponto e horário | I — `user_access_rules` (regras comissionadas) | I — `doorRight` + `RightPlan` + `Valid` início/fim no mesmo Modify (§15); validade parcial recusada; sem prazo com `Valid` anterior: recusado (`VALIDITY_CLEAR_NOT_DOCUMENTED`); `userType` obrigatório (§15.2) preservado da busca, ilegível recusa sem envio (`USER_TYPE_UNREADABLE`) | NS | NS |
 | Retirar direitos | I — `destroy_objects user_access_rules/user_groups` | I — via exclusão da pessoa (§16) | NS | NS |
 | Consultar estado (leitura de volta) | I — regras, grupos, cartões, PIN, QR (face: null) | I — pessoa, `doorRight`, `RightPlan`, `Valid`; dado faltante = desconhecido, nunca vazio (cartão/face: null) | NS | NS |
 | Abertura pontual | I — `execute_actions.fcgi` (`door`/`sec_box`/`catra`) | NS (RemoteControl/door fora de HK12) | I — `accessControl.cgi?action=openDoor` | NS |
