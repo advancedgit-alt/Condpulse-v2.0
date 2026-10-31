@@ -102,6 +102,7 @@ public final class ControlIdAdapter extends BaseAdapter {
    lan!=null?"LAN: conexão nova por comando, sem repetição.":"Push: comando vencido nunca é entregue; atraso depende do intervalo de busca do equipamento."));
   ops.put(Operation.FETCH_EVENTS,OperationSupport.implemented(Operation.FETCH_EVENTS,List.of(t,LOAD,LIST),
    "Códigos de access_logs numerados pela ordem da tabela (3 e 7 confirmados no texto CI-ONLINE).",
+   "Paginação por id crescente (order/limit); ordem não respeitada pelo equipamento vira UNKNOWN sem avançar.",
    "Unidade de access_logs.time não documentada: occurredAt fica null e timeQuality UNKNOWN."));
   ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,lan!=null?List.of(SESSION):List.of(PUSH,ONLINE),
    lan!=null?"Sonda de sessão; relógio e firmware não lidos.":"Último GET /push ou device_is_alive recebido."));
@@ -364,23 +365,28 @@ public final class ControlIdAdapter extends BaseAdapter {
  }
 
  /**
-  * Janela determinística de ids: {@code cursor < id <= cursor+limit}. Sem ordenação não documentada; se a janela vier
-  * vazia mas existir id maior, o cursor avança a janela (ids podem ter lacunas).
+  * Eventos com {@code id > cursor}, ordenados por id crescente ({@code order: ["id","ascending"]}, CI-OBJ-LOAD) e
+  * com {@code limit}: lacunas de ids são saltadas direto para o menor id existente, sem pular eventos. Se o
+  * equipamento não respeitar a ordem (lista fora de ordem), o cursor não avança e a página vem UNKNOWN
+  * (ORDER_NOT_HONORED): nada é dado como lido sem prova.
   */
  @Override public EventPage fetchEvents(String cursor,int limit) {
   long from=cursor==null?0:Long.parseLong(cursor);
-  long to=from+limit;
   try {
-   var rows=load("access_logs",Map.of("access_logs",Map.of("id",Map.of(">",from,"<=",to))));
-   long max=from;
+   var response=transport.call("load_objects",Map.of("object","access_logs","where",Map.of("access_logs",Map.of("id",Map.of(">",from))),
+    "order",List.of("id","ascending"),"limit",limit),false,null);
+   var list=Json.list(response.get("access_logs"));
+   var rows=new ArrayList<Map<String,Object>>();
+   if(list!=null) for(Object o:list) rows.add(Json.map(o));
+   long max=from, previous=from;
    var userIds=new HashSet<Long>();
-   for(var r:rows) { max=Math.max(max,Json.longValue(r,"id")); Long u=Json.longValue(r,"user_id"); if(u!=null && u>0) userIds.add(u); }
-   if(rows.isEmpty()) {
-    var later=transport.call("load_objects",Map.of("object","access_logs","where",Map.of("access_logs",Map.of("id",Map.of(">",to))),"limit",1),false,null);
-    var list=Json.list(later.get("access_logs"));
-    String next=list==null || list.isEmpty()?cursor:String.valueOf(to);
-    return new EventPage(OperationState.CONFIRMED,null,List.of(),next,0);
+   for(var r:rows) {
+    long id=Json.longValue(r,"id");
+    if(id<=previous) return EventPage.unavailable(OperationState.UNKNOWN,"ORDER_NOT_HONORED",cursor);
+    previous=id; max=id;
+    Long u=Json.longValue(r,"user_id"); if(u!=null && u>0) userIds.add(u);
    }
+   if(rows.isEmpty()) return new EventPage(OperationState.CONFIRMED,null,List.of(),cursor,0);
    var subjects=new HashMap<Long,String>();
    if(!userIds.isEmpty()) {
     for(var u:load("users",Map.of("users",Map.of("id",Map.of("IN",new ArrayList<Object>(userIds))))))
@@ -441,7 +447,10 @@ public final class ControlIdAdapter extends BaseAdapter {
   String user=form.get("user_id"), portal=form.get("portal_id");
   if(user!=null && !user.matches("\\d{1,18}")) user=null;
   if(portal!=null && !portal.matches("\\d{1,18}")) portal=null;
-  var decision=ctx.decide(user,portal==null || portal.equals("0")?null:portal);
+  InboundEndpoint.LocalDecision decision;
+  // Qualquer falha na decisão é negativa (event 6 sem ação), nunca erro HTTP que leve à contingência local.
+  try { decision=ctx.decide(user,portal==null || portal.equals("0")?null:portal); }
+  catch(RuntimeException e) { decision=new InboundEndpoint.LocalDecision(false,List.of("DEPENDENCY_UNAVAILABLE"),null,null); }
   var result=new LinkedHashMap<String,Object>();
   if(user!=null) result.put("user_id",Long.parseLong(user));
   if(portal!=null) result.put("portal_id",Long.parseLong(portal));
