@@ -125,7 +125,7 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT UPDATE(document) ON cp.rights_publications TO cp_api","REVOKE UPDATE(document) ON cp.rights_publications FROM cp_api",false);
   assertRefusedWith("GRANT INSERT(state) ON cp.rights_publications TO cp_api","REVOKE INSERT(state) ON cp.rights_publications FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(outcome) ON cp.edge_reports TO cp_api","REVOKE UPDATE(outcome) ON cp.edge_reports FROM cp_api",false);
-  // Log de Segurança (V049, CPX-006): só INSERT por coluna, nunca UPDATE/DELETE/TRUNCATE nem colunas do banco.
+  // Log de Segurança (V050, CPX-006): só INSERT por coluna, nunca UPDATE/DELETE/TRUNCATE nem colunas do banco.
   assertRefusedWith("GRANT UPDATE(reason) ON cp.security_log TO cp_api","REVOKE UPDATE(reason) ON cp.security_log FROM cp_api",false);
   assertRefusedWith("GRANT DELETE ON cp.security_log TO cp_api","REVOKE DELETE ON cp.security_log FROM cp_api",false);
   assertRefusedWith("GRANT TRUNCATE ON cp.security_log TO cp_worker","REVOKE TRUNCATE ON cp.security_log FROM cp_worker",true);

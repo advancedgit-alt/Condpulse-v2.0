@@ -29,10 +29,10 @@ public enum StaffCapability {
   * financeiro, cadastro, vínculo, encomenda, visita ou acesso.
   */
  OPERATE_MAINTENANCE("maintenance.operate"),
- /** Log de Segurança do próprio condomínio (CPX-009, V049; PRD complementar 4.4): gestão local, sempre com AAL2. */
+ /** Log de Segurança do próprio condomínio (CPX-009, V050; PRD complementar 4.4): gestão local, sempre com AAL2. */
  READ_SECURITY_LOG_TENANT("security.log.read.tenant"),
  /**
-  * Log da carteira (SECURITY_LEAD, PARTNER_ADMIN) e exportação com manifesto (SECURITY_LEAD). Já valem nas políticas da V049;
+  * Log da carteira (SECURITY_LEAD, PARTNER_ADMIN) e exportação com manifesto (SECURITY_LEAD). Já valem nas políticas da V050;
   * nenhum papel de condomínio as recebe: a hierarquia de parceiros (CPX-001/CPX-003) as publica, sem mudar o schema.
   */
  READ_SECURITY_LOG("security.log.read"),

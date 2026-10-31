@@ -20585,7 +20585,7 @@
           }
         ],
         "x-feature-flag": "CP_SECURITY_LOG_ENABLED",
-        "description": "Log de Segurança do condomínio (V049, CPX-009), mais recente primeiro (seq decrescente). Exige security.log.read.tenant (gestão local) ou security.log.read (parceiro) e AAL2. Toda consulta grava SENSITIVE_VIEWED na mesma transação. Para a gestão local, a conta da equipe do parceiro aparece só pelo papel (actorAccountId nulo).",
+        "description": "Log de Segurança do condomínio (V050, CPX-009), mais recente primeiro (seq decrescente). Exige security.log.read.tenant (gestão local) ou security.log.read (parceiro) e AAL2. Toda consulta grava SENSITIVE_VIEWED na mesma transação. Para a gestão local, a conta da equipe do parceiro aparece só pelo papel (actorAccountId nulo).",
         "parameters": [
           {
             "name": "tenantId",

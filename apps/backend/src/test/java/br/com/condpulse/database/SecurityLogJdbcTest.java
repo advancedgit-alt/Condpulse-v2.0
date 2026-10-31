@@ -30,7 +30,7 @@ import org.springframework.dao.DataAccessException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * V049 (CPX-006 a CPX-011) com PostgreSQL real e o login da API: busca com filtros e paginação só com
+ * V050 (CPX-006 a CPX-011) com PostgreSQL real e o login da API: busca com filtros e paginação só com
  * security.log.read.tenant e AAL2, SENSITIVE_VIEWED em toda leitura sensível, verificação que detecta adulteração,
  * exportação só com security.log.export e motivo, e falha do log desfazendo a operação de negócio.
  */

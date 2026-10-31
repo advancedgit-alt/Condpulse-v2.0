@@ -13,14 +13,14 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * SENSITIVE_VIEWED no Log de Segurança (CPX-011, V049; PRD complementar R5.6): toda consulta sensível pela equipe (log,
+ * SENSITIVE_VIEWED no Log de Segurança (CPX-011, V050; PRD complementar R5.6): toda consulta sensível pela equipe (log,
  * histórico de acesso do condomínio, cadastro de pessoas e evidência de idade) grava o evento na mesma transação da
  * leitura; se a gravação falha, a leitura falha. Atrás de CP_SECURITY_LOG_ENABLED (padrão false): desligada, não grava.
  * Autoria, papel e horários vêm do banco; details leva só identificadores e contagens, nunca conteúdo pessoal.
  */
 @Component @Profile("api")
 public class SensitiveViewRecorder {
- /** Origens aceitas para a consulta (subconjunto da coluna source da V049). */
+ /** Origens aceitas para a consulta (subconjunto da coluna source da V050). */
  public static final Set<String> SOURCES=Set.of("MANAGEMENT","CONCIERGE","REMOTE_CENTRAL","PLATFORM");
  private static final JsonMapper JSON=JsonMapper.builder().build();
  private final JdbcTemplate jdbc;

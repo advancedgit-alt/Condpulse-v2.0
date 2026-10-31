@@ -248,7 +248,7 @@ test('contrato publica somente a superficie implementada da fundacao',()=>{
  assert.deepEqual(spec.components.schemas.EdgeReportRequest.properties.state.enum,['ACK','APPLIED_UNVERIFIED','CONFIRMED','PARTIAL','FAILED','UNKNOWN'],'gateway nunca relata PENDING nem SUPERSEDED');
  for(const name of ['EdgeAgent','EdgeIdentity','EdgeSyncCommand','EdgeReportResult']) assert.ok(!Object.keys(spec.components.schemas[name].properties).some(k=>/token|secret|password|credentialHash/i.test(k)),name);
  assert.ok(!('tenantId' in spec.components.schemas.EdgeReportRequest.properties) && !('tenantId' in spec.components.schemas.EdgeLeaseRequest.properties));
- // Log de Segurança (V049): atrás de CP_SECURITY_LOG_ENABLED, AAL2, exportação com motivo e manifesto; sem biometria.
+ // Log de Segurança (V050): atrás de CP_SECURITY_LOG_ENABLED, AAL2, exportação com motivo e manifesto; sem biometria.
  for(const [path,item] of Object.entries(spec.paths).filter(([p])=>p.includes('/security-log'))) for(const operation of Object.values(item)) {
   assert.equal(operation['x-feature-flag'],'CP_SECURITY_LOG_ENABLED',path);
   assert.match(operation.responses['403'].description,/MFA_REQUIRED/,path);

@@ -98,7 +98,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("update platform.tenants set active=true where id in (?,?)",tenantA,tenantB);
  }
  /**
-  * Log de Segurança (V049) só acrescenta: nem o dono apaga com gatilhos ligados. Só no banco descartável, antes de remover o
+  * Log de Segurança (V050) só acrescenta: nem o dono apaga com gatilhos ligados. Só no banco descartável, antes de remover o
   * condomínio da fixture, o log, a cabeça e as âncoras saem com os gatilhos desligados (session_replication_role=replica).
   */
  static void deleteSecurityLog(Connection connection,UUID...tenants) throws SQLException {

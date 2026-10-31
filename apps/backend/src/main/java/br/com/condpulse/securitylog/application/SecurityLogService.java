@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
 
 /**
- * Log de Segurança do condomínio (CPX-009 a CPX-011, V049). Busca com filtros e verificação de integridade pela equipe com
+ * Log de Segurança do condomínio (CPX-009 a CPX-011, V050). Busca com filtros e verificação de integridade pela equipe com
  * security.log.read.tenant (gestão local) ou security.log.read (parceiro, publicada pela hierarquia), sempre com AAL2;
  * toda leitura grava SENSITIVE_VIEWED na mesma transação (R5.6). Exportação só com security.log.export e motivo, com
  * manifesto (intervalo de seq, hashes de início e fim, quem exportou) e LOG_EXPORTED na mesma transação (R5.7).

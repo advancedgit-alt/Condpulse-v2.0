@@ -73,7 +73,7 @@ class OperationalOnboardingJdbcTest {
         for (String table : new String[] {"idempotency_keys", "outbox", "audit_log", "reservations", "memberships", "amenities", "units"})
             admin("delete from cp." + table + " where tenant_id in (?,?)", plan.tenant().id(), FOREIGN_TENANT);
         admin("delete from platform.onboarding_runs where tenant_id=?", plan.tenant().id());
-        // Log de Segurança (V049) só acrescenta: na fixture descartável sai com os gatilhos desligados, antes do condomínio.
+        // Log de Segurança (V050) só acrescenta: na fixture descartável sai com os gatilhos desligados, antes do condomínio.
         for (UUID tenant : new UUID[] {plan.tenant().id(), FOREIGN_TENANT})
             admin("set session_replication_role=replica; delete from cp.security_log where tenant_id='" + tenant
                 + "'; delete from cp.security_log_heads where tenant_id='" + tenant + "'; delete from platform.security_log_anchors where tenant_id='"

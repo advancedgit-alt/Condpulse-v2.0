@@ -67,8 +67,8 @@ condpulse:
     age-evidence-key: ${CP_AGE_EVIDENCE_KEY:}
     age-evidence-key-version: ${CP_AGE_EVIDENCE_KEY_VERSION:v1}
   security-log:
-    # Log de Segurança (V049, PRD complementar seção 5): API de busca/integridade/exportação, SENSITIVE_VIEWED nas
-    # consultas sensíveis e âncora diária no worker. Desligado por padrão; a gravação das fontes é do banco (V049).
+    # Log de Segurança (V050, PRD complementar seção 5): API de busca/integridade/exportação, SENSITIVE_VIEWED nas
+    # consultas sensíveis e âncora diária no worker. Desligado por padrão; a gravação das fontes é do banco (V050).
     enabled: ${CP_SECURITY_LOG_ENABLED:false}
   realtime:
     enabled: ${CP_REALTIME_ENABLED:false}

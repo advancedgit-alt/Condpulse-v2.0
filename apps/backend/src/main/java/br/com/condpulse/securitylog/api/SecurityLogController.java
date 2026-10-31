@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Log de Segurança (CPX-009/CPX-010, V049), atrás de CP_SECURITY_LOG_ENABLED=false. Autorização no serviço e no banco. */
+/** Log de Segurança (CPX-009/CPX-010, V050), atrás de CP_SECURITY_LOG_ENABLED=false. Autorização no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.security-log.enabled",havingValue="true")
 @TenantModuleExempt("Log de Segurança: trilha transversal de prova de todos os módulos de segurança.")

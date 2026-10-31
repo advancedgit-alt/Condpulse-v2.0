@@ -34,7 +34,7 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem.
   // Evidência de idade (V039): nunca apagada nem editada; só revogada/substituída; o worker nunca lê a data cifrada.
   // Catálogo e homologação (V040): perfil só por migration; homologação só muda de estado por decisão; decisão nunca muda.
-  // Log de Segurança (V049, R5.1): só INSERT por coluna, sem seq, horário de gravação, autoria nem hash; cabeça da
+  // Log de Segurança (V050, R5.1): só INSERT por coluna, sem seq, horário de gravação, autoria nem hash; cabeça da
   // cadeia só avança (sem trocar condomínio nem apagar); âncora diária só acrescenta. Gateway (V048): identidade, entrega e relatório nunca apagados; relatório nunca muda; identidade, tentativa, prazos e
   // horários vêm do banco. Áreas e pontos (V041): nunca apagados; código, condomínio, autoria inicial e horários fixos. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.

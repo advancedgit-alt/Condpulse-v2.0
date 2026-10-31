@@ -8,7 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import br.com.condpulse.shared.application.BusinessProblem;
 
-/** Contratos do Log de Segurança (CPX-009/CPX-010, V049). */
+/** Contratos do Log de Segurança (CPX-009/CPX-010, V050). */
 public final class SecurityLogModels {
  private SecurityLogModels() {}
  public static final Set<String> SEVERITIES=Set.of("INFO","ATTENTION","CRITICAL");

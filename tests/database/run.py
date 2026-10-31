@@ -4821,7 +4821,7 @@ def tenant_module_checks():
           f"DELETE FROM platform.accounts WHERE id='{PL}'")
 
 def security_log_checks():
-    """V049 (CPX-006 a CPX-011): Log de Seguranca so acrescenta, seq sem buracos e cadeia SHA-256 por condominio
+    """V050 (CPX-006 a CPX-011): Log de Seguranca so acrescenta, seq sem buracos e cadeia SHA-256 por condominio
     calculadas no banco, ancora diaria, verificacao que detecta adulteracao, isolamento e falha do log desfaz a operacao."""
     S1, S2, S3 = ("00000000-0000-4000-8000-0000000049a1", "00000000-0000-4000-8000-0000000049a2", "00000000-0000-4000-8000-0000000049a3")
     MG, CO, RS = ("10000000-0000-4000-8000-0000000049b1", "10000000-0000-4000-8000-0000000049b2", "10000000-0000-4000-8000-0000000049b3")

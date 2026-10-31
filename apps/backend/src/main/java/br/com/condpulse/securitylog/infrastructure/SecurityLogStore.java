@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Leitura e gravação do Log de Segurança (V049) sempre dentro da transação com contexto do condomínio. O banco decide
+ * Leitura e gravação do Log de Segurança (V050) sempre dentro da transação com contexto do condomínio. O banco decide
  * seq, hash, autoria e horários; a leitura depende da capacidade publicada (RLS).
  */
 @Repository @Profile("api")

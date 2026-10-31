@@ -1,7 +1,7 @@
 # Log de Segurança — CPX-006 a CPX-011 (base)
 
 Referências: PRD complementar Segurança v1.0 (`docs/prd/CondPulse_PRD_Complementar_Seguranca_v1.0.md`, seção 5 e §7.6/E11),
-ADR-0011 item 3, `docs/prd/DECISOES_COMPLEMENTAR.md`. Migration: `db/migrations/V049__security_log.sql`.
+ADR-0011 item 3, `docs/prd/DECISOES_COMPLEMENTAR.md`. Migration: `db/migrations/V050__security_log.sql`.
 Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na Vercel nem na Fly).
 
 ## O que existe
@@ -51,7 +51,7 @@ novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
 - `SENSITIVE_VIEWED` na mesma transação da leitura: busca e integridade do log (sempre), histórico de acesso do
   condomínio pela portaria, cadastro de pessoas (sujeitos de acesso) e evidência de idade (com a flag ligada).
 - `security.log.read`, `security.log.export` e `security.log.read.shift` não são publicadas por nenhum papel de
-  condomínio: chegam com a hierarquia de parceiros (CPX-001/CPX-003). As duas primeiras já valem nas políticas da V049;
+  condomínio: chegam com a hierarquia de parceiros (CPX-001/CPX-003). As duas primeiras já valem nas políticas da V050;
   a de turno depende da escala (CPX-002) e precisa de política nova.
 
 ## Forma canônica do hash (`cpsl1`)
@@ -67,8 +67,8 @@ recalcula um hash fora do banco com essa regra.
 
 - Retenção indefinida até decisão do responsável (DECISOES_COMPLEMENTAR.md): nenhuma rotina de expurgo.
 - `platform.partner_security_log` (eventos só de parceiro) e a FK de `partner_id` ficam para depois da hierarquia.
-- A gravação pelas fontes é do banco: aplicar a V049 na homologação liga a gravação mesmo com a flag desligada (a flag
-  controla a API, as consultas sensíveis e a âncora). A V049 não foi aplicada em nenhum banco remoto.
+- A gravação pelas fontes é do banco: aplicar a V050 na homologação liga a gravação mesmo com a flag desligada (a flag
+  controla a API, as consultas sensíveis e a âncora). A V050 não foi aplicada em nenhum banco remoto.
 - Intervenção de superusuário com `session_replication_role=replica` não grava no log (gatilhos desligados); a
   verificação de integridade detecta a alteração do que já estava gravado.
 - A verificação percorre a cadeia inteira a cada chamada (custo linear); otimização a partir da última âncora fica
