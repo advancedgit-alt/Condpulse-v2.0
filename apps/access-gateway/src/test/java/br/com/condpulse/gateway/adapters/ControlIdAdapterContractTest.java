@@ -400,4 +400,22 @@ class ControlIdAdapterContractTest {
    assertNotEquals(a.personAttributes(person).orElseThrow(),a.readState("ref-20").personAttributes());
   }
  }
+
+ // ----- quinta rodada (#130) -----
+
+ @Test void respostaSemOCampoDoObjetoNuncaProvaAusencia() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   fake.on("POST","/login.fcgi",Reply.json("{\"session\":\"s\"}"));
+   fake.on("POST","/load_objects.fcgi",Reply.json("{}"));
+   fake.on("POST","/destroy_objects.fcgi",Reply.json("{\"changes\":0}"));
+   var a=lan(fake,new TestSupport.TestClock(),null);
+   var state=a.readState("ref-1");
+   assertEquals(OperationState.UNKNOWN,state.state());
+   assertNull(state.personPresent());
+   assertNotEquals(OperationState.CONFIRMED,a.removeFace("ref-1").state(),"sem prova de ausência não confirma retirada");
+   assertNotEquals(OperationState.CONFIRMED,a.revokeRights("ref-1").state());
+   assertEquals(OperationState.UNKNOWN,a.fetchEvents("1",10).state());
+   assertEquals("1",a.fetchEvents("1",10).nextCursor());
+  }
+ }
 }

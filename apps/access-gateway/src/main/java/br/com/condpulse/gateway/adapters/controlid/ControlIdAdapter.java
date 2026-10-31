@@ -375,9 +375,9 @@ public final class ControlIdAdapter extends BaseAdapter {
   try {
    var response=transport.call("load_objects",Map.of("object","access_logs","where",Map.of("access_logs",Map.of("id",Map.of(">",from))),
     "order",List.of("id","ascending"),"limit",limit),false,null);
-   var list=Json.list(response.get("access_logs"));
+   if(!(response.get("access_logs") instanceof List<?> list)) return EventPage.unavailable(OperationState.UNKNOWN,"FIELD_MISSING",cursor);
    var rows=new ArrayList<Map<String,Object>>();
-   if(list!=null) for(Object o:list) rows.add(Json.map(o));
+   for(Object o:list) rows.add(Json.map(o));
    long max=from, previous=from;
    var userIds=new HashSet<Long>();
    for(var r:rows) {
@@ -476,9 +476,15 @@ public final class ControlIdAdapter extends BaseAdapter {
 
  private List<Map<String,Object>> load(String object,Map<String,Object> where) throws DeviceCallException {
   var response=transport.call("load_objects",Map.of("object",object,"where",where),false,null);
-  var list=Json.list(response.get(object));
+  // A resposta documentada traz o campo com o nome do objeto (CI-OBJ-LOAD). Sem ele, a leitura é indisponível —
+  // nunca uma lista vazia (que provaria ausência).
+  if(!response.containsKey(object)) throw new DeviceCallException(br.com.condpulse.gateway.http.DeviceHttpClient.Failure.AMBIGUOUS,"FIELD_MISSING");
+  List<Object> list;
+  try { list=Json.list(response.get(object)); }
+  catch(Json.JsonException e) { throw new DeviceCallException(br.com.condpulse.gateway.http.DeviceHttpClient.Failure.AMBIGUOUS,"FIELD_INVALID"); }
+  if(list==null) throw new DeviceCallException(br.com.condpulse.gateway.http.DeviceHttpClient.Failure.AMBIGUOUS,"FIELD_MISSING");
   var out=new ArrayList<Map<String,Object>>();
-  if(list!=null) for(Object o:list) out.add(Json.map(o));
+  for(Object o:list) out.add(Json.map(o));
   return out;
  }
 
