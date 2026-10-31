@@ -21,6 +21,7 @@ class AgeRuleTest {
   assertEquals(DOES_NOT_MEET,AgeRule.fromBirthDate(BIRTH,LocalDate.of(2026,10,31),MARCH_1,18));
   assertEquals(17,AgeRule.completedYears(BIRTH,LocalDate.of(2026,10,31),MARCH_1));
   assertEquals(MEETS,AgeRule.fromBirthDate(BIRTH,LocalDate.of(2026,11,1),MARCH_1,18));
+  assertEquals(MEETS,AgeRule.fromBirthDate(BIRTH,LocalDate.of(2026,11,2),MARCH_1,18),"Depois do aniversário");
   assertEquals(MEETS,AgeRule.fromBirthDate(LocalDate.of(1986,5,10),LocalDate.of(2026,10,31),MARCH_1,18),"40 anos");
  }
  @Test void leapDayRuleIsATenantParameter() {
@@ -49,6 +50,10 @@ class AgeRuleTest {
   assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(null,17,true,18,D0,D0),"Até 17 anos");
  }
  @Test void upperBoundsAgeWhileLowerBoundsKeepHolding() {
+  // Atestado "menor de 18" verificado na véspera dos 18 (31/10/2026; aniversário em 01/11).
+  assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(18,null,false,18,D0,D0),"Véspera: não atende");
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,false,18,D0,LocalDate.of(2026,11,1)),"No dia: não se prova mais o limite superior");
+  assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,false,18,D0,LocalDate.of(2027,3,1)),"Depois: desconhecido, pede nova evidência");
   // Atestado de 17 anos (não tem 18) não sustenta "não atende" depois que o tempo passa.
   assertEquals(DOES_NOT_MEET,AgeRule.fromAttestation(18,null,false,18,D0,D0));
   assertEquals(UNKNOWN,AgeRule.fromAttestation(18,null,false,18,D0,D0.plusDays(1)),"Pode ter feito 18 no dia seguinte");
