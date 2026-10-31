@@ -10,6 +10,7 @@ import { Empty, ErrorState, Icon, Loading, Notice, SectionTabs, errorMessage, ty
 import { formatWhen } from '../dateTime';
 import '../management/Management.css';
 import { OutboxSection } from './Outbox';
+import { TechnicalGrantSection } from './TechnicalGrants';
 import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 import { InvitationLinkNotice, TenantCreateForm, TenantDetailView, creationOutcome } from './TenantViews';
@@ -17,12 +18,14 @@ import { billingText, originText, usageText } from './tenants';
 
 export type { Outcome } from './shared';
 const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'financeiro', label: 'Financeiro', icon: 'card' },
-  { id: 'auditoria', label: 'Auditoria', icon: 'clock' }, { id: 'fila', label: 'Fila de tarefas', icon: 'list' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
+  { id: 'auditoria', label: 'Auditoria', icon: 'clock' }, { id: 'fila', label: 'Fila de tarefas', icon: 'list' },
+  { id: 'concessoes', label: 'Concessões técnicas', icon: 'key' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 type Section = typeof sections[number]['id'];
 /** Seções liberadas pelas capacidades da sessão; a navegação lateral e as abas usam a mesma regra (o servidor confere de novo). */
 export function visiblePlatformSections(capabilities: readonly string[]) {
   return sections.filter((item) => (item.id !== 'financeiro' || capabilities.includes('billing.read'))
-    && (item.id !== 'fila' || capabilities.includes('outbox.operate')));
+    && (item.id !== 'fila' || capabilities.includes('outbox.operate'))
+    && (item.id !== 'concessoes' || capabilities.includes('technical_grants.manage')));
 }
 /** Seção efetivamente exibida: uma seção não liberada cai em Condomínios. */
 export function currentPlatformSection(section: string, capabilities: readonly string[]): Section {
@@ -99,6 +102,7 @@ function PlatformConsole({ section, tenantId }: { section: Section; tenantId: st
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
     <SectionTabs label="Seções do painel master" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: `/master/${item.id}` }))} />
     {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'fila' ? <OutboxSection />
+      : current === 'concessoes' ? <TechnicalGrantSection />
       : tenantId ? <TenantDetailView key={tenantId} tenantId={tenantId} describe={describeEvent}
         editor={(tenant, close) => <TenantEditor tenant={tenant} close={close} />} /> : <TenantSection />}
   </>;
