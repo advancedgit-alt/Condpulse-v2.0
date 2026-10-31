@@ -37,12 +37,22 @@ import br.com.condpulse.gateway.spi.InboundEndpoint.Response;
 public final class InboundServer implements AutoCloseable {
  private static final System.Logger LOG=System.getLogger(InboundServer.class.getName());
  public static final String PREFIX="/d/";
+ /** Prazo, em segundos, para receber a requisição inteira (cabeçalhos e corpo) de um equipamento. */
+ public static final String MAX_REQUEST_SECONDS="5";
+
+ /** Deve rodar antes do primeiro servidor HTTP do JDK no processo (a configuração é lida uma vez). */
+ public static void configureJdkServerDeadlines() {
+  if(System.getProperty("sun.net.httpserver.maxReqTime")==null) System.setProperty("sun.net.httpserver.maxReqTime",MAX_REQUEST_SECONDS);
+  if(System.getProperty("sun.net.httpserver.maxRspTime")==null) System.setProperty("sun.net.httpserver.maxRspTime","10");
+ }
+ static { configureJdkServerDeadlines(); }
 
  private final HttpServer server;
  private final Map<String,byte[]> tokenDigests=new HashMap<>();
  private final int maxBody;
  private final BiFunction<String,Request,Response> dispatcher;
- private final java.util.concurrent.ExecutorService executor=Executors.newFixedThreadPool(8,r->{ var t=new Thread(r,"gateway-inbound"); t.setDaemon(true); return t; });
+ // Pool elástico: só equipamentos autenticados (token conferido antes de ler o corpo) chegam a ocupar uma thread.
+ private final java.util.concurrent.ExecutorService executor=Executors.newCachedThreadPool(r->{ var t=new Thread(r,"gateway-inbound"); t.setDaemon(true); return t; });
 
  /** dispatcher recebe o deviceId autenticado e a requisição e devolve a resposta do adaptador. */
  public InboundServer(GatewayConfig config,SecretProvider secrets,BiFunction<String,Request,Response> dispatcher) throws IOException {
@@ -84,7 +94,10 @@ public final class InboundServer implements AutoCloseable {
    String subPath=rest.substring(slash);
    if(!subPath.matches("/[A-Za-z0-9_./-]{1,120}") || subPath.contains("..")) { send(exchange,Response.notFound()); return; }
    byte[] body;
+   // Corpo que para no meio: o servidor do JDK encerra a conexão em sun.net.httpserver.maxReqTime (definido antes
+   // de criar o servidor) e a leitura falha; enquanto isso, o pool elástico mantém os demais equipamentos atendidos.
    try(InputStream in=exchange.getRequestBody()) { body=in.readNBytes(maxBody+1); }
+   catch(IOException e) { return; }
    if(body.length>maxBody) { send(exchange,new Response(413,"text/plain",new byte[0])); return; }
    var request=new Request(exchange.getRequestMethod(),subPath,parseQuery(exchange.getRequestURI().getRawQuery()),
     exchange.getRequestHeaders().getFirst("Content-Type"),body,exchange.getRemoteAddress().getAddress().getHostAddress());

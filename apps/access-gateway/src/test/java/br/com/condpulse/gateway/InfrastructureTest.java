@@ -130,4 +130,29 @@ class InfrastructureTest {
    assertTrue(reqs.get(1).authorization().contains("uri=\"/cgi-bin/x.cgi?action=y\""));
   }
  }
+
+ @Test void corposIncompletosNaoPrendemOAtendimentoDosDemais() throws Exception {
+  var device=TestSupport.device("d1",Brand.INTELBRAS,ConnectionMode.NUVEM,DecisionMode.EDGE_ONLINE,null,
+   List.of(TestSupport.channel("c1","1",null)),Map.of(),Map.of(),false);
+  var config=TestSupport.config(List.of(device),true,br.com.condpulse.gateway.config.GatewayConfig.CondoOpenPolicy.closed());
+  String token="tokensinteticodeentrada_0123456789abcdef";
+  try(var server=new InboundServer(config,TestSupport.secrets(Map.of("token-d1",token)),(id,req)->InboundEndpoint.Response.json("{}"))) {
+   server.start();
+   var stalled=new java.util.ArrayList<java.net.Socket>();
+   try {
+    for(int i=0;i<12;i++) {
+     var sock=new java.net.Socket("127.0.0.1",server.port());
+     sock.getOutputStream().write(("POST /d/"+token+"/notification HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\nparcial").getBytes());
+     sock.getOutputStream().flush();
+     stalled.add(sock);
+    }
+    Thread.sleep(200);
+    var client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    var ok=client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+server.port()+"/d/"+token+"/keepalive")).timeout(Duration.ofSeconds(3)).GET().build(),
+     HttpResponse.BodyHandlers.ofString());
+    assertEquals(200,ok.statusCode(),"outro equipamento atendido apesar de 12 corpos incompletos");
+   } finally { for(var sock:stalled) sock.close(); }
+  }
+  assertEquals("5",System.getProperty("sun.net.httpserver.maxReqTime"),"prazo de requisição configurado antes do servidor");
+ }
 }
