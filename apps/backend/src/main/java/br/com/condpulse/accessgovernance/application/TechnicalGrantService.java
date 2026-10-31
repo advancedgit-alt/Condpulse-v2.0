@@ -86,8 +86,8 @@ public class TechnicalGrantService {
    context.require(PlatformCapability.READ_TENANTS);
    var existing=store.find(input.grantId());
    if(existing!=null) {
-    if(existing.tenantId().equals(tenantId) && existing.accountId().equals(input.accountId()) && existing.roleCode().equals(input.roleCode())
-      && new HashSet<>(existing.scopes()).equals(new HashSet<>(input.scopes())))
+    // Repetição só com o pedido inteiro igual (inclui validade e motivo normalizados); qualquer diferença é conflito.
+    if(store.sameRequest(input.grantId(),tenantId,input.accountId(),input.roleCode(),input.scopes(),input.validDays(),input.reason()))
      return new TechnicalGrantModels.TechnicalGrantIssued(existing,false);
     throw new BusinessProblem("TECHNICAL_GRANT_ID_CONFLICT",409,"Este identificador já foi usado para outra concessão.");
    }

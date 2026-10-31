@@ -31,6 +31,20 @@ public class TechnicalGrantStore {
   return jdbc.query("select "+COLUMNS+" from cp.technical_grants where tenant_id=? order by created_at desc,id limit 200",
    TechnicalGrantStore::grant,tenantId);
  }
+ /** O pedido inteiro (condomínio, conta, papel, escopos, validade e motivo normalizado) é igual ao que gravou a concessão. */
+ public boolean sameRequest(UUID grantId,UUID tenantId,UUID accountId,String roleCode,List<String> scopes,int validDays,String reason) {
+  Boolean same=jdbc.query(connection->{
+   var statement=connection.prepareStatement("""
+    select count(*)=1 from cp.technical_grants where id=? and tenant_id=? and account_id=? and role_code=? and scopes@>? and scopes<@?
+     and valid_until-valid_from=make_interval(days=>?) and reason=?
+    """);
+   Array array=connection.createArrayOf("text",scopes.toArray());
+   statement.setObject(1,grantId); statement.setObject(2,tenantId); statement.setObject(3,accountId); statement.setString(4,roleCode);
+   statement.setArray(5,array); statement.setArray(6,array); statement.setInt(7,validDays); statement.setString(8,reason);
+   return statement;
+  },(ResultSet r)->r.next() && r.getBoolean(1));
+  return Boolean.TRUE.equals(same);
+ }
  /** Um único instante (início da transação) para os dois limites e para a leitura de "current". */
  public void insert(UUID grantId,UUID tenantId,UUID accountId,String roleCode,List<String> scopes,int validDays,UUID grantedBy,String reason) {
   jdbc.update(connection->{

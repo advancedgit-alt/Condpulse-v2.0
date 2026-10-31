@@ -70,6 +70,13 @@ class TechnicalGrantJdbcTest {
   var replay=grants.issue(db.accountA,AAL2,db.tenantA,request(id,MASTER,List.of("installation.manage","installation.bind_channel")));
   assertFalse(replay.applied(),"Mesmo pedido devolve a concessão já gravada");
   assertEquals("TECHNICAL_GRANT_ID_CONFLICT",code(()->grants.issue(db.accountA,AAL2,db.tenantA,request(id,MASTER,List.of("installation.read")))));
+  assertEquals("TECHNICAL_GRANT_ID_CONFLICT",code(()->grants.issue(db.accountA,AAL2,db.tenantA,
+   new TechnicalGrantModels.IssueTechnicalGrant(id,MASTER,"MASTER_IMPLANTACAO",scopes,8,"Implantacao piloto ficticia JDBC"))),"Validade diferente");
+  assertEquals("TECHNICAL_GRANT_ID_CONFLICT",code(()->grants.issue(db.accountA,AAL2,db.tenantA,
+   new TechnicalGrantModels.IssueTechnicalGrant(id,MASTER,"MASTER_IMPLANTACAO",scopes,7,"Outro motivo ficticio JDBC"))),"Motivo diferente");
+  assertEquals("TECHNICAL_GRANT_ID_CONFLICT",code(()->grants.issue(db.accountA,AAL2,db.tenantB,request(id,MASTER,scopes))),"Outro condomínio");
+  assertFalse(grants.issue(db.accountA,AAL2,db.tenantA,new TechnicalGrantModels.IssueTechnicalGrant(id,MASTER,"MASTER_IMPLANTACAO",scopes,7,
+   "  Implantacao   piloto ficticia JDBC ")).applied(),"Motivo igual depois de normalizado é repetição");
   assertEquals("1",db.adminString("select count(*) from platform.platform_audit_log where action='TECHNICAL_GRANT_ISSUED' and tenant_id=?",db.tenantA));
 
   var session=grants.session(MASTER,db.tenantA,AAL2);
