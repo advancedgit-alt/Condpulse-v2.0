@@ -434,4 +434,26 @@ class ControlIdAdapterContractTest {
    assertFalse(a.removePersonCoversCredentials());
   }
  }
+
+ // ----- sétima rodada (#130) -----
+
+ @Test void portalPresenteEInvalidoNegaSemCairNoCanalUnico() {
+  var a=push(new TestSupport.TestClock());
+  var endpoint=a.inbound().orElseThrow();
+  var asked=new ArrayList<String>();
+  InboundEndpoint.Context allowAll=new InboundEndpoint.Context() {
+   @Override public Instant now() { return Instant.now(); }
+   @Override public InboundEndpoint.LocalDecision decide(String user,String channel) { asked.add(user+"@"+channel); return new InboundEndpoint.LocalDecision(true,List.of("ALLOWED"),"ref-7","c1"); }
+   @Override public void events(List<EdgeEvent> events) {}
+   @Override public void heartbeat() {}
+  };
+  for(String form:List.of("user_id=7&portal_id=invalid","user_id=x7&portal_id=1")) {
+   var r=Json.map(Json.object(new String(endpoint.handle(req("POST","/new_user_identified.fcgi",Map.of(),form),allowAll).body())).get("result"));
+   assertEquals(6L,r.get("event"),form);
+   assertTrue(Json.list(r.get("actions")).isEmpty());
+  }
+  assertTrue(asked.isEmpty(),"nem consulta a decisão com campo inválido");
+  var ok=Json.map(Json.object(new String(endpoint.handle(req("POST","/new_user_identified.fcgi",Map.of(),"user_id=7"),allowAll).body())).get("result"));
+  assertEquals(7L,ok.get("event"),"portal ausente segue a regra do canal único");
+ }
 }

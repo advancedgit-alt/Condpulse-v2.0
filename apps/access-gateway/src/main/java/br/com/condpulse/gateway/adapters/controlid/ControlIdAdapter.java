@@ -449,12 +449,15 @@ public final class ControlIdAdapter extends BaseAdapter {
   if(!request.method().equals("POST")) return InboundEndpoint.Response.notFound();
   var form=InboundServer.parseQuery(new String(request.body(),StandardCharsets.UTF_8));
   String user=form.get("user_id"), portal=form.get("portal_id");
-  if(user!=null && !user.matches("\\d{1,18}")) user=null;
-  if(portal!=null && !portal.matches("\\d{1,18}")) portal=null;
+  // Campo presente e inválido é diferente de campo ausente: nega sem ação, sem cair no canal único por padrão.
+  boolean malformed=(user!=null && !user.matches("\\d{1,18}")) || (portal!=null && !portal.matches("\\d{1,18}"));
   InboundEndpoint.LocalDecision decision;
-  // Qualquer falha na decisão é negativa (event 6 sem ação), nunca erro HTTP que leve à contingência local.
-  try { decision=ctx.decide(user,portal==null || portal.equals("0")?null:portal); }
-  catch(RuntimeException e) { decision=new InboundEndpoint.LocalDecision(false,List.of("DEPENDENCY_UNAVAILABLE"),null,null); }
+  if(malformed) { decision=new InboundEndpoint.LocalDecision(false,List.of("CONTEXT_AMBIGUOUS"),null,null); user=null; portal=null; }
+  else {
+   // Qualquer falha na decisão é negativa (event 6 sem ação), nunca erro HTTP que leve à contingência local.
+   try { decision=ctx.decide(user,portal==null || portal.equals("0")?null:portal); }
+   catch(RuntimeException e) { decision=new InboundEndpoint.LocalDecision(false,List.of("DEPENDENCY_UNAVAILABLE"),null,null); }
+  }
   var result=new LinkedHashMap<String,Object>();
   if(user!=null) result.put("user_id",Long.parseLong(user));
   if(portal!=null) result.put("portal_id",Long.parseLong(portal));

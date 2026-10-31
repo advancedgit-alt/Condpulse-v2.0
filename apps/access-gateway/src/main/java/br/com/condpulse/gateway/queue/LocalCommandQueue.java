@@ -181,12 +181,18 @@ public final class LocalCommandQueue implements AutoCloseable {
     else if(command.desiredVersion()<=accepted) { status=Status.REJECTED_STALE; reason="STALE_VERSION"; }
     else acceptedVersion.put(key(command,command.scope()),command.desiredVersion());
    } else {
-    revokedVersion.merge(key(command,command.scope()),command.desiredVersion(),Math::max);
+    // Revogação com versão menor que uma aplicação já aceita no escopo coberto é mensagem antiga (empate: revogação vence).
+    long newerApply=0;
+    String prefix=command.deviceId()+"|"+command.subjectRef()+"|";
+    for(var e:acceptedVersion.entrySet())
+     if(e.getKey().startsWith(prefix) && (command.scope().equals("ALL") || e.getKey().equals(key(command,command.scope())))) newerApply=Math.max(newerApply,e.getValue());
+    if(command.desiredVersion()<newerApply) { status=Status.REJECTED_STALE; reason="STALE_REVOCATION"; }
+    else revokedVersion.merge(key(command,command.scope()),command.desiredVersion(),Math::max);
    }
    byId.put(command.commandId(),new Entry(command,seq,status,null,reason,0,at,null,false));
    byKey.put(command.idempotencyKey(),command.commandId());
    lastSuperseded.clear();
-   if(command.type().revocation()) {
+   if(command.type().revocation() && status!=Status.REJECTED_STALE) {
     for(var other:List.copyOf(byId.values())) {
      var oc=other.command();
      if(!active(other) || oc.type().revocation() || !oc.deviceId().equals(command.deviceId()) || !oc.subjectRef().equals(command.subjectRef())) continue;
