@@ -72,3 +72,15 @@ O kit define o white label como **configuração versionada e governada** (Anexo
 4. **Canais adicionais** (domínio, remetente de e-mail, app de loja): fases próprias, quando contratados.
 
 A marca do cliente nunca concede permissão, muda regra de acesso ou dá acesso a credenciais técnicas.
+
+## Implementação (fase 1)
+
+| Superfície | Situação | Onde |
+|---|---|---|
+| Web | Tokens `--cp-*` claro/escuro, marca SVG canônica, favicons/manifest, links `#00666D`, Lato 400/700, ponto de extensão de white label | `apps/web/src/styles/tokens.css`, `apps/web/src/ui/theme/`, `apps/web/src/ui/brandLogo.ts` |
+| Mobile | Ícone (iOS e adaptativo Android com monocromático), splash claro/escuro e cores do tema alinhados ao kit | `apps/mobile/app.json`, `apps/mobile/assets/`, `apps/mobile/src/ui/theme.ts` |
+| Mobile, Lato | Pendente: o React Native não tem fonte global; exige `expo-font`, espera do carregamento e `fontFamily` em cada estilo de texto das 13 telas | — |
+| Mobile, tema escuro | Pendente: `userInterfaceStyle` segue `light` até existir paleta escura validada no nativo | — |
+
+Exceções conhecidas à meta de 12 px dos metadados: abas da unidade em telas de até 480 px (.72rem) e 340 px
+(.66rem), exigidas pelo ensaio de fonte larga para manter as quatro abas inteiras em 320 px.

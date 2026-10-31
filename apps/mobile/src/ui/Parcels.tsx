@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   button: { minHeight: touch, borderRadius: 10, backgroundColor: colors.teal, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   dimmed: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: colors.onAction, fontSize: 16, fontWeight: '700' },
   secondaryText: { color: colors.navy },
   notice: { padding: 12, borderRadius: 10, fontSize: 15, gap: 4 },
   error: { backgroundColor: colors.errorBg, color: colors.error },
