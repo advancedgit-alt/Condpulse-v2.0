@@ -3740,10 +3740,29 @@ def area_checks():
     expect(value(mgr + "select count(*) from cp.access_points", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: mapa nao atravessa condominio")
     expect(error(tech + f"UPDATE cp.access_points SET status='RETIRED',updated_by='{MI}',version=1 WHERE id='{P1}'; "
                  f"UPDATE cp.access_points SET status='MAPPED',updated_by='{MI}',version=2 WHERE id='{P1}'", "23514", **as_tech), "retirada final")
+    # Ponto ligado a area retirada ainda pode ser suspenso ou retirado; so nao pode ser religado a ela.
+    P2 = "41200000-0000-4000-8000-000000000002"
+    query(tech + point.replace(P1, P2).replace("'P-ACADEMIA'", "'P-SALA'") + f"'{MI}')", **as_tech)
+    query(mgr + f"UPDATE cp.access_areas SET status='RETIRED',updated_by='{MG}',version=version+1 WHERE id='{A3}'", **as_mgr)
+    query(tech + f"UPDATE cp.access_points SET status='SUSPENDED',updated_by='{MI}',version=1 WHERE id='{P2}'", **as_tech)
+    query(tech + f"UPDATE cp.access_points SET status='RETIRED',updated_by='{MI}',version=2 WHERE id='{P2}'", **as_tech)
+    expect(value(f"select status from cp.access_points where id='{P2}'") == "RETIRED", "ponto de area retirada pode ser suspenso e retirado")
+    expect(error(tech + point.replace(P1, "41200000-0000-4000-8000-000000000003").replace("'P-ACADEMIA'", "'P-NOVO'") + f"'{MI}')", "23514", **as_tech),
+           "nao se liga ponto novo a area retirada")
+    # Write skew na hierarquia: duas trocas de pai cruzadas e concorrentes; so uma conclui.
+    X1, X2 = "41100000-0000-4000-8000-000000000011", "41100000-0000-4000-8000-000000000012"
+    query(mgr + area(X1, "X1") + "; " + area(X2, "X2"), **as_mgr)
+    def swap(child, parent):
+        return query(mgr + f"UPDATE cp.access_areas SET parent_area_id='{parent}',updated_by='{MG}',version=1 WHERE id='{child}'; SELECT pg_sleep(1)",
+                     check=False, **as_mgr)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda pair: swap(*pair), [(X1, X2), (X2, X1)]))
+    expect(sum(r.returncode == 0 for r in results) == 1 and value(f"select count(*) from cp.access_areas where id in ('{X1}','{X2}') and parent_area_id is not null") == "1",
+           "trocas de pai concorrentes passam em serie e nao formam ciclo")
     expect(error(tech + f"DELETE FROM cp.access_points WHERE id='{P1}'", "42501", **as_tech), "ponto nao e apagado")
     expect(error(mgr + f"DELETE FROM cp.access_areas WHERE id='{A3}'", "42501", **as_mgr), "area nao e apagada")
     expect(error("select emergency_design_ref from cp.access_points", "42501", tenant=TA, role="cp_worker"), "worker nao le referencias de projeto")
-    expect(value("select count(*) from cp.access_points", tenant=TA, role="cp_worker") == "1", "worker le o mapa do condominio")
+    expect(value("select count(*) from cp.access_points", tenant=TA, role="cp_worker") == "2", "worker le o mapa do condominio")
     expect(error(mgr + f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) VALUES('{TA}','{MG}','POINT_CREATED','ACCESS_POINT','{P1}',gen_random_uuid())",
                  "42501", **as_mgr), "trilha POINT_* so do MASTER de implantacao")
     expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' "

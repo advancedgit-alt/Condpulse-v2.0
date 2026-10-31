@@ -76,6 +76,11 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=NEW.timezone) THEN
   RAISE EXCEPTION 'fuso IANA inválido' USING ERRCODE='23514';
  END IF;
+ -- Hierarquia: alterações de pai no mesmo condomínio passam em série (trava da transação por condomínio), para que duas
+ -- mudanças concorrentes não formem ciclo por escrita cruzada em READ COMMITTED.
+ IF NEW.parent_area_id IS NOT NULL AND (TG_OP='INSERT' OR NEW.parent_area_id IS DISTINCT FROM OLD.parent_area_id) THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended('cp.access_areas:'||NEW.tenant_id::text,0));
+ END IF;
  IF NEW.parent_area_id IS NOT NULL AND EXISTS(
    WITH RECURSIVE up(id,depth) AS (
     SELECT a.parent_area_id,1 FROM cp.access_areas a WHERE a.tenant_id=NEW.tenant_id AND a.id=NEW.parent_area_id
@@ -111,7 +116,9 @@ CREATE TRIGGER access_areas_guard BEFORE INSERT OR UPDATE ON cp.access_areas FOR
 CREATE FUNCTION cp.access_points_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
- IF EXISTS(SELECT 1 FROM cp.access_areas a WHERE a.tenant_id=NEW.tenant_id AND a.id IN (NEW.from_area_id,NEW.to_area_id) AND a.status='RETIRED') THEN
+ -- Só ligar (criar ou mudar origem/destino) exige áreas não retiradas; suspender ou retirar um ponto continua possível.
+ IF (TG_OP='INSERT' OR (NEW.from_area_id,NEW.to_area_id) IS DISTINCT FROM (OLD.from_area_id,OLD.to_area_id))
+   AND EXISTS(SELECT 1 FROM cp.access_areas a WHERE a.tenant_id=NEW.tenant_id AND a.id IN (NEW.from_area_id,NEW.to_area_id) AND a.status='RETIRED') THEN
   RAISE EXCEPTION 'ponto não liga área retirada' USING ERRCODE='23514';
  END IF;
  IF TG_OP='INSERT' THEN
