@@ -11,9 +11,10 @@ import br.com.condpulse.gateway.spi.Spi.OperationState;
 
 /**
  * Cliente da API central. O gateway não escreve no banco central: tudo passa por aqui, autenticado pelo certificado
- * do gateway (mTLS), sem tenantId no corpo. Duas operações existem no OpenAPI proposto 1.1.0
- * ({@code POST /v1/edge/events}, {@code POST /v1/edge/decisions}); as demais ainda não existem e estão marcadas
- * PROPOSTO — o backend precisa expô-las (lista em docs/integracoes/facial/GATEWAY.md). Até lá só há o stub de teste.
+ * pela credencial do gateway (V048; mTLS fica pendente na borda central), sem tenantId no corpo. Entrega e relatório
+ * de sincronização existem em contracts/openapi.json ({@code POST /v1/edge/sync-commands/lease},
+ * {@code POST /v1/edge/sync-commands/{commandId}/result}); eventos, decisões, abertura, saúde e material seguem
+ * PROPOSTO (lista em docs/integracoes/facial/GATEWAY.md).
  */
 public interface CentralApiClient {
  /** OpenAPI {@code ingestEdgeEvents}: ACK por item depois de persistir na caixa de entrada central. */
@@ -22,13 +23,13 @@ public interface CentralApiClient {
  /** OpenAPI {@code ingestEdgeDecision}: telemetria de decisão já tomada no gateway; a resposta nunca autoriza nada. */
  DecisionReceipt postDecision(EdgeDecision decision,String idempotencyKey) throws CentralUnavailable;
 
- /** PROPOSTO {@code GET /v1/edge/sync-commands}: comandos tipados de sincronização para este gateway. */
+ /** {@code POST /v1/edge/sync-commands/lease} (V048): trabalhos da publicação por destino entregues a este gateway. */
  List<SyncCommand> pullSyncCommands(int max) throws CentralUnavailable;
 
  /** PROPOSTO {@code GET /v1/edge/open-commands}: aberturas pontuais pendentes (curta validade). */
  List<OpenCommand> pullOpenCommands(int max) throws CentralUnavailable;
 
- /** PROPOSTO {@code POST /v1/edge/sync-commands/{commandId}/result}: estado por destino. */
+ /** {@code POST /v1/edge/sync-commands/{commandId}/result} (V048): ACK de transporte ou resultado por trabalho, idempotente. */
  void reportSyncResult(SyncResult result) throws CentralUnavailable;
 
  /** PROPOSTO {@code POST /v1/edge/open-commands/{commandId}/receipt}: recibo durável da abertura. */
@@ -62,6 +63,10 @@ public interface CentralApiClient {
  }
  record DecisionReceipt(String decisionId,IngestStatus status,String reasonCode) {}
 
- record SyncResult(String commandId,String deviceId,OperationState state,String reasonCode,Instant observedAt) {}
+ /**
+  * Resultado por comando. documentHash: hash do documento entregue pela plataforma (V048); em CONFIRMED ele é também o
+  * hash lido de volta (a leitura bateu com o comando derivado desse documento). null só em comando sem documento.
+  */
+ record SyncResult(String commandId,String deviceId,OperationState state,String reasonCode,Instant observedAt,String documentHash) {}
  record GatewayHealth(Instant observedAt,Map<String,Object> summary) {}
 }

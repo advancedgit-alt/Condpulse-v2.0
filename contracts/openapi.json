@@ -20022,6 +20022,556 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/technical/edge-agents": {
+      "get": {
+        "operationId": "technicalListEdgeAgents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Gateways do condomínio (gateway.manage ou installation.read, AAL2). Só a impressão curta (12 dígitos) do hash da credencial; nunca credencial nem hash completo.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeAgentPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), EDGE_AGENT_FORBIDDEN; MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "EDGE_AGENT_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "technicalRegisterEdgeAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cadastra o gateway local ou de nuvem de um conector ativo (gateway.manage, AAL2). Recebe só o SHA-256 da credencial gerada no gateway; a plataforma nunca gera nem devolve credencial. Um gateway não revogado por conector; agentId do cliente: o mesmo pedido inteiro é repetição.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterEdgeAgent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeAgent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), EDGE_AGENT_FORBIDDEN; MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "EDGE_AGENT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "EDGE_AGENT_INVALID, EDGE_AGENT_LABEL_INVALID, EDGE_CREDENTIAL_HASH_INVALID ou EDGE_CREDENTIAL_VALIDITY_INVALID"
+          },
+          "409": {
+            "description": "EDGE_AGENT_ID_CONFLICT ou EDGE_AGENT_CONFLICT (gateway ativo no conector ou credencial já usada)"
+          },
+          "422": {
+            "description": "EDGE_AGENT_INVALID ou EDGE_AGENT_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/edge-agents/{agentId}/rotate": {
+      "post": {
+        "operationId": "technicalRotateEdgeAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Troca a credencial (novo SHA-256, nova validade) do gateway (gateway.manage, AAL2). A credencial anterior deixa de valer na hora.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateEdgeAgent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeAgent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), EDGE_AGENT_FORBIDDEN; MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, EDGE_AGENT_NOT_FOUND"
+          },
+          "503": {
+            "description": "EDGE_AGENT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "EDGE_CREDENTIAL_HASH_INVALID, EDGE_CREDENTIAL_VALIDITY_INVALID ou EDGE_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "EDGE_AGENT_STALE, EDGE_AGENT_REVOKED ou EDGE_AGENT_CONFLICT"
+          },
+          "422": {
+            "description": "EDGE_AGENT_INVALID (rotação exige credencial nova)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/edge-agents/{agentId}/revoke": {
+      "post": {
+        "operationId": "technicalRevokeEdgeAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Revoga o gateway de forma definitiva e imediata (gateway.manage, AAL2), com motivo.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeEdgeAgent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeAgent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), EDGE_AGENT_FORBIDDEN; MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, EDGE_AGENT_NOT_FOUND"
+          },
+          "503": {
+            "description": "EDGE_AGENT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "EDGE_AGENT_REASON_REQUIRED ou EDGE_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "EDGE_AGENT_STALE ou EDGE_AGENT_REVOKED"
+          }
+        }
+      }
+    },
+    "/v1/edge/identity": {
+      "get": {
+        "operationId": "edgeIdentity",
+        "security": [
+          {
+            "edgeCredential": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Identidade do gateway autenticado e relógio do servidor (para medir desvio). Sem sessão nem CSRF; o condomínio vem da identidade cadastrada, nunca do pedido. Primeiro contato muda PROVISIONED para ONLINE.",
+        "parameters": [
+          {
+            "name": "X-CondPulse-Edge-Credential",
+            "in": "header",
+            "required": true,
+            "description": "Credencial do gateway (base64url, 43 a 128 caracteres, gerada no próprio gateway). Só o SHA-256 vai ao banco; o valor nunca é registrado.",
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]{43,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeIdentity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "EDGE_UNAUTHENTICATED (credencial ausente, desconhecida, girada, revogada ou vencida: mesma resposta)"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio) ou EDGE_FORBIDDEN"
+          },
+          "503": {
+            "description": "EDGE_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/edge/sync-commands/lease": {
+      "post": {
+        "operationId": "edgeLeaseSyncCommands",
+        "security": [
+          {
+            "edgeCredential": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Entrega (arrendamento com prazo) dos trabalhos sem resultado (PENDING ou só ACK) da publicação por destino (V047) dos equipamentos do conector do gateway: retirada (prioridade 0) antes de ampliação. Entrega não é sucesso. Trabalho com entrega viva ou com resultado não é entregue de novo; entrega vencida sem resultado (mesmo com ACK) volta na tentativa seguinte, com o mesmo commandId e a mesma idempotencyKey; revogar o gateway libera na hora as entregas dele para o gateway novo do conector.",
+        "parameters": [
+          {
+            "name": "X-CondPulse-Edge-Credential",
+            "in": "header",
+            "required": true,
+            "description": "Credencial do gateway (base64url, 43 a 128 caracteres, gerada no próprio gateway). Só o SHA-256 vai ao banco; o valor nunca é registrado.",
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]{43,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdgeLeaseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeLeasePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "EDGE_LEASE_MAX_INVALID ou EDGE_LEASE_SECONDS_INVALID"
+          },
+          "401": {
+            "description": "EDGE_UNAUTHENTICATED (credencial ausente, desconhecida, girada, revogada ou vencida: mesma resposta)"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio) ou EDGE_FORBIDDEN"
+          },
+          "409": {
+            "description": "EDGE_CONFLICT"
+          },
+          "503": {
+            "description": "EDGE_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/edge/sync-commands/{commandId}/result": {
+      "post": {
+        "operationId": "edgeReportSyncResult",
+        "security": [
+          {
+            "edgeCredential": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Relatório do gateway por trabalho, idempotente por Idempotency-Key (mesma chave e mesmo corpo devolvem o mesmo resultado com duplicate=true; outro corpo é 409). Só vale de quem detém a entrega mais recente. ACK = comando gravado na fila local durável (não é aplicação); CONFIRMED exige observedHash igual ao hash do documento (leitura de volta do mesmo documento). Trabalho confirmado ou superado não muda (outcome CLOSED: o gateway para). Relatório de outro documento ou leitura diferente: outcome REJECTED, sem efeito.",
+        "parameters": [
+          {
+            "name": "X-CondPulse-Edge-Credential",
+            "in": "header",
+            "required": true,
+            "description": "Credencial do gateway (base64url, 43 a 128 caracteres, gerada no próprio gateway). Só o SHA-256 vai ao banco; o valor nunca é registrado.",
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]{43,128}$"
+            }
+          },
+          {
+            "name": "commandId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdgeReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "APPLIED, CLOSED ou REJECTED",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeReportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "EDGE_REPORT_STATE_INVALID, EDGE_REPORT_CODE_INVALID, EDGE_REPORT_DOCUMENT_HASH_REQUIRED, EDGE_REPORT_OBSERVED_HASH_INVALID, EDGE_REPORT_READBACK_REQUIRED ou EDGE_IDEMPOTENCY_KEY_REQUIRED"
+          },
+          "401": {
+            "description": "EDGE_UNAUTHENTICATED (credencial ausente, desconhecida, girada, revogada ou vencida: mesma resposta)"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio) ou EDGE_FORBIDDEN"
+          },
+          "404": {
+            "description": "EDGE_COMMAND_NOT_FOUND"
+          },
+          "409": {
+            "description": "EDGE_IDEMPOTENCY_CONFLICT, EDGE_LEASE_NOT_HELD, EDGE_JOB_CHANGED ou EDGE_CONFLICT"
+          },
+          "422": {
+            "description": "EDGE_REPORT_REFUSED"
+          },
+          "503": {
+            "description": "EDGE_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -20035,6 +20585,12 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "__Host-cp_session"
+      },
+      "edgeCredential": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CondPulse-Edge-Credential",
+        "description": "Credencial de máquina por gateway (V048), gerada no gateway; a plataforma guarda só o SHA-256. Substitui provisoriamente o edgeMutualTLS do pacote (DECISOES_PENDENTES P19): a borda atual termina o TLS e não repassa certificado de cliente."
       }
     },
     "schemas": {
@@ -34000,6 +34556,462 @@
             }
           },
           "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EdgeAgent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agentId",
+          "connectorId",
+          "instanceId",
+          "label",
+          "credentialFingerprint",
+          "credentialExpiresAt",
+          "status",
+          "createdAt",
+          "version"
+        ],
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "instanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "credentialFingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{12}$",
+            "description": "12 primeiros dígitos do SHA-256, só para conferência visual; não autentica."
+          },
+          "credentialExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "credentialRotatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PROVISIONED",
+              "ONLINE",
+              "REVOKED"
+            ]
+          },
+          "agentVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "protocolVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSeenAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Último contato autenticado; não prova saúde dos equipamentos."
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokeReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "EdgeAgentPage": {
+        "type": "object",
+        "required": [
+          "agents"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EdgeAgent"
+            }
+          }
+        }
+      },
+      "RegisterEdgeAgent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agentId",
+          "connectorId",
+          "label",
+          "credentialHash"
+        ],
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "credentialHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 (hex minúsculo) da credencial gerada no gateway; nunca a credencial."
+          },
+          "credentialValidDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 2,
+            "maximum": 180,
+            "description": "Padrão 90."
+          }
+        }
+      },
+      "RotateEdgeAgent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "credentialHash",
+          "expectedVersion"
+        ],
+        "properties": {
+          "credentialHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "credentialValidDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 2,
+            "maximum": 180
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RevokeEdgeAgent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "EdgeIdentity": {
+        "type": "object",
+        "required": [
+          "agentId",
+          "connectorId",
+          "instanceId",
+          "status",
+          "credentialExpiresAt",
+          "serverTime"
+        ],
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "instanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PROVISIONED",
+              "ONLINE"
+            ]
+          },
+          "credentialExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EdgeLeaseRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Padrão 10."
+          },
+          "leaseSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 30,
+            "maximum": 600,
+            "description": "Padrão 120."
+          }
+        }
+      },
+      "EdgeSyncCommand": {
+        "type": "object",
+        "required": [
+          "commandId",
+          "idempotencyKey",
+          "leaseId",
+          "attempt",
+          "leaseExpiresAt",
+          "deviceId",
+          "subjectRef",
+          "type",
+          "desiredVersion",
+          "priority",
+          "documentHash",
+          "document",
+          "issuedAt"
+        ],
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trabalho da publicação por destino (V047)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Igual ao commandId: a mesma entrega repetida é a mesma chave na fila local."
+          },
+          "leaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "leaseExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectRef": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "APPLY_RIGHTS",
+              "REVOKE_RIGHTS",
+              "REVOKE_ALL"
+            ]
+          },
+          "desiredVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "priority": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "documentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "document": {
+            "type": "string",
+            "description": "Texto exato do documento compilado (jsonb canônico do PostgreSQL); SHA-256 do texto em UTF-8 = documentHash. Entradas por direito com channelId, pointId, bindingRevision, sentido e vigência."
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EdgeLeasePage": {
+        "type": "object",
+        "required": [
+          "commands",
+          "serverTime"
+        ],
+        "properties": {
+          "commands": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/EdgeSyncCommand"
+            }
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EdgeReportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "documentHash"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACK",
+              "APPLIED_UNVERIFIED",
+              "CONFIRMED",
+              "PARTIAL",
+              "FAILED",
+              "UNKNOWN"
+            ]
+          },
+          "resultCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z0-9_]{1,64}$"
+          },
+          "documentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Hash do documento recebido na entrega."
+          },
+          "observedHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Obrigatório em CONFIRMED: hash do documento cuja leitura de volta bateu com o equipamento; proibido em ACK."
+          }
+        }
+      },
+      "EdgeReportResult": {
+        "type": "object",
+        "required": [
+          "commandId",
+          "outcome",
+          "duplicate"
+        ],
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "APPLIED",
+              "CLOSED",
+              "REJECTED"
+            ]
+          },
+          "outcomeCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "JOB_ALREADY_CONFIRMED",
+              "JOB_SUPERSEDED",
+              "DOCUMENT_HASH_MISMATCH",
+              "READBACK_HASH_MISMATCH",
+              "ACK_AFTER_RESULT"
+            ]
+          },
+          "jobState": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "PENDING",
+              "ACK",
+              "APPLIED_UNVERIFIED",
+              "CONFIRMED",
+              "PARTIAL",
+              "FAILED",
+              "UNKNOWN",
+              "SUPERSEDED"
+            ]
+          },
+          "duplicate": {
             "type": "boolean"
           }
         }

@@ -70,7 +70,9 @@ public final class TestSupport {
 
  public static GatewayConfig config(List<Device> devices,boolean withProfiles,CondoOpenPolicy openPolicy) {
   var windows=Map.of("comercial",List.of(new WeeklyWindow(EnumSet.of(DayOfWeek.MONDAY,DayOfWeek.TUESDAY,DayOfWeek.WEDNESDAY,DayOfWeek.THURSDAY,DayOfWeek.FRIDAY),
-   LocalTime.of(8,0),LocalTime.of(18,0))),"sempre",List.of(new WeeklyWindow(EnumSet.allOf(DayOfWeek.class),LocalTime.MIN,LocalTime.of(23,59,59))));
+   LocalTime.of(8,0),LocalTime.of(18,0))),"sempre",List.of(new WeeklyWindow(EnumSet.allOf(DayOfWeek.class),LocalTime.MIN,LocalTime.of(23,59,59))),
+   // Faixa dos documentos da plataforma (V048: só regra de tempo integral), comissionada pelo MASTER.
+   "FULL_TIME",List.of(new WeeklyWindow(EnumSet.allOf(DayOfWeek.class),LocalTime.MIN,LocalTime.of(23,59,59))));
   boolean inbound=devices.stream().anyMatch(d->d.inboundTokenRef()!=null);
   return new GatewayConfig("gateway-teste","conector-teste","Condomínio Teste 1",ZONE,null,
    inbound?new Inbound("127.0.0.1",0,null,null,256*1024):null,Limits.defaults(),openPolicy,windows,
