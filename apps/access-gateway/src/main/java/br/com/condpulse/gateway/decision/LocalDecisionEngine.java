@@ -65,8 +65,9 @@ public final class LocalDecisionEngine implements AutoCloseable {
  /** Revogação: vale imediatamente e bloqueia versões menores ou iguais. */
  public synchronized void revoke(String deviceId,String subjectRef,long version) {
   var current=grants.get(deviceId+"|"+subjectRef);
-  if(current!=null && current.revoked() && current.version()>=version) return;
-  var m=record("revoke"); m.put("deviceId",deviceId); m.put("subject",subjectRef); m.put("version",Math.max(version,current==null?0:current.version()));
+  // Ordem de versões preservada: revogação mais antiga que o estado atual é ignorada; empate, revogação vence.
+  if(current!=null && (current.version()>version || (current.revoked() && current.version()==version))) return;
+  var m=record("revoke"); m.put("deviceId",deviceId); m.put("subject",subjectRef); m.put("version",version);
   journal.append(m); apply(m);
  }
 
