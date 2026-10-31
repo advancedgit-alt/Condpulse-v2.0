@@ -35,17 +35,24 @@ public final class EventOutbox implements AutoCloseable {
   journal.replay(this::apply);
  }
 
+ /** Reserva acima do limite só para eventos recebidos dos equipamentos (não há como pedir de novo). */
+ public static final int INBOUND_RESERVE=5_000;
+
+ /**
+  * Eventos que o equipamento enviou (modo online/push): usa a reserva própria. Sem espaço nem na reserva, ou falha
+  * de gravação, lança — quem chamou não pode confirmar o recebimento.
+  */
+ public synchronized int addInbound(String deviceId,List<EdgeEvent> events) {
+  long pending=items.values().stream().filter(i->i.state()==State.PENDING).count();
+  if(pending+events.size()>(long)limit+INBOUND_RESERVE) throw new IllegalStateException("EVENT_OUTBOX_FULL");
+  return append(events);
+ }
+
  /** Grava a página e, na mesma passagem, a nova posição do cursor do equipamento. Devolve quantos eram novos. */
  public synchronized int add(String deviceId,List<EdgeEvent> events,String nextCursor) {
   long pending=items.values().stream().filter(i->i.state()==State.PENDING).count();
   if(pending+events.size()>limit) throw new IllegalStateException("EVENT_OUTBOX_FULL");
-  int fresh=0;
-  for(EdgeEvent e:events) {
-   if(items.containsKey(e.eventId())) continue;
-   var m=new LinkedHashMap<String,Object>();
-   m.put("t","add"); m.put("event",toMap(e)); m.put("at",clock.instant().toString());
-   journal.append(m); apply(m); fresh++;
-  }
+  int fresh=append(events);
   if(nextCursor!=null && !nextCursor.equals(cursors.get(deviceId))) {
    var m=new LinkedHashMap<String,Object>();
    m.put("t","cursor"); m.put("deviceId",deviceId); m.put("cursor",nextCursor); m.put("at",clock.instant().toString());
@@ -53,6 +60,17 @@ public final class EventOutbox implements AutoCloseable {
   }
   return fresh;
  }
+ private int append(List<EdgeEvent> events) {
+  int fresh=0;
+  for(EdgeEvent e:events) {
+   if(items.containsKey(e.eventId())) continue;
+   var m=new LinkedHashMap<String,Object>();
+   m.put("t","add"); m.put("event",toMap(e)); m.put("at",clock.instant().toString());
+   journal.append(m); apply(m); fresh++;
+  }
+  return fresh;
+ }
+
  public synchronized Optional<String> cursor(String deviceId) { return Optional.ofNullable(cursors.get(deviceId)); }
 
  public synchronized List<EdgeEvent> nextBatch(int max) {
