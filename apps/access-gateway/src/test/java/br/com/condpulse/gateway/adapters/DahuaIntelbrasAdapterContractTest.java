@@ -333,4 +333,24 @@ class DahuaIntelbrasAdapterContractTest {
    assertTrue(drain(a,1,new ArrayList<>()).isEmpty(),"parte incompleta é descartada, nunca inventada");
   } finally { a.shutdown(); server.stop(0); }
  }
+
+ // ----- sexta rodada (#132) -----
+
+ @Test void intelbrasEstouroDoBufferAparececomoLacunaNaPaginaENaSaude() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   fake.on("GET","/cgi-bin/eventManager.cgi",r->new Reply(200,"multipart/x-mixed-replace; boundary=myboundary",STREAM,Map.of(),0));
+   var device=TestSupport.device("ibo",Brand.INTELBRAS,ConnectionMode.LOCAL,DecisionMode.DEVICE_LOCAL_ACL,fake.baseUrl(),
+    List.of(TestSupport.channel("c1","0",null)),Map.of(),Map.of("intelbras.bufferLimit","1"),false);
+   var a=new IntelbrasCgiAdapter(TestSupport.context(device,new TestSupport.TestClock()));
+   try {
+    String reason=null;
+    for(int i=0;i<300 && reason==null;i++) { var p=a.fetchEvents(null,100); reason=p.reasonCode(); if(reason==null) Thread.sleep(20); }
+    assertTrue(reason!=null && reason.startsWith("BUFFER_OVERFLOW:"),String.valueOf(reason));
+    var h=a.health();
+    assertTrue(h.reasonCode()==null || h.reasonCode().startsWith("EVENTS_DROPPED:") || h.reasonCode().startsWith("NO_RECENT") || h.reasonCode().startsWith("STREAM"),h.reasonCode());
+    assertTrue(a.droppedEvents()>0);
+    if(h.reachable()) assertTrue(h.reasonCode().startsWith("EVENTS_DROPPED:"),"saudável no ar, mas com a perda declarada");
+   } finally { a.shutdown(); }
+  }
+ }
 }

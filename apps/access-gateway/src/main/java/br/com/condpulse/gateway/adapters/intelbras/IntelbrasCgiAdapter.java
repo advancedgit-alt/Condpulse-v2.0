@@ -49,6 +49,7 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
 
  private final DeviceHttpClient http;
  private final int heartbeatSeconds;
+ private final int bufferLimit;
  // Assinatura contínua (LOCAL): uma linha de execução mantém eventManager.cgi?action=attach aberto e enfileira.
  /** Evento recebido com número de sequência desta execução do processo. */
  private record Buffered(long seq,EdgeEvent event) {}
@@ -57,6 +58,7 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  private long nextSeq;
  private final java.util.concurrent.atomic.AtomicLong dropped=new java.util.concurrent.atomic.AtomicLong();
  private final java.util.concurrent.atomic.AtomicInteger gaps=new java.util.concurrent.atomic.AtomicInteger();
+ private final java.util.concurrent.atomic.AtomicLong droppedSinceDrain=new java.util.concurrent.atomic.AtomicLong();
  private final java.util.concurrent.atomic.AtomicInteger unmappedSinceDrain=new java.util.concurrent.atomic.AtomicInteger();
  private final java.util.concurrent.atomic.AtomicBoolean started=new java.util.concurrent.atomic.AtomicBoolean();
  private final java.util.LinkedHashSet<String> recent=new java.util.LinkedHashSet<>();
@@ -70,6 +72,8 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   this.http=context.device().connectionMode()==ConnectionMode.LOCAL?context.http(Set.of(P_EVENTS)):null;
   String h=context.device().param("intelbras.heartbeatSeconds");
   this.heartbeatSeconds=h!=null && h.matches("[1-5]")?Integer.parseInt(h):5; // IB-EVM: heartbeat de 1 a 5
+  String b=context.device().param("intelbras.bufferLimit");
+  this.bufferLimit=b!=null && b.matches("\\d{1,6}") && Integer.parseInt(b)>0?Integer.parseInt(b):BUFFER_LIMIT;
  }
 
  @Override public Manifest manifest() {
@@ -116,7 +120,10 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
    }
   }
   int gap=gaps.getAndSet(0);
-  return new EventPage(OperationState.CONFIRMED,gap>0?"STREAM_GAP":null,out,next,unmappedSinceDrain.getAndSet(0));
+  long lost=droppedSinceDrain.getAndSet(0);
+  // Perda por estouro do buffer é publicada como lacuna explícita, junto com a reconexão quando houver.
+  String reason=lost>0?"BUFFER_OVERFLOW:"+lost+(gap>0?",STREAM_GAP":""):gap>0?"STREAM_GAP":null;
+  return new EventPage(OperationState.CONFIRMED,reason,out,next,unmappedSinceDrain.getAndSet(0));
  }
 
  /** Cursor {@code <sessão>:<seq>}; de outra execução do processo não confirma nada deste buffer. */
@@ -131,7 +138,9 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   ensureSubscribed();
   boolean recent=connected && !stale();
   watchdog();
-  return new HealthReport(recent,recent?null:connected?"NO_RECENT_HEARTBEAT":"STREAM_DISCONNECTED",null,null,null);
+  long lost=dropped.get();
+  String reason=!recent?(connected?"NO_RECENT_HEARTBEAT":"STREAM_DISCONNECTED"):lost>0?"EVENTS_DROPPED:"+lost:null;
+  return new HealthReport(recent,reason,null,null,null);
  }
 
  private boolean stale() {
@@ -255,7 +264,7 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
    }
    synchronized(buffer) {
     buffer.addLast(new Buffered(nextSeq++,e));
-    if(buffer.size()>BUFFER_LIMIT) { buffer.pollFirst(); dropped.incrementAndGet(); }
+    if(buffer.size()>bufferLimit) { buffer.pollFirst(); dropped.incrementAndGet(); droppedSinceDrain.incrementAndGet(); }
    }
   }
  }

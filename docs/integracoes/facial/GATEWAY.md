@@ -117,7 +117,7 @@ Parâmetros por equipamento (`devices[]`):
 | `installationRevision` | revisão da instalação conferida na abertura |
 | `channels[]` | `channelId`, `pointId`, `bindingRevision`, `nativeChannel` (porta/portal nativo), `nativeOpenAction`, `direction` |
 | `nativeSchedules` | faixa CondPulse → valor nativo (Control iD: `access_rules.id` quando há um canal; Hikvision: `planTemplateNo`) |
-| `params` | Control iD: `rule.<channelId>.<scheduleRef>` = `access_rules.id`; Hikvision: `hikvision.deleteProgressPolls`; Intelbras: `intelbras.streamWindowMillis` |
+| `params` | Control iD: `rule.<channelId>.<scheduleRef>` = `access_rules.id`; Hikvision: `hikvision.deleteProgressPolls`; Intelbras: `intelbras.heartbeatSeconds` (1–5), `intelbras.bufferLimit` |
 
 `nativeOpenAction` (Control iD): `door:door=N`, `sec_box:id=N,reason=N` (iDFace) ou
 `catra:allow=clockwise|anticlockwise|both`. Outro texto é recusado. Dahua usa `nativeChannel` numérico como `channel`.
