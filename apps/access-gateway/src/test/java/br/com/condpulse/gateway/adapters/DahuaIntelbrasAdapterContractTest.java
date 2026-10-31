@@ -389,6 +389,30 @@ class DahuaIntelbrasAdapterContractTest {
   }
  }
 
+ @Test void dahuaAberturaPorGetComConexaoQueCaiAposOPedidoNaoRepeteEFicaUnknown() throws Exception {
+  try(var server=new br.com.condpulse.gateway.support.DropAfterRequestServer()) {
+   var clock=new TestSupport.TestClock();
+   var device=TestSupport.device("dh",Brand.DAHUA,ConnectionMode.LOCAL,DecisionMode.DEVICE_LOCAL_ACL,server.base(),
+    List.of(TestSupport.channel("c1","1",null)),Map.of(),Map.of(),true);
+   var adapter=new DahuaCgiAdapter(TestSupport.context(device,clock));
+   var config=TestSupport.config(List.of(device),true,new br.com.condpulse.gateway.config.GatewayConfig.CondoOpenPolicy(
+    java.util.EnumSet.of(br.com.condpulse.gateway.config.GatewayConfig.OpenOrigin.PORTARIA_LOCAL),false));
+   try(var dispatcher=new br.com.condpulse.gateway.open.OpenDispatcher(TestSupport.tempDir(),clock,config,
+     new br.com.condpulse.gateway.capability.CapabilityRegistry(config.profiles()),id->java.util.Optional.of(adapter))) {
+    var now=clock.instant();
+    var command=new br.com.condpulse.gateway.open.OpenDispatcher.OpenCommand("o1","n1","dh","c1","ponto-c1",1,1,now,now.plusSeconds(5),
+     br.com.condpulse.gateway.config.GatewayConfig.OpenOrigin.PORTARIA_LOCAL,"autorizacao-o1",null);
+    var receipt=dispatcher.dispatch(command);
+    assertEquals(br.com.condpulse.gateway.open.OpenDispatcher.Status.UNKNOWN,receipt.status(),String.valueOf(receipt.reasonCode()));
+    Thread.sleep(300);
+    assertEquals(1,server.received.get(),"abertura por GET chega uma única vez, sem reenvio automático");
+    assertEquals(br.com.condpulse.gateway.open.OpenDispatcher.Status.UNKNOWN,dispatcher.dispatch(command).status());
+    Thread.sleep(300);
+    assertEquals(1,server.received.get(),"mesmo comando não reenvia");
+   }
+  }
+ }
+
  @Test void intelbrasNuvemSaudePeloUltimoKeepAlive() {
   var a=intelbras(null,ConnectionMode.NUVEM);
   assertFalse(a.health().reachable(),"sem chamada do equipamento: fora do ar");
