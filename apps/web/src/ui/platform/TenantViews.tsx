@@ -219,6 +219,8 @@ export function TenantDetailView({ tenantId, editor, describe }: { tenantId: str
         {billing ? <li>{billing}</li> : null}
         <li>Código <code>{tenant.tenantId}</code></li>
       </ul>
+      <div className="button-row"><Link className="button button-secondary button-compact" to={`/implantacao/${tenant.tenantId}/roteiro`}>Abrir implantação técnica</Link></div>
+      <p className="field-help">A implantação exige concessão técnica vigente desta conta no condomínio, além do papel de plataforma.</p>
       {!tenant.active ? <Notice tone="warning">Suspenso: moradores, portaria e gestão local não acessam o condomínio. Nenhum dado foi apagado.</Notice> : null}
       {manage && !editing ? <div className="button-row"><button className="button button-secondary button-compact" type="button"
         onClick={() => { setOutcome(null); setEditing(true); }}>Alterar nome, suspender ou reativar</button></div> : null}

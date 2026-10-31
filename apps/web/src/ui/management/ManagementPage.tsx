@@ -17,6 +17,7 @@ import { PendingReservations, ReservationAgenda } from './Reservations';
 import { AmenitySection, UnitSection } from './Setup';
 import { OccurrenceSection } from '../concierge/Occurrences';
 import { FinanceSection } from './Finance';
+import { AccessMapSection } from './AccessMap';
 import { ManagementProvider, type ManagementScope } from './shared';
 import './Management.css';
 
@@ -31,6 +32,7 @@ export const managementSections = [
   { id: 'pedidos', label: 'Pedidos', icon: 'chat' },
   { id: 'mudancas', label: 'Mudanças', icon: 'truck' },
   { id: 'acesso', label: 'Acesso', icon: 'key' },
+  { id: 'mapa-acesso', label: 'Mapa de acesso', icon: 'door' },
   { id: 'ocorrencias', label: 'Ocorrências', icon: 'alert' },
   { id: 'financeiro', label: 'Financeiro', icon: 'card' },
   { id: 'auditoria', label: 'Auditoria', icon: 'clock' },
@@ -99,6 +101,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'pedidos' ? <RequestSection /> : null}
     {section === 'mudancas' ? <MoveManagementSection /> : null}
     {section === 'acesso' ? <><AccessHealthSection /><CredentialManagementSection /></> : null}
+    {section === 'mapa-acesso' ? <AccessMapSection /> : null}
     {section === 'ocorrencias' ? <OccurrenceSection canPickUnit={false} /> : null}
     {section === 'financeiro' ? <FinanceSection /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
