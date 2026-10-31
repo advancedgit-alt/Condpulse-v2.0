@@ -102,7 +102,17 @@ public class PolicyStore {
     r.getString("timezone"),r.getBoolean("essential_route")),tenant,id);
   return rows.isEmpty()?null:rows.getFirst();
  }
- public List<PolicyModels.Destination> destinations(UUID tenant,UUID area) {
+ private static final String ENTERING="""
+    p.tenant_id=? and p.status<>'RETIRED'
+     and ((p.to_area_id=? and p.flow_direction in ('FROM_TO','BOTH','UNKNOWN')) or (p.from_area_id=? and p.flow_direction in ('TO_FROM','BOTH','UNKNOWN')))
+   """;
+ /** Total real de passagens de ingresso da área (conferido antes de listar: nunca lista truncada em silêncio). */
+ public int countDestinations(UUID tenant,UUID area) {
+  Integer n=jdbc.queryForObject("select count(*) from cp.access_points p where"+ENTERING,Integer.class,tenant,area,area);
+  return n==null?0:n;
+ }
+ /** Até MAX_TARGETS passagens de ingresso, com o vínculo ativo e a combinação; pointId filtra uma só. */
+ public List<PolicyModels.Destination> destinations(UUID tenant,UUID area,UUID point,int limit) {
   jdbc.queryForObject("select set_config('app.policy_destination_scan','on',true)",String.class);
   try {
    return jdbc.query("""
@@ -110,12 +120,10 @@ public class PolicyStore {
      from cp.access_points p
      left join cp.point_bindings b on b.tenant_id=p.tenant_id and b.point_id=p.id and b.status='ACTIVE'
      left join platform.access_homologations h on h.id=b.homologation_id
-     where p.tenant_id=? and p.status<>'RETIRED'
-      and ((p.to_area_id=? and p.flow_direction in ('FROM_TO','BOTH','UNKNOWN')) or (p.from_area_id=? and p.flow_direction in ('TO_FROM','BOTH','UNKNOWN')))
-     order by p.id limit 1000
-    """,(r,n)->new PolicyModels.Destination(r.getObject("id",UUID.class),r.getString("status"),r.getString("flow_direction"),
+     where"""+ENTERING+" and (?::uuid is null or p.id=?::uuid) order by p.id limit ?",
+    (r,n)->new PolicyModels.Destination(r.getObject("id",UUID.class),r.getString("status"),r.getString("flow_direction"),
      (Integer)r.getObject("binding_revision"),r.getString("homologation_status"),instant(r.getTimestamp("review_due_at")),
-     r.getArray("approved_capabilities")==null?List.of():strings(r.getArray("approved_capabilities"))),tenant,area,area);
+     r.getArray("approved_capabilities")==null?List.of():strings(r.getArray("approved_capabilities"))),tenant,area,area,point,point,limit);
   } finally { jdbc.queryForObject("select set_config('app.policy_destination_scan','',true)",String.class); }
  }
 

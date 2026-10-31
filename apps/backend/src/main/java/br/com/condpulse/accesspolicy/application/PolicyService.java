@@ -110,8 +110,9 @@ public class PolicyService {
    var area=store.area(tenant,policy.areaId());
    if(area==null) throw notFound("POLICY_NOT_FOUND");
    int revision=store.installationRevision(tenant);
-   var destinations=store.destinations(tenant,policy.areaId());
-   var issues=PolicyEngine.validate(v.document(),area,destinations,Instant.now());
+   int targets=store.countDestinations(tenant,policy.areaId());
+   var destinations=store.destinations(tenant,policy.areaId(),null,PolicyEngine.MAX_TARGETS);
+   var issues=PolicyEngine.validate(v.document(),area,destinations,targets,Instant.now());
    String status=PolicyEngine.blocked(issues)?"BLOCKED":"VALIDATED";
    UUID id=UUID.randomUUID();
    store.insertValidation(tenant,id,v,revision,status,issues,destinations.stream().map(PolicyModels.Destination::pointId).toList(),
@@ -138,9 +139,10 @@ public class PolicyService {
    if("REJECTED".equals(v.state())) throw new BusinessProblem("POLICY_VERSION_NOT_EDITABLE",409,"Revisão rejeitada não é simulada.");
    var area=store.area(tenant,policy.areaId());
    if(area==null) throw notFound("POLICY_NOT_FOUND");
-   var point=store.destinations(tenant,policy.areaId()).stream().filter(d->d.pointId().equals(request.pointId())).findFirst()
+   var point=store.destinations(tenant,policy.areaId(),request.pointId(),1).stream().findFirst()
     .orElseThrow(()->new BusinessProblem("POLICY_POINT_NOT_IN_AREA",422,"A passagem não dá ingresso nesta área."));
-   var outcome=PolicyEngine.evaluate(v.document(),area,point,request.subject(),request.at());
+   // Mesmos impeditivos da validação (regra, área, total de passagens e esta passagem): nenhum impeditivo vira ALLOW.
+   var outcome=PolicyEngine.evaluate(v.document(),area,point,store.countDestinations(tenant,policy.areaId()),request.subject(),request.at());
    return new PolicyModels.SimulationResult(outcome.result(),outcome.reasonCodes(),PolicyEngine.explain(outcome.reasonCodes()),v.versionId(),
     point.bindingRevision(),outcome.missingCapabilities(),true,false);
   }));

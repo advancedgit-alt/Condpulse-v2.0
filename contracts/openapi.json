@@ -18532,7 +18532,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Valida a revisão contra a área e todas as passagens de ingresso comissionadas (capacidades aprovadas da combinação vigente). Sem comando físico. Resultado preso ao hash e à revisão de instalação; vale 24 h.",
+        "description": "Valida a revisão contra a área e todas as passagens de ingresso comissionadas (capacidades aprovadas da combinação vigente). Sem comando físico. Resultado preso ao hash e à revisão de instalação; vale 24 h. Mais de 1000 passagens de ingresso bloqueia com TOO_MANY_TARGETS (nunca lista truncada).",
         "parameters": [
           {
             "name": "tenantId",
@@ -31830,7 +31830,8 @@
                 "COMPANION_NOT_VERIFIED",
                 "ASSISTANCE_REQUIRED",
                 "OUTSIDE_SCHEDULE",
-                "UNSUPPORTED_RESTRICTION"
+                "UNSUPPORTED_RESTRICTION",
+                "POLICY_BLOCKED"
               ]
             }
           },
@@ -31881,7 +31882,7 @@
             "const": false
           }
         },
-        "description": "REQUIRE_ASSISTANCE e UNAVAILABLE negam atuação automática; nunca convertidos em ALLOW. Restrição declarada que o motor ainda não avalia (idade máxima, antirretorno, lotação, acompanhamento físico, feriados) sempre nega com UNSUPPORTED_RESTRICTION."
+        "description": "REQUIRE_ASSISTANCE e UNAVAILABLE negam atuação automática; nunca convertidos em ALLOW. Restrição declarada que o motor ainda não avalia (idade máxima, antirretorno, lotação, acompanhamento físico, feriados) sempre nega com UNSUPPORTED_RESTRICTION. A simulação aplica, para a passagem avaliada, os mesmos impeditivos da validação (POLICY_BLOCKED, CAPABILITY_MISSING, NOT_COMMISSIONED, UNSUPPORTED_RESTRICTION)."
       },
       "VersionAction": {
         "type": "object",

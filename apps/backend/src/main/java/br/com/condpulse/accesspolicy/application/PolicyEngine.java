@@ -125,8 +125,13 @@ public final class PolicyEngine {
  public static boolean entersArea(UUID area,UUID from,UUID to,String flow) {
   return (area.equals(to) && Set.of("FROM_TO","BOTH","UNKNOWN").contains(flow)) || (area.equals(from) && Set.of("TO_FROM","BOTH","UNKNOWN").contains(flow));
  }
- public static List<PolicyModels.ValidationIssue> validate(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,
-   List<PolicyModels.Destination> destinations,Instant now) {
+ /** Máximo de passagens avaliadas numa validação; acima disso a validação bloqueia (nunca lista truncada). */
+ public static final int MAX_TARGETS=1000;
+ /**
+  * Problemas da regra e da área (independem da passagem). Compartilhado por validate e evaluate: tudo que bloqueia a
+  * validação aqui também nega a avaliação.
+  */
+ public static List<PolicyModels.ValidationIssue> ruleIssues(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,int targetCount) {
   var issues=new ArrayList<PolicyModels.ValidationIssue>();
   if("RETIRED".equals(area.status())) issues.add(issue("AREA_RETIRED","/areaId","Área retirada não recebe regra.","BLOCKER",null,null));
   if("INTERDICTED".equals(area.status())) issues.add(issue("AREA_INTERDICTED","/areaId","Área interditada: ingresso segue negado até a liberação.","WARNING",null,null));
@@ -138,27 +143,42 @@ public final class PolicyEngine {
   if(!"NOT_REQUIRED".equals(d.reservation().mode()) && area.amenityId()==null)
    issues.add(issue("RESERVATION_WITHOUT_AMENITY","/reservation/mode","Reserva exigida só em área ligada a espaço reservável.","BLOCKER",null,null));
   for(var u:unsupported(d)) issues.add(issue(u.code(),u.pointer(),u.message(),"BLOCKER",null,null));
+  if(targetCount==0) issues.add(issue("NO_DESTINATION","/areaId","Nenhuma passagem de ingresso para esta área.","BLOCKER",null,null));
+  if(targetCount>MAX_TARGETS)
+   issues.add(issue("TOO_MANY_TARGETS","/areaId","Mais de "+MAX_TARGETS+" passagens de ingresso: divida a área antes de validar.","BLOCKER",null,null));
   if(d.eligibleContexts().contains("EMERGENCY_RESPONDER"))
    issues.add(issue("EMERGENCY_PROCEDURE_REQUIRED","/eligibleContexts","Socorrista exige procedimento operacional e autorização transitória.","WARNING",null,null));
   if(d.eligibleContexts().contains("OWNER_NONRESIDENT"))
    issues.add(issue("OWNER_DOES_NOT_INHERIT","/eligibleContexts","Proprietário não residente não herda direitos do ocupante.","INFO",null,null));
-  var required=requiredCapabilities(d);
-  if(destinations.isEmpty()) issues.add(issue("NO_DESTINATION","/areaId","Nenhuma passagem de ingresso para esta área.","BLOCKER",null,null));
-  for(var p:destinations) {
-   if("UNKNOWN".equals(p.flowDirection()))
-    issues.add(issue("DIRECTION_UNKNOWN","/areaId","Sentido da passagem não definido.","BLOCKER",p.pointId(),null));
-   if(!"COMMISSIONED".equals(p.pointStatus()) || p.bindingRevision()==null) {
-    issues.add(issue("NOT_COMMISSIONED","/areaId","Passagem sem comissionamento aprovado.","BLOCKER",p.pointId(),null));
-    continue;
-   }
-   if(!approved(p,now)) {
-    issues.add(issue("HOMOLOGATION_NOT_APPROVED","/areaId","Combinação do equipamento sem aprovação vigente para piloto ou produção.","BLOCKER",p.pointId(),null));
-    continue;
-   }
-   for(String capability:required) if(!p.approvedCapabilities().contains(capability))
-    issues.add(issue("CAPABILITY_MISSING","/areaId","Capacidade não aprovada para esta passagem.","BLOCKER",p.pointId(),capability));
+  return issues;
+ }
+ /** Impeditivos de uma passagem; a mesma função para validar todas e para avaliar uma. */
+ public static List<PolicyModels.ValidationIssue> pointIssues(PolicyModels.PolicyDocument d,PolicyModels.Destination p,Instant now) {
+  var issues=new ArrayList<PolicyModels.ValidationIssue>();
+  if("UNKNOWN".equals(p.flowDirection()))
+   issues.add(issue("DIRECTION_UNKNOWN","/areaId","Sentido da passagem não definido.","BLOCKER",p.pointId(),null));
+  if(!"COMMISSIONED".equals(p.pointStatus()) || p.bindingRevision()==null) {
+   issues.add(issue("NOT_COMMISSIONED","/areaId","Passagem sem comissionamento aprovado.","BLOCKER",p.pointId(),null));
+   return issues;
   }
+  if(!approved(p,now)) {
+   issues.add(issue("HOMOLOGATION_NOT_APPROVED","/areaId","Combinação do equipamento sem aprovação vigente para piloto ou produção.","BLOCKER",p.pointId(),null));
+   return issues;
+  }
+  for(String capability:requiredCapabilities(d)) if(!p.approvedCapabilities().contains(capability))
+   issues.add(issue("CAPABILITY_MISSING","/areaId","Capacidade não aprovada para esta passagem.","BLOCKER",p.pointId(),capability));
+  return issues;
+ }
+ /** destinations: até MAX_TARGETS passagens; targetCount: total real de passagens de ingresso da área. */
+ public static List<PolicyModels.ValidationIssue> validate(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,
+   List<PolicyModels.Destination> destinations,int targetCount,Instant now) {
+  var issues=ruleIssues(d,area,targetCount);
+  for(var p:destinations) issues.addAll(pointIssues(d,p,now));
   return aggregate(issues);
+ }
+ public static List<PolicyModels.ValidationIssue> validate(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,
+   List<PolicyModels.Destination> destinations,Instant now) {
+  return validate(d,area,destinations,destinations.size(),now);
  }
  /** Amostra de passagens por problema agregado. */
  public static final int POINT_SAMPLE=20;
@@ -207,20 +227,31 @@ public final class PolicyEngine {
  public record Outcome(String result,List<String> reasonCodes,List<String> missingCapabilities) {}
  public static Outcome evaluate(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,PolicyModels.Destination point,
    PolicyModels.SyntheticSubject s,Instant at) {
+  return evaluate(d,area,point,1,s,at);
+ }
+ /**
+  * Avaliação de um cenário: primeiro os mesmos impeditivos da validação (regra, área e esta passagem); qualquer
+  * impeditivo nega (UNAVAILABLE sem comissionamento, DENY nos demais). Depois os fatos do sujeito e o horário.
+  */
+ public static Outcome evaluate(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,PolicyModels.Destination point,int targetCount,
+   PolicyModels.SyntheticSubject s,Instant at) {
   var unavailable=new LinkedHashSet<String>();
   var deny=new LinkedHashSet<String>();
   var assist=new LinkedHashSet<String>();
   var missing=new ArrayList<String>();
-  if(!"COMMISSIONED".equals(point.pointStatus()) || point.bindingRevision()==null) unavailable.add("NOT_COMMISSIONED");
-  else {
-   var required=requiredCapabilities(d);
-   for(String capability:required)
-    if(!approved(point,at) || !point.approvedCapabilities().contains(capability)) missing.add(capability);
-   if(!missing.isEmpty()) deny.add("CAPABILITY_MISSING");
+  var blockers=new ArrayList<PolicyModels.ValidationIssue>(ruleIssues(d,area,targetCount));
+  blockers.addAll(pointIssues(d,point,at));
+  for(var b:blockers) {
+   if(!"BLOCKER".equals(b.severity())) continue;
+   switch(b.code()) {
+    case "NOT_COMMISSIONED" -> unavailable.add("NOT_COMMISSIONED");
+    case "CAPABILITY_MISSING" -> { deny.add("CAPABILITY_MISSING"); missing.add(b.capability()); }
+    case "HOMOLOGATION_NOT_APPROVED" -> { deny.add("CAPABILITY_MISSING"); missing.addAll(requiredCapabilities(d)); }
+    case "AREA_RETIRED" -> deny.add("AREA_INTERDICTED");
+    default -> deny.add(unsupported(d).stream().anyMatch(u->u.code().equals(b.code()))?"UNSUPPORTED_RESTRICTION":"POLICY_BLOCKED");
+   }
   }
   if(!"ACTIVE".equals(area.status())) deny.add("AREA_INTERDICTED");
-  // Restrição declarada e não avaliada pelo motor: nega (falha fechada), mesmo em rascunho.
-  if(!unsupported(d).isEmpty()) deny.add("UNSUPPORTED_RESTRICTION");
   String context=s.context();
   if("VISITOR".equals(context) && "DENY".equals(d.visitorPolicy())) deny.add("VISITOR_NOT_ALLOWED");
   else if(!d.eligibleContexts().contains(context)) deny.add("NO_ELIGIBLE_CONTEXT");
@@ -238,7 +269,7 @@ public final class PolicyEngine {
   reasons.addAll(unavailable); reasons.addAll(deny); reasons.addAll(assist);
   String result=!unavailable.isEmpty()?"UNAVAILABLE":!deny.isEmpty()?"DENY":!assist.isEmpty()?"REQUIRE_ASSISTANCE":"ALLOW";
   if(reasons.isEmpty()) reasons.add("ALLOWED");
-  return new Outcome(result,List.copyOf(reasons),List.copyOf(missing));
+  return new Outcome(result,List.copyOf(reasons),CAPABILITIES.stream().filter(missing::contains).toList());
  }
  /** Janela semanal no fuso da regra, fim exclusivo; janela que vira a noite vale do início até a meia-noite e na manhã seguinte. */
  static boolean inSchedule(PolicyModels.PolicyDocument d,Instant at) {
@@ -261,6 +292,7 @@ public final class PolicyEngine {
   Map.entry("AGE_NOT_VERIFIED","Idade sem evidência verificada."),Map.entry("AGE_BELOW_MINIMUM","Idade abaixo do mínimo da área."),
   Map.entry("RESERVATION_REQUIRED","Exige reserva vigente."),Map.entry("COMPANION_NOT_VERIFIED","Exige acompanhamento físico comprovado."),
   Map.entry("ASSISTANCE_REQUIRED","Exige atendimento da equipe."),Map.entry("OUTSIDE_SCHEDULE","Fora do horário permitido."),
+  Map.entry("POLICY_BLOCKED","A regra tem impeditivo de validação para esta área ou passagem: ingresso negado."),
   Map.entry("UNSUPPORTED_RESTRICTION","A regra declara restrição que ainda não é avaliada: ingresso negado."));
  public static String explain(List<String> reasons) {
   return String.join(" ",reasons.stream().map(r->EXPLAIN.getOrDefault(r,r)).toList());

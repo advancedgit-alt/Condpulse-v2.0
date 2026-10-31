@@ -105,6 +105,51 @@ class PolicyEngineTest {
   assertTrue(missing.stream().allMatch(i->i.occurrences()==600 && "BLOCKER".equals(i.severity())));
   assertEquals(issues,PolicyEngine.validate(d,ACTIVE,destinations,SAT_10),"Agregação determinística");
  }
+ /** Propriedade: em qualquer cenário em que a validação tem impeditivo (na regra, na área ou na passagem X), a avaliação em X nunca é ALLOW. */
+ @Test void anyValidationBlockerOnATargetNeverEvaluatesToAllow() {
+  var random=new java.util.Random(20261031L);
+  var allContexts=List.of("RESIDENT","DEPENDENT","OWNER_NONRESIDENT","VISITOR","SERVICE_PROVIDER","EMPLOYEE","EMERGENCY_RESPONDER");
+  int blockedCases=0,allowedCases=0;
+  for(int n=0;n<5000;n++) {
+   String context=allContexts.get(random.nextInt(allContexts.size()));
+   var contexts=random.nextBoolean()?List.of(context):List.of(context,"RESIDENT".equals(context)?"DEPENDENT":"RESIDENT");
+   String visitor=contexts.contains("VISITOR")?(contexts.size()==1 && random.nextBoolean()?"ONLY_VISITORS":"ALLOW_WITH_VALID_PERMIT"):"DENY";
+   var windows=random.nextBoolean()?List.of(w("00:00","24:00",false,"MON","TUE","WED","THU","FRI","SAT","SUN")):DAY;
+   String reservation=random.nextInt(4)==0?"VALID_RESERVATION":"NOT_REQUIRED";
+   String companion=List.of("NONE","NONE","ASSISTED_BY_STAFF","VERIFIED_PHYSICAL_COMPANION").get(random.nextInt(4));
+   var d=new PolicyModels.PolicyDocument("1.0","Regra",AREA,"America/Sao_Paulo","ALL",contexts,visitor,random.nextInt(3)==0?18:null,true,windows,
+    random.nextInt(8)==0?List.of(UUID.randomUUID()):List.of(),"HOLIDAY_OVERRIDES_WEEKLY",new PolicyModels.ReservationRule(reservation,0,0),
+    new PolicyModels.CompanionRule(companion,"NONE".equals(companion)?0:30),
+    new PolicyModels.OfflineRule(random.nextBoolean()?"SAFE_LOCAL_SUBSET":"DENY_ENTRY",300,true),new PolicyModels.FailureRule("DENY","DENY"),
+    random.nextInt(8)==0?"GLOBAL":"OFF",random.nextInt(8)==0?50:null,true,random.nextInt(8)==0?60:null,"DENY");
+   assertNull(PolicyEngine.structure(d,AREA),"Cenário gerado precisa ser estruturalmente válido");
+   var area=new PolicyModels.AreaFacts(AREA,List.of("ACTIVE","ACTIVE","ACTIVE","INTERDICTED","RETIRED").get(random.nextInt(5)),"COMMON_AREA",
+    random.nextBoolean()?UUID.randomUUID():null,random.nextInt(6)==0?"America/Manaus":"America/Sao_Paulo",random.nextInt(6)==0);
+   var caps=ALL_CAPS.stream().filter(c->random.nextInt(10)!=0).toList();
+   var point=new PolicyModels.Destination(POINT,random.nextInt(6)==0?"MAPPED":"COMMISSIONED",random.nextInt(6)==0?"UNKNOWN":"FROM_TO",
+    random.nextInt(8)==0?null:1,List.of("APROVADO_PILOTO","HOMOLOGADO","APROVADO_BANCADA","SUSPENSO").get(random.nextInt(4)),
+    random.nextInt(8)==0?SAT_10.minusSeconds(60):null,caps);
+   // Sujeito que satisfaz tudo o que depende dele: só os impeditivos podem negar.
+   var subject=new PolicyModels.SyntheticSubject(context,"VERIFIED_MEETS_MINIMUM",true,true,true);
+   var issues=PolicyEngine.validate(d,area,List.of(point),SAT_10);
+   var outcome=PolicyEngine.evaluate(d,area,point,subject,SAT_10);
+   if(PolicyEngine.blocked(issues)) {
+    blockedCases++;
+    assertNotEquals("ALLOW",outcome.result(),"Impeditivo "+issues.stream().filter(i->"BLOCKER".equals(i.severity())).map(PolicyModels.ValidationIssue::code).toList()
+     +" virou ALLOW");
+   } else if("ALLOW".equals(outcome.result())) allowedCases++;
+  }
+  assertTrue(blockedCases>1000 && allowedCases>50,"Gerador cobre os dois lados: "+blockedCases+"/"+allowedCases);
+  // Caso do achado: sentido desconhecido bloqueia a validação e nega a avaliação.
+  var d=doc(List.of("RESIDENT"),"DENY",null,DAY,"SAFE_LOCAL_SUBSET","DENY");
+  var unknown=new PolicyModels.Destination(POINT,"COMMISSIONED","UNKNOWN",1,"APROVADO_PILOTO",null,ALL_CAPS);
+  assertTrue(PolicyEngine.blocked(PolicyEngine.validate(d,ACTIVE,List.of(unknown),SAT_10)));
+  var outcome=PolicyEngine.evaluate(d,ACTIVE,unknown,subject("RESIDENT","VERIFIED_MEETS_MINIMUM"),SAT_10);
+  assertEquals("DENY",outcome.result()); assertTrue(outcome.reasonCodes().contains("POLICY_BLOCKED"));
+  // Mais passagens do que o limite: bloqueio explícito, nunca lista truncada.
+  assertTrue(PolicyEngine.validate(d,ACTIVE,List.of(COMMISSIONED),PolicyEngine.MAX_TARGETS+1,SAT_10).stream().anyMatch(i->"TOO_MANY_TARGETS".equals(i.code())));
+  assertEquals("DENY",PolicyEngine.evaluate(d,ACTIVE,COMMISSIONED,PolicyEngine.MAX_TARGETS+1,subject("RESIDENT","VERIFIED_MEETS_MINIMUM"),SAT_10).result());
+ }
  @Test void evaluationIsDeterministicAndDeniesByDefault() {
   var d=doc(List.of("RESIDENT","DEPENDENT"),"DENY",18,DAY,"SAFE_LOCAL_SUBSET","DENY");
   assertEquals("ALLOW",PolicyEngine.evaluate(d,ACTIVE,COMMISSIONED,subject("RESIDENT","VERIFIED_MEETS_MINIMUM"),SAT_10).result());
