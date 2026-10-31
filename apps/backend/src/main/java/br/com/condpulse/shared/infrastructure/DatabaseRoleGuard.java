@@ -137,7 +137,11 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
        where c.attrelid=to_regclass('cp.credential_syncs') and c.attname in ('observed_version','observed_action','confirmed_at','updated_at')),false)
      or coalesce(has_any_column_privilege(current_user,to_regclass('cp.access_connectors'),'INSERT,UPDATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.access_connectors'),'DELETE,TRUNCATE'),false)
-     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.access_devices'),'INSERT,UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_devices') and c.attname in ('status','provisioned_instance_id','created_at','updated_at','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_devices') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('label','direction','status','hardware_revision','homologation_id','device_role','connection_mode','version')),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.access_devices'),'DELETE,TRUNCATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('cp.parcel_delegations'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
@@ -227,6 +231,21 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce(has_table_privilege(current_user,to_regclass('cp.access_points'),'DELETE,TRUNCATE'),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid in (to_regclass('cp.access_areas'),to_regclass('cp.access_points')) and c.attname in ('id','tenant_id','code','created_by','created_at','updated_at')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.device_channels'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.point_bindings'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.installation_acceptances'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.device_channels') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('channel_kind','limits','status','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.point_bindings') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('status','installation_acceptance_id','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.point_bindings') and c.attname in ('status','binding_revision','configuration_hash','valid_from',
+        'valid_until','installation_acceptance_id','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT,UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.installation_acceptances') and c.attname in ('installation_revision','effective_at','created_at','updated_at')),false)
+     or coalesce(has_column_privilege(current_user,to_regclass('cp.installation_acceptances'),'created_by','UPDATE'),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

@@ -16736,6 +16736,1392 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/technical/access-devices": {
+      "get": {
+        "operationId": "technicalListAccessDevices",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Equipamentos do condomínio com instância provisionada, combinação homologada e modo de conexão (installation.read, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDevicePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "technicalCreateAccessDevice",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cadastra equipamento num conector ativo (installation.manage, AAL2). Instância provisionada gerada pelo banco; connectionMode null usa o padrão do condomínio. deviceId do cliente: o mesmo pedido inteiro é repetição.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessDevice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDevice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_DEVICE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_DEVICE_ID_REQUIRED, INSTALLATION_DEVICE_EXTERNAL_INVALID, INSTALLATION_DEVICE_LABEL_INVALID, INSTALLATION_DEVICE_DIRECTION_INVALID, INSTALLATION_DEVICE_HARDWARE_INVALID, INSTALLATION_DEVICE_ROLE_INVALID, INSTALLATION_DEVICE_MODE_INVALID, INSTALLATION_DEVICE_STATUS_INVALID, INSTALLATION_DEVICE_INVALID ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_DEVICE_ID_CONFLICT ou INSTALLATION_CONFLICT"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/access-devices/{deviceId}": {
+      "put": {
+        "operationId": "technicalUpdateAccessDevice",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Edita nome, sentido, estado, revisão de hardware, combinação, papel e conexão pela versão lida. Conector, id externo e instância não mudam (troca de equipamento é nova instância).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccessDevice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessDevice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_DEVICE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_DEVICE_ID_REQUIRED, INSTALLATION_DEVICE_EXTERNAL_INVALID, INSTALLATION_DEVICE_LABEL_INVALID, INSTALLATION_DEVICE_DIRECTION_INVALID, INSTALLATION_DEVICE_HARDWARE_INVALID, INSTALLATION_DEVICE_ROLE_INVALID, INSTALLATION_DEVICE_MODE_INVALID, INSTALLATION_DEVICE_STATUS_INVALID, INSTALLATION_DEVICE_INVALID ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/device-channels": {
+      "get": {
+        "operationId": "technicalListDeviceChannels",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Canais nativos (relé, contato, botoeira, sensor). Nunca expostos à gestão (installation.read, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceChannelPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "technicalCreateDeviceChannel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Registra canal nativo de um equipamento ativo (installation.manage, AAL2); único por equipamento, espaço e canal.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeviceChannel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceChannel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_CHANNEL_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_CHANNEL_ID_REQUIRED, INSTALLATION_CHANNEL_NATIVE_INVALID, INSTALLATION_CHANNEL_KIND_INVALID, INSTALLATION_CHANNEL_STATUS_INVALID, INSTALLATION_CHANNEL_INVALID ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_CHANNEL_ID_CONFLICT ou INSTALLATION_CONFLICT"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/device-channels/{channelId}": {
+      "put": {
+        "operationId": "technicalUpdateDeviceChannel",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Muda função ou estado do canal pela versão lida; canal em vínculo ativo ou pendente não muda de função nem é desligado.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "channelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceChannel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceChannel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_CHANNEL_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_CHANNEL_ID_REQUIRED, INSTALLATION_CHANNEL_NATIVE_INVALID, INSTALLATION_CHANNEL_KIND_INVALID, INSTALLATION_CHANNEL_STATUS_INVALID, INSTALLATION_CHANNEL_INVALID ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/point-bindings": {
+      "get": {
+        "operationId": "technicalListPointBindings",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Revisões do vínculo físico de cada ponto (installation.read, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointBindingPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "technicalCreatePointBinding",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cria revisão DRAFT do vínculo (installation.bind_channel, AAL2). Atuador precisa ser ACCESS_ACTUATOR verificado do controlador (saída de alarme nunca); sensores conferidos pela função; revisão e hash calculados pelo banco.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePointBinding"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointBinding"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_BINDING_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_BINDING_REQUIRED, INSTALLATION_BINDING_DIRECTION_INVALID, INSTALLATION_BINDING_EVIDENCE_INVALID, INSTALLATION_ACCEPTANCE_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_BINDING_ID_CONFLICT ou INSTALLATION_CONFLICT"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/point-bindings/{bindingId}/submit": {
+      "post": {
+        "operationId": "technicalSubmitPointBinding",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Inclui o vínculo DRAFT num aceite em preparação (PENDING_COMMISSION).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bindingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitPointBinding"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointBinding"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_BINDING_NOT_FOUND ou INSTALLATION_ACCEPTANCE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_BINDING_REQUIRED, INSTALLATION_BINDING_DIRECTION_INVALID, INSTALLATION_BINDING_EVIDENCE_INVALID, INSTALLATION_ACCEPTANCE_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE ou INSTALLATION_CONFLICT"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/point-bindings/{bindingId}/discard": {
+      "post": {
+        "operationId": "technicalDiscardPointBinding",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Descarta vínculo DRAFT ou pendente (SUPERSEDED); nada é apagado.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bindingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionOnly"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointBinding"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_BINDING_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_BINDING_REQUIRED, INSTALLATION_BINDING_DIRECTION_INVALID, INSTALLATION_BINDING_EVIDENCE_INVALID, INSTALLATION_ACCEPTANCE_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/installation-acceptances": {
+      "get": {
+        "operationId": "technicalListInstallationAcceptances",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Aceites de instalação por revisão, com planta, topologia e relatório (installation.read, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptancePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "technicalCreateInstallationAcceptance",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Abre aceite DRAFT com planta, topologia, envelope de capacidades, suíte, resultados críticos, teste de emergência e plano de reversão (installation.commission, AAL2). Revisão sequencial pelo banco.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInstallationAcceptance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_ACCEPTANCE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_ACCEPTANCE_ID_REQUIRED, INSTALLATION_ACCEPTANCE_REF_INVALID, INSTALLATION_ACCEPTANCE_HASH_INVALID, INSTALLATION_ACCEPTANCE_SUITE_INVALID, INSTALLATION_RESULTS_INVALID, INSTALLATION_TRANSITION_INVALID, INSTALLATION_REASON_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_ACCEPTANCE_ID_CONFLICT ou INSTALLATION_CONFLICT"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/installation-acceptances/{acceptanceId}/results": {
+      "put": {
+        "operationId": "technicalRecordInstallationResults",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Registra testes críticos e relatório antes da assinatura técnica; depois dela o conteúdo é imutável.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "acceptanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallationAcceptanceResults"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_ACCEPTANCE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_ACCEPTANCE_ID_REQUIRED, INSTALLATION_ACCEPTANCE_REF_INVALID, INSTALLATION_ACCEPTANCE_HASH_INVALID, INSTALLATION_ACCEPTANCE_SUITE_INVALID, INSTALLATION_RESULTS_INVALID, INSTALLATION_TRANSITION_INVALID, INSTALLATION_REASON_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/installation-acceptances/{acceptanceId}/technical-signature": {
+      "post": {
+        "operationId": "technicalSignInstallationAcceptance",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Assinatura técnica pela própria conta com concessão vigente de comissionamento; o banco grava a concessão e o horário.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "acceptanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionOnly"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_ACCEPTANCE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_ACCEPTANCE_ID_REQUIRED, INSTALLATION_ACCEPTANCE_REF_INVALID, INSTALLATION_ACCEPTANCE_HASH_INVALID, INSTALLATION_ACCEPTANCE_SUITE_INVALID, INSTALLATION_RESULTS_INVALID, INSTALLATION_TRANSITION_INVALID, INSTALLATION_REASON_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/installation-acceptances/{acceptanceId}/status": {
+      "post": {
+        "operationId": "technicalTransitionInstallationAcceptance",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "TESTING, APPROVED, REJECTED, SUSPENDED ou SUPERSEDED. APPROVED exige as duas assinaturas, zero teste crítico pendente ou reprovado e combinações APROVADO_PILOTO ou HOMOLOGADO vigentes; ativa os vínculos (anterior SUPERSEDED) e comissiona os pontos na mesma transação. SUSPENDED devolve os pontos a MAPPED.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "acceptanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallationAcceptanceTransition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_ACCEPTANCE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_ACCEPTANCE_ID_REQUIRED, INSTALLATION_ACCEPTANCE_REF_INVALID, INSTALLATION_ACCEPTANCE_HASH_INVALID, INSTALLATION_ACCEPTANCE_SUITE_INVALID, INSTALLATION_RESULTS_INVALID, INSTALLATION_TRANSITION_INVALID, INSTALLATION_REASON_REQUIRED ou INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE ou INSTALLATION_CONFLICT"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/installation-acceptances": {
+      "get": {
+        "operationId": "managementListInstallationAcceptances",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Resumo dos aceites para a gestão (area.manage, AAL2): revisão, estado, testes críticos e assinaturas, sem planta, topologia, canal ou relé.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptanceSummaryPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/installation-acceptances/{acceptanceId}/rules-signature": {
+      "post": {
+        "operationId": "managementSignInstallationRules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "A gestão assina as regras do aceite com o próprio vínculo MANAGER vigente; não altera conteúdo técnico nem estado.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "acceptanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionOnly"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationAcceptanceSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), INSTALLATION_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, INSTALLATION_ACCEPTANCE_NOT_FOUND"
+          },
+          "503": {
+            "description": "INSTALLATION_UNAVAILABLE"
+          },
+          "400": {
+            "description": "INSTALLATION_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INSTALLATION_STALE"
+          },
+          "422": {
+            "description": "INSTALLATION_INVALID ou INSTALLATION_REFERENCE_INVALID"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -27667,6 +29053,1140 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "AccessDevice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "connectorId",
+          "externalId",
+          "provisionedInstanceId",
+          "label",
+          "direction",
+          "status",
+          "hardwareRevision",
+          "homologationId",
+          "deviceRole",
+          "connectionMode",
+          "version"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,120}$"
+          },
+          "provisionedInstanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "ENTRY",
+              "EXIT",
+              "BOTH",
+              "UNKNOWN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "RETIRED"
+            ]
+          },
+          "hardwareRevision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 64
+          },
+          "homologationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "deviceRole": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FACE_TERMINAL",
+              "CONTROLLER",
+              "READER",
+              "EXPANSION_MODULE",
+              null
+            ]
+          },
+          "connectionMode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "LOCAL_GATEWAY",
+              "CLOUD_SERVICE",
+              null
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessDevicePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "devices"
+        ],
+        "properties": {
+          "devices": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/AccessDevice"
+            }
+          }
+        }
+      },
+      "CreateAccessDevice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceId",
+          "connectorId",
+          "externalId",
+          "label"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,120}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "ENTRY",
+              "EXIT",
+              "BOTH",
+              "UNKNOWN",
+              null
+            ]
+          },
+          "hardwareRevision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 64
+          },
+          "homologationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "deviceRole": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FACE_TERMINAL",
+              "CONTROLLER",
+              "READER",
+              "EXPANSION_MODULE",
+              null
+            ]
+          },
+          "connectionMode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "LOCAL_GATEWAY",
+              "CLOUD_SERVICE",
+              null
+            ]
+          }
+        }
+      },
+      "UpdateAccessDevice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "status",
+          "expectedVersion"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "ENTRY",
+              "EXIT",
+              "BOTH",
+              "UNKNOWN",
+              null
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "RETIRED"
+            ]
+          },
+          "hardwareRevision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 64
+          },
+          "homologationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "deviceRole": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FACE_TERMINAL",
+              "CONTROLLER",
+              "READER",
+              "EXPANSION_MODULE",
+              null
+            ]
+          },
+          "connectionMode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "LOCAL_GATEWAY",
+              "CLOUD_SERVICE",
+              null
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DeviceChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channelId",
+          "deviceId",
+          "nativeNamespace",
+          "externalChannel",
+          "channelKind",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "channelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nativeNamespace": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "externalChannel": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,64}$"
+          },
+          "channelKind": {
+            "type": "string",
+            "enum": [
+              "ACCESS_ACTUATOR",
+              "DOOR_CONTACT",
+              "EXIT_REQUEST",
+              "PASSAGE_SENSOR",
+              "ALARM_OUTPUT",
+              "OTHER"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DISCOVERED",
+              "VERIFIED",
+              "DISABLED",
+              "RETIRED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DeviceChannelPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channels"
+        ],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "$ref": "#/components/schemas/DeviceChannel"
+            }
+          }
+        }
+      },
+      "CreateDeviceChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channelId",
+          "deviceId",
+          "nativeNamespace",
+          "externalChannel",
+          "channelKind"
+        ],
+        "properties": {
+          "channelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nativeNamespace": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "externalChannel": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,64}$"
+          },
+          "channelKind": {
+            "type": "string",
+            "enum": [
+              "ACCESS_ACTUATOR",
+              "DOOR_CONTACT",
+              "EXIT_REQUEST",
+              "PASSAGE_SENSOR",
+              "ALARM_OUTPUT",
+              "OTHER"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "DISCOVERED",
+              "VERIFIED",
+              null
+            ]
+          }
+        }
+      },
+      "UpdateDeviceChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channelKind",
+          "status",
+          "expectedVersion"
+        ],
+        "properties": {
+          "channelKind": {
+            "type": "string",
+            "enum": [
+              "ACCESS_ACTUATOR",
+              "DOOR_CONTACT",
+              "EXIT_REQUEST",
+              "PASSAGE_SENSOR",
+              "ALARM_OUTPUT",
+              "OTHER"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DISCOVERED",
+              "VERIFIED",
+              "DISABLED",
+              "RETIRED"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ReaderDirections": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "entryReader": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FROM_TO",
+              "TO_FROM",
+              null
+            ]
+          },
+          "exitReader": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FROM_TO",
+              "TO_FROM",
+              null
+            ]
+          }
+        }
+      },
+      "PointBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingId",
+          "pointId",
+          "bindingRevision",
+          "actuatorChannelId",
+          "controllerDeviceId",
+          "entryReaderDeviceId",
+          "exitReaderDeviceId",
+          "doorContactChannelId",
+          "exitRequestChannelId",
+          "passageSensorChannelId",
+          "homologationId",
+          "installationAcceptanceId",
+          "directions",
+          "status",
+          "validFrom",
+          "validUntil",
+          "wiringEvidenceRef",
+          "configurationHash",
+          "version"
+        ],
+        "properties": {
+          "bindingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bindingRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "actuatorChannelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "controllerDeviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entryReaderDeviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "exitReaderDeviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "doorContactChannelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "exitRequestChannelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "passageSensorChannelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "homologationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationAcceptanceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "directions": {
+            "$ref": "#/components/schemas/ReaderDirections"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_COMMISSION",
+              "ACTIVE",
+              "SUPERSEDED",
+              "SUSPENDED"
+            ]
+          },
+          "validFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "wiringEvidenceRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "configurationHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "PointBindingPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindings"
+        ],
+        "properties": {
+          "bindings": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "$ref": "#/components/schemas/PointBinding"
+            }
+          }
+        }
+      },
+      "CreatePointBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingId",
+          "pointId",
+          "actuatorChannelId",
+          "controllerDeviceId",
+          "homologationId",
+          "wiringEvidenceRef"
+        ],
+        "properties": {
+          "bindingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actuatorChannelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "controllerDeviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entryReaderDeviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "exitReaderDeviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "doorContactChannelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "exitRequestChannelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "passageSensorChannelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "homologationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "directions": {
+            "$ref": "#/components/schemas/ReaderDirections"
+          },
+          "wiringEvidenceRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          }
+        }
+      },
+      "SubmitPointBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installationAcceptanceId",
+          "expectedVersion"
+        ],
+        "properties": {
+          "installationAcceptanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "VersionOnly": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "InstallationAcceptance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "acceptanceId",
+          "installationRevision",
+          "status",
+          "plantRef",
+          "plantHash",
+          "topologyManifestRef",
+          "topologyHash",
+          "capabilityEnvelopeHash",
+          "testSuiteVersion",
+          "testReportRef",
+          "criticalTestsPending",
+          "criticalTestsFailed",
+          "emergencyTestRef",
+          "rollbackPlanRef",
+          "revocationCheckpointRef",
+          "technicalApproverAccountId",
+          "technicalSignedAt",
+          "rulesApproverAccountId",
+          "rulesSignedAt",
+          "effectiveAt",
+          "reviewDueAt",
+          "statusReason",
+          "version"
+        ],
+        "properties": {
+          "acceptanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "TESTING",
+              "APPROVED",
+              "REJECTED",
+              "SUSPENDED",
+              "SUPERSEDED"
+            ]
+          },
+          "plantRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "plantHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "topologyManifestRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "topologyHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "capabilityEnvelopeHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "testSuiteVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          },
+          "testReportRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "criticalTestsPending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "criticalTestsFailed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "emergencyTestRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "rollbackPlanRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "revocationCheckpointRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "technicalApproverAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "technicalSignedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rulesApproverAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "rulesSignedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "effectiveAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reviewDueAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "statusReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "InstallationAcceptancePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "acceptances"
+        ],
+        "properties": {
+          "acceptances": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/InstallationAcceptance"
+            }
+          }
+        }
+      },
+      "CreateInstallationAcceptance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "acceptanceId",
+          "plantRef",
+          "plantHash",
+          "topologyManifestRef",
+          "topologyHash",
+          "capabilityEnvelopeHash",
+          "testSuiteVersion",
+          "testReportRef",
+          "criticalTestsPending",
+          "criticalTestsFailed",
+          "emergencyTestRef",
+          "rollbackPlanRef"
+        ],
+        "properties": {
+          "acceptanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plantRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "plantHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "topologyManifestRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "topologyHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "capabilityEnvelopeHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "testSuiteVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          },
+          "testReportRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "criticalTestsPending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "criticalTestsFailed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "emergencyTestRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "rollbackPlanRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "revocationCheckpointRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "reviewDueAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "InstallationAcceptanceResults": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criticalTestsPending",
+          "criticalTestsFailed",
+          "testReportRef",
+          "expectedVersion"
+        ],
+        "properties": {
+          "criticalTestsPending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "criticalTestsFailed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "testReportRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "revocationCheckpointRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "InstallationAcceptanceTransition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "expectedVersion"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "TESTING",
+              "APPROVED",
+              "REJECTED",
+              "SUSPENDED",
+              "SUPERSEDED"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "InstallationAcceptanceSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "acceptanceId",
+          "installationRevision",
+          "status",
+          "criticalTestsPending",
+          "criticalTestsFailed",
+          "technicalSignedAt",
+          "rulesSignedAt",
+          "rulesApproverAccountId",
+          "effectiveAt",
+          "reviewDueAt",
+          "version"
+        ],
+        "properties": {
+          "acceptanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "TESTING",
+              "APPROVED",
+              "REJECTED",
+              "SUSPENDED",
+              "SUPERSEDED"
+            ]
+          },
+          "criticalTestsPending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "criticalTestsFailed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "technicalSignedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rulesSignedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rulesApproverAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "effectiveAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reviewDueAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "InstallationAcceptanceSummaryPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "acceptances"
+        ],
+        "properties": {
+          "acceptances": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/InstallationAcceptanceSummary"
+            }
           }
         }
       }

@@ -151,6 +151,16 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-areas","/v1/tenants/*/technical/access-points").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/access-areas/*","/v1/tenants/*/technical/access-areas/*/physical",
       "/v1/tenants/*/technical/access-points/*").authenticated()
+    // Instalação física (AC-004 parte 2, V042): MASTER de implantação (installation.*, AAL2); gestão assina as regras.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/technical/access-devices","/v1/tenants/*/technical/device-channels",
+      "/v1/tenants/*/technical/point-bindings","/v1/tenants/*/technical/installation-acceptances",
+      "/v1/tenants/*/management/installation-acceptances").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/technical/access-devices","/v1/tenants/*/technical/device-channels",
+      "/v1/tenants/*/technical/point-bindings","/v1/tenants/*/technical/point-bindings/*/submit","/v1/tenants/*/technical/point-bindings/*/discard",
+      "/v1/tenants/*/technical/installation-acceptances","/v1/tenants/*/technical/installation-acceptances/*/technical-signature",
+      "/v1/tenants/*/technical/installation-acceptances/*/status","/v1/tenants/*/management/installation-acceptances/*/rules-signature").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/technical/access-devices/*","/v1/tenants/*/technical/device-channels/*",
+      "/v1/tenants/*/technical/installation-acceptances/*/results").authenticated()
     // Proprietário × inquilino (V034): gestão (AAL2) ou vínculo OWNER com locação em vigor, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/rentals","/v1/tenants/*/units/*/rental").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/units/*/rental","/v1/tenants/*/management/units/*/rental/end",

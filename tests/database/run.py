@@ -3771,6 +3771,161 @@ def area_checks():
           f"DELETE FROM cp.access_areas WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.technical_grants WHERE id='{G1}'; "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{CO}'); DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{CO}')")
 
+def binding_checks():
+    """V042 (AC-004, parte 2): equipamento provisionado, canais, vinculo versionado e aceite de instalacao. Casos HAC-009
+    (gestor sem canal/rele), HAC-010 (MASTER limitado ao escopo), HAC-021 (controlador com varios canais), HAC-022 (saida de
+    alarme nunca vira atuador), HAC-027 (mudanca fisica exige nova revisao), HAC-098 (comissionamento por condominio) e
+    HAC-100 (aceite bloqueado por falha critica) e HAC-007 (isolamento)."""
+    MG, MI, MS = "10000000-0000-4000-8000-0000000042a1", "10000000-0000-4000-8000-0000000042a2", "10000000-0000-4000-8000-0000000042a3"
+    KA, KB = "42000000-0000-4000-8000-0000000000a1", "42000000-0000-4000-8000-0000000000b1"
+    HOK, HNO = "42000000-0000-4000-8000-0000000000c1", "42000000-0000-4000-8000-0000000000c2"
+    A1, A2, P1 = "42100000-0000-4000-8000-000000000001", "42100000-0000-4000-8000-000000000002", "42200000-0000-4000-8000-000000000001"
+    D1, D2 = "42300000-0000-4000-8000-000000000001", "42300000-0000-4000-8000-000000000002"
+    CR, CA, CD, CR2 = ("42400000-0000-4000-8000-000000000001", "42400000-0000-4000-8000-000000000002",
+                       "42400000-0000-4000-8000-000000000003", "42400000-0000-4000-8000-000000000004")
+    B1, B2, B3 = "42500000-0000-4000-8000-000000000001", "42500000-0000-4000-8000-000000000002", "42500000-0000-4000-8000-000000000003"
+    I1, I2 = "42600000-0000-4000-8000-000000000001", "42600000-0000-4000-8000-000000000002"
+    G1, G2 = "42700000-0000-4000-8000-000000000001", "42700000-0000-4000-8000-000000000002"
+    def refused(statement, **kwargs):
+        # Recusa pela politica (42501) ou antes dela, porque o gatilho nao enxerga o recurso tecnico (23514).
+        result = query(statement, check=False, **kwargs)
+        return result.returncode != 0 and ("42501" in result.stderr or "23514" in result.stderr)
+    def cleanup():
+        binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2)
+    profile = value("select id from platform.access_model_profiles order by catalog_code limit 1")
+    names = ["doorContactEvents","eventBackfill","faceDeletion","faceEnrollment","localValidity","offlineRestriction",
+             "onlineDecisionBeforeRelay","passageEvents","perDoorRights","safeRecovery","scopedRemoteOpen","secureTransport"]
+    caps = "'{" + ",".join(f'"{n}":{{"documented":true,"observed":null,"approved":null}}' for n in names) + "}'::jsonb"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{MI}','ACTIVE'),('{MS}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{TA}','{MG}',NULL,'GESTAO VINCULO','MANAGER','ACTIVE');
+        INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) VALUES
+          ('{G1}','{TA}','{MI}','MASTER_IMPLANTACAO',ARRAY['installation.read','installation.manage','installation.bind_channel','installation.commission'],
+           now(),now()+interval '30 days','OPERATIONS','Implantacao ficticia'),
+          ('{G2}','{TA}','{MS}','TECHNICAL_SUPPORT',ARRAY['installation.read'],now(),now()+interval '30 days','OPERATIONS','Suporte ficticio');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{KA}','{TA}','SIMULATED','Conector A'),('{KB}','{TB}','SIMULATED','Conector B');
+        INSERT INTO cp.access_areas(id,tenant_id,code,name,area_kind,timezone,created_by) VALUES
+          ('{A1}','{TA}','EXT42','Exterior','EXTERIOR','America/Sao_Paulo','{MG}'),('{A2}','{TA}','HALL42','Hall','RESIDENTIAL_ROUTE','America/Sao_Paulo','{MG}');
+        INSERT INTO cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,created_by)
+          VALUES('{P1}','{TA}','P42','Portao social','{A1}','{A2}','DOOR','BOTH','FREE_EGRESS','MAPPED','{MI}');
+        SET session_replication_role=replica;
+        INSERT INTO platform.access_homologations(id,model_profile_id,firmware_exact,adapter_name,adapter_version,decision_mode,topology,
+          contract_schema_version,capabilities,limits,reason,requested_by,status,approved_at,approved_by) VALUES
+          ('{HOK}','{profile}','4.2.0','control-id-rest','0.1.0','EDGE_ONLINE','LOCAL_GATEWAY','v1',{caps},'{{}}','Combinacao piloto ficticia','{MS}',
+           'APROVADO_PILOTO',now(),'{MS}'),
+          ('{HNO}','{profile}','4.2.1','control-id-rest','0.1.0','EDGE_ONLINE','LOCAL_GATEWAY','v1',{caps},'{{}}','Combinacao so documentada','{MS}',
+           'CANDIDATO_DOCUMENTADO',NULL,NULL);
+    """)
+    mgr = "SET LOCAL app.capabilities='area.manage'; "
+    tech = "SET LOCAL app.technical_scopes='installation.read,installation.manage,installation.bind_channel,installation.commission'; "
+    sup = "SET LOCAL app.technical_scopes='installation.read'; "
+    as_mgr, as_tech, as_sup = dict(tenant=TA, actor=MG, role="cp_api"), dict(tenant=TA, actor=MI, role="cp_api"), dict(tenant=TA, actor=MS, role="cp_api")
+    def device(identifier, external, role="CONTROLLER", by=MI, connector=KA, tenant=TA):
+        return (f"INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label,device_role,connection_mode,homologation_id,registered_by) "
+                f"VALUES('{identifier}','{tenant}','{connector}','{external}','Equip {external}','{role}','LOCAL_GATEWAY','{HOK}','{by}')")
+    expect(refused(mgr + device(D1, "ctrl-1", by=MG), **as_mgr),
+           "HAC-009: gestor nao cadastra equipamento (nem enxerga o conector)")
+    expect(refused(sup + device(D1, "ctrl-1", by=MS), **as_sup), "HAC-010: suporte so le a instalacao")
+    expect(error(tech + device(D1, "ctrl-1", connector=KB), "23503", **as_tech) or error(tech + device(D1, "ctrl-1", connector=KB), "23514", **as_tech),
+           "HAC-007: conector de outro condominio")
+    query(tech + device(D1, "ctrl-1") + "; " + device(D2, "leitor-1", role="READER"), **as_tech)
+    expect(value(f"select (provisioned_instance_id is not null)::text||':'||version from cp.access_devices where id='{D1}'") == "true:0",
+           "instancia provisionada pelo banco")
+    expect(error(tech + f"UPDATE cp.access_devices SET external_id='outro',version=1 WHERE id='{D1}'", "42501", **as_tech), "id externo fixo")
+    query(tech + f"UPDATE cp.access_devices SET connection_mode='CLOUD_SERVICE',version=1 WHERE id='{D1}'", **as_tech)
+    expect(error(tech + f"UPDATE cp.access_devices SET label='x',version=5 WHERE id='{D1}'", "23514", **as_tech), "versao do equipamento sequencial")
+    def channel(identifier, ext, kind, status="VERIFIED", dev=D1):
+        return (f"INSERT INTO cp.device_channels(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,status,created_by) "
+                f"VALUES('{identifier}','{TA}','{dev}','relay','{ext}','{kind}','{status}','{MI}')")
+    expect(refused(mgr + channel(CR, "1", "ACCESS_ACTUATOR").replace(f"'{MI}')", f"'{MG}')"), **as_mgr), "HAC-009: gestor nao cadastra rele")
+    query(tech + channel(CR, "1", "ACCESS_ACTUATOR") + "; " + channel(CA, "2", "ALARM_OUTPUT") + "; " + channel(CD, "door-1", "DOOR_CONTACT")
+          + "; " + channel(CR2, "3", "ACCESS_ACTUATOR"), **as_tech)
+    expect(error(tech + channel("42400000-0000-4000-8000-000000000009", "1", "ACCESS_ACTUATOR"), "23505", **as_tech),
+           "HAC-021: canal nativo unico por controlador")
+    expect(value(mgr + "select count(*) from cp.device_channels", **as_mgr) == "0", "HAC-009: gestor nao le canal nem rele")
+    expect(value(sup + "select count(*) from cp.device_channels", **as_sup) == "4", "suporte tecnico le os canais")
+    def binding(identifier, actuator=CR, homologation=HOK, extra_cols="", extra_vals="", direction='{"entryReader":"FROM_TO"}', reader=D2):
+        return (f"INSERT INTO cp.point_bindings(id,tenant_id,point_id,actuator_channel_id,controller_device_id,entry_reader_device_id,door_contact_channel_id,"
+                f"homologation_id,direction_map,wiring_evidence_ref,created_by{extra_cols}) VALUES('{identifier}','{TA}','{P1}','{actuator}','{D1}',"
+                + ("NULL" if reader is None else f"'{reader}'") + f",'{CD}','{homologation}','{direction}'::jsonb,'evid/ligacao-42','{MI}'{extra_vals})")
+    expect(error(tech + binding(B1, actuator=CA), "23514", **as_tech), "HAC-022: saida de alarme nunca vira atuador")
+    expect(error(tech + binding(B1, direction='{}'), "23514", **as_tech), "sentido do leitor obrigatorio no mapa")
+    expect(error(tech + binding(B1, extra_cols=",status", extra_vals=",'ACTIVE'"), "42501", **as_tech), "vinculo nao nasce ativo")
+    expect(refused(mgr + binding(B1).replace(f"'{MI}')", f"'{MG}')"), **as_mgr), "HAC-009: gestor nao vincula ponto")
+    query(tech + binding(B1), **as_tech)
+    expect(value(f"select binding_revision||':'||length(configuration_hash) from cp.point_bindings where id='{B1}'") == "1:64",
+           "revisao e hash calculados pelo banco")
+    expect(error(tech + f"UPDATE cp.point_bindings SET installation_acceptance_id=NULL,version=1,status='ACTIVE' WHERE id='{B1}'", "23514", **as_tech),
+           "vinculo nao ativa sem aceite")
+    def acceptance(identifier, pending=0, failed=0, by=MI):
+        return (f"INSERT INTO cp.installation_acceptances(id,tenant_id,plant_ref,plant_hash,topology_manifest_ref,topology_hash,capability_envelope_hash,"
+                f"test_suite_version,test_report_ref,critical_tests_pending,critical_tests_failed,emergency_test_ref,rollback_plan_ref,created_by) "
+                f"VALUES('{identifier}','{TA}','planta/42','{'a'*64}','topologia/42','{'b'*64}','{'c'*64}','hac-1.1','relatorio/42',{pending},{failed},"
+                f"'emergencia/42','rollback/42','{by}')")
+    expect(error(mgr + acceptance(I1, by=MG), "42501", **as_mgr), "gestor nao abre aceite tecnico")
+    query(tech + acceptance(I1, failed=1), **as_tech)
+    query(tech + f"UPDATE cp.point_bindings SET installation_acceptance_id='{I1}',status='PENDING_COMMISSION',version=1 WHERE id='{B1}'", **as_tech)
+    query(tech + f"UPDATE cp.installation_acceptances SET status='TESTING',version=1 WHERE id='{I1}'", **as_tech)
+    expect(error(mgr + f"UPDATE cp.installation_acceptances SET critical_tests_failed=0,version=2 WHERE id='{I1}'", "42501", **as_mgr),
+           "gestao nao altera resultado de teste")
+    mid = value(f"select id from cp.memberships where account_id='{MG}' and tenant_id='{TA}'")
+    query(tech + f"UPDATE cp.installation_acceptances SET technical_grant_id='{G1}',technical_approver_account_id='{MI}',technical_signed_at=now(),version=2 WHERE id='{I1}'", **as_tech)
+    query(mgr + f"UPDATE cp.installation_acceptances SET rules_approver_membership_id='{mid}',rules_approver_account_id='{MG}',rules_signed_at=now(),version=3 WHERE id='{I1}'", **as_mgr)
+    expect(error(tech + f"UPDATE cp.installation_acceptances SET status='APPROVED',version=4 WHERE id='{I1}'", "23514", **as_tech),
+           "HAC-100: falha critica bloqueia o aceite")
+    expect(error(tech + f"UPDATE cp.installation_acceptances SET critical_tests_failed=0,version=4 WHERE id='{I1}'", "23514", **as_tech),
+           "conteudo assinado nao muda")
+    query(tech + f"UPDATE cp.installation_acceptances SET status='REJECTED',status_reason='Falha critica no ensaio',version=4 WHERE id='{I1}'", **as_tech)
+    expect(value(f"select status from cp.point_bindings where id='{B1}'") == "SUPERSEDED", "rejeicao descarta o vinculo pendente")
+    # Revisao 2: combinacao so documentada nao comissiona; revisao 3 com combinacao piloto ativa.
+    query(tech + binding(B2, homologation=HNO), **as_tech)
+    query(tech + acceptance(I2), **as_tech)
+    expect(value(f"select installation_revision from cp.installation_acceptances where id='{I2}'") == "2", "revisao do aceite sequencial")
+    query(tech + f"UPDATE cp.point_bindings SET installation_acceptance_id='{I2}',status='PENDING_COMMISSION',version=1 WHERE id='{B2}'", **as_tech)
+    query(tech + f"UPDATE cp.installation_acceptances SET status='TESTING',technical_grant_id='{G1}',technical_approver_account_id='{MI}',technical_signed_at=now(),version=1 WHERE id='{I2}'", **as_tech)
+    expect(error(tech + f"UPDATE cp.installation_acceptances SET rules_approver_membership_id='{mid}',rules_approver_account_id='{MG}',rules_signed_at=now(),version=2 WHERE id='{I2}'",
+                 "42501", **as_tech), "assinatura das regras so pela propria gestao")
+    query(mgr + f"UPDATE cp.installation_acceptances SET rules_approver_membership_id='{mid}',rules_approver_account_id='{MG}',rules_signed_at=now(),version=2 WHERE id='{I2}'", **as_mgr)
+    expect(error(mgr + f"UPDATE cp.installation_acceptances SET status='APPROVED',version=3 WHERE id='{I2}'", "42501", **as_mgr), "gestao nao aprova aceite tecnico")
+    expect(error(tech + f"UPDATE cp.installation_acceptances SET status='APPROVED',version=3 WHERE id='{I2}'", "23514", **as_tech),
+           "combinacao so documentada nao comissiona")
+    query(tech + f"UPDATE cp.point_bindings SET status='SUPERSEDED',version=2 WHERE id='{B2}'", **as_tech)
+    query(tech + binding(B3) + f"; UPDATE cp.point_bindings SET installation_acceptance_id='{I2}',status='PENDING_COMMISSION',version=1 WHERE id='{B3}'", **as_tech)
+    expect(value(f"select binding_revision from cp.point_bindings where id='{B3}'") == "3", "HAC-027: nova revisao do vinculo")
+    query(tech + f"UPDATE cp.installation_acceptances SET status='APPROVED',version=3 WHERE id='{I2}'", **as_tech)
+    expect(value(f"select b.status||':'||(b.valid_from is not null)::text||':'||p.status from cp.point_bindings b join cp.access_points p on p.id=b.point_id where b.id='{B3}'")
+           == "ACTIVE:true:COMMISSIONED", "HAC-098: aceite aprovado ativa o vinculo e comissiona o ponto")
+    expect(error(tech + f"UPDATE cp.point_bindings SET wiring_evidence_ref='outra',version=3 WHERE id='{B3}'", "42501", **as_tech), "vinculo fisico imutavel")
+    expect(error(tech + f"UPDATE cp.device_channels SET channel_kind='OTHER',version=version+1 WHERE id='{CR}'", "23514", **as_tech),
+           "canal em vinculo ativo nao muda de funcao")
+    # Mudanca fisica do ponto comissionado: volta a MAPPED e o vinculo ativo e suspenso.
+    query(tech + f"UPDATE cp.access_points SET flow_direction='FROM_TO',updated_by='{MI}',version=version+1 WHERE id='{P1}'", **as_tech)
+    expect(value(f"select p.status||':'||b.status||':'||(b.valid_until is not null)::text from cp.access_points p join cp.point_bindings b on b.point_id=p.id where b.id='{B3}'")
+           == "MAPPED:SUSPENDED:true", "HAC-027: mudanca fisica suspende o vinculo e exige novo comissionamento")
+    expect(value(sup + "select count(*) from cp.point_bindings", **as_sup) == "3", "suporte le os vinculos")
+    expect(value(mgr + "select count(*) from cp.point_bindings", **as_mgr) == "0", "HAC-009: gestor nao le vinculo fisico")
+    expect(value(mgr + "select count(*) from cp.installation_acceptances", **as_mgr) == "2", "gestao le o aceite que assina")
+    expect(value(tech + "select count(*) from cp.point_bindings", tenant=TB, actor=MI, role="cp_api") == "0", "HAC-007: vinculo nao atravessa condominio")
+    expect(error("select wiring_evidence_ref from cp.point_bindings", "42501", tenant=TA, role="cp_worker"), "worker nao le evidencia de instalacao")
+    expect(value("select count(*) from cp.point_bindings where status='SUSPENDED'", tenant=TA, role="cp_worker") == "1", "worker le a topologia")
+    expect(error(tech + f"DELETE FROM cp.point_bindings WHERE id='{B1}'", "42501", **as_tech), "vinculo nao e apagado")
+    expect(error(tech + f"DELETE FROM cp.installation_acceptances WHERE id='{I1}'", "42501", **as_tech), "aceite nao e apagado")
+    expect(error(mgr + f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) VALUES('{TA}','{MG}','BINDING_CREATED','POINT_BINDING','{B1}',gen_random_uuid())",
+                 "42501", **as_mgr), "trilha BINDING_* so do MASTER de implantacao")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname in "
+                 "('device_channels','point_bindings','installation_acceptances') and c.relrowsecurity and c.relforcerowsecurity") == "3",
+           "canais, vinculos e aceites com RLS FORCE")
+    cleanup()
+
+def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
+    query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MI}','{MS}'); "
+          f"DELETE FROM cp.point_bindings WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.installation_acceptances WHERE tenant_id in ('{TA}','{TB}'); "
+          f"DELETE FROM cp.device_channels WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_devices WHERE id in ('{D1}','{D2}'); "
+          f"DELETE FROM cp.access_connectors WHERE id in ('{KA}','{KB}'); DELETE FROM cp.access_points WHERE id='{P1}'; "
+          f"DELETE FROM cp.access_areas WHERE id in ('{A1}','{A2}'); DELETE FROM platform.access_homologations WHERE id in ('{HOK}','{HNO}'); "
+          f"DELETE FROM cp.technical_grants WHERE id in ('{G1}','{G2}'); DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{MS}'); "
+          f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -3900,6 +4055,7 @@ def main():
     age_checks()
     homologation_checks()
     area_checks()
+    binding_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
