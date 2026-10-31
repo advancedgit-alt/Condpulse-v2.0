@@ -50,7 +50,8 @@ test('conta só de plataforma entra direto na central, com as seções futuras d
   await expect(page.getByRole('heading', { name: 'Central administradora' })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Navegação principal' });
   await expect(nav.getByRole('link', { name: 'Condomínios' })).toHaveAttribute('aria-current', 'page');
-  for (const label of ['Módulos por condomínio', 'Contas e acessos', 'Chaves e integrações', 'Acesso facial']) {
+  await expect(nav.getByRole('link', { name: 'Módulos por condomínio' })).toBeVisible();
+  for (const label of ['Contas e acessos', 'Chaves e integrações', 'Acesso facial']) {
     await expect(nav.getByText(label)).toBeVisible();
     await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
   }

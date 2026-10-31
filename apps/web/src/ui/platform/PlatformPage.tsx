@@ -11,6 +11,7 @@ import { formatWhen } from '../dateTime';
 import '../management/Management.css';
 import { OutboxSection } from './Outbox';
 import { TechnicalGrantSection } from './TechnicalGrants';
+import { ModuleSection } from './Modules';
 import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 import { InvitationLinkNotice, TenantCreateForm, TenantDetailView, creationOutcome } from './TenantViews';
@@ -18,20 +19,21 @@ import { billingText, originText, usageText } from './tenants';
 import { ENTRY_PATH, centralPath, centralTenantPath } from '../shell/paths';
 
 export type { Outcome } from './shared';
-const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'financeiro', label: 'Financeiro', icon: 'card' },
+const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'modulos', label: 'Módulos por condomínio', icon: 'grid' },
+  { id: 'financeiro', label: 'Financeiro', icon: 'card' },
   { id: 'concessoes', label: 'Concessões técnicas', icon: 'key' }, { id: 'operacao', label: 'Operação', icon: 'list' },
   { id: 'auditoria', label: 'Auditoria', icon: 'clock' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 /**
  * Seções da central ainda sem backend (docs/ESTRUTURA.md §4): aparecem desabilitadas, sem rota, até a API existir.
  * Nenhuma delas mostra ou recebe segredo nesta versão.
  */
-export const upcomingCentralSections = [{ id: 'modulos', label: 'Módulos por condomínio', icon: 'grid' },
-  { id: 'contas', label: 'Contas e acessos', icon: 'users' }, { id: 'chaves', label: 'Chaves e integrações', icon: 'shield' },
+export const upcomingCentralSections = [{ id: 'contas', label: 'Contas e acessos', icon: 'users' }, { id: 'chaves', label: 'Chaves e integrações', icon: 'shield' },
   { id: 'facial', label: 'Acesso facial', icon: 'door' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 type Section = typeof sections[number]['id'];
 /** Seções liberadas pelas capacidades da sessão; a navegação lateral e as abas usam a mesma regra (o servidor confere de novo). */
 export function visiblePlatformSections(capabilities: readonly string[]) {
   return sections.filter((item) => (item.id !== 'financeiro' || capabilities.includes('billing.read'))
+    && (item.id !== 'modulos' || capabilities.includes('tenants.read'))
     && (item.id !== 'operacao' || capabilities.includes('outbox.operate'))
     && (item.id !== 'concessoes' || capabilities.includes('technical_grants.manage')));
 }
@@ -110,7 +112,7 @@ function PlatformConsole({ section, tenantId }: { section: Section; tenantId: st
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
     <SectionTabs label="Seções da central" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: centralPath(item.id) }))} />
     {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'operacao' ? <OutboxSection />
-      : current === 'concessoes' ? <TechnicalGrantSection />
+      : current === 'concessoes' ? <TechnicalGrantSection /> : current === 'modulos' ? <ModuleSection />
       : tenantId ? <TenantDetailView key={tenantId} tenantId={tenantId} describe={describeEvent}
         editor={(tenant, close) => <TenantEditor tenant={tenant} close={close} />} /> : <TenantSection />}
   </>;

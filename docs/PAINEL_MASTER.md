@@ -142,14 +142,15 @@ A central libera ou suspende módulos de cada condomínio, dentro das flags glob
 - **Mudanças**: pedido igual ao estado atual devolve `applied=false` sem gravar; versão divergente com mudança real é
   `409 TENANT_MODULE_CHANGED`. Mudanças do mesmo condomínio ficam em fila pela trava da linha do condomínio.
 - **Limites**: worker/outbox e sincronização do acesso facial ainda não consultam o módulo (tarefas já enfileiradas
-  seguem). Tela na central: fatia 6 do desenho.
+  seguem). Tela na central: `/central/modulos?condominio={id}` (também pelo botão "Módulos" da ficha), com estado real,
+  flag global, motivo e versão; liberar/suspender exige `tenant_modules.manage`, motivo e a versão lida.
 
 ## Tela web (`/central`, antes `/master`)
 
 A central administradora fica em `/central` (`/master/...` redireciona, preservando parâmetros; `/master/fila` virou
 `/central/operacao`). Depois do login, conta só de plataforma vai direto à central; conta com plataforma e condomínio vê
-o atalho da central no seletor `/entrada`. Seções futuras (módulos por condomínio, contas e acessos, chaves e
-integrações, acesso facial) aparecem desabilitadas, sem rota, até o backend existir. A tela consulta
+o atalho da central no seletor `/entrada`. Seções futuras (contas e acessos, chaves e integrações, acesso facial)
+aparecem desabilitadas, sem rota, até o backend existir. A tela consulta
 `/v1/platform/session`; conta sem papel vê "Área restrita" sem nenhum dado da plataforma; flag desligada mostra
 "Painel indisponível"; sem AAL2 a tela cadastra/verifica o autenticador antes de qualquer outra rota. Seções:
 Condomínios (lista com estado, fuso, versão, origem, recibo do onboarding, uso agregado e assinatura; "Novo

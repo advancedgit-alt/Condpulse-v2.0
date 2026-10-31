@@ -221,6 +221,7 @@ export function TenantDetailView({ tenantId, editor, describe }: { tenantId: str
         <li>Código <code>{tenant.tenantId}</code></li>
       </ul>
       <div className="button-row"><Link className="button button-secondary button-compact" to={installationPath(tenant.tenantId)}>Abrir implantação técnica</Link>
+        <Link className="button button-secondary button-compact" to={`${centralPath('modulos')}?condominio=${tenant.tenantId}`}>Módulos</Link>
         {scope.session.capabilities.includes('technical_grants.manage') ? <Link className="button button-secondary button-compact"
           to={`${centralPath('concessoes')}?condominio=${tenant.tenantId}`}>Concessões técnicas</Link> : null}</div>
       <p className="field-help">A implantação exige concessão técnica vigente desta conta no condomínio, além do papel de plataforma.</p>
