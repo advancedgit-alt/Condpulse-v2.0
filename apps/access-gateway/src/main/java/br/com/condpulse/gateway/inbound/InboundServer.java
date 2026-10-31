@@ -65,7 +65,12 @@ public final class InboundServer implements AutoCloseable {
    String t=new String(token);
    Arrays.fill(token,'\0');
    if(!t.matches("[A-Za-z0-9_-]{32,128}")) throw new IllegalStateException("Token de entrada fora do formato (32 a 128 caracteres seguros): "+d.deviceId());
-   tokenDigests.put(d.deviceId(),sha256(t));
+   byte[] digest=sha256(t);
+   // Token compartilhado tornaria o equipamento de origem ambíguo (canais e direitos de outro): recusa antes de abrir a porta.
+   for(var other:tokenDigests.entrySet())
+    if(java.security.MessageDigest.isEqual(other.getValue(),digest))
+     throw new IllegalStateException("Token de entrada repetido entre equipamentos: "+other.getKey()+" e "+d.deviceId());
+   tokenDigests.put(d.deviceId(),digest);
   }
   var address=new InetSocketAddress(inbound.bindAddress(),inbound.port());
   if(inbound.tlsKeystorePath()!=null) {
