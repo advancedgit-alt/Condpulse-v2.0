@@ -49,4 +49,13 @@ public interface AccessProviderAdapter {
   * essa declaração o núcleo retira cada método separadamente.
   */
  default boolean removePersonCoversCredentials() { return false; }
+
+ /** true somente quando a fonte oficial declara que {@link #removePerson} também retira os direitos da pessoa. */
+ default boolean removePersonCoversRights() { return false; }
+
+ /**
+  * true quando {@link #rightKeys} e a leitura de volta incluem os limites temporais (início/fim) aplicados. Sem
+  * isso, direitos com prazo nunca são confirmados por leitura (ficam não verificados).
+  */
+ default boolean rightKeysIncludeValidity() { return false; }
 }
