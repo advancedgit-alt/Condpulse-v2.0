@@ -468,4 +468,64 @@ class GatewayServiceTest {
   @SuppressWarnings("unchecked") var device=(Map<String,Object>)((List<Object>)service.healthSummary().get("devices")).getFirst();
   assertTrue(String.valueOf(device.get("lastEventGap")).startsWith("BUFFER_OVERFLOW:3@"));
  }
+
+ // ----- sétima rodada (#129) -----
+
+ @Test void adiarPorIdentidadePreservaANecessidadeDeLeitura() {
+  queue.enqueue(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador")));
+  queue.mark("p",Status.IN_FLIGHT,null,null);
+  queue.close();
+  queue=new LocalCommandQueue(dir,clock,100,200); // reinício: IN_FLIGHT vira NEEDS_READBACK
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o9"),clock,config,registry,id->Optional.of(adapter)),
+   outbox,decisions,decisionOutbox,central,clock);
+  service.processQueues(10); // antes da sonda de identidade
+  assertEquals(Status.NEEDS_READBACK,queue.get("p").orElseThrow().status());
+  service.checkHealth();
+  adapter.calls.clear();
+  adapter.personPresent=true; adapter.personName="Morador";
+  service.processQueues(10);
+  assertEquals("READ_STATE",adapter.calls.getFirst(),"leitura antes de qualquer reenvio");
+  assertTrue(adapter.calls.stream().noneMatch("UPSERT_PERSON"::equals));
+  assertEquals(OperationState.CONFIRMED,queue.get("p").orElseThrow().lastState());
+ }
+
+ @Test void reconciliacaoPreservaAOrdemDasVersoes() {
+  build(ScriptedAdapter.all(),true,DecisionMode.EDGE_ONLINE);
+  service.submit(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador","nativeUserRef","77")));
+  service.submit(command("rv","d1","s1",CommandType.REVOKE_ALL,2,Map.of()));
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,3,RIGHTS));
+  assertEquals(LocalCommandQueue.EnqueueOutcome.REJECTED_STALE,service.submit(command("velha","d1","s1",CommandType.REVOKE_RIGHTS,1,Map.of())).outcome(),
+   "revogação mais antiga que a concessão aceita é mensagem velha");
+  decisions.markSynced(clock.instant());
+  decisions.observeClockSkew(Duration.ZERO);
+  assertTrue(context().decide("77","1").allow());
+  decisions.close();
+  decisions=new LocalDecisionEngine(dir,clock,config);
+  decisions.markSynced(clock.instant());
+  decisions.observeClockSkew(Duration.ZERO);
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o10"),clock,config,registry,id->Optional.of(adapter)),
+   outbox,decisions,decisionOutbox,central,clock);
+  assertTrue(context().decide("77","1").allow(),"recuperação não converte revogação v2 em revogação da concessão v3");
+ }
+
+ @Test void atalhoDeRevogacaoExigeCascataDeDireitosECredenciais() {
+  adapter.coversCredentials=true;
+  adapter.coversRights=false;
+  service.submit(command("rv","d1","s1",CommandType.REVOKE_ALL,1,Map.of()));
+  service.processQueues(1);
+  assertTrue(adapter.calls.contains("REVOKE_RIGHTS"),"sem cascata de direitos, retira direitos separadamente");
+ }
+
+ @Test void identificacaoParcialNaoEOk() {
+  var registry=new CapabilityRegistry(config.profiles());
+  var d=config.devices().getFirst();
+  assertEquals(br.com.condpulse.gateway.capability.CapabilityRegistry.IdentityCheck.UNVERIFIED,
+   registry.checkIdentity(d,new DeviceIdentity(OperationState.CONFIRMED,null,d.sku(),null,null)));
+  assertEquals(br.com.condpulse.gateway.capability.CapabilityRegistry.IdentityCheck.UNVERIFIED,
+   registry.checkIdentity(d,new DeviceIdentity(OperationState.CONFIRMED,null,null,d.firmware(),null)));
+  assertEquals(br.com.condpulse.gateway.capability.CapabilityRegistry.IdentityCheck.OK,
+   registry.checkIdentity(d,new DeviceIdentity(OperationState.CONFIRMED,null,d.sku(),d.firmware(),null)));
+ }
 }

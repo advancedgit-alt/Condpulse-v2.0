@@ -69,7 +69,8 @@ public final class CapabilityRegistry {
   if(identity==null || identity.state()!=OperationState.CONFIRMED) return IdentityCheck.UNVERIFIED;
   if(identity.firmware()!=null && !identity.firmware().equals(device.firmware())) return IdentityCheck.MISMATCH;
   if(identity.sku()!=null && !identity.sku().equals(device.sku())) return IdentityCheck.MISMATCH;
-  if(identity.firmware()==null && identity.sku()==null) return IdentityCheck.UNVERIFIED;
+  // OK só com SKU e firmware lidos e iguais ao perfil; identificação parcial fica não verificada.
+  if(identity.firmware()==null || identity.sku()==null) return IdentityCheck.UNVERIFIED;
   return IdentityCheck.OK;
  }
 }
