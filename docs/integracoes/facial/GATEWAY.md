@@ -171,13 +171,13 @@ documentada (`REVOGACAO_SEM_DOCUMENTACAO`), **NS** `NAO_SUPORTADO_SEM_DOCUMENTAC
 | Cadastrar face | I — `user_set_image_list.fcgi` | NS (FaceDataRecord truncado; FDSetUp só `faceURL`) | I\* — `FaceInfoManager.cgi?action=add` | NS (página recusada por robots) |
 | Remover face | I — `user_destroy_image.fcgi` (só `user_id`) | NS | NS | NS |
 | Cartão: gravar / retirar | I / I — `cards` | I / I — CardInfo Record/Delete (§21, §23) | I\* / NS — `recordUpdater.cgi insert AccessControlCard` | NS / NS |
-| PIN: gravar / retirar | I / I — `pins` | NS / NS | NS / NS | NS / NS |
+| PIN: gravar / retirar | I / I — `pins` (substituição por `modify_objects`, `user_id` único) | NS / NS | NS / NS | NS / NS |
 | QR: gravar / retirar | I / I — `qrcodes` (só modo alfanumérico) | NS / NS | NS / NS | NS / NS |
 | Aplicar direitos por ponto e horário | I — `user_access_rules` (regras comissionadas) | I — `doorRight` + `RightPlan` (§15) | NS | NS |
 | Retirar direitos | I — `destroy_objects user_access_rules/user_groups` | I — via exclusão da pessoa (§16) | NS | NS |
 | Consultar estado (leitura de volta) | I — regras, grupos, cartões, PIN, QR (face: null) | I — pessoa, RightPlan (cartão/face: null) | NS | NS |
 | Abertura pontual | I — `execute_actions.fcgi` (`door`/`sec_box`/`catra`) | NS (RemoteControl/door fora de HK12) | I — `accessControl.cgi?action=openDoor` | NS |
-| Eventos por busca (backfill) | I — `load_objects access_logs` | NS (AcsEvent fora de HK12) | I — `recordFinder.cgi AccessControlCardRec` | NS (só fluxo ao vivo) |
+| Eventos por busca (backfill) | I — `load_objects access_logs` por id crescente (`order`, `limit`); ordem não respeitada = UNKNOWN sem avançar | NS (AcsEvent fora de HK12) | I — `recordFinder.cgi AccessControlCardRec` | NS (só fluxo ao vivo) |
 | Eventos recebidos (push/fluxo) | NS (Monitor não consultado) | NS | NS | I — `eventManager.cgi attach`; `POST` do modo online |
 | Decisão antes do relé (online) | I — modo Pro `new_user_identified.fcgi` | NS (`remoteCheck` fora de HK12) | NS | I — modo online, resposta `auth` |
 | Saúde | I — `session_is_valid.fcgi` / último `GET /push` | I — `UserInfo/Count` (§3) | I — `recordFinder` `count=1` | I — `eventManager` com `heartbeat=1` |
