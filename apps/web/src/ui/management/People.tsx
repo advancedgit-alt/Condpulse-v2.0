@@ -6,7 +6,7 @@ import { formatWhen } from '../dateTime';
 import { RentalsPanel } from './Rentals';
 import { ActionFeedback, ReasonForm, managementKey, membershipStatusLabels, roleLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
 
-const invitationRoles: InvitationRole[] = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE'];
+const invitationRoles: InvitationRole[] = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE'];
 const invitationStatus: Record<string, string> = { PENDING: 'Pendente', ACCEPTED: 'Aceito', REVOKED: 'Revogado', EXPIRED: 'Expirado' };
 
 function MembershipItem({ membership, onDone }: { membership: ManagedMembership; onDone(result: ActionResult): void }) {
@@ -83,7 +83,7 @@ function InvitationForm() {
   const [validDays, setValidDays] = useState('7');
   const [created, setCreated] = useState<InvitationCreated | null>(null);
   const [copied, setCopied] = useState(false);
-  const staff = role === 'CONCIERGE';
+  const staff = role === 'CONCIERGE' || role === 'MAINTENANCE';
   async function submit(event: FormEvent) {
     event.preventDefault();
     setCreated(null); setCopied(false);

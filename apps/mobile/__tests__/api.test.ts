@@ -50,9 +50,18 @@ describe('API no aplicativo', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('zeladoria e papel ainda desconhecido não derrubam os demais vínculos', () => {
+    const maintenance = { ...me.memberships[0], membershipId: '51000000-0000-4000-8000-000000000002', unitId: null, role: 'MAINTENANCE' };
+    const future = { ...me.memberships[0], membershipId: '51000000-0000-4000-8000-000000000003', unitId: null, role: 'FUTURE_STAFF' };
+    const parsed = identity({ ...me, memberships: [me.memberships[0], maintenance, future] });
+    expect(parsed.memberships.map((item) => item.role)).toEqual(['RESIDENT', 'MAINTENANCE']);
+    expect(parsed.memberships[0]?.unitId).toBe(me.memberships[0]!.unitId);
+  });
+
   it('resposta inválida, erro conhecido e rede fora viram mensagens', async () => {
     expect(() => identity({ ...me, accountId: 'x' })).toThrow();
-    expect(() => identity({ ...me, memberships: [{ ...me.memberships[0], role: 'ADMIN' }] })).toThrow();
+    expect(() => identity({ ...me, memberships: [{ ...me.memberships[0], role: 42 }] })).toThrow();
+    expect(() => identity({ ...me, memberships: [{ ...me.memberships[0], role: 'admin; drop' }] })).toThrow();
     const source = tokens().source;
     await expect(createApi({ baseUrl: 'https://api.example.invalid', tokens: source, fetch: async () => json({ code: 'ACCOUNT_INACTIVE' }, 403) }).me())
       .rejects.toMatchObject({ code: 'ACCOUNT_INACTIVE', message: 'Seu acesso precisa ser validado pela gestão.' });

@@ -28,4 +28,12 @@ class InvitationRulesTest {
  @Test void managerRoleIsNeverOfferedByInvitation() {
   assertFalse(InvitationService.ROLES.contains("MANAGER")); assertFalse(InvitationService.ROLES.contains("SUPPORT"));
  }
+ /** Zeladoria (V046): convidada pela gestão como a portaria, com capacidade própria e nada de gestão, portaria ou finanças. */
+ @Test void maintenanceIsInvitableStaffWithItsOwnCapabilityOnly() {
+  assertTrue(InvitationService.ROLES.contains("MAINTENANCE"));
+  assertEquals(java.util.EnumSet.of(StaffCapability.OPERATE_MAINTENANCE),StaffCapability.forRole("MAINTENANCE"));
+  assertEquals("maintenance.operate",StaffCapability.OPERATE_MAINTENANCE.key());
+  assertFalse(StaffCapability.forRole("MANAGER").contains(StaffCapability.OPERATE_MAINTENANCE));
+  assertFalse(StaffCapability.forRole("CONCIERGE").contains(StaffCapability.OPERATE_MAINTENANCE));
+ }
 }

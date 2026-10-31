@@ -8,7 +8,7 @@ import type { Membership } from '../../api/types';
 export type Role = Membership['role'];
 export const residentialRoles = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER'] as const satisfies readonly Role[];
 export const roleLabels: Record<Role, string> = { RESIDENT: 'Morador', RESPONSIBLE: 'Responsável', DEPENDENT: 'Dependente',
-  OWNER: 'Proprietário', CONCIERGE: 'Portaria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
+  OWNER: 'Proprietário', CONCIERGE: 'Portaria', MAINTENANCE: 'Zeladoria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
 
 export const ENTRY_PATH = '/entrada';
 export const condoPath = (tenantId: string) => `/c/${tenantId}`;
@@ -24,7 +24,7 @@ export const centralTenantPath = (tenantId: string) => `/central/condominios/${t
 /** Um condomínio da conta, com os papéis e as unidades dos vínculos vigentes informados por /v1/me. */
 export interface Condo { tenantId: string; tenantName: string; timeZone: string; roles: Role[]; unitIds: string[] }
 
-const roleOrder: Role[] = ['MANAGER', 'CONCIERGE', 'RESPONSIBLE', 'RESIDENT', 'OWNER', 'DEPENDENT', 'SUPPORT'];
+const roleOrder: Role[] = ['MANAGER', 'CONCIERGE', 'MAINTENANCE', 'RESPONSIBLE', 'RESIDENT', 'OWNER', 'DEPENDENT', 'SUPPORT'];
 
 /** Condomínios distintos da conta, em ordem alfabética; papéis sem repetição e unidades residenciais distintas. */
 export function condominiums(memberships: readonly Membership[]): Condo[] {
@@ -46,8 +46,8 @@ export type AreaId = 'inicio' | 'morador' | 'portaria' | 'zeladoria' | 'gestao' 
 export interface Area { id: AreaId; label: string; disabled: boolean }
 
 /**
- * Áreas visíveis dentro do condomínio. Só aparecem as dos papéis da conta. Zeladoria fica desabilitada ("em breve") e
- * só para a gestão, que vai convidar a equipe quando o papel MAINTENANCE existir no servidor; não há rota para ela.
+ * Áreas visíveis dentro do condomínio. Só aparecem as dos papéis da conta. Zeladoria aparece desabilitada ("em breve")
+ * para a gestão e para a equipe de zeladoria (papel MAINTENANCE, V046); a tela própria ainda não existe, então não há rota.
  * Implantação aparece só com concessão técnica confirmada pelo servidor (ou enquanto a própria tela está aberta).
  */
 export function condoAreas(condo: Condo | undefined, technical: boolean): Area[] {
@@ -57,7 +57,7 @@ export function condoAreas(condo: Condo | undefined, technical: boolean): Area[]
   if (condo) areas.push({ id: 'inicio', label: 'Início', disabled: false });
   if (condo && condo.unitIds.length > 0) areas.push({ id: 'morador', label: 'Morador', disabled: false });
   if (has('CONCIERGE')) areas.push({ id: 'portaria', label: 'Portaria', disabled: false });
-  if (has('MANAGER')) areas.push({ id: 'zeladoria', label: 'Zeladoria', disabled: true });
+  if (has('MANAGER', 'MAINTENANCE')) areas.push({ id: 'zeladoria', label: 'Zeladoria', disabled: true });
   if (has('MANAGER')) areas.push({ id: 'gestao', label: 'Gestão', disabled: false });
   if (technical) areas.push({ id: 'implantacao', label: 'Implantação', disabled: false });
   return areas;

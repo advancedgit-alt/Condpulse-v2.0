@@ -53,4 +53,19 @@ public final class RequestModels {
    List<TeamMember> team) {
   public ManagedRequest { messages=List.copyOf(messages); team=List.copyOf(team); }
  }
+
+ // Zeladoria (V046): pedidos atribuídos ao próprio vínculo, sem nome de quem abriu nem equipe.
+ public record MaintenanceSummary(UUID requestId,UUID unitId,String unitLabel,String category,String title,String state,LocalDate dueOn,
+   Instant updatedAt,long version) {}
+ public record MaintenancePage(List<MaintenanceSummary> requests,boolean truncated) {
+  public MaintenancePage { requests=List.copyOf(requests); }
+ }
+ public record MaintenanceRequest(UUID requestId,UUID unitId,String unitLabel,String category,String title,String description,String state,
+   LocalDate dueOn,String resolution,Instant createdAt,Instant updatedAt,Instant resolvedAt,long version,List<Message> messages,
+   boolean messagesTruncated) {
+  public MaintenanceRequest { messages=List.copyOf(messages); }
+ }
+ /** Andamento pela versão lida: em execução, aguardando a unidade ou concluído (com resolução). */
+ public record MaintenanceUpdate(String state,String resolution,Long expectedVersion) {}
+ public static final List<String> MAINTENANCE_STATES=List.of("IN_PROGRESS","WAITING_RESIDENT","RESOLVED");
 }

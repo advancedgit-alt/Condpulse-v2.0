@@ -40,7 +40,7 @@ export interface UnitRequest extends UnitRequestSummary {
 export interface OpenRequestBody { category: RequestCategory; title: string; description: string }
 export interface OpenRequestResult { request: UnitRequest; replayed: boolean }
 export interface MessageResult { message: RequestMessage; replayed: boolean }
-export interface TeamMember { membershipId: UUID; name: string; role: 'MANAGER' | 'CONCIERGE' }
+export interface TeamMember { membershipId: UUID; name: string; role: 'MANAGER' | 'CONCIERGE' | 'MAINTENANCE' }
 export interface ManagedRequestSummary {
   requestId: UUID; unitId: UUID; unitLabel: string; category: RequestCategory; title: string; state: RequestState;
   assigneeMembershipId: UUID | null; assigneeName: string | null; dueOn: CivilDate | null; createdAt: ISODateTime; updatedAt: ISODateTime;
@@ -120,7 +120,7 @@ export function unitRequest(value: unknown, uncertain = false): UnitRequest {
     messages: messages(value.messages, false, uncertain), messagesTruncated: value.messagesTruncated };
 }
 function teamMember(value: unknown): TeamMember {
-  if (!record(value) || !isUUID(value.membershipId) || !name(value.name) || !oneOf(value.role, ['MANAGER', 'CONCIERGE'])) throw invalidResponse();
+  if (!record(value) || !isUUID(value.membershipId) || !name(value.name) || !oneOf(value.role, ['MANAGER', 'CONCIERGE', 'MAINTENANCE'])) throw invalidResponse();
   return { membershipId: value.membershipId, name: value.name, role: value.role };
 }
 function managedFields(value: Record<string, unknown>): boolean {

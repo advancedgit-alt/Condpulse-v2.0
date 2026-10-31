@@ -34,6 +34,11 @@ describe('áreas por papel dentro do condomínio', () => {
     expect(condoAreas(staff, false).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['portaria', false],
       ['zeladoria', true], ['gestao', false]]);
   });
+  it('zelador vê a zeladoria (em breve) e nenhuma área de gestão ou portaria', () => {
+    const [maintenance] = condominiums([membership(A, 'MAINTENANCE')]);
+    expect(maintenance!.roles).toEqual(['MAINTENANCE']);
+    expect(condoAreas(maintenance, false).map((area) => [area.id, area.disabled])).toEqual([['inicio', false], ['zeladoria', true]]);
+  });
   it('implantação só com concessão técnica, inclusive sem vínculo no condomínio', () => {
     const [resident] = condominiums([membership(A, 'RESIDENT', U1)]);
     expect(condoAreas(resident, true).at(-1)?.id).toBe('implantacao');

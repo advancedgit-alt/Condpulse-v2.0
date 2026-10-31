@@ -5,9 +5,9 @@ import type { ISODateTime, ReservationPolicy, UUID } from './types';
  * Contratos da gestão local (CP-014/CP-018/CP-020/CP-021/CP-023). Toda resposta é validada antes da interface e
  * toda falha, inclusive de identificador inválido, chega como Promise rejeitada.
  */
-export type MembershipRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MANAGER' | 'SUPPORT';
+export type MembershipRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE' | 'MANAGER' | 'SUPPORT';
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
-export type InvitationRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE';
+export type InvitationRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE';
 export type ReservationStatus = 'HELD' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
 
 export interface ManagedBlock { blockId: UUID; name: string }
@@ -92,7 +92,7 @@ function amenity(value: unknown): ManagedAmenity {
 }
 function membership(value: unknown): ManagedMembership {
   if (!record(value) || !isUUID(value.membershipId) || !nullableUuid(value.unitId ?? null) || !nullableString(value.unitLabel ?? null)
-      || !isString(value.displayName) || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MANAGER', 'SUPPORT'])
+      || !isString(value.displayName) || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER', 'SUPPORT'])
       || !oneOf(value.status, ['PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED']) || !isDate(value.validFrom)
       || !nullableDate(value.validUntil ?? null) || !isInteger(value.version)) throw invalidResponse();
   return { membershipId: value.membershipId, unitId: (value.unitId ?? null) as string | null, unitLabel: (value.unitLabel ?? null) as string | null,

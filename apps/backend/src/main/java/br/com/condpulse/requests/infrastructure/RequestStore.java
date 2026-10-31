@@ -116,11 +116,11 @@ public class RequestStore {
    found.requesterName(),found.createdAt(),found.updatedAt(),found.resolvedAt(),found.closedAt(),found.version(),messages.items(),
    messages.truncated(),team(tenant));
  }
- /** Equipe vigente do condomínio (gestão e portaria), que pode ser responsável por um pedido. */
+ /** Equipe vigente do condomínio (gestão, portaria e zeladoria), que pode ser responsável por um pedido. */
  public List<RequestModels.TeamMember> team(UUID tenant) {
   return jdbc.query("""
    select m.id,m.display_name,m.role from cp.memberships m
-   where m.tenant_id=? and m.role in('MANAGER','CONCIERGE') and m.status='ACTIVE' and m.valid_from<=now()
+   where m.tenant_id=? and m.role in('MANAGER','CONCIERGE','MAINTENANCE') and m.status='ACTIVE' and m.valid_from<=now()
     and(m.valid_until is null or m.valid_until>now())
    order by m.display_name,m.id limit 200
    """,(r,n)->new RequestModels.TeamMember(r.getObject("id",UUID.class),r.getString("display_name"),r.getString("role")),tenant);
@@ -185,6 +185,41 @@ public class RequestStore {
    where tenant_id=? and actor_id=? and method='POST' and route=? and request_key=? and response_status is null
    """,status,resource,tenant,actor,route,key);
   if(changed!=1) throw new IllegalStateException("Resultado de idempotência não persistido.");
+ }
+
+
+ // Zeladoria (V046): somente pedidos atribuídos ao próprio vínculo MAINTENANCE; a política do banco repete a regra.
+ private static final String MAINTENANCE_SELECT="""
+  select r.id,r.unit_id,u.label as unit_label,r.category,r.title,r.description,r.state,r.due_on,r.resolution,r.created_at,
+   r.updated_at,r.resolved_at,r.version
+  from cp.service_requests r
+  join cp.units u on u.tenant_id=r.tenant_id and u.id=r.unit_id
+  """;
+ public RequestModels.MaintenancePage maintenance(UUID tenant,UUID membership) {
+  var rows=jdbc.query(MAINTENANCE_SELECT+" where r.tenant_id=? and r.assignee_membership_id=? and r.state<>'CLOSED'"
+   +" order by r.updated_at desc,r.id limit ?",(r,n)->new RequestModels.MaintenanceSummary(r.getObject("id",UUID.class),
+    r.getObject("unit_id",UUID.class),r.getString("unit_label"),r.getString("category"),r.getString("title"),r.getString("state"),
+    date(r,"due_on"),instant(r,"updated_at"),r.getLong("version")),tenant,membership,PAGE+1);
+  return new RequestModels.MaintenancePage(rows.stream().limit(PAGE).toList(),rows.size()>PAGE);
+ }
+ public RequestModels.MaintenanceRequest maintenanceRequest(UUID tenant,UUID membership,UUID request) {
+  var rows=jdbc.query(MAINTENANCE_SELECT+" where r.tenant_id=? and r.assignee_membership_id=? and r.id=?",
+   (r,n)->new RequestModels.MaintenanceRequest(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("unit_label"),
+    r.getString("category"),r.getString("title"),r.getString("description"),r.getString("state"),date(r,"due_on"),r.getString("resolution"),
+    instant(r,"created_at"),instant(r,"updated_at"),instant(r,"resolved_at"),r.getLong("version"),List.of(),false),tenant,membership,request);
+  if(rows.isEmpty()) return null;
+  var found=rows.getFirst();
+  var messages=messages(tenant,request,true);
+  return new RequestModels.MaintenanceRequest(found.requestId(),found.unitId(),found.unitLabel(),found.category(),found.title(),
+   found.description(),found.state(),found.dueOn(),found.resolution(),found.createdAt(),found.updatedAt(),found.resolvedAt(),
+   found.version(),messages.items(),messages.truncated());
+ }
+ /** Só andamento e resolução: responsável e prazo ficam como estão (o gatilho do banco recusa outra mudança). */
+ public boolean maintenanceUpdate(UUID tenant,UUID request,UUID membership,long expectedVersion,String state,String resolution) {
+  return jdbc.update("""
+   update cp.service_requests set state=?,resolution=?,version=version+1
+   where tenant_id=? and id=? and assignee_membership_id=? and version=?
+   """,state,resolution,tenant,request,membership,expectedVersion)==1;
  }
 
  private static final String MANAGED_SELECT="""

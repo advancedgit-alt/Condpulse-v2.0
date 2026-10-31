@@ -7,7 +7,7 @@ export interface Membership {
   tenantName: string;
   timeZone: string;
   unitId: UUID | null;
-  role: 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MANAGER' | 'SUPPORT';
+  role: 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE' | 'MANAGER' | 'SUPPORT';
 }
 
 export interface CurrentIdentity {
