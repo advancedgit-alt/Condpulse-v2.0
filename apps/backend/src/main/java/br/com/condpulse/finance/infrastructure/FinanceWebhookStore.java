@@ -53,11 +53,14 @@ public class FinanceWebhookStore {
    var row=current.getFirst();
    LocalDate today=LocalDate.now(ZONE);
    var target=FinanceRules.target(row.state(),row.paidAt(),row.paidCents(),payment,today);
+   String resulting=FinanceRules.terminal(row.state())?row.state():target.state();
    var inserted=jdbc.query("""
     insert into cp.finance_webhook_events(tenant_id,event_id,event_type,charge_id,asaas_status,resulting_state)
     values(?,?,?,?,?,?) on conflict (event_id) do nothing returning id
-    """,(r,n)->r.getObject(1,UUID.class),tenant,eventId,eventType,chargeId,target.asaasStatus(),target.state());
+    """,(r,n)->r.getObject(1,UUID.class),tenant,eventId,eventType,chargeId,target.asaasStatus(),resulting);
    if(inserted.isEmpty()) return FinanceWebhookService.Outcome.DUPLICATE;
+   // Cancelada ou estornada é final: o evento fica registrado (idempotente), a cobrança não muda (o gatilho recusaria).
+   if(FinanceRules.terminal(row.state())) return FinanceWebhookService.Outcome.PROCESSED;
    boolean unchanged=row.state().equals(target.state()) && java.util.Objects.equals(row.asaasStatus(),target.asaasStatus())
     && java.util.Objects.equals(row.paidAt(),target.paidAt()) && java.util.Objects.equals(row.paidCents(),target.paidCents());
    if(unchanged) return FinanceWebhookService.Outcome.PROCESSED;

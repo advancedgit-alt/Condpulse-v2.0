@@ -3012,6 +3012,12 @@ def finance_checks():
     query(hook + f"UPDATE cp.finance_charges SET state='REFUNDED',asaas_status='REFUNDED',version=3 WHERE id='{C1}'", tenant=TA, actor=None, role="cp_api")
     expect(error(hook + f"UPDATE cp.finance_charges SET state='OPEN',version=4 WHERE id='{C1}'", "23514", tenant=TA, actor=None, role="cp_api"),
            "estorno e final")
+    # Evento tardio de cobranca final: o evento e gravado (idempotente) e a cobranca nao muda; o servico nao tenta o UPDATE.
+    late = query(hook + event.format(event="evt_ficticio_0002", charge=C1).replace("'PAYMENT_RECEIVED'", "'PAYMENT_DELETED'")
+                 .replace("'RECEIVED','PAID'", "NULL,'REFUNDED'"), tenant=TA, actor=None, role="cp_api")
+    expect(late.returncode == 0 and late.stdout.strip() != "", "evento tardio de cobranca final e registrado")
+    expect(error(hook + f"UPDATE cp.finance_charges SET asaas_status='DELETED',version=4 WHERE id='{C1}'", "23514", tenant=TA, actor=None, role="cp_api"),
+           "cobranca final nao aceita nem mudanca de status bruto (por isso o webhook so registra o evento)")
     query(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',cancelled_by='{MGF}',cancel_reason='Lancada por engano',version=1 WHERE id='{C2}'",
           **as_manager)
     expect(value(f"select (cancelled_at is not null)::text from cp.finance_charges where id='{C2}'") == "true", "horario do cancelamento vem do banco")

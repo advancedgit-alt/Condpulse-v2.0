@@ -130,6 +130,11 @@ public class FinanceService {
   int pending=execute(actor,tenant,assurance,context->{ manager(context); return store.pendingCount(tenant); });
   return new FinanceModels.IssueResult(issued,failed,pending);
  }
+ /**
+  * Cancela pela versão lida, com motivo. Cobrança ainda pendente de emissão recebe, na mesma transação da conferência,
+  * a mesma reserva curta da emissão: emissão e cancelamento nunca falam com o Asaas ao mesmo tempo. A gravação final
+  * confere de novo a versão (a reserva incrementa a versão; qualquer outra mudança no meio recusa).
+  */
  public FinanceModels.Charge cancel(UUID actor,UUID tenant,AssuranceLevel assurance,UUID chargeId,FinanceModels.Cancel request) {
   if(chargeId==null) throw notFound();
   if(request==null || request.expectedVersion()==null || request.expectedVersion()<0) throw invalid("FINANCE_VERSION_REQUIRED","Atualize a cobrança antes de continuar.");
@@ -142,15 +147,24 @@ public class FinanceService {
    if(!Set.of("PENDING_ISSUE","OPEN","OVERDUE").contains(row.view().state())) throw closed();
    if(row.view().version()!=request.expectedVersion()) throw changed();
    if(row.leased()) throw issuing();
+   if("PENDING_ISSUE".equals(row.view().state())) {
+    if(!store.claimIssue(tenant,chargeId,row.view().version())) throw issuing();
+    return store.charge(tenant,chargeId,false);
+   }
    return row;
   });
   if("CANCELLED".equals(current.view().state())) return current.view();
+  long reserved=current.view().version();
+  boolean pending="PENDING_ISSUE".equals(current.view().state());
   try {
    if(current.paymentId()!=null) asaas.deletePayment(current.paymentId());
    else asaas.findPayment(chargeId.toString()).ifPresent(found->asaas.deletePayment(found.id()));
-  } catch(AsaasGateway.Rejected rejected) {
-   throw new BusinessProblem("FINANCE_ASAAS_REJECTED",409,"O Asaas não permitiu cancelar esta cobrança (por exemplo, já paga). Sincronize e confira.");
-  } catch(AsaasGateway.Unavailable unavailable) { throw asaasUnavailable(); }
+  } catch(AsaasGateway.Rejected | AsaasGateway.Unavailable failure) {
+   if(pending) execute(actor,tenant,assurance,context->{ manager(context); store.releaseIssue(tenant,chargeId,reserved); return null; });
+   if(failure instanceof AsaasGateway.Rejected)
+    throw new BusinessProblem("FINANCE_ASAAS_REJECTED",409,"O Asaas não permitiu cancelar esta cobrança (por exemplo, já paga). Sincronize e confira.");
+   throw asaasUnavailable();
+  }
   return execute(actor,tenant,assurance,context->{
    manager(context);
    var row=store.charge(tenant,chargeId,true);
@@ -159,7 +173,7 @@ public class FinanceService {
     audit.record(tenant,actor,"FINANCE_CHARGE_CANCELLED","FINANCE_CHARGE",chargeId,reason);
     return row.view();
    }
-   if(!store.cancel(tenant,chargeId,row.view().version(),actor,reason)) throw changed();
+   if(row.view().version()!=reserved || !store.cancel(tenant,chargeId,reserved,actor,reason)) throw changed();
    var cancelled=store.charge(tenant,chargeId,false).view();
    audit.record(tenant,actor,"FINANCE_CHARGE_CANCELLED","FINANCE_CHARGE",chargeId,reason);
    store.event(tenant,"FINANCE_CHARGE_CANCELLED",cancelled);
@@ -184,6 +198,8 @@ public class FinanceService {
    var row=store.charge(tenant,chargeId,true);
    if(row==null) throw notFound();
    var view=row.view();
+   // Cancelada e estornada são finais (o banco recusa qualquer alteração): nada a sincronizar.
+   if(FinanceRules.terminal(view.state())) return view;
    var target=FinanceRules.target(view.state(),view.paidAt(),view.paidCents(),payment,LocalDate.now(context.timeZone()));
    if(same(view,target)) return view;
    if(!store.sync(tenant,chargeId,view.version(),target)) throw changed();

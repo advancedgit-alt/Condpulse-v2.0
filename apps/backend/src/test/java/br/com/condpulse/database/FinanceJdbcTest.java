@@ -43,13 +43,16 @@ class FinanceJdbcTest {
   final Map<String,Payment> payments=new ConcurrentHashMap<>();
   final AtomicInteger created=new AtomicInteger();
   volatile boolean down;
+  /** Executado uma vez na próxima busca por referência externa: simula outra requisição concorrente no meio da chamada. */
+  volatile Runnable onFind;
   private void check() { if(down) throw new Unavailable(); }
   @Override public Optional<String> findCustomer(String reference) { check(); return Optional.ofNullable(customers.get(reference)); }
   @Override public String createCustomer(Customer customer) {
    check(); return customers.computeIfAbsent(customer.externalReference(),k->"cus_"+(1000+customers.size()));
   }
   @Override public Optional<Payment> findPayment(String reference) {
-   check(); return payments.values().stream().filter(p->reference.equals(p.externalReference()) && !p.deleted()).findFirst();
+   check();
+   var hook=onFind; onFind=null; if(hook!=null) hook.run(); return payments.values().stream().filter(p->reference.equals(p.externalReference()) && !p.deleted()).findFirst();
   }
   @Override public Payment createPayment(PaymentRequest request) {
    check();
@@ -89,7 +92,7 @@ class FinanceJdbcTest {
  @BeforeEach void reset() throws Exception {
   db.restoreActiveFixtures(); db.clearReservationFixtures();
   db.adminUpdate("delete from cp.unit_rentals where tenant_id=?",db.tenantA);
-  asaas.down=false; db.assertEmptyContext();
+  asaas.down=false; asaas.onFind=null; db.assertEmptyContext();
  }
  @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }
 
@@ -176,6 +179,13 @@ class FinanceJdbcTest {
   assertEquals("FINANCE_REASON_REQUIRED",code(()->finance.cancel(MANAGER,db.tenantA,AAL2,issued.chargeId(),new FinanceModels.Cancel(" ",issued.version()))));
   var cancelled=finance.cancel(MANAGER,db.tenantA,AAL2,issued.chargeId(),new FinanceModels.Cancel("Lançada em duplicidade",issued.version()));
   assertEquals("CANCELLED",cancelled.state()); assertTrue(asaas.payments.get(paymentId(issued.chargeId())).deleted());
+  // PAYMENT_DELETED depois do cancelamento pela gestão: evento registrado uma vez, cobrança final intacta (sem 503 em laço).
+  String deletedPayment=paymentId(issued.chargeId());
+  assertEquals(FinanceWebhookService.Outcome.PROCESSED,webhook.handle(TOKEN,event("evt_c1","PAYMENT_DELETED",deletedPayment)));
+  assertEquals(FinanceWebhookService.Outcome.DUPLICATE,webhook.handle(TOKEN,event("evt_c1","PAYMENT_DELETED",deletedPayment)));
+  assertEquals("CANCELLED:"+cancelled.version(),db.adminString("select state||':'||version from cp.finance_charges where id=?",issued.chargeId()));
+  assertEquals("CANCELLED",db.adminString("select resulting_state from cp.finance_webhook_events where event_id='evt_c1'"));
+  assertEquals("CANCELLED",finance.sync(MANAGER,db.tenantA,AAL2,issued.chargeId()).state(),"Sincronizar cobrança final não tenta alterá-la");
   // Falha do Asaas na emissão: fica pendente com o código; "emitir pendentes" conclui depois.
   asaas.down=true;
   var pending=charge("BOLETO");
@@ -204,6 +214,35 @@ class FinanceJdbcTest {
   assertEquals(1,report.units().size()); assertEquals(15000,report.totalCents());
   assertEquals("STAFF_ACCESS_DENIED",code(()->finance.delinquency(db.accountA,db.tenantA,AAL2)));
   assertFalse(finance.report(MANAGER,db.tenantA,AAL2,YearMonth.from(today()).minusMonths(1).toString(),month).months().isEmpty());
+  db.assertEmptyContext();
+ }
+
+ @Test void cancelAndIssueOfAPendingChargeExcludeEachOther() throws Exception {
+  payer();
+  asaas.down=true;
+  var pending=charge("PIX");
+  assertEquals("PENDING_ISSUE",pending.state());
+  asaas.down=false;
+  // Enquanto o cancelamento consulta o Asaas, uma emissão concorrente encontra a reserva e não cria pagamento.
+  var during=new java.util.concurrent.atomic.AtomicReference<String>();
+  asaas.onFind=()->during.set(code(()->finance.issue(MANAGER,db.tenantA,AAL2,pending.chargeId())));
+  int before=asaas.created.get();
+  var cancelled=finance.cancel(MANAGER,db.tenantA,AAL2,pending.chargeId(),new FinanceModels.Cancel("Lançada por engano",pending.version()));
+  assertEquals("CANCELLED",cancelled.state());
+  assertEquals("FINANCE_CHARGE_ISSUING",during.get(),"A emissão concorrente encontra a reserva do cancelamento");
+  assertEquals(before,asaas.created.get(),"Nenhum pagamento criado no Asaas");
+  // Emissão em andamento (reserva ativa): o cancelamento é recusado sem falar com o Asaas.
+  asaas.down=true;
+  var other=charge("PIX");
+  asaas.down=false;
+  db.adminUpdateWithoutTriggers("update cp.finance_charges set issue_lease_until=clock_timestamp()+interval '60 seconds' where id=?",other.chargeId());
+  assertEquals("FINANCE_CHARGE_ISSUING",code(()->finance.cancel(MANAGER,db.tenantA,AAL2,other.chargeId(),new FinanceModels.Cancel("Motivo",other.version()))));
+  // Asaas fora durante o cancelamento: a reserva é devolvida e a emissão segue possível.
+  db.adminUpdateWithoutTriggers("update cp.finance_charges set issue_lease_until=null where id=?",other.chargeId());
+  asaas.down=true;
+  assertEquals("FINANCE_ASAAS_UNAVAILABLE",code(()->finance.cancel(MANAGER,db.tenantA,AAL2,other.chargeId(),new FinanceModels.Cancel("Motivo",other.version()))));
+  asaas.down=false;
+  assertEquals("OPEN",finance.issue(MANAGER,db.tenantA,AAL2,other.chargeId()).state());
   db.assertEmptyContext();
  }
 }

@@ -63,12 +63,19 @@ const money = (value: unknown): value is number => isInteger(value) && value <= 
 export function formatCents(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 }
-/** "1.234,56", "1234.56" ou "1234" em centavos; null quando não é um valor válido. */
+/**
+ * Valor em reais (formato brasileiro) para centavos; null quando inválido ou ambíguo. Vírgula é sempre o separador
+ * decimal e ponto, com vírgula ou em grupos de três ("12.345", "1.234.567"), é separador de milhar. Sem vírgula, ponto
+ * só vale como decimal com 1 ou 2 casas ("150.5"); qualquer outro uso é recusado.
+ */
 export function parseCents(value: string): number | null {
   const cleaned = value.trim().replace(/^R\$\s*/, '');
-  if (!/^\d{1,3}(\.\d{3})*(,\d{1,2})?$|^\d+([.,]\d{1,2})?$/.test(cleaned)) return null;
-  const normalized = cleaned.includes(',') ? cleaned.replace(/\./g, '').replace(',', '.') : cleaned;
-  const cents = Math.round(Number(normalized) * 100);
+  let reais: string; let fraction = '';
+  if (/^(\d{1,3}(\.\d{3})+|\d+),\d{1,2}$/.test(cleaned)) [reais, fraction] = cleaned.split(',') as [string, string];
+  else if (/^\d{1,3}(\.\d{3})+$/.test(cleaned) || /^\d+$/.test(cleaned)) reais = cleaned;
+  else if (/^\d+\.\d{1,2}$/.test(cleaned)) [reais, fraction] = cleaned.split('.') as [string, string];
+  else return null;
+  const cents = Number(reais.replace(/\./g, '')) * 100 + Number(fraction.padEnd(2, '0') || '0');
   return Number.isSafeInteger(cents) ? cents : null;
 }
 /** Data civil AAAA-MM-DD como DD/MM/AAAA, sem conversão de fuso. */

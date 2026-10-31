@@ -127,6 +127,13 @@ public class FinanceStore {
    where tenant_id=? and id=? and state='PENDING_ISSUE' and version=? and (issue_lease_until is null or issue_lease_until<=clock_timestamp())
    """,tenant,id,version)==1;
  }
+ /** Devolve a reserva de emissão tomada (por exemplo, por um cancelamento que não conseguiu falar com o Asaas). */
+ public boolean releaseIssue(UUID tenant,UUID id,long version) {
+  return jdbc.update("""
+   update cp.finance_charges set issue_lease_until=null,version=version+1
+   where tenant_id=? and id=? and state='PENDING_ISSUE' and version=? and issue_lease_until is not null
+   """,tenant,id,version)==1;
+ }
  public boolean markIssued(UUID tenant,UUID id,long version,String paymentId,FinanceRules.Target target,String invoiceUrl,String slipUrl) {
   return jdbc.update("""
    update cp.finance_charges set state=?,asaas_payment_id=?,asaas_status=?,invoice_url=?,bank_slip_url=?,paid_at=?,paid_cents=?,

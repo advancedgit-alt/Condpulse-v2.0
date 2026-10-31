@@ -34,6 +34,8 @@ public final class FinanceRules {
   if("REFUNDED".equals(raw) && "PAID".equals(current)) return new Target("REFUNDED",status,currentPaidAt,currentPaidCents);
   return new Target(current,status,currentPaidAt,currentPaidCents);
  }
+ /** Cancelada e estornada não mudam mais (gatilho da V036). */
+ public static boolean terminal(String state) { return "CANCELLED".equals(state) || "REFUNDED".equals(state); }
  /** Situação inicial depois da emissão (ou da adoção do pagamento já criado). */
  public static Target issued(AsaasGateway.Payment payment,LocalDate today) {
   if(payment.deleted()) throw new AsaasGateway.Unavailable();

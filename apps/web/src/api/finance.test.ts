@@ -33,6 +33,10 @@ describe('contrato do financeiro condominial', () => {
     expect(formatDay('2030-01-10')).toBe('10/01/2030');
     expect(parseCents('1.234,56')).toBe(123456); expect(parseCents('150')).toBe(15000); expect(parseCents('150.5')).toBe(15050);
     expect(parseCents('R$ 10,00')).toBe(1000); expect(parseCents('abc')).toBeNull(); expect(parseCents('1,234')).toBeNull();
+    // Milhar no formato brasileiro (achado da revisão: "12.345" virava R$ 12,35).
+    expect(parseCents('12.345')).toBe(1234500); expect(parseCents('12.345,67')).toBe(1234567); expect(parseCents('12,5')).toBe(1250);
+    expect(parseCents('1.234.567,89')).toBe(123456789); expect(parseCents('1.234')).toBe(123400); expect(parseCents('150.50')).toBe(15050);
+    for (const ambiguous of ['1.23.456', '12.3456', '1.234.5', '12.345.6,7', '1,234.56', '.5', '5.', ',5', '1.234,567']) expect(parseCents(ambiguous)).toBeNull();
   });
   it('segunda via: boleto exige linha, PIX exige copia e cola, sempre da cobrança pedida', () => {
     const boleto = { chargeId, billingType: 'BOLETO', identificationField: '23793381286000000000300000000000100000000015000', pixPayload: null,
