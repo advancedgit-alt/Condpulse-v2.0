@@ -4279,6 +4279,32 @@ def grant_checks():
     expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G3}'") == "REVOKED:ORIGIN_CHANGED",
            "varredura grava a marca do direito que deixou de valer")
     expect(error(both + scan + guest.replace(G3, G4), "23514", **as_mgr), "convite cancelado nao gera direito novo")
+    # Corrida cartao x bloqueio (mesmo lock por condominio): nenhuma ordem deixa cartao ativo para sujeito bloqueado.
+    def card(identifier):
+        return (mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+                f"VALUES('{identifier}','{TA}','{ids['KA']}','{MRS}','{UA}','CARD','Cartao corrida','{MG}')")
+    def block(epoch, version):
+        return (mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch={epoch},"
+                f"version={version} WHERE id='{SRS}'")
+    def unblock(epoch, version):
+        query(mm + f"UPDATE cp.access_subjects SET status='ACTIVE',blocked_reason=NULL,blocked_by=NULL,restriction_epoch={epoch},version={version} "
+              f"WHERE id='{SRS}'", **as_mgr)
+    def race(first, second):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            a = pool.submit(query, first + "; SELECT pg_sleep(1.5)", check=False, **as_mgr)
+            time.sleep(0.5)
+            b = pool.submit(query, second, check=False, **as_mgr)
+            return a.result(), b.result()
+    K1, K2 = "44800000-0000-4000-8000-000000000011", "44800000-0000-4000-8000-000000000012"
+    blocked_first, card_late = race(block(3, 3), card(K1))
+    expect(blocked_first.returncode == 0 and card_late.returncode != 0 and "23514" in card_late.stderr
+           and value(f"select count(*) from cp.access_credentials where id='{K1}'") == "0", "corrida: bloqueio primeiro recusa o cartao concorrente")
+    unblock(4, 4)
+    card_first, blocked_late = race(card(K2), block(5, 5))
+    expect(card_first.returncode == 0 and blocked_late.returncode == 0
+           and value(f"select desired_state from cp.access_credentials where id='{K2}'") == "REVOKED", "corrida: cartao primeiro e revogado pela cascata do bloqueio")
+    unblock(6, 6)
+    query(f"DELETE FROM cp.outbox WHERE aggregate_id='{K2}'; DELETE FROM cp.access_credentials WHERE id='{K2}'")
     expect(value(both + f"select count(*) from cp.access_grants", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: direitos nao atravessam condominio")
     expect(value(f"select count(*) from cp.access_grants where id='{G1}'", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le direitos da gestao")
     expect(error("select derived_by from cp.access_grants", "42501", tenant=TA, role="cp_worker"), "worker nao le autoria do direito")

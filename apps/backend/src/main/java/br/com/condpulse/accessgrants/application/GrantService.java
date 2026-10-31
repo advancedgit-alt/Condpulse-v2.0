@@ -87,7 +87,7 @@ public class GrantService implements SubjectFactsPort {
     var check=AgeService.assess(ages,cipher,tenant,s,doc.minimumAgeYears(),context.timeZone(),false);
     return new GrantPlanner.AgeFact(check.outcome(),check.evidenceId(),check.validUntil());
    });
-   var plan=GrantPlanner.plan(doc,candidates,store.reservations(tenant,area.amenityId()),ageFacts,now,store.versionUntil(tenant,version.versionId()));
+   var plan=GrantPlanner.plan(doc,candidates,store.reservations(tenant,area.amenityId(),doc.reservation().entryGraceBeforeSeconds(),doc.reservation().entryGraceAfterSeconds()),ageFacts,now,store.versionUntil(tenant,version.versionId()));
    // 3. Gravação: mesma chave ativa não muda; chave revogada não volta; origem ativa de outra derivação é substituída.
    int created=0,unchanged=0;
    var skipped=new ArrayList<GrantModels.Skip>(plan.skipped());

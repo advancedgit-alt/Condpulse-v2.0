@@ -206,16 +206,24 @@ class AccessGrantJdbcTest {
   db.adminUpdate("insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
    +"values(?,?,?,?,?,'BOOKING','CONFIRMED',now()+interval '2 hours',now()+interval '4 hours',now()+interval '2 hours',now()+interval '4 hours','{}'::jsonb)",
    booking,db.tenantA,amenity,db.unitA,db.accountA);
+  // Reserva que terminou há 5 min: ainda dentro da tolerância de saída da regra (900 s), recebe direito até o fim da tolerância.
+  UUID ended=UUID.randomUUID();
+  db.adminUpdate("insert into cp.reservations(id,tenant_id,amenity_id,unit_id,created_by,kind,status,starts_at,ends_at,occupied_from,occupied_until,rule_snapshot) "
+   +"values(?,?,?,?,?,'BOOKING','CONFIRMED',now()-interval '1 hour',now()-interval '5 minutes',now()-interval '1 hour',now()-interval '5 minutes','{}'::jsonb)",
+   ended,db.tenantA,amenity,db.unitA,db.accountA);
   subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
   UUID policy=policyOf(version);
   var first=grants.derive(MANAGER,db.tenantA,AAL2,policy,new GrantModels.DeriveRequest(version));
-  assertEquals(1,first.created(),first.toString());
+  assertEquals(2,first.created(),first.toString());
   assertEquals(1,first.skippedByReason().getOrDefault("RESERVATION_REQUIRED",0),"Unidade sem reserva não recebe direito");
-  var host=grants.grants(MANAGER,db.tenantA,AAL2,null,inst.area()).grants().getFirst();
+  var inGrace=grants.grants(MANAGER,db.tenantA,AAL2,null,inst.area()).grants().stream().filter(g->ended.equals(g.originId())).findFirst().orElseThrow();
+  assertTrue(inGrace.current(),"Tolerância de saída da regra conta na consulta de reservas");
+  assertTrue(inGrace.validUntil().isBefore(Instant.now().plusSeconds(900)),"Nunca além do fim + tolerância");
+  var host=grants.grants(MANAGER,db.tenantA,AAL2,null,inst.area()).grants().stream().filter(g->booking.equals(g.originId())).findFirst().orElseThrow();
   assertEquals("RESERVATION",host.originKind()); assertEquals(booking,host.originId());
   assertFalse(host.current(),"Ainda não começou"); assertTrue(host.validFrom().isAfter(Instant.now()));
   var again=grants.derive(MANAGER,db.tenantA,AAL2,policy,new GrantModels.DeriveRequest(version));
-  assertEquals(0,again.revoked(),"Direito futuro não é origem inválida"); assertEquals(1,again.unchanged());
+  assertEquals(0,again.revoked(),"Direito futuro não é origem inválida"); assertEquals(2,again.unchanged());
   db.adminUpdate("update cp.reservations set status='CANCELLED',version=version+1 where id=?",booking);
   assertEquals(1,grants.derive(MANAGER,db.tenantA,AAL2,policy,new GrantModels.DeriveRequest(version)).revoked(),"Reserva cancelada: marca na varredura");
   db.assertEmptyContext();

@@ -481,10 +481,13 @@ END $$;
 REVOKE ALL ON FUNCTION cp.subject_contexts_revocation() FROM PUBLIC;
 CREATE TRIGGER subject_contexts_revocation AFTER UPDATE OF status ON cp.subject_contexts FOR EACH ROW EXECUTE FUNCTION cp.subject_contexts_revocation();
 
--- Credencial nova não nasce para sujeito restrito (a revogação alcança cartão e QR também no cadastro).
+-- Credencial nova não nasce para sujeito restrito (a revogação alcança cartão e QR também no cadastro). Mesmo lock por
+-- condomínio da marca de revogação: se o bloqueio vier antes, a conferência (instrução nova, depois do lock) já o vê; se
+-- vier depois, a cascata do bloqueio espera este commit e revoga a credencial criada.
 CREATE FUNCTION cp.access_credentials_subject_active() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
  IF EXISTS(SELECT 1 FROM cp.access_subjects s WHERE s.tenant_id=NEW.tenant_id AND s.id=NEW.subject_id AND s.status<>'ACTIVE') THEN
   RAISE EXCEPTION 'sujeito restrito não recebe credencial' USING ERRCODE='23514';
  END IF;
@@ -523,6 +526,8 @@ GRANT INSERT(tenant_id,target_kind,subject_id,context_id,grant_id,reason_code,op
 -- Worker (publicação por destino, V045): estado desejado e marcas, sem autoria nem origem pessoal.
 GRANT SELECT(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,valid_from,valid_until,generation,subject_restriction_epoch,
  status,revoked_at,revocation_marker_id) ON cp.access_grants TO cp_worker;
+-- Worker de credenciais (CP-046): não ativa credencial de sujeito restrito (CredentialSyncStore.due).
+GRANT SELECT(subject_id) ON cp.access_credentials TO cp_worker;
 GRANT SELECT(id,tenant_id,target_kind,subject_id,context_id,grant_id,covered_methods,revoked_through_generation,subject_restriction_epoch,
  effective_at,journal_stream_id,journal_sequence,entry_hash,previous_entry_hash,external_durability_status) ON cp.revocation_markers TO cp_worker;
 

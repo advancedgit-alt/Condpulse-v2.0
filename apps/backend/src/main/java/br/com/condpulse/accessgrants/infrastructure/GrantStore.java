@@ -49,13 +49,14 @@ public class GrantStore {
     r.getLong("source_version"),instant(r.getTimestamp("valid_until")),r.getLong("restriction_epoch"),r.getBoolean("subject_active"),
     r.getBoolean("is_current"),instant(r.getTimestamp("permit_until")),r.getObject("reservation_id",UUID.class),r.getBoolean("reservation_confirmed")),tenant,kinds.toArray(String[]::new),limit));
  }
- public List<GrantPlanner.Reservation> reservations(UUID tenant,UUID amenity) {
+ /** Reservas confirmadas do espaço cuja janela de ingresso (fim + tolerância da regra) ainda não acabou, até o horizonte. */
+ public List<GrantPlanner.Reservation> reservations(UUID tenant,UUID amenity,int graceBeforeSeconds,int graceAfterSeconds) {
   if(amenity==null) return List.of();
   return jdbc.query("""
    select id,unit_id,version,starts_at,ends_at from cp.reservations where tenant_id=? and amenity_id=? and kind='BOOKING' and status='CONFIRMED'
-    and ends_at>now() and starts_at<now()+interval '30 days' order by starts_at,id limit 5000
+    and ends_at+make_interval(secs=>?)>now() and starts_at-make_interval(secs=>?)<now()+interval '30 days' order by starts_at,id limit 5000
    """,(r,n)->new GrantPlanner.Reservation(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),r.getLong("version"),
-    r.getTimestamp("starts_at").toInstant(),r.getTimestamp("ends_at").toInstant()),tenant,amenity);
+    r.getTimestamp("starts_at").toInstant(),r.getTimestamp("ends_at").toInstant()),tenant,amenity,graceAfterSeconds,graceBeforeSeconds);
  }
  public Instant versionUntil(UUID tenant,UUID version) {
   var rows=jdbc.query("select valid_until from cp.access_policy_versions where tenant_id=? and id=?",(r,n)->instant(r.getTimestamp(1)),tenant,version);
