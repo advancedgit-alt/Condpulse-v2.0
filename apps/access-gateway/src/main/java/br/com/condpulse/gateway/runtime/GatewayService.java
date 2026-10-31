@@ -214,6 +214,15 @@ public final class GatewayService {
   return true;
  }
 
+ /**
+  * Única regra de cascata: remover a pessoa só substitui a retirada de outro método quando a fonte declara que a
+  * remoção da pessoa também retira esse método (direitos e/ou credenciais com face).
+  */
+ static boolean personRemovalCovers(AccessProviderAdapter adapter,boolean rights,boolean credentials) {
+  if(!adapter.manifest().supports(Operation.REMOVE_PERSON)) return false;
+  return (!rights || adapter.removePersonCoversRights()) && (!credentials || adapter.removePersonCoversCredentials());
+ }
+
  /** Regras antes do envio. null = pode enviar. */
  String gate(Device device,AccessProviderAdapter adapter,SyncCommand command) {
   var manifest=adapter.manifest();
@@ -221,14 +230,14 @@ public final class GatewayService {
   if(type.revocation()) {
    // Restrição sempre pode ser tentada, inclusive sem perfil aprovado: ela só retira.
    return switch(type) {
-    case REMOVE_FACE -> manifest.supports(Operation.REMOVE_FACE) || manifest.supports(Operation.REMOVE_PERSON)?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:REMOVE_FACE";
+    case REMOVE_FACE -> manifest.supports(Operation.REMOVE_FACE) || personRemovalCovers(adapter,false,true)?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:REMOVE_FACE";
     case REMOVE_CREDENTIAL -> manifest.supports(BaseAdapter.removeOperation(kind(command)))?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:"+BaseAdapter.removeOperation(kind(command));
     case REVOKE_RIGHTS -> manifest.supports(Operation.REVOKE_RIGHTS)?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:REVOKE_RIGHTS";
     default -> null;
    };
   }
   if(registry.profile(device).isEmpty()) return "PROFILE_NOT_REGISTERED";
-  boolean removePerson=manifest.supports(Operation.REMOVE_PERSON) && adapter.removePersonCoversCredentials();
+  boolean removePerson=personRemovalCovers(adapter,false,true);
   switch(type) {
    case UPSERT_PERSON -> {
     if(!manifest.supports(Operation.UPSERT_PERSON)) return "NAO_SUPORTADO_SEM_DOCUMENTACAO:UPSERT_PERSON";
@@ -279,7 +288,8 @@ public final class GatewayService {
     finally { Arrays.fill(value,(byte)0); }
    }
    case APPLY_RIGHTS -> adapter.applyRights(rights(c));
-   case REMOVE_FACE -> adapter.manifest().supports(Operation.REMOVE_FACE)?adapter.removeFace(c.subjectRef()):adapter.removePerson(c.subjectRef());
+   case REMOVE_FACE -> adapter.manifest().supports(Operation.REMOVE_FACE)?adapter.removeFace(c.subjectRef())
+    :personRemovalCovers(adapter,false,true)?adapter.removePerson(c.subjectRef()):OperationResult.notSupported(Operation.REMOVE_FACE);
    case REMOVE_CREDENTIAL -> adapter.removeCredential(c.subjectRef(),kind(c));
    case REVOKE_RIGHTS -> adapter.revokeRights(c.subjectRef());
    case REVOKE_ALL -> revokeAll(adapter,c.subjectRef());
@@ -293,8 +303,7 @@ public final class GatewayService {
  OperationResult revokeAll(AccessProviderAdapter adapter,String subjectRef) {
   var manifest=adapter.manifest();
   // Atalho só com cascata declarada de direitos E credenciais; senão cada método é retirado e agregado.
-  if(manifest.supports(Operation.REMOVE_PERSON) && adapter.removePersonCoversCredentials() && adapter.removePersonCoversRights())
-   return adapter.removePerson(subjectRef);
+  if(personRemovalCovers(adapter,true,true)) return adapter.removePerson(subjectRef);
   var states=new ArrayList<OperationResult>();
   if(manifest.supports(Operation.APPLY_RIGHTS) || manifest.supports(Operation.REVOKE_RIGHTS)) states.add(adapter.revokeRights(subjectRef));
   for(CredentialKind k:CredentialKind.values())
@@ -327,8 +336,8 @@ public final class GatewayService {
   if(s.state()!=OperationState.CONFIRMED) return Verdict.UNAVAILABLE;
   boolean absentPerson=Boolean.FALSE.equals(s.personPresent());
   // Pessoa ausente só prova retirada do que a fonte declara removido junto (cascata); o resto precisa ser lido.
-  boolean absentCoversRights=absentPerson && adapter.removePersonCoversRights();
-  boolean absentCoversCredentials=absentPerson && adapter.removePersonCoversCredentials();
+  boolean absentCoversRights=absentPerson && personRemovalCovers(adapter,true,false);
+  boolean absentCoversCredentials=absentPerson && personRemovalCovers(adapter,false,true);
   return switch(c.type()) {
    case UPSERT_PERSON -> {
     if(s.personPresent()==null) yield Verdict.UNPROVEN;
@@ -495,9 +504,16 @@ public final class GatewayService {
    boolean pending=previous==null || previous.identityPending() || !previous.reachable();
    if(!report.reachable()) pending=true; // perda de conexão: confere de novo na volta
    else if(pending) {
-    try { identity=registry.checkIdentity(d,adapter.identify()); } catch(RuntimeException e) { identity=IdentityCheck.UNVERIFIED; }
-    quarantined=identity==IdentityCheck.MISMATCH;
-    pending=false;
+    DeviceIdentity read;
+    try { read=adapter.identify(); } catch(RuntimeException e) { read=null; }
+    if(read==null || read.state()==OperationState.UNKNOWN || read.state()==OperationState.FAILED) {
+     // Falha transitória na identificação: continua pendente e tenta de novo na próxima sonda (sem liberar atuação).
+     pending=true;
+    } else {
+     identity=registry.checkIdentity(d,read);
+     quarantined=identity==IdentityCheck.MISMATCH;
+     pending=false; // CONFIRMED (OK/MISMATCH) ou sem documentação (UNVERIFIED: só BANCADA libera)
+    }
    }
    status.put(d.deviceId(),new DeviceStatus(report.reachable(),report.reasonCode(),clock.instant(),previous==null?null:previous.lastHeartbeatAt(),
     identity,quarantined,pending));
@@ -571,10 +587,9 @@ public final class GatewayService {
     long started=System.nanoTime();
     InboundEndpoint.LocalDecision decision;
     try {
-     var st=status.get(deviceId);
-     boolean production=device.phase()==GatewayConfig.Phase.PRODUCAO;
-     if((st!=null && st.quarantined()) || (production && (st==null || st.identity()!=IdentityCheck.OK)))
-      decision=new InboundEndpoint.LocalDecision(false,List.of("NOT_COMMISSIONED"),null,null);
+     // Mesma porta de identidade da abertura e da gravação: conferida desde a última conexão.
+     String identity=actuationBlock(deviceId);
+     if(identity!=null) decision=new InboundEndpoint.LocalDecision(false,List.of("NOT_COMMISSIONED"),null,null);
      else if(device.decisionMode()!=DecisionMode.EDGE_ONLINE || !registry.allows(device,adapter.manifest(),CapabilityName.onlineDecisionBeforeRelay).allowed())
       decision=new InboundEndpoint.LocalDecision(false,List.of("CAPABILITY_MISSING"),null,null);
      else decision=decisions.decide(deviceId,nativeUserRef,nativeChannel);

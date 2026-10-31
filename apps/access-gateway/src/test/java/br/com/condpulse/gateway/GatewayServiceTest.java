@@ -507,6 +507,7 @@ class GatewayServiceTest {
   var registry=new CapabilityRegistry(config.profiles());
   service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o10"),clock,config,registry,id->Optional.of(adapter)),
    outbox,decisions,decisionOutbox,central,clock);
+  service.checkHealth(); // identidade conferida após a recuperação, como no ciclo real
   assertTrue(context().decide("77","1").allow(),"recuperação não converte revogação v2 em revogação da concessão v3");
  }
 
@@ -527,5 +528,61 @@ class GatewayServiceTest {
    registry.checkIdentity(d,new DeviceIdentity(OperationState.CONFIRMED,null,null,d.firmware(),null)));
   assertEquals(br.com.condpulse.gateway.capability.CapabilityRegistry.IdentityCheck.OK,
    registry.checkIdentity(d,new DeviceIdentity(OperationState.CONFIRMED,null,d.sku(),d.firmware(),null)));
+ }
+
+ // ----- oitava rodada (#129): varredura de identidade e cascata -----
+
+ @Test void retiradaDeFacePelaPessoaSoComCascataDeclarada() {
+  build(EnumSet.of(Operation.REMOVE_PERSON,Operation.READ_STATE,Operation.HEALTH),true,DecisionMode.DEVICE_LOCAL_ACL);
+  service.submit(command("f","d1","s1",CommandType.REMOVE_FACE,1,Map.of()));
+  service.processQueues(1);
+  assertTrue(queue.get("f").orElseThrow().lastReason().startsWith("NAO_SUPORTADO_SEM_DOCUMENTACAO"));
+  assertTrue(adapter.calls.stream().noneMatch("REMOVE_PERSON"::equals),"sem cascata, remover a pessoa não substitui a retirada da face");
+ }
+
+ @Test void decisaoOnlineExigeIdentidadeReconferidaAposDesconexao() {
+  var flaky=new boolean[]{true};
+  var registry=new CapabilityRegistry(config.profiles());
+  var dev=config.devices().getFirst();
+  var online=TestSupport.config(List.of(TestSupport.device("d1",dev.brand(),dev.connectionMode(),DecisionMode.EDGE_ONLINE,dev.baseUrl(),dev.channels(),
+   dev.nativeSchedules(),dev.params(),false)),true,CondoOpenPolicy.closed());
+  var a=new ScriptedAdapter(TestSupport.context(online.devices().getFirst(),clock),ScriptedAdapter.all()) {
+   @Override public HealthReport health() { return new HealthReport(flaky[0],flaky[0]?null:"DOWN",null,null,null); }
+  };
+  config=online;
+  adapter=a;
+  decisions.close();
+  decisions=new LocalDecisionEngine(dir.resolve("dd"),clock,online);
+  service=new GatewayService(online,new CapabilityRegistry(online.profiles()),Map.of("d1",a),queue,
+   new OpenDispatcher(dir.resolve("o11"),clock,online,new CapabilityRegistry(online.profiles()),id->Optional.of(a)),outbox,decisions,decisionOutbox,central,clock);
+  service.checkHealth();
+  service.submit(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador","nativeUserRef","77")));
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
+  decisions.markSynced(clock.instant());
+  decisions.observeClockSkew(Duration.ZERO);
+  assertTrue(context().decide("77","1").allow());
+  flaky[0]=false; service.checkHealth(); // desconectou
+  flaky[0]=true;
+  assertFalse(context().decide("77","1").allow(),"sem reconferir a identidade após a reconexão: nega");
+  service.checkHealth();
+  assertTrue(context().decide("77","1").allow());
+ }
+
+ @Test void falhaTransitoriaNaIdentificacaoMantemPendencia() {
+  var attempts=new int[1];
+  var a=new ScriptedAdapter(TestSupport.context(config.devices().getFirst(),clock),ScriptedAdapter.all()) {
+   @Override public DeviceIdentity identify() {
+    if(attempts[0]++==0) return new DeviceIdentity(OperationState.UNKNOWN,"RESPONSE_NOT_RECEIVED",null,null,null);
+    return new DeviceIdentity(OperationState.NAO_SUPORTADO_SEM_DOCUMENTACAO,null,null,null,null);
+   }
+  };
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",a),queue,new OpenDispatcher(dir.resolve("o12"),clock,config,registry,id->Optional.of(a)),
+   outbox,decisions,decisionOutbox,central,clock);
+  service.checkHealth();
+  assertTrue(service.status("d1").orElseThrow().identityPending(),"falha transitória não encerra a pendência");
+  service.checkHealth();
+  assertFalse(service.status("d1").orElseThrow().identityPending());
+  assertEquals(2,attempts[0]);
  }
 }
