@@ -14,11 +14,6 @@ public final class AdapterFactory {
  private static final System.Logger LOG=System.getLogger(AdapterFactory.class.getName());
  private AdapterFactory() {}
 
- private static AccessProviderAdapter unavailable(GatewayConfig.Device device) {
-  LOG.log(System.Logger.Level.WARNING,"Sem adaptador para a marca {0}: equipamento {1} sem adaptador.",device.brand(),device.deviceId());
-  return null;
- }
-
  public static Optional<AccessProviderAdapter> create(GatewayConfig config,GatewayConfig.Device device,SecretProvider secrets,Clock clock) {
   SecretProvider.DeviceCredential credential=null;
   if(device.connectionMode()==ConnectionMode.LOCAL) {
@@ -33,8 +28,8 @@ public final class AdapterFactory {
   return Optional.ofNullable(switch(device.brand()) {
    case CONTROL_ID -> new br.com.condpulse.gateway.adapters.controlid.ControlIdAdapter(context);
    case HIKVISION -> new br.com.condpulse.gateway.adapters.hikvision.HikvisionIsapiAdapter(context);
-   // Adaptadores entram no PR empilhado seguinte (Dahua e Intelbras).
-   case DAHUA,INTELBRAS -> unavailable(device);
+   case DAHUA -> new br.com.condpulse.gateway.adapters.dahua.DahuaCgiAdapter(context);
+   case INTELBRAS -> new br.com.condpulse.gateway.adapters.intelbras.IntelbrasCgiAdapter(context);
   });
  }
 }
