@@ -137,16 +137,7 @@ public final class PolicyEngine {
    issues.add(issue("ESSENTIAL_ROUTE_RESTRICTED","/eligibleContexts","Rota residencial essencial não pode restringir moradores por horário, idade ou reserva.","BLOCKER",null,null));
   if(!"NOT_REQUIRED".equals(d.reservation().mode()) && area.amenityId()==null)
    issues.add(issue("RESERVATION_WITHOUT_AMENITY","/reservation/mode","Reserva exigida só em área ligada a espaço reservável.","BLOCKER",null,null));
-  if(!d.holidayCalendarIds().isEmpty())
-   issues.add(issue("HOLIDAY_CALENDAR_UNKNOWN","/holidayCalendarIds","Calendários de feriado ainda não existem neste condomínio.","BLOCKER",null,null));
-  if(!"OFF".equals(d.antiPassbackMode()))
-   issues.add(issue("ANTIPASSBACK_UNSUPPORTED","/antiPassbackMode","Antirretorno ainda não é suportado.","BLOCKER",null,null));
-  if(d.maximumAgeYears()!=null)
-   issues.add(issue("AGE_MAXIMUM_UNSUPPORTED","/maximumAgeYears","Idade máxima ainda não tem evidência própria; não pode ser publicada.","BLOCKER",null,null));
-  if(d.maximumOccupancy()!=null)
-   issues.add(issue("OCCUPANCY_UNSUPPORTED","/maximumOccupancy","Lotação máxima ainda não é suportada.","BLOCKER",null,null));
-  if("VERIFIED_PHYSICAL_COMPANION".equals(d.companion().mode()))
-   issues.add(issue("COMPANION_TOPOLOGY_UNAVAILABLE","/companion/mode","Acompanhamento físico exige topologia comprovada, ainda indisponível.","BLOCKER",null,null));
+  for(var u:unsupported(d)) issues.add(issue(u.code(),u.pointer(),u.message(),"BLOCKER",null,null));
   if(d.eligibleContexts().contains("EMERGENCY_RESPONDER"))
    issues.add(issue("EMERGENCY_PROCEDURE_REQUIRED","/eligibleContexts","Socorrista exige procedimento operacional e autorização transitória.","WARNING",null,null));
   if(d.eligibleContexts().contains("OWNER_NONRESIDENT"))
@@ -178,6 +169,21 @@ public final class PolicyEngine {
   return new PolicyModels.ValidationIssue(code,pointer,message,severity,point,capability);
  }
 
+ /** Restrição declarada que o motor ainda não avalia: impede a validação e nega a avaliação (nunca ALLOW). */
+ public record Unsupported(String code,String pointer,String message) {}
+ /** Lista central dos recursos não suportados; um recurso só sai daqui junto com a sua avaliação. */
+ public static List<Unsupported> unsupported(PolicyModels.PolicyDocument d) {
+  var list=new ArrayList<Unsupported>();
+  if(d.maximumAgeYears()!=null) list.add(new Unsupported("AGE_MAXIMUM_UNSUPPORTED","/maximumAgeYears","Idade máxima ainda não tem evidência própria."));
+  if(!"OFF".equals(d.antiPassbackMode())) list.add(new Unsupported("ANTIPASSBACK_UNSUPPORTED","/antiPassbackMode","Antirretorno ainda não é suportado."));
+  if(d.maximumOccupancy()!=null) list.add(new Unsupported("OCCUPANCY_UNSUPPORTED","/maximumOccupancy","Lotação máxima ainda não é suportada."));
+  if("VERIFIED_PHYSICAL_COMPANION".equals(d.companion().mode()))
+   list.add(new Unsupported("COMPANION_TOPOLOGY_UNAVAILABLE","/companion/mode","Acompanhamento físico exige topologia comprovada, ainda indisponível."));
+  if(!d.holidayCalendarIds().isEmpty())
+   list.add(new Unsupported("HOLIDAY_CALENDAR_UNKNOWN","/holidayCalendarIds","Calendários de feriado ainda não existem neste condomínio."));
+  return List.copyOf(list);
+ }
+
  // ---- 3. Avaliação de um cenário sintético
  public record Outcome(String result,List<String> reasonCodes,List<String> missingCapabilities) {}
  public static Outcome evaluate(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,PolicyModels.Destination point,
@@ -194,13 +200,14 @@ public final class PolicyEngine {
    if(!missing.isEmpty()) deny.add("CAPABILITY_MISSING");
   }
   if(!"ACTIVE".equals(area.status())) deny.add("AREA_INTERDICTED");
+  // Restrição declarada e não avaliada pelo motor: nega (falha fechada), mesmo em rascunho.
+  if(!unsupported(d).isEmpty()) deny.add("UNSUPPORTED_RESTRICTION");
   String context=s.context();
   if("VISITOR".equals(context) && "DENY".equals(d.visitorPolicy())) deny.add("VISITOR_NOT_ALLOWED");
   else if(!d.eligibleContexts().contains(context)) deny.add("NO_ELIGIBLE_CONTEXT");
   else if("VISITOR".equals(context) && !s.permitActive()) deny.add("PERMIT_EXPIRED");
   if(d.minimumAgeYears()!=null || d.maximumAgeYears()!=null) {
-   // A evidência sintética só fala do mínimo: com idade máxima, a idade é tratada como não verificada (falha fechada).
-   if("UNKNOWN".equals(s.ageEvidence()) || d.maximumAgeYears()!=null)
+   if("UNKNOWN".equals(s.ageEvidence()))
     (("ASSISTED_VERIFICATION".equals(d.failure().onMissingAttribute()))?assist:deny).add("AGE_NOT_VERIFIED");
    if("VERIFIED_BELOW_MINIMUM".equals(s.ageEvidence()) && d.minimumAgeYears()!=null) deny.add("AGE_BELOW_MINIMUM");
   }
@@ -234,7 +241,8 @@ public final class PolicyEngine {
   Map.entry("NO_ELIGIBLE_CONTEXT","O vínculo não está entre os permitidos."),Map.entry("PERMIT_EXPIRED","Visitante sem autorização vigente."),
   Map.entry("AGE_NOT_VERIFIED","Idade sem evidência verificada."),Map.entry("AGE_BELOW_MINIMUM","Idade abaixo do mínimo da área."),
   Map.entry("RESERVATION_REQUIRED","Exige reserva vigente."),Map.entry("COMPANION_NOT_VERIFIED","Exige acompanhamento físico comprovado."),
-  Map.entry("ASSISTANCE_REQUIRED","Exige atendimento da equipe."),Map.entry("OUTSIDE_SCHEDULE","Fora do horário permitido."));
+  Map.entry("ASSISTANCE_REQUIRED","Exige atendimento da equipe."),Map.entry("OUTSIDE_SCHEDULE","Fora do horário permitido."),
+  Map.entry("UNSUPPORTED_RESTRICTION","A regra declara restrição que ainda não é avaliada: ingresso negado."));
  public static String explain(List<String> reasons) {
   return String.join(" ",reasons.stream().map(r->EXPLAIN.getOrDefault(r,r)).toList());
  }

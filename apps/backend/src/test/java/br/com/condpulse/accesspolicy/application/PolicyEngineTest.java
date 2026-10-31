@@ -58,16 +58,34 @@ class PolicyEngineTest {
   assertTrue(PolicyEngine.validate(d,ACTIVE,List.of(expired),SAT_10).stream().anyMatch(i->"HOMOLOGATION_NOT_APPROVED".equals(i.code())));
   assertEquals(PolicyEngine.validate(d,ACTIVE,List.of(partial),SAT_10),PolicyEngine.validate(d,ACTIVE,List.of(partial),SAT_10),"Determinístico");
  }
- @Test void maximumAgeIsBlockedAndNeverPermissive() {
-  var base=doc(List.of("RESIDENT"),"DENY",null,DAY,"SAFE_LOCAL_SUBSET","DENY");
-  var withMax=new PolicyModels.PolicyDocument(base.schemaVersion(),base.name(),base.areaId(),base.timezone(),base.ruleCombination(),base.eligibleContexts(),
-   base.visitorPolicy(),null,true,base.weeklyWindows(),base.holidayCalendarIds(),base.calendarPrecedence(),base.reservation(),base.companion(),base.offline(),
-   base.failure(),base.antiPassbackMode(),base.maximumOccupancy(),true,12,"DENY");
-  assertNull(PolicyEngine.structure(withMax,AREA));
-  assertTrue(PolicyEngine.validate(withMax,ACTIVE,List.of(COMMISSIONED),SAT_10).stream()
-   .anyMatch(i->"AGE_MAXIMUM_UNSUPPORTED".equals(i.code()) && "BLOCKER".equals(i.severity())));
-  var outcome=PolicyEngine.evaluate(withMax,ACTIVE,COMMISSIONED,subject("RESIDENT","VERIFIED_MEETS_MINIMUM"),SAT_10);
-  assertEquals("DENY",outcome.result()); assertEquals(List.of("AGE_NOT_VERIFIED"),outcome.reasonCodes(),"Sem evidência do máximo, nunca ALLOW");
+ static PolicyModels.PolicyDocument variant(Integer maxAge,String antiPassback,Integer occupancy,String companion,List<UUID> holidays) {
+  var b=doc(List.of("RESIDENT"),"DENY",null,DAY,"SAFE_LOCAL_SUBSET","DENY");
+  return new PolicyModels.PolicyDocument(b.schemaVersion(),b.name(),b.areaId(),b.timezone(),b.ruleCombination(),b.eligibleContexts(),b.visitorPolicy(),
+   null,true,b.weeklyWindows(),holidays,b.calendarPrecedence(),b.reservation(),new PolicyModels.CompanionRule(companion,companion.equals("NONE")?0:30),
+   b.offline(),b.failure(),antiPassback,occupancy,true,maxAge,"DENY");
+ }
+ @Test void everyUnsupportedRestrictionBlocksValidationAndDeniesEvaluation() {
+  var supported=variant(null,"OFF",null,"NONE",List.of());
+  assertTrue(PolicyEngine.unsupported(supported).isEmpty());
+  assertEquals("ALLOW",PolicyEngine.evaluate(supported,ACTIVE,COMMISSIONED,subject("RESIDENT","VERIFIED_MEETS_MINIMUM"),SAT_10).result());
+  var cases=java.util.Map.of(
+   "AGE_MAXIMUM_UNSUPPORTED",variant(12,"OFF",null,"NONE",List.of()),
+   "ANTIPASSBACK_UNSUPPORTED",variant(null,"GLOBAL",null,"NONE",List.of()),
+   "OCCUPANCY_UNSUPPORTED",variant(null,"OFF",30,"NONE",List.of()),
+   "COMPANION_TOPOLOGY_UNAVAILABLE",variant(null,"OFF",null,"VERIFIED_PHYSICAL_COMPANION",List.of()),
+   "HOLIDAY_CALENDAR_UNKNOWN",variant(null,"OFF",null,"NONE",List.of(UUID.randomUUID())));
+  var local=variant(null,"LOCAL",null,"NONE",List.of());
+  assertEquals(List.of("ANTIPASSBACK_UNSUPPORTED"),PolicyEngine.unsupported(local).stream().map(PolicyEngine.Unsupported::code).toList());
+  for(var entry:cases.entrySet()) {
+   var d=entry.getValue();
+   assertNull(PolicyEngine.structure(d,AREA),entry.getKey());
+   assertTrue(PolicyEngine.validate(d,ACTIVE,List.of(COMMISSIONED),SAT_10).stream()
+    .anyMatch(i->entry.getKey().equals(i.code()) && "BLOCKER".equals(i.severity())),entry.getKey());
+   // Cenário que satisfaz tudo o que o motor avalia, inclusive acompanhante verificado: ainda assim nunca ALLOW.
+   var outcome=PolicyEngine.evaluate(d,ACTIVE,COMMISSIONED,new PolicyModels.SyntheticSubject("RESIDENT","VERIFIED_MEETS_MINIMUM",true,true,true),SAT_10);
+   assertEquals("DENY",outcome.result(),entry.getKey());
+   assertTrue(outcome.reasonCodes().contains("UNSUPPORTED_RESTRICTION"),entry.getKey());
+  }
  }
  @Test void evaluationIsDeterministicAndDeniesByDefault() {
   var d=doc(List.of("RESIDENT","DEPENDENT"),"DENY",18,DAY,"SAFE_LOCAL_SUBSET","DENY");

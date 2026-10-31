@@ -31813,7 +31813,8 @@
                 "RESERVATION_REQUIRED",
                 "COMPANION_NOT_VERIFIED",
                 "ASSISTANCE_REQUIRED",
-                "OUTSIDE_SCHEDULE"
+                "OUTSIDE_SCHEDULE",
+                "UNSUPPORTED_RESTRICTION"
               ]
             }
           },
@@ -31864,7 +31865,7 @@
             "const": false
           }
         },
-        "description": "REQUIRE_ASSISTANCE e UNAVAILABLE negam atuação automática; nunca convertidos em ALLOW."
+        "description": "REQUIRE_ASSISTANCE e UNAVAILABLE negam atuação automática; nunca convertidos em ALLOW. Restrição declarada que o motor ainda não avalia (idade máxima, antirretorno, lotação, acompanhamento físico, feriados) sempre nega com UNSUPPORTED_RESTRICTION."
       },
       "VersionAction": {
         "type": "object",
