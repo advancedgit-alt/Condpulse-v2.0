@@ -353,4 +353,22 @@ class DahuaIntelbrasAdapterContractTest {
    } finally { a.shutdown(); }
   }
  }
+
+ // ----- sétima rodada (#132) -----
+
+ @Test void intelbrasPortaPresenteEInvalidaNega() {
+  var a=intelbras(null,ConnectionMode.NUVEM);
+  var endpoint=a.inbound().orElseThrow();
+  var asked=new ArrayList<String>();
+  InboundEndpoint.Context allowAll=new InboundEndpoint.Context() {
+   @Override public Instant now() { return Instant.now(); }
+   @Override public InboundEndpoint.LocalDecision decide(String u,String c) { asked.add(u+"@"+c); return new InboundEndpoint.LocalDecision(true,List.of("x"),null,null); }
+   @Override public void events(List<EdgeEvent> e) {}
+   @Override public void heartbeat() {}
+  };
+  String bad="--myboundary\r\n\r\nCode=AccessControl;action=Pulse;index=0;data={\"Door\":\"x\",\"ErrorCode\":96,\"UserID\":\"501\"}\r\n";
+  var r=Json.object(new String(endpoint.handle(new InboundEndpoint.Request("POST","/notification",Map.of(),null,bad.getBytes(),"127.0.0.1"),allowAll).body()));
+  assertEquals("false",r.get("auth"));
+  assertTrue(asked.isEmpty());
+ }
 }

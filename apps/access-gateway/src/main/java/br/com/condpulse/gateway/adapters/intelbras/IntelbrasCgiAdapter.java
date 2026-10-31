@@ -337,8 +337,9 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
        if(!"AccessControl".equals(block.code()) || block.data()==null) continue;
        String user=Json.string(block.data(),"UserID");
        String door=Json.string(block.data(),"Door");
-       if(user==null || !user.matches("[A-Za-z0-9_-]{1,64}")) continue;
-       allow=ctx.decide(user,door!=null && door.matches("\\d{1,3}")?door:null).allow();
+       // Usuário ausente/inválido ou porta presente e inválida: negativa, sem cair no canal único por padrão.
+       if(user==null || !user.matches("[A-Za-z0-9_-]{1,64}") || (door!=null && !door.matches("\\d{1,3}"))) { allow=false; break; }
+       allow=ctx.decide(user,door).allow();
        break;
       }
      } catch(RuntimeException e) { allow=false; }
