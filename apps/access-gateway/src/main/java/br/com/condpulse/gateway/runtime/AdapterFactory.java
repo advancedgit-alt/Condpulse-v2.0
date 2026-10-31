@@ -31,8 +31,9 @@ public final class AdapterFactory {
   var context=new DeviceContext(device,config.connectorId(),credential,Duration.ofMillis(config.limits().deviceTimeoutMillis()),
    Duration.ofMillis(config.limits().pushPickupTimeoutMillis()),clock,config.zone());
   return Optional.ofNullable(switch(device.brand()) {
-   // Adaptadores entram nos PRs empilhados (Control iD, Hikvision, Dahua e Intelbras).
-   case CONTROL_ID,HIKVISION,DAHUA,INTELBRAS -> unavailable(device);
+   case CONTROL_ID -> new br.com.condpulse.gateway.adapters.controlid.ControlIdAdapter(context);
+   // Adaptadores entram nos PRs empilhados seguintes (Hikvision, Dahua e Intelbras).
+   case HIKVISION,DAHUA,INTELBRAS -> unavailable(device);
   });
  }
 }
