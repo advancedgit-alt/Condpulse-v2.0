@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "owner": {
+    "type": "condominium",
+    "id": "condominio_demo"
+  },
+  "inherits": {
+    "profileId": "brand_administradora_demo",
+    "revisionId": "rev_admin_3"
+  },
+  "identity": {
+    "displayName": "Residencial Horizonte",
+    "shortName": "Horizonte",
+    "coBranding": "condpulse_signature"
+  },
+  "brand": {
+    "primary": "#007F86",
+    "accent": "#102A43",
+    "fontFamilyId": "lato"
+  },
+  "assets": {
+    "horizontalLight": "asset_logo_light",
+    "horizontalDark": "asset_logo_dark",
+    "symbolLight": "asset_symbol_light",
+    "symbolDark": "asset_symbol_dark",
+    "monoPositive": "asset_logo_mono_navy",
+    "monoNegative": "asset_logo_mono_white",
+    "onBrand": "asset_logo_on_brand",
+    "favicon": "asset_favicon"
+  },
+  "appearance": {
+    "defaultMode": "system",
+    "allowedModes": [
+      "light",
+      "dark",
+      "system"
+    ],
+    "defaultDensity": "comfortable",
+    "allowedDensities": [
+      "comfortable",
+      "compact"
+    ]
+  }
+}

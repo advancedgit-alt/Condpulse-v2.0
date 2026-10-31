@@ -1,0 +1,189 @@
+{
+  "format": "CondPulse semantic handoff tokens; custom JSON, not a claim of DTCG conformance",
+  "schemaVersion": 1,
+  "version": "1.0.0-proposal",
+  "status": "PROPOSTA; não aplicada ao repositório, não homologada em produção",
+  "generatedOn": "2026-10-31",
+  "auditBaseline": {
+    "repository": "advancedgit-alt/Condpulse-v2.0",
+    "commit": "7130b52769ad2acaac420fd2896b32b1ad7484ad",
+    "web": "React + TypeScript + Vite + CSS próprio; Lato 400/700",
+    "native": "React Native + Expo; fontes nativas nos estilos auditados"
+  },
+  "notes": [
+    "Paleta fornecida para a proposta. Navegação inversa reutiliza valores dessas paletas.",
+    "No modo escuro, action.primary.hover é alias do normal: não foi introduzida uma cor extra. Validar feedback de hover/foco/pressionado no componente; nunca depender só de hover.",
+    "No modo claro, text.link usa #00666D: #007F86 em #F4F7FA resulta em 4.4592176977037035:1 e não passa para texto comum AA.",
+    "border.decorative não identifica sozinho campos/controles. Para esses casos usar border.control.",
+    "focus.ring precisa de área de superfície ao redor: outline de 2px com offset de 3px. Em superfície inversa, usar focus.inverse.",
+    "Não reduzir opacidade de todo o botão para simular pressed: isso altera os pares medidos. Estados inativos exigem política própria.",
+    "48px é meta de produto para alvos de toque. Densidade compacta é de desktop com ponteiro preciso.",
+    "Os tokens não concedem permissão e não mudam estados do domínio ou regras de acesso."
+  ],
+  "identity": {
+    "name": "CondPulse",
+    "navy": "#102A43",
+    "teal": "#007F86"
+  },
+  "themes": {
+    "light": {
+      "surface.canvas": "#F4F7FA",
+      "surface.panel": "#FFFFFF",
+      "surface.alternate": "#F4F7FA",
+      "surface.inverse": "#102A43",
+      "text.primary": "#102A43",
+      "text.secondary": "#52667A",
+      "text.inverse": "#FFFFFF",
+      "text.inverseSecondary": "#B4C2D1",
+      "text.inverseLink": "#5DD6C7",
+      "border.decorative": "#DCE5EC",
+      "border.control": "#7B8C9C",
+      "action.primary.background": "#007F86",
+      "action.primary.hover": "#00666D",
+      "action.primary.foreground": "#FFFFFF",
+      "focus.ring": "#005FCC",
+      "focus.inverse": "#8EBDFF",
+      "status.success.foreground": "#17633D",
+      "status.success.background": "#EAF5EE",
+      "status.warning.foreground": "#8A4B08",
+      "status.warning.background": "#FFF4DF",
+      "status.danger.foreground": "#B42318",
+      "status.danger.background": "#FFF0EE",
+      "status.info.foreground": "#2459A6",
+      "status.info.background": "#EDF3FF",
+      "text.link": "#00666D"
+    },
+    "dark": {
+      "surface.canvas": "#0D1724",
+      "surface.panel": "#152334",
+      "surface.alternate": "#1A2B3F",
+      "surface.inverse": "#0D1724",
+      "text.primary": "#F2F6FB",
+      "text.secondary": "#B4C2D1",
+      "text.inverse": "#F2F6FB",
+      "text.inverseSecondary": "#B4C2D1",
+      "text.inverseLink": "#5DD6C7",
+      "border.decorative": "#34485E",
+      "border.control": "#7891AC",
+      "action.primary.background": "#5DD6C7",
+      "action.primary.hover": "#5DD6C7",
+      "action.primary.foreground": "#0D1724",
+      "focus.ring": "#8EBDFF",
+      "focus.inverse": "#8EBDFF",
+      "status.success.foreground": "#8FDDB2",
+      "status.success.background": "#1C392D",
+      "status.warning.foreground": "#FFD18A",
+      "status.warning.background": "#43321C",
+      "status.danger.foreground": "#FFB4AD",
+      "status.danger.background": "#42272C",
+      "status.info.foreground": "#A8C8FF",
+      "status.info.background": "#213653",
+      "text.link": "#5DD6C7"
+    }
+  },
+  "typography": {
+    "webFamily": "Lato, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "nativeFamily": "system (Lato exige carregamento e validação específicos antes da adoção)",
+    "weights": {
+      "regular": 400,
+      "strong": 700
+    },
+    "sizesPx": {
+      "body": 16,
+      "label": 14,
+      "caption": 14,
+      "metadata": 12,
+      "section": 20,
+      "page": 28,
+      "metric": 32
+    },
+    "lineHeights": {
+      "body": 1.5,
+      "heading": 1.25
+    },
+    "metadataRestriction": "12px só para informação secundária não crítica; não usar em regras de acesso, erros ou ações.",
+    "fontSynthesis": "none"
+  },
+  "spacingPx": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48
+  },
+  "radiusPx": {
+    "control": 10,
+    "card": 16,
+    "dialog": 16,
+    "badge": 999
+  },
+  "sizingPx": {
+    "controlComfortable": 48,
+    "controlCompactDesktop": 40,
+    "touchTarget": 48,
+    "tableRowComfortable": 52,
+    "tableRowCompactDesktop": 40,
+    "icon": 24,
+    "focusWidth": 2,
+    "focusOffset": 3
+  },
+  "layoutPx": {
+    "sidebarDefault": 244,
+    "sidebarNarrow": 215,
+    "sidebarNarrowAt": 1200,
+    "drawerBelow": 1024,
+    "contentMax": 1550
+  },
+  "layoutNote": "Valores de shell preservam a base auditada; o breakpoint final precisa de validação nas telas. CSS custom properties não substituem diretamente números em media queries.",
+  "motionMs": {
+    "fast": 150,
+    "normal": 220,
+    "reduced": 0
+  },
+  "componentAliases": {
+    "button.primary.background": "action.primary.background",
+    "button.primary.hover": "action.primary.hover",
+    "button.primary.text": "action.primary.foreground",
+    "input.background": "surface.panel",
+    "input.text": "text.primary",
+    "input.placeholder": "text.secondary",
+    "input.border": "border.control",
+    "table.background": "surface.panel",
+    "table.row.hover": "surface.alternate",
+    "table.divider": "border.decorative",
+    "table.text": "text.primary",
+    "dialog.background": "surface.panel",
+    "dialog.text": "text.primary",
+    "notice.error.text": "status.danger.foreground",
+    "notice.error.background": "status.danger.background",
+    "notice.warning.text": "status.warning.foreground",
+    "notice.warning.background": "status.warning.background"
+  },
+  "tenantPolicy": {
+    "brandEditableFields": [
+      "identity.displayName",
+      "identity.shortName",
+      "identity.coBranding",
+      "brand.primary",
+      "brand.accent",
+      "assets"
+    ],
+    "protected": [
+      "status.*",
+      "focus.*",
+      "border.control",
+      "typography.sizesPx",
+      "sizingPx.touchTarget",
+      "authorization",
+      "integrationSecrets"
+    ],
+    "initialFontFamilyIds": [
+      "lato"
+    ],
+    "themeCompilation": "Overrides autorizados geram candidato; resolver herança por revisões fixadas e validar todos os pares antes de publicar."
+  }
+}

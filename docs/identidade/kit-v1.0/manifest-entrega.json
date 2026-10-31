@@ -1,0 +1,527 @@
+{
+  "version": "1.0",
+  "date": "2026-10-31",
+  "prototype_url": "https://condpulse-visual-lab-20261031.tisindicoadvanced.chatgpt.site",
+  "files": [
+    {
+      "path": "CondPulse_Caderno_Referencias_Prototipos_v1.0.md",
+      "bytes": 18669,
+      "sha256": "ba016ed3307ef23f578fb4524cf83264875bf439948cf5c6494d7aedcc39f120"
+    },
+    {
+      "path": "CondPulse_Caderno_Referencias_Prototipos_v1.0.pdf",
+      "bytes": 10167236,
+      "sha256": "af0b27d060f15f56b2db95041c9e863c256945e2d5310623605aea40d85fa8ce"
+    },
+    {
+      "path": "CondPulse_Manual_Identidade_Marca_Sistema_v1.0.md",
+      "bytes": 61490,
+      "sha256": "37a952f7f1938e645994e56a3618b5ffdf58bb0db7630718e4ff607da98528b6"
+    },
+    {
+      "path": "CondPulse_Manual_Identidade_Marca_Sistema_v1.0.pdf",
+      "bytes": 795217,
+      "sha256": "cdd46c3ffcc7a7d1ccb008a2d50cbdd35b8175ddeb66c9dab0a38aa76fca7fd5"
+    },
+    {
+      "path": "LEIA-ME.md",
+      "bytes": 7463,
+      "sha256": "c3cd45c5c6e5457555229a07e33069c520534151635526ab819a0d31a70af4d7"
+    },
+    {
+      "path": "Manual_Identidade_CondPulse.md",
+      "bytes": 36320,
+      "sha256": "eed7016556e12bc2b15c80784a8dae73a9a19f377caf529cf05f896e7fd1aaa7"
+    },
+    {
+      "path": "brand-assets/README.md",
+      "bytes": 7283,
+      "sha256": "2ebda155b251108657d42bb5d659b6dc5b79d61d8897b92ae654b0e2865c5624"
+    },
+    {
+      "path": "brand-assets/condpulse-prancha-variantes.png",
+      "bytes": 178523,
+      "sha256": "b57841e84def3d43f9191997f8adeccac39965c53465cf07304c514b3879bd97"
+    },
+    {
+      "path": "brand-assets/favicons/condpulse-favicon-180.png",
+      "bytes": 6328,
+      "sha256": "3fba7776ddb8c62e5b1f985dca45e004e228e02dcb559a41a9b03777ae0d299b"
+    },
+    {
+      "path": "brand-assets/favicons/condpulse-favicon-32.png",
+      "bytes": 1252,
+      "sha256": "b23378db1c38367f032f7d8e976a08118a5b3c201196ef36ecd6fdbad82c3411"
+    },
+    {
+      "path": "brand-assets/favicons/condpulse-favicon-512.png",
+      "bytes": 19159,
+      "sha256": "b75e7853e89b871ce21ce152e1bb399f091c7045961608dcde44b48a1e085251"
+    },
+    {
+      "path": "brand-assets/favicons/condpulse-favicon-escuro-180.png",
+      "bytes": 6837,
+      "sha256": "501776fe6d0cb55158f4d1daa611a6e22f1fc760c3c84da08a3b6524679aaec5"
+    },
+    {
+      "path": "brand-assets/favicons/condpulse-favicon-escuro-32.png",
+      "bytes": 1335,
+      "sha256": "24f67d0b896f162ade8b50a709f12e3f96247695cc27ba304ecfced031893a42"
+    },
+    {
+      "path": "brand-assets/favicons/condpulse-favicon-escuro-512.png",
+      "bytes": 20743,
+      "sha256": "67dbfed11f91f13dea9939480c92949286de9358ddf2f60de75505da8b274aef"
+    },
+    {
+      "path": "brand-assets/favicons/favicon.ico",
+      "bytes": 1216,
+      "sha256": "cf8cb47c8b497826bae28a8b5fe947b6eb1a44969079a98561049d7bfae601cf"
+    },
+    {
+      "path": "brand-assets/manifest.json",
+      "bytes": 9096,
+      "sha256": "11beb3dbda2c3ee497bb02c7aa1f6000a53aa61a0405edb0a332571887f64a45"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-mono-branca@2x.png",
+      "bytes": 44496,
+      "sha256": "34c610a3c137cecb5332e29ccfc9679a4d8ce5768b4caae6e8c46f9376fe2b4d"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-mono-branca@4x.png",
+      "bytes": 99349,
+      "sha256": "bce462561b10205e219207c9a0cf0c5a96612e5ae3770df124012aed6339b08c"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-mono-navy@2x.png",
+      "bytes": 41078,
+      "sha256": "c18be4c871af5c4fb961d03de52d2bbbcb78dc02e8f3319f67071e56856bf09a"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-mono-navy@4x.png",
+      "bytes": 92075,
+      "sha256": "cd9b8d122fcb3fff70ce8cda21a6c98aa74e4f036da61bb9a1cb464f3361b378"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-negativa@2x.png",
+      "bytes": 44329,
+      "sha256": "5161d79f819a9cfbbb26478e06344234421f818997cd6ea54fb8029d6bab26a3"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-negativa@4x.png",
+      "bytes": 98890,
+      "sha256": "7f1f67b8440db0adba8a552be9555227e7f2c204f548c80e3b33c2afc0354fad"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-positiva@2x.png",
+      "bytes": 41061,
+      "sha256": "8f808acc93791a4d9315037414fb4316e64cbf0f4c6803fecc0f3ae3d813871f"
+    },
+    {
+      "path": "brand-assets/png/condpulse-app-icon-positiva@4x.png",
+      "bytes": 91991,
+      "sha256": "0e59781b487d8caca3990615ebef4a6773ddbf2957c1385a8559a0463f9f5949"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-mono-branca@2x.png",
+      "bytes": 25784,
+      "sha256": "c618f9e8b25819d4536e028cfcf805b001fd2490bef304d2aeb194330324d430"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-mono-branca@4x.png",
+      "bytes": 57362,
+      "sha256": "c12cdbaf0c126d39aadfa43c718c779334f43cb5741ff3c3e01ba635350cdb37"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-mono-navy@2x.png",
+      "bytes": 36762,
+      "sha256": "281d3538767545ef6a7131a07b7a7998527334ea3d2b226dbdefc2e9889933af"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-mono-navy@4x.png",
+      "bytes": 80256,
+      "sha256": "6d999461f74dc1a7aa2444b349736aea27cd44446a8365eeb4e40fc951ecab07"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-negativa@2x.png",
+      "bytes": 30381,
+      "sha256": "33a83b67a335c8e7449e0a63fb30b4c0d34487218e5afcc3a076ccb4732749c9"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-negativa@4x.png",
+      "bytes": 66516,
+      "sha256": "46a4625ecb0e8a2cb027dbda28c2da36ddadb3a34ec7e0af89a6b447dcdf95de"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-positiva@2x.png",
+      "bytes": 36496,
+      "sha256": "5f4fee966f8f19ab7267f6b678a9f0493e2b1338dcc2dad023f315492e1e9bbf"
+    },
+    {
+      "path": "brand-assets/png/condpulse-horizontal-positiva@4x.png",
+      "bytes": 79509,
+      "sha256": "34a4cf30a8bde38fb49ed1c0c80dc031371b49639cf3e77dbaff338c2dfd5e3b"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-mono-branca@2x.png",
+      "bytes": 8690,
+      "sha256": "dac47baded556c1416decf837be524f6b44e1b6ebc67a83dfa3887b3d6a7958f"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-mono-branca@4x.png",
+      "bytes": 19447,
+      "sha256": "8f8577ad32cda21b76491e18da77e743ca49d4c5610ff5be0a7baf1c61378105"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-mono-navy@2x.png",
+      "bytes": 11702,
+      "sha256": "32d5b93294e2c1d99a4962835afc4b1334f59780ea51466268953e703c7e03ec"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-mono-navy@4x.png",
+      "bytes": 25882,
+      "sha256": "08ebfff186e2e2bb656999a903733a286e5236fbb16c3070d85a33e9c3d12870"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-negativa@2x.png",
+      "bytes": 8936,
+      "sha256": "55b145645db813a37ceee0a2a53ead5b42309210197c7811b1a26ad04db59fa5"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-negativa@4x.png",
+      "bytes": 19956,
+      "sha256": "11037a22356eec2f9bf9294b057c0249a39fb024b9f5b9f058bb9f3b6b1f78b9"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-positiva@2x.png",
+      "bytes": 11714,
+      "sha256": "2f2cde6d8e89eb185eaa8f0704622196ea8cf258f2873fc89fba62d04c8051e6"
+    },
+    {
+      "path": "brand-assets/png/condpulse-simbolo-positiva@4x.png",
+      "bytes": 25817,
+      "sha256": "4c7f7b9827d8057f52d7ac599ca18908027883c1f201d870355e41dbbdb1e139"
+    },
+    {
+      "path": "brand-assets/reference/condpulse-app-icon-original.svg",
+      "bytes": 492,
+      "sha256": "aac6acbf07ccad519913a57ee3fdec845d81f3c9031bfc8cb246f47c4f0133e4"
+    },
+    {
+      "path": "brand-assets/reference/condpulse-horizontal-original.svg",
+      "bytes": 5537,
+      "sha256": "375e0a22af6ee044aab294586d4faf6d8b3b395da45a1f50d1a34a1e0436c77a"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-app-icon-mono-branca.svg",
+      "bytes": 605,
+      "sha256": "b381227560ee944fc585416aef5cc323adc55ddd8e33c18605c387ca50cd4d76"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-app-icon-mono-navy.svg",
+      "bytes": 601,
+      "sha256": "2e70c46262cb1f5e95941ae46caa751f08c791c5af31f67e0fa0097309613cf1"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-app-icon-negativa.svg",
+      "bytes": 599,
+      "sha256": "8ab9e01cd21090e0d0f67bf45ae281142430cd08104505fd6be2690434e81496"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-app-icon-positiva.svg",
+      "bytes": 599,
+      "sha256": "ceea8ae25a2975a16428297caff9e20893d9caaef3f4d4cd4c2ed33506d52aa3"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-horizontal-mono-branca.svg",
+      "bytes": 5572,
+      "sha256": "d536408a70aa78be981d81a1f61dff36e19b83072162c7f50416c3cd98f3eb24"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-horizontal-mono-navy.svg",
+      "bytes": 5568,
+      "sha256": "50b2fe6e8d73134260214b980d28679d5460febb9e6512350c85b805031b0886"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-horizontal-negativa.svg",
+      "bytes": 5566,
+      "sha256": "0ffaeee70ced46f201672419af3741b76878ee2a65577cdb3d87ad123f334a56"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-horizontal-positiva.svg",
+      "bytes": 5566,
+      "sha256": "4e54bc009ae1d569858d6226a35068dde335e84a16a5f989978b0bc41dbda937"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-simbolo-mono-branca.svg",
+      "bytes": 502,
+      "sha256": "4dbbb3cb5acb1c775673f79cd17d76f8e57550ef4f8252e4678a4b2203b83709"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-simbolo-mono-navy.svg",
+      "bytes": 498,
+      "sha256": "4ef778701efe1acd677e713262e997a349e25a3b5a54d0cee8be2f398690cfc0"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-simbolo-negativa.svg",
+      "bytes": 496,
+      "sha256": "f36e92b581c4ae54783bd07ac0433b6d7ed1535842b618deb0eec7d2a20c87b7"
+    },
+    {
+      "path": "brand-assets/svg/condpulse-simbolo-positiva.svg",
+      "bytes": 496,
+      "sha256": "4861483467d069979306fd46b61868ab4243ca0ab7ec04390a8f01d9da7ced9a"
+    },
+    {
+      "path": "fonts/Lato-Bold.ttf",
+      "bytes": 656544,
+      "sha256": "8a0aace75d33794eece4b28187bfc1df0bbd2888b5d8a56e01788c8d65d16be1"
+    },
+    {
+      "path": "fonts/Lato-Bold.woff",
+      "bytes": 334304,
+      "sha256": "a207b06be5db4e0e30f978df569526914886bc398fe0eb064753d1a32e7b591c"
+    },
+    {
+      "path": "fonts/Lato-Regular.ttf",
+      "bytes": 656568,
+      "sha256": "d636e4683231f931eda222d588e944d082bfd3bdba02f928bee461c0f185b251"
+    },
+    {
+      "path": "fonts/Lato-Regular.woff",
+      "bytes": 335304,
+      "sha256": "ab436a50606542a66487a7cf4fe6597fc7d1c347fd255d27bc3d23f7df1790f1"
+    },
+    {
+      "path": "fonts/OFL.txt",
+      "bytes": 4407,
+      "sha256": "74ba064d03f1f1c4a952da936c3eb71866c34404916734de3cae73b34357e59e"
+    },
+    {
+      "path": "handoff/caderno_referencias_texto.md",
+      "bytes": 18669,
+      "sha256": "ba016ed3307ef23f578fb4524cf83264875bf439948cf5c6494d7aedcc39f120"
+    },
+    {
+      "path": "handoff/contrast-report.json",
+      "bytes": 89023,
+      "sha256": "49d9a033ce1ba724df9e98a2dd6c2895866fe253f880ba8b5f799eb5e00f974d"
+    },
+    {
+      "path": "handoff/contrast-report.md",
+      "bytes": 15669,
+      "sha256": "22fd5ef62028c9f2df907588afa3a5956be916a18cc9eacdbf37407f42f34604"
+    },
+    {
+      "path": "handoff/design-tokens.json",
+      "bytes": 6661,
+      "sha256": "e639209e6590a1074e7891ce649efbe2de1b526c24feed5bf85558062d6b9bdc"
+    },
+    {
+      "path": "handoff/identity_pdf_qa.md",
+      "bytes": 3211,
+      "sha256": "cad1727a3e7a6095e34de9f2eb0b1ad807ca0e262da1227564528ee0c457ebcc"
+    },
+    {
+      "path": "handoff/qa-prototipo-estatico.md",
+      "bytes": 10941,
+      "sha256": "e6e77d6513a50d68d823374c40a1426acdc56bfce06ff9b7a56645900703bf4d"
+    },
+    {
+      "path": "handoff/reference_pdf_qa.md",
+      "bytes": 1426,
+      "sha256": "0dfa5d3c286a6888e370e596585713c8da24d8d461549adab2903fa320ff1e9b"
+    },
+    {
+      "path": "handoff/tenant-branding.example.json",
+      "bytes": 1000,
+      "sha256": "b79351873023cd053a386c5c73dfae49ed6208e2d8c3392c77f3645078564600"
+    },
+    {
+      "path": "handoff/tenant-branding.schema.json",
+      "bytes": 4279,
+      "sha256": "9c0c4559d26585b4ac35f0923f5eaa3d73510ede48a41b1b6fe65916afec4c39"
+    },
+    {
+      "path": "handoff/token-to-code-map.md",
+      "bytes": 16257,
+      "sha256": "1383454f7d9a7a4bf36e89cbf5ff1fb3bb6a9cbe9491f990ce931fbe3a96e22f"
+    },
+    {
+      "path": "handoff/tokens.css",
+      "bytes": 4520,
+      "sha256": "f8f43ecf795c442ccfa67f4672bc1e6ec5987e7f5cb7bb3fc40becc445eb9399"
+    },
+    {
+      "path": "handoff/validate-contrast.py",
+      "bytes": 14670,
+      "sha256": "75c73f0c6ed8106e0dabdd5b1d2abf9410d050370ddf360f3e5f9e14a813ff6b"
+    },
+    {
+      "path": "media-templates/README.md",
+      "bytes": 3816,
+      "sha256": "8440970349dd16faae2ac58a4233e55588a1ae78195215584b4ed05cc653ec5d"
+    },
+    {
+      "path": "media-templates/condpulse-anuncio-1200x628.png",
+      "bytes": 52961,
+      "sha256": "db670985f2f71daab539b3bc22d30b0fb9696a0ae9ea0eb8c067b6b68d2fddc6"
+    },
+    {
+      "path": "media-templates/condpulse-anuncio-1200x628.svg",
+      "bytes": 1761271,
+      "sha256": "ce139b830851c49de39ffa631c5d37da45b66f819519b095aa1604ab31a885e3"
+    },
+    {
+      "path": "media-templates/condpulse-assinatura-email-600x180.png",
+      "bytes": 13570,
+      "sha256": "ff1c96e56477c6e2868e667f9de5d156ae8024ab9730c0283211f36605226b45"
+    },
+    {
+      "path": "media-templates/condpulse-assinatura-email-600x180.svg",
+      "bytes": 1758111,
+      "sha256": "0c4fc02fcbdae2c2e1b2229cede3b4a0fbf33fe67f531383b10bb77c6f089e35"
+    },
+    {
+      "path": "media-templates/condpulse-feed-1080x1350.png",
+      "bytes": 68656,
+      "sha256": "e7825408f745c66fee6a1b47c0db77b58e2214a322d9da4f16c8c7be7a4f0f23"
+    },
+    {
+      "path": "media-templates/condpulse-feed-1080x1350.svg",
+      "bytes": 1761912,
+      "sha256": "8ef0efc5944b1f0594f03a1b897d39d22ab7fa57a38e8f89d156dc23a26281f7"
+    },
+    {
+      "path": "media-templates/condpulse-story-1080x1920.png",
+      "bytes": 85244,
+      "sha256": "6631be17bc1385f8141975aeb83380ac7861528b0b1e33082c5f7bfb80b8e26d"
+    },
+    {
+      "path": "media-templates/condpulse-story-1080x1920.svg",
+      "bytes": 1762569,
+      "sha256": "cf398288689831618791f889d075f9dac45ae683468ea5ec031cf8ab66e84c57"
+    },
+    {
+      "path": "media-templates/generate_media.py",
+      "bytes": 14899,
+      "sha256": "3e1af35c28c86d20496c3d7114f2a036c88e412f83f200c7cff2d744efdc1db8"
+    },
+    {
+      "path": "media-templates/manifest.json",
+      "bytes": 8315,
+      "sha256": "1716fb502023b5ed1d2fe70e014daedef5e2684a4d05b45f862e6cdccbd6a06a"
+    },
+    {
+      "path": "prototype-captures/01-gestao.jpg",
+      "bytes": 95590,
+      "sha256": "3217b637c363710cf0b38e02d25b4c861718a29f8661d29e1af00c092c4e5ebf"
+    },
+    {
+      "path": "prototype-captures/02-portaria.jpg",
+      "bytes": 96293,
+      "sha256": "a7078087085f4d6fb9dafbb5f1d30872ff84821fc22a678fb7ee8690e5b79b02"
+    },
+    {
+      "path": "prototype-captures/03-areas.jpg",
+      "bytes": 111308,
+      "sha256": "2af2c6dd720f3efc3b8a9006f4eafdc0a7a19f46df86ccd4d7d7e4a6d7d6c65f"
+    },
+    {
+      "path": "prototype-captures/04-simulacao-idade.jpg",
+      "bytes": 94035,
+      "sha256": "b39cc3d7232e066abc9cdb78b97ebb6d793ee01d55983c23da6e21ab1de37df6"
+    },
+    {
+      "path": "prototype-captures/05-editor-regra.jpg",
+      "bytes": 100244,
+      "sha256": "92dcc10c2bb5828789cdb774d90b8ba86817365a2716b59c24d561465d8e32b3"
+    },
+    {
+      "path": "prototype-captures/06-whitelabel-azul.jpg",
+      "bytes": 109681,
+      "sha256": "344ec52ad90e66559675e7d681b724bb25718b207571ddf0b24c5ac43bd2e4c4"
+    },
+    {
+      "path": "prototype-captures/07-whitelabel-escuro.jpg",
+      "bytes": 107208,
+      "sha256": "6e9843090d23881e9e33103adf0c1f4bf1b2b4f994b1c857a5e48bc1f0dd88eb"
+    },
+    {
+      "path": "prototype-captures/08-morador.jpg",
+      "bytes": 83191,
+      "sha256": "3a521a1356dd52dc173058e638be93fec9301aa48c4072bb59538788c254437e"
+    },
+    {
+      "path": "prototype-captures/09-master.jpg",
+      "bytes": 102575,
+      "sha256": "84d831304ed9ed60df80c88749f8de8015eef7f96504d67da31200618ac61b02"
+    },
+    {
+      "path": "prototype-captures/10-reservas.jpg",
+      "bytes": 83899,
+      "sha256": "2c4b231319919d09a626659315f0b7657ded23cbbc25ad33d7fe22228157d13f"
+    },
+    {
+      "path": "prototype-captures/11-financeiro.jpg",
+      "bytes": 100775,
+      "sha256": "48bbeaee5b259399f73b99ec8939ceabcd1d00591edc721602e4ce80ff589a8f"
+    },
+    {
+      "path": "prototype-captures/12-pessoas.jpg",
+      "bytes": 100099,
+      "sha256": "c0f8bcd1d653d3b71d2486443f570c6686166984c9cbc9b1011273b1ee093f64"
+    },
+    {
+      "path": "prototype-captures/13-comunicacao.jpg",
+      "bytes": 86657,
+      "sha256": "7251e697b45f1c04c071d7efd09b118110675f5c8ea50c086ebcad43e367095d"
+    },
+    {
+      "path": "prototype-captures/14-componentes.jpg",
+      "bytes": 111675,
+      "sha256": "6fe198bd3e91c0f77b024a8a56819365c31df342165149dc821f0403e737f8cb"
+    },
+    {
+      "path": "prototype-captures/15-mobile.jpg",
+      "bytes": 145379,
+      "sha256": "dffe20080ce62f7036f43b24e3f9bdebb43039c19c0692ffbec3958848912a06"
+    },
+    {
+      "path": "prototype-captures/16-portaria-escura.jpg",
+      "bytes": 98661,
+      "sha256": "dd75113faf6c39f60e7dbf1f70cbdf0582e5c5c72b43a3d771d7ca29fe31d09b"
+    },
+    {
+      "path": "research/design_system_research.md",
+      "bytes": 13059,
+      "sha256": "0c0f8698b474a05c41a3c8c620410dfa4e6ba176364beaf8b7777d44dbcc7093"
+    },
+    {
+      "path": "research/design_system_sources.json",
+      "bytes": 10454,
+      "sha256": "7712bcbf454c7754cdda3874498b24675b1946cc043860db985012f1eeba468e"
+    },
+    {
+      "path": "research/design_system_white_label.md",
+      "bytes": 25078,
+      "sha256": "17d10d745026b5f335ff8030e10554d86cf857ae87ee2ff03639f6a3e8e4fa09"
+    },
+    {
+      "path": "research/frontend_audit.md",
+      "bytes": 16773,
+      "sha256": "5ecdbe0dd713b1801019e7adb05c491328228365377a1a0374bb98c989fb9174"
+    },
+    {
+      "path": "research/market_references.json",
+      "bytes": 16478,
+      "sha256": "627b605882cee22f1b1557f06b9bdda491b52ee930218c9b28433e68112a4c30"
+    },
+    {
+      "path": "research/market_references.md",
+      "bytes": 19849,
+      "sha256": "204027dfbc9a68254bbcf3d4618126eec6a765155b40d15d0215d10c9e2bbcbd"
+    }
+  ]
+}

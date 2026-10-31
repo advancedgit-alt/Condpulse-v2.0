@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CondPulse — rascunho de override de marca por tenant",
+  "description": "PROPOSTA. Valida estrutura de override. Autorizações, herança, assets, contraste e compatibilidade são verificados pelo servidor após resolução.",
+  "$comment": "Campos omitidos herdam. Este schema não aceita status de publicação, HTML, CSS, JavaScript ou URLs de assets. Não é contrato implementado no sistema atual.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "owner",
+    "inherits"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "organization",
+            "condominium"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "inherits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "revisionId"
+      ],
+      "properties": {
+        "profileId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "revisionId": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "shortName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24,
+          "pattern": "^[^<>\\u0000-\\u001F]+$"
+        },
+        "coBranding": {
+          "enum": [
+            "condpulse_signature",
+            "client_primary"
+          ]
+        }
+      }
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "primary": {
+          "$ref": "#/$defs/hexColor"
+        },
+        "accent": {
+          "$ref": "#/$defs/hexColor"
+        },
+        "fontFamilyId": {
+          "const": "lato"
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "horizontalLight": {
+          "$ref": "#/$defs/identifier"
+        },
+        "horizontalDark": {
+          "$ref": "#/$defs/identifier"
+        },
+        "symbolLight": {
+          "$ref": "#/$defs/identifier"
+        },
+        "symbolDark": {
+          "$ref": "#/$defs/identifier"
+        },
+        "monoPositive": {
+          "$ref": "#/$defs/identifier"
+        },
+        "monoNegative": {
+          "$ref": "#/$defs/identifier"
+        },
+        "onBrand": {
+          "$ref": "#/$defs/identifier"
+        },
+        "favicon": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "defaultMode": {
+          "enum": [
+            "light",
+            "dark",
+            "system"
+          ]
+        },
+        "allowedModes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "light",
+              "dark",
+              "system"
+            ]
+          }
+        },
+        "defaultDensity": {
+          "enum": [
+            "comfortable",
+            "compact"
+          ]
+        },
+        "allowedDensities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "comfortable",
+              "compact"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^<>\\u0000-\\u001F]+$"
+    },
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    }
+  }
+}
