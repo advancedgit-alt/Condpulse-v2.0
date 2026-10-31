@@ -16051,6 +16051,691 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/access-areas": {
+      "get": {
+        "operationId": "managementListAccessAreas",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Áreas do condomínio (area.manage, AAL2), inclusive sem reserva. Permissão na área pai não é herdada.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAreaPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "managementCreateAccessArea",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cria área lógica (DRAFT ou ACTIVE). Rota essencial e separação física são do MASTER de implantação. areaId do cliente: o mesmo pedido inteiro é repetição; código único no condomínio.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessArea"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessArea"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_AREA_ID_REQUIRED, ACCESS_AREA_CODE_INVALID, ACCESS_AREA_NAME_INVALID, ACCESS_AREA_KIND_INVALID, ACCESS_AREA_AMENITY_INVALID, ACCESS_AREA_SUBTYPE_INVALID, ACCESS_AREA_TIME_ZONE_INVALID, ACCESS_AREA_STATUS_INVALID, ACCESS_AREA_PARENT_INVALID ou ACCESS_AREA_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_AREA_ID_CONFLICT ou ACCESS_MAP_CODE_CONFLICT"
+          },
+          "422": {
+            "description": "ACCESS_MAP_INVALID ou ACCESS_MAP_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-areas/{areaId}": {
+      "put": {
+        "operationId": "managementUpdateAccessArea",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Edita nome, tipo, hierarquia (sem ciclo), área reservável, fuso, subtipo e estado (inclusive INTERDICTED) pela versão lida. Código e campos físicos não mudam por aqui.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "areaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccessArea"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessArea"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_AREA_ID_REQUIRED, ACCESS_AREA_CODE_INVALID, ACCESS_AREA_NAME_INVALID, ACCESS_AREA_KIND_INVALID, ACCESS_AREA_AMENITY_INVALID, ACCESS_AREA_SUBTYPE_INVALID, ACCESS_AREA_TIME_ZONE_INVALID, ACCESS_AREA_STATUS_INVALID, ACCESS_AREA_PARENT_INVALID ou ACCESS_AREA_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_MAP_STALE"
+          },
+          "422": {
+            "description": "ACCESS_MAP_INVALID ou ACCESS_MAP_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-points": {
+      "get": {
+        "operationId": "managementListAccessPoints",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Pontos de passagem pelo nome e pelas áreas (gestão, só leitura); sem referências de projeto.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPointSummaryPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/access-areas": {
+      "get": {
+        "operationId": "technicalListAccessAreas",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Áreas para o MASTER de implantação (installation.read, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAreaPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/access-areas/{areaId}/physical": {
+      "put": {
+        "operationId": "technicalSetAccessAreaPhysical",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "MASTER de implantação (installation.manage, AAL2) marca rota essencial e separação física verificada, pela versão lida.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "areaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessAreaPhysical"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessArea"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_AREA_PHYSICAL_INVALID"
+          },
+          "409": {
+            "description": "ACCESS_MAP_STALE"
+          },
+          "422": {
+            "description": "ACCESS_MAP_INVALID ou ACCESS_MAP_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/access-points": {
+      "get": {
+        "operationId": "technicalListAccessPoints",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Pontos com projeto de saída e referências (installation.read, AAL2).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPointPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "technicalCreateAccessPoint",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cria passagem física entre duas áreas (DRAFT ou MAPPED; COMMISSIONED só pelo aceite técnico). pointId do cliente: o mesmo pedido inteiro é repetição.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessPoint"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPoint"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_POINT_ID_REQUIRED, ACCESS_POINT_CODE_INVALID, ACCESS_POINT_NAME_INVALID, ACCESS_POINT_AREAS_INVALID, ACCESS_POINT_KIND_INVALID, ACCESS_POINT_FLOW_INVALID, ACCESS_POINT_EGRESS_INVALID, ACCESS_POINT_REF_INVALID, ACCESS_POINT_STATUS_INVALID ou ACCESS_POINT_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_POINT_ID_CONFLICT ou ACCESS_MAP_CODE_CONFLICT"
+          },
+          "422": {
+            "description": "ACCESS_MAP_INVALID ou ACCESS_MAP_REFERENCE_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/technical/access-points/{pointId}": {
+      "put": {
+        "operationId": "technicalUpdateAccessPoint",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Edita o ponto pela versão lida; mudança física de ponto comissionado o devolve a MAPPED (novo comissionamento).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccessPoint"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPoint"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACCOUNT_INACTIVE, TECHNICAL_SCOPE_REQUIRED ou MFA_REQUIRED (segundo fator exigido), ACCESS_MAP_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED, ACCESS_AREA_NOT_FOUND ou ACCESS_POINT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_MAP_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_POINT_ID_REQUIRED, ACCESS_POINT_CODE_INVALID, ACCESS_POINT_NAME_INVALID, ACCESS_POINT_AREAS_INVALID, ACCESS_POINT_KIND_INVALID, ACCESS_POINT_FLOW_INVALID, ACCESS_POINT_EGRESS_INVALID, ACCESS_POINT_REF_INVALID, ACCESS_POINT_STATUS_INVALID ou ACCESS_POINT_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_MAP_STALE"
+          },
+          "422": {
+            "description": "ACCESS_MAP_INVALID ou ACCESS_MAP_REFERENCE_INVALID"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -26261,6 +26946,727 @@
           },
           "applied": {
             "type": "boolean"
+          }
+        }
+      },
+      "AccessArea": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "areaId",
+          "code",
+          "name",
+          "areaKind",
+          "blockId",
+          "parentAreaId",
+          "amenityId",
+          "timeZone",
+          "essentialRoute",
+          "physicalBoundaryVerified",
+          "physicalSubtype",
+          "status",
+          "updatedAt",
+          "version"
+        ],
+        "properties": {
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "areaKind": {
+            "type": "string",
+            "enum": [
+              "COMMON_AREA",
+              "AMENITY",
+              "RECEPTION",
+              "TECHNICAL_AREA",
+              "RESIDENTIAL_ROUTE",
+              "EXTERIOR"
+            ]
+          },
+          "blockId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "parentAreaId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "essentialRoute": {
+            "type": "boolean"
+          },
+          "physicalBoundaryVerified": {
+            "type": "boolean"
+          },
+          "physicalSubtype": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "EXTERIOR",
+              "HALL",
+              "CORRIDOR",
+              "GYM",
+              "POOL",
+              "GARAGE",
+              "PARTY_ROOM",
+              "PLAYGROUND",
+              "SPORTS_COURT",
+              "MACHINE_ROOM",
+              "STORAGE",
+              "OTHER",
+              null
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INTERDICTED",
+              "RETIRED"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessAreaPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "areas"
+        ],
+        "properties": {
+          "areas": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/AccessArea"
+            }
+          }
+        }
+      },
+      "CreateAccessArea": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "areaId",
+          "code",
+          "name",
+          "areaKind"
+        ],
+        "properties": {
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "areaKind": {
+            "type": "string",
+            "enum": [
+              "COMMON_AREA",
+              "AMENITY",
+              "RECEPTION",
+              "TECHNICAL_AREA",
+              "RESIDENTIAL_ROUTE",
+              "EXTERIOR"
+            ]
+          },
+          "blockId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "parentAreaId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "physicalSubtype": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "EXTERIOR",
+              "HALL",
+              "CORRIDOR",
+              "GYM",
+              "POOL",
+              "GARAGE",
+              "PARTY_ROOM",
+              "PLAYGROUND",
+              "SPORTS_COURT",
+              "MACHINE_ROOM",
+              "STORAGE",
+              "OTHER",
+              null
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              null
+            ]
+          }
+        }
+      },
+      "UpdateAccessArea": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "areaKind",
+          "status",
+          "expectedVersion"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "areaKind": {
+            "type": "string",
+            "enum": [
+              "COMMON_AREA",
+              "AMENITY",
+              "RECEPTION",
+              "TECHNICAL_AREA",
+              "RESIDENTIAL_ROUTE",
+              "EXTERIOR"
+            ]
+          },
+          "blockId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "parentAreaId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "amenityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "physicalSubtype": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "EXTERIOR",
+              "HALL",
+              "CORRIDOR",
+              "GYM",
+              "POOL",
+              "GARAGE",
+              "PARTY_ROOM",
+              "PLAYGROUND",
+              "SPORTS_COURT",
+              "MACHINE_ROOM",
+              "STORAGE",
+              "OTHER",
+              null
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INTERDICTED",
+              "RETIRED"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessAreaPhysical": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "essentialRoute",
+          "physicalBoundaryVerified",
+          "expectedVersion"
+        ],
+        "properties": {
+          "essentialRoute": {
+            "type": "boolean"
+          },
+          "physicalBoundaryVerified": {
+            "type": "boolean"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessPointSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointId",
+          "code",
+          "name",
+          "fromAreaId",
+          "toAreaId",
+          "pointKind",
+          "flowDirection",
+          "status"
+        ],
+        "properties": {
+          "pointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "fromAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointKind": {
+            "type": "string",
+            "enum": [
+              "DOOR",
+              "TURNSTILE",
+              "VEHICLE_GATE",
+              "PEDESTRIAN_GATE",
+              "ELEVATOR_CONTROL",
+              "OTHER"
+            ]
+          },
+          "flowDirection": {
+            "type": "string",
+            "enum": [
+              "FROM_TO",
+              "TO_FROM",
+              "BOTH",
+              "UNKNOWN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "MAPPED",
+              "COMMISSIONED",
+              "SUSPENDED",
+              "RETIRED"
+            ]
+          }
+        }
+      },
+      "AccessPointSummaryPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "points"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/AccessPointSummary"
+            }
+          }
+        }
+      },
+      "AccessPoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointId",
+          "code",
+          "name",
+          "fromAreaId",
+          "toAreaId",
+          "pointKind",
+          "flowDirection",
+          "egressClass",
+          "accessibleRouteRef",
+          "emergencyDesignRef",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "pointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "fromAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointKind": {
+            "type": "string",
+            "enum": [
+              "DOOR",
+              "TURNSTILE",
+              "VEHICLE_GATE",
+              "PEDESTRIAN_GATE",
+              "ELEVATOR_CONTROL",
+              "OTHER"
+            ]
+          },
+          "flowDirection": {
+            "type": "string",
+            "enum": [
+              "FROM_TO",
+              "TO_FROM",
+              "BOTH",
+              "UNKNOWN"
+            ]
+          },
+          "egressClass": {
+            "type": "string",
+            "enum": [
+              "FREE_EGRESS",
+              "MANAGED_EGRESS",
+              "NOT_EGRESS",
+              "UNVERIFIED"
+            ]
+          },
+          "accessibleRouteRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "emergencyDesignRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "MAPPED",
+              "COMMISSIONED",
+              "SUSPENDED",
+              "RETIRED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessPointPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "points"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/AccessPoint"
+            }
+          }
+        }
+      },
+      "CreateAccessPoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointId",
+          "code",
+          "name",
+          "fromAreaId",
+          "toAreaId",
+          "pointKind"
+        ],
+        "properties": {
+          "pointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "fromAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointKind": {
+            "type": "string",
+            "enum": [
+              "DOOR",
+              "TURNSTILE",
+              "VEHICLE_GATE",
+              "PEDESTRIAN_GATE",
+              "ELEVATOR_CONTROL",
+              "OTHER"
+            ]
+          },
+          "flowDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FROM_TO",
+              "TO_FROM",
+              "BOTH",
+              "UNKNOWN",
+              null
+            ]
+          },
+          "egressClass": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FREE_EGRESS",
+              "MANAGED_EGRESS",
+              "NOT_EGRESS",
+              "UNVERIFIED",
+              null
+            ]
+          },
+          "accessibleRouteRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "emergencyDesignRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "DRAFT",
+              "MAPPED",
+              null
+            ]
+          }
+        }
+      },
+      "UpdateAccessPoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "fromAreaId",
+          "toAreaId",
+          "pointKind",
+          "status",
+          "expectedVersion"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "fromAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toAreaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pointKind": {
+            "type": "string",
+            "enum": [
+              "DOOR",
+              "TURNSTILE",
+              "VEHICLE_GATE",
+              "PEDESTRIAN_GATE",
+              "ELEVATOR_CONTROL",
+              "OTHER"
+            ]
+          },
+          "flowDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FROM_TO",
+              "TO_FROM",
+              "BOTH",
+              "UNKNOWN",
+              null
+            ]
+          },
+          "egressClass": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "FREE_EGRESS",
+              "MANAGED_EGRESS",
+              "NOT_EGRESS",
+              "UNVERIFIED",
+              null
+            ]
+          },
+          "accessibleRouteRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "emergencyDesignRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:/-]{3,120}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "MAPPED",
+              "COMMISSIONED",
+              "SUSPENDED",
+              "RETIRED"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

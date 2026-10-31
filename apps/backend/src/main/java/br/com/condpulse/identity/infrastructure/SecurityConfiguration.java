@@ -145,6 +145,12 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/platform/access-models","/v1/platform/access-models/*","/v1/platform/access-homologations",
       "/v1/platform/access-homologations/*","/v1/tenants/*/management/access-homologations").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/access-homologations","/v1/platform/access-homologations/*/decisions").authenticated()
+    // Áreas e pontos (AC-004, V041): gestão (area.manage, AAL2) e MASTER de implantação (installation.*, AAL2).
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-areas","/v1/tenants/*/management/access-points",
+      "/v1/tenants/*/technical/access-areas","/v1/tenants/*/technical/access-points").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-areas","/v1/tenants/*/technical/access-points").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/access-areas/*","/v1/tenants/*/technical/access-areas/*/physical",
+      "/v1/tenants/*/technical/access-points/*").authenticated()
     // Proprietário × inquilino (V034): gestão (AAL2) ou vínculo OWNER com locação em vigor, no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/rentals","/v1/tenants/*/units/*/rental").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/units/*/rental","/v1/tenants/*/management/units/*/rental/end",
