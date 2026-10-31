@@ -115,7 +115,7 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/requests/*","/v1/tenants/*/requests/*/messages","/v1/tenants/*/management/requests/*/messages").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*/messages",
       "/v1/tenants/*/management/requests/*/messages","/v1/tenants/*/management/requests/*/state").authenticated()
-    // Zeladoria (V046): maintenance.operate e AAL2 no serviço; pedido atribuído ao próprio vínculo no serviço e no banco.
+    // Zeladoria (V045): maintenance.operate e AAL2 no serviço; pedido atribuído ao próprio vínculo no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/maintenance/requests","/v1/tenants/*/maintenance/requests/*").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/maintenance/requests/*/state","/v1/tenants/*/maintenance/requests/*/messages").authenticated()
     // Mudança e entrega de móveis (CP-042): vínculo adulto da unidade, gestão (AAL2) ou portaria (AAL2) no serviço e no banco.

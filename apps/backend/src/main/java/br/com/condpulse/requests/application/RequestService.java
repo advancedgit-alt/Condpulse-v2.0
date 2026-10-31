@@ -212,7 +212,7 @@ public class RequestService {
   });
  }
 
- // Zeladoria (V046): só pedidos atribuídos ao próprio vínculo MAINTENANCE, com maintenance.operate e AAL2.
+ // Zeladoria (V045): só pedidos atribuídos ao próprio vínculo MAINTENANCE, com maintenance.operate e AAL2.
  public RequestModels.MaintenancePage maintenance(UUID actor,UUID tenant,AssuranceLevel assurance) {
   return maintenanceStaff(actor,tenant,assurance,Map.of(),(context,membership)->store.maintenance(tenant,membership));
  }

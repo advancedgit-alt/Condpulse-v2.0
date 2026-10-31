@@ -1,6 +1,6 @@
 -- AC-007/AC-008 (pacote Acesso Facial v1.1): política de ingresso por área, revisões imutáveis do documento de regra,
 -- validação contra os destinos comissionados e aprovação pela gestão. A publicação por destino (ponteiro publicado,
--- implantações e confirmação) fica na V045; a simulação não grava decisão nem cria comando (as decisões entram na V046).
+-- implantações e confirmação) fica na V045; a simulação não grava decisão nem cria comando (as decisões entram na V045).
 --  - cp.access_policies: uma política por área (identidade estável); estado DRAFT ou RETIRED nesta fatia.
 --  - cp.access_policy_versions: documento fechado (schema 1.0) imutável, hash calculado pelo banco, revisão sequencial;
 --    DRAFT -> VALIDATED (validação aprovada e vigente) -> APPROVED (policy.publish) ou REJECTED. Nada é apagado.

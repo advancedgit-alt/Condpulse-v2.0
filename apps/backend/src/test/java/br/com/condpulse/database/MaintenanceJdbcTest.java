@@ -24,7 +24,7 @@ import org.springframework.dao.DataAccessException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * V046 com PostgreSQL real e o login da API: zelador (MAINTENANCE) convidado e aprovado pela gestão pelos fluxos reais,
+ * V045 com PostgreSQL real e o login da API: zelador (MAINTENANCE) convidado e aprovado pela gestão pelos fluxos reais,
  * com capacidade própria (maintenance.operate, AAL2), que lê e registra o andamento somente dos pedidos atribuídos ao
  * próprio vínculo; não muda responsável nem prazo, não encerra e não enxerga cadastro nem pedidos de terceiros.
  */

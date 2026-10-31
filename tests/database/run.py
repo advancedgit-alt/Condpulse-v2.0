@@ -4331,7 +4331,7 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
 def maintenance_checks():
-    """V046: zelador (MAINTENANCE) com maintenance.operate le e registra andamento so dos pedidos atribuidos ao proprio
+    """V045: zelador (MAINTENANCE) com maintenance.operate le e registra andamento so dos pedidos atribuidos ao proprio
     vinculo; nao muda responsavel nem prazo, nao encerra e nao le cadastro."""
     MG, ZL, Z2, RS = ("10000000-0000-4000-8000-0000000046a1", "10000000-0000-4000-8000-0000000046a2",
                       "10000000-0000-4000-8000-0000000046a3", "10000000-0000-4000-8000-0000000046a4")

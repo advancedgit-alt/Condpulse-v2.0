@@ -54,7 +54,7 @@ public final class RequestModels {
   public ManagedRequest { messages=List.copyOf(messages); team=List.copyOf(team); }
  }
 
- // Zeladoria (V046): pedidos atribuídos ao próprio vínculo, sem nome de quem abriu nem equipe.
+ // Zeladoria (V045): pedidos atribuídos ao próprio vínculo, sem nome de quem abriu nem equipe.
  public record MaintenanceSummary(UUID requestId,UUID unitId,String unitLabel,String category,String title,String state,LocalDate dueOn,
    Instant updatedAt,long version) {}
  public record MaintenancePage(List<MaintenanceSummary> requests,boolean truncated) {

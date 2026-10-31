@@ -25,7 +25,7 @@ public enum StaffCapability {
  /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V045). */
  PUBLISH_POLICIES("policy.publish"),
  /**
-  * Zeladoria (MAINTENANCE, V046): lê e registra o andamento somente dos pedidos atribuídos ao próprio vínculo; nenhum
+  * Zeladoria (MAINTENANCE, V045): lê e registra o andamento somente dos pedidos atribuídos ao próprio vínculo; nenhum
   * financeiro, cadastro, vínculo, encomenda, visita ou acesso.
   */
  OPERATE_MAINTENANCE("maintenance.operate");
