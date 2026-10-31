@@ -50,6 +50,8 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  private final DeviceHttpClient http;
  private final int heartbeatSeconds;
  private final int bufferLimit;
+ private final int keepAliveSeconds;
+ private volatile Instant lastInbound;
  // Assinatura contínua (LOCAL): uma linha de execução mantém eventManager.cgi?action=attach aberto e enfileira.
  /** Evento recebido com número de sequência desta execução do processo. */
  private record Buffered(long seq,EdgeEvent event) {}
@@ -72,6 +74,8 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   this.http=context.device().connectionMode()==ConnectionMode.LOCAL?context.http(Set.of(P_EVENTS)):null;
   String h=context.device().param("intelbras.heartbeatSeconds");
   this.heartbeatSeconds=h!=null && h.matches("[1-5]")?Integer.parseInt(h):5; // IB-EVM: heartbeat de 1 a 5
+  String k=context.device().param("intelbras.keepAliveSeconds");
+  this.keepAliveSeconds=k!=null && k.matches("\\d{1,4}") && Integer.parseInt(k)>0?Integer.parseInt(k):120;
   String b=context.device().param("intelbras.bufferLimit");
   this.bufferLimit=b!=null && b.matches("\\d{1,6}") && Integer.parseInt(b)>0?Integer.parseInt(b):BUFFER_LIMIT;
  }
@@ -84,6 +88,8 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
     "Assinatura contínua com fila local confirmada pelo cursor da fila durável, reconexão e watchdog de heartbeat; sem backfill: eventos ocorridos com o fluxo desconectado não são recuperados (STREAM_GAP).",
     "Sem identificador nativo de evento: chave composta (UTC, porta, usuário, método, erro, índice); tentativas idênticas no mesmo segundo colapsam."));
    ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,List.of(EVM),"Assinatura conectada e heartbeat recente (heartbeat de 1 a 5 s)."));
+  } else {
+   ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,List.of(ONLINE,ONLINE_CFG),"Último keep alive ou evento recebido do equipamento."));
   }
   ops.put(Operation.RECEIVE_EVENTS,OperationSupport.implemented(Operation.RECEIVE_EVENTS,List.of(ONLINE,ONLINE_CFG,PARAM),
    "Modo online: eventos chegam por POST no caminho configurado no equipamento (contém o token do equipamento)."));
@@ -132,9 +138,17 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   try { return Long.parseLong(cursor.substring(session.length()+1)); } catch(NumberFormatException e) { return -1; }
  }
 
- /** Alcance: assinatura conectada e dado (evento ou heartbeat) recebido dentro de 3 heartbeats. */
+ /**
+  * Saúde: LOCAL pela assinatura (conectada e dado recebido dentro de 3 heartbeats); modo online/NUVEM pelo último keep alive ou evento recebido (IB-ONLINE), dentro de
+  * 3 intervalos de keep alive configurados no equipamento (parâmetro intelbras.keepAliveSeconds, padrão 120 s do
+  * exemplo oficial). Sem chamada recente: fora do ar.
+  */
  @Override public HealthReport health() {
-  if(http==null) return super.health();
+  if(http==null) {
+   var seen=lastInbound;
+   boolean recent=seen!=null && Duration.between(seen,context.clock().instant()).getSeconds()<=3L*keepAliveSeconds;
+   return new HealthReport(recent,recent?null:"NO_RECENT_DEVICE_CALL",null,null,null);
+  }
   ensureSubscribed();
   boolean recent=connected && !stale();
   watchdog();
@@ -324,9 +338,10 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  @Override public Optional<InboundEndpoint> inbound() {
   return Optional.of((request,ctx)->{
    switch(request.subPath()) {
-    case "/keepalive" -> { ctx.heartbeat(); return InboundEndpoint.Response.empty(); }
+    case "/keepalive" -> { lastInbound=context.clock().instant(); ctx.heartbeat(); return InboundEndpoint.Response.empty(); }
     case "/notification" -> {
      if(!request.method().equals("POST")) return InboundEndpoint.Response.notFound();
+     lastInbound=context.clock().instant();
      boolean allow=false;
      String body=new String(request.body(),StandardCharsets.UTF_8);
      try {

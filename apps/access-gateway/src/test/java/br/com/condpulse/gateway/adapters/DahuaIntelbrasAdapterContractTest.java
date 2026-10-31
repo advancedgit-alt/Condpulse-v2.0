@@ -371,4 +371,35 @@ class DahuaIntelbrasAdapterContractTest {
   assertEquals("false",r.get("auth"));
   assertTrue(asked.isEmpty());
  }
+
+ // ----- oitava rodada (#132): varredura -----
+
+ @Test void dahuaAberturaComRespostaIninterpretavelEIncerta() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var clock=new TestSupport.TestClock();
+   var a=dahua(fake,clock);
+   fake.on("GET","/cgi-bin/accessControl.cgi",Reply.text("Error"));
+   assertEquals(OpenOutcome.AMBIGUOUS,a.open(new OpenAction("o1","c1","1",null,clock.instant().plusSeconds(5))).outcome());
+   fake.on("GET","/cgi-bin/accessControl.cgi",Reply.status(500));
+   assertEquals(OpenOutcome.AMBIGUOUS,a.open(new OpenAction("o2","c1","1",null,clock.instant().plusSeconds(5))).outcome());
+   fake.on("GET","/cgi-bin/accessControl.cgi",Reply.status(403));
+   assertEquals(OpenOutcome.REJECTED_BY_DEVICE,a.open(new OpenAction("o3","c1","1",null,clock.instant().plusSeconds(5))).outcome());
+   fake.on("GET","/cgi-bin/recordUpdater.cgi",Reply.text("sem recno"));
+   assertEquals(OperationState.UNKNOWN,a.setCredential(new CredentialSpec("ref-1",CredentialKind.CARD,"1")).state());
+  }
+ }
+
+ @Test void intelbrasNuvemSaudePeloUltimoKeepAlive() {
+  var a=intelbras(null,ConnectionMode.NUVEM);
+  assertFalse(a.health().reachable(),"sem chamada do equipamento: fora do ar");
+  InboundEndpoint.Context ctx=new InboundEndpoint.Context() {
+   @Override public Instant now() { return Instant.now(); }
+   @Override public InboundEndpoint.LocalDecision decide(String u,String c) { return new InboundEndpoint.LocalDecision(false,List.of("x"),null,null); }
+   @Override public void events(List<EdgeEvent> e) {}
+   @Override public void heartbeat() {}
+  };
+  a.inbound().orElseThrow().handle(new InboundEndpoint.Request("GET","/keepalive",Map.of(),null,new byte[0],"127.0.0.1"),ctx);
+  assertTrue(a.health().reachable());
+  assertTrue(a.manifest().supports(Operation.HEALTH));
+ }
 }

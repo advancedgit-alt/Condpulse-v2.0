@@ -81,9 +81,11 @@ public final class DahuaCgiAdapter extends BaseAdapter {
   q.put("CardType","0");
   try {
    var response=http.call("GET",P_RECORD_UPDATER,q,null,null,true);
+   if(response.status()>=500) return OperationResult.of(OperationState.UNKNOWN,"DAHUA_HTTP_"+response.status());
    if(!response.ok()) return OperationResult.of(OperationState.FAILED,"DAHUA_HTTP_"+response.status());
    String recNo=KeyValueText.lines(response.text()).get("RecNo");
-   return new OperationResult(OperationState.APPLIED_UNVERIFIED,recNo==null?"NO_RECNO":null,recNo);
+   if(recNo==null) return OperationResult.of(OperationState.UNKNOWN,"NO_RECNO");
+   return new OperationResult(OperationState.APPLIED_UNVERIFIED,null,recNo);
   } catch(DeviceCallException e) { return failure(e); }
  }
 
@@ -95,6 +97,8 @@ public final class DahuaCgiAdapter extends BaseAdapter {
   try {
    var response=http.call("POST",P_FACE,Map.of("action","add"),"application/json",Json.write(body).getBytes(StandardCharsets.UTF_8),false);
    if(response.ok() && response.text().trim().equals("OK")) return OperationResult.of(OperationState.APPLIED_UNVERIFIED,null);
+   // 2xx sem "OK" ou 5xx: ininterpretável/incerto; só 4xx é recusa explícita.
+   if(response.ok() || response.status()>=500) return OperationResult.of(OperationState.UNKNOWN,"DAHUA_HTTP_"+response.status());
    return OperationResult.of(OperationState.FAILED,"DAHUA_HTTP_"+response.status());
   } catch(DeviceCallException e) { return failure(e); }
  }
@@ -111,6 +115,8 @@ public final class DahuaCgiAdapter extends BaseAdapter {
   try {
    var response=http.call("GET",P_ACCESS,q,null,null,true);
    if(response.ok() && response.text().trim().equals("OK")) return new OpenResult(OpenOutcome.ACCEPTED,null);
+   // 2xx sem "OK" ou 5xx: o relé pode ter acionado — incerto, nunca recusa.
+   if(response.ok() || response.status()>=500) return new OpenResult(OpenOutcome.AMBIGUOUS,"DAHUA_HTTP_"+response.status());
    return new OpenResult(OpenOutcome.REJECTED_BY_DEVICE,"DAHUA_HTTP_"+response.status());
   } catch(DeviceCallException e) { return openFailure(e); }
  }
