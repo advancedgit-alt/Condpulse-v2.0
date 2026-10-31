@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, type InvitationKind } from '../api/client';
 import type { InvitationFirstAccess } from '../api/types';
 import { SessionPage, useAuth } from './Auth';
 import { Icon, Loading, Notice, RateLimitNotice, errorMessage } from './primitives';
 import { useCooldown } from './cooldown';
-import { captureInvitationFromLocation, forgetInvitation as forget } from './invitationStorage';
+import { captureInvitationFromLocation, forgetInvitation } from './invitationStorage';
 
 /** Recusas definitivas: o convite desta aba não serve mais e é descartado. */
 const SPENT = ['INVITATION_NOT_AVAILABLE', 'MEMBERSHIP_ALREADY_EXISTS'];
 
-export function InvitationPage() {
+/**
+ * Convite da gestão (kind="membership", rota /convite): cria vínculo pendente de aprovação. Convite de primeiro gestor
+ * emitido pelo painel master (kind="manager", rota /convite-gestor): o vínculo de gestão nasce ativo.
+ */
+export function InvitationPage({ kind = 'membership' }: { kind?: InvitationKind }) {
   const auth = useAuth();
   const queries = useQueryClient();
-  const [token, setToken] = useState(captureInvitationFromLocation);
+  const manager = kind === 'manager';
+  const [token, setToken] = useState(() => captureInvitationFromLocation(kind));
+  const forget = useCallback(() => forgetInvitation(kind), [kind]);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [accepted, setAccepted] = useState<null | { sessionStarted: boolean }>(null);
@@ -34,13 +40,14 @@ export function InvitationPage() {
     if (!token || pending) return;
     setPending(true); setFailure(null);
     try {
-      await api.acceptInvitation(token);
+      await api.acceptInvitation(token, undefined, kind);
       forget(); setToken(null); setAccepted({ sessionStarted: true });
       void queries.invalidateQueries({ queryKey: ['identity'] });
     } catch (error) { settle(error); } finally { setPending(false); }
   }
-  if (accepted) return <SessionPage><span className="eyebrow">CONVITE ACEITO</span><h1>Pedido de vínculo enviado.</h1>
-    <p>A gestão do condomínio precisa aprovar o seu acesso. Depois da aprovação, o condomínio aparecerá na escolha de acesso.</p>
+  if (accepted) return <SessionPage><span className="eyebrow">CONVITE ACEITO</span><h1>{manager ? 'Acesso de gestão liberado.' : 'Pedido de vínculo enviado.'}</h1>
+    <p>{manager ? 'Você é o gestor do condomínio. A gestão aparece na escolha de acesso e as ações de gestão pedem o segundo fator de autenticação.'
+      : 'A gestão do condomínio precisa aprovar o seu acesso. Depois da aprovação, o condomínio aparecerá na escolha de acesso.'}</p>
     {accepted.sessionStarted ? <Link className="button" to="/contextos">Ir para meus acessos<Icon name="arrow" /></Link>
       : <><Notice tone="warning">O pedido foi registrado, mas a sessão não pôde ser iniciada agora. Entre com o seu e-mail e a sua senha para acompanhar.</Notice>
         <Link className="button" to="/entrar">Entrar<Icon name="arrow" /></Link></>}</SessionPage>;
@@ -49,9 +56,9 @@ export function InvitationPage() {
     <p>Não repita o envio por aqui: um convite aceito não vale de novo. Entre com o seu e-mail e a sua senha; se o pedido tiver sido registrado, a tela informará que o acesso aguarda a validação da gestão. Se a entrada não funcionar, abra novamente o link recebido.</p>
     <Link className="button" to="/entrar">Entrar<Icon name="arrow" /></Link></SessionPage>;
   if (!token) return <SessionPage><span className="eyebrow">CONVITE</span><h1>Convite indisponível.</h1>
-    {failure ? <Notice tone="error">{errorMessage(failure)}</Notice> : <p>Abra o link completo recebido da gestão. Ele vale uma única vez, para o e-mail convidado e dentro do prazo.</p>}
+    {failure ? <Notice tone="error">{errorMessage(failure)}</Notice> : <p>Abra o link completo recebido {manager ? 'da administração do CondPulse' : 'da gestão'}. Ele vale uma única vez, para o e-mail convidado e dentro do prazo.</p>}
     <Link className="button button-secondary" to="/entrar">Ir para o acesso</Link></SessionPage>;
-  const firstAccess = <FirstAccess token={token} onOpen={openFirstAccess}
+  const firstAccess = <FirstAccess token={token} kind={kind} onOpen={openFirstAccess}
     onAccepted={(result) => { forget(); setToken(null); setAccepted({ sessionStarted: result.sessionStarted }); }}
     onSpent={(error) => settle(error)} onUnconfirmed={(error) => { forget(); setToken(null); setUnconfirmed(error); }}
     discard={() => { forget(); setToken(null); }} />;
@@ -61,8 +68,9 @@ export function InvitationPage() {
   if (auth.status !== 'authenticated') return <SessionPage><span className="eyebrow">CONVITE</span><h1>Não foi possível verificar seu acesso.</h1>
     <p>Tente novamente em instantes. O convite continua guardado nesta janela.</p>
     <button className="button" type="button" onClick={auth.recheck}>Verificar acesso</button></SessionPage>;
-  return <SessionPage><span className="eyebrow">CONVITE</span><h1>Aceitar convite do condomínio?</h1>
-    <p>O aceite cria um pedido de vínculo para a sua conta. O acesso só é liberado depois da aprovação da gestão.</p>
+  return <SessionPage><span className="eyebrow">{manager ? 'CONVITE DE GESTOR' : 'CONVITE'}</span><h1>{manager ? 'Aceitar a gestão do condomínio?' : 'Aceitar convite do condomínio?'}</h1>
+    <p>{manager ? 'O aceite liga esta conta ao condomínio como gestor, com acesso imediato à gestão. Confira se é a conta do e-mail convidado.'
+      : 'O aceite cria um pedido de vínculo para a sua conta. O acesso só é liberado depois da aprovação da gestão.'}</p>
     {failure ? <Notice tone="error">{errorMessage(failure)}</Notice> : null}
     <div className="button-row"><button className="button" type="button" disabled={pending} onClick={() => void accept()}>{pending ? 'Enviando…' : 'Aceitar convite'}<Icon name="check" /></button>
       <button className="button button-secondary" type="button" disabled={pending} onClick={() => { forget(); setToken(null); }}>Descartar convite</button></div>
@@ -73,7 +81,7 @@ export function InvitationPage() {
  * Primeiro acesso: o convidado ainda sem conta local entra com o e-mail convidado e a senha recebida no cadastro, e o
  * convite é aceito na mesma operação. Quem já tem acesso pode entrar pelo login comum e voltar ao aviso do convite.
  */
-function FirstAccess({ token, onOpen, onAccepted, onSpent, onUnconfirmed, discard }: { token: string; onOpen(): void;
+function FirstAccess({ token, kind, onOpen, onAccepted, onSpent, onUnconfirmed, discard }: { token: string; kind: InvitationKind; onOpen(): void;
   onAccepted(result: InvitationFirstAccess): void; onSpent(error: unknown): void; onUnconfirmed(error: unknown): void; discard(): void }) {
   const auth = useAuth();
   const [email, setEmail] = useState('');
@@ -88,7 +96,7 @@ function FirstAccess({ token, onOpen, onAccepted, onSpent, onUnconfirmed, discar
     if (inFlight.current || remaining > 0 || !email.trim() || !password) return;
     inFlight.current = true; setPending(true); setFailure(null);
     try {
-      const result = await auth.acceptInvitation(email.trim(), password, token);
+      const result = await auth.acceptInvitation(email.trim(), password, token, kind);
       setPassword('');
       onAccepted(result);
     } catch (error) {
@@ -98,8 +106,9 @@ function FirstAccess({ token, onOpen, onAccepted, onSpent, onUnconfirmed, discar
       setFailure(error);
     } finally { inFlight.current = false; setPending(false); }
   }
-  return <SessionPage><span className="eyebrow">CONVITE · PRIMEIRO ACESSO</span><h1>Aceite o convite e entre.</h1>
-    <p>Use o e-mail que recebeu o convite e a senha do seu cadastro. O aceite cria um pedido de vínculo; o acesso ao condomínio só é liberado depois da aprovação da gestão.</p>
+  return <SessionPage><span className="eyebrow">{kind === 'manager' ? 'CONVITE DE GESTOR · PRIMEIRO ACESSO' : 'CONVITE · PRIMEIRO ACESSO'}</span><h1>Aceite o convite e entre.</h1>
+    <p>{kind === 'manager' ? 'Use o e-mail que recebeu o convite e a senha do seu cadastro no CondPulse (com o e-mail já confirmado). O aceite libera a gestão do condomínio para esta conta.'
+      : 'Use o e-mail que recebeu o convite e a senha do seu cadastro. O aceite cria um pedido de vínculo; o acesso ao condomínio só é liberado depois da aprovação da gestão.'}</p>
     <form className="stack-form" onSubmit={event => void submit(event)}>
       <label htmlFor="invitation-email">E-mail convidado</label>
       <input id="invitation-email" type="email" autoComplete="username" required maxLength={254} value={email}

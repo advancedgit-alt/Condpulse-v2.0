@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { CondPulseApi } from './client';
-import { createPlatformApi, platformSession, platformTenant, tenantChange } from './platform';
+import { createPlatformApi, managerInvitationLink, platformSession, platformTenant, tenantChange, tenantCreated, tenantDetail } from './platform';
 import { tenantChangeOutcome } from '../ui/platform/PlatformPage';
 
 const account = '10000000-0000-4000-8000-000000000001';
@@ -71,5 +71,34 @@ describe('contratos do painel master', () => {
     expect(renamed.text).toBe('Nome atualizado para "Novo Nome".');
     const reactivated = tenantChangeOutcome({ applied: true, tenant: platformTenant(tenant) }, { name: tenant.name, active: false });
     expect(reactivated.text).toMatch(/reativado/);
+  });
+  it('criação envia a chave de operação e o pedido; resposta com token só quando aplicada', async () => {
+    const fetcher = vi.fn<typeof globalThis.fetch>();
+    const created = { tenant, applied: true, invitationId: '40000000-0000-4000-8000-000000000001', invitationToken: 'T'.repeat(43),
+      invitationExpiresAt: '2030-01-08T12:00:00Z' };
+    fetcher.mockImplementation(async (input) => String(input) === '/auth/csrf' ? json({ headerName: 'X-CSRF-Token', token: 'synthetic-csrf' }) : json(created, 201));
+    const client = createPlatformApi(new CondPulseApi({ fetch: fetcher }));
+    const body = { name: 'Sol', timeZone: 'America/Sao_Paulo', units: ['101'], manager: { displayName: 'G', email: 'g@example.invalid', validDays: 7 },
+      amenity: null, reason: 'Contrato' };
+    const result = await client.createTenant(body, 'web:chave-sintetica-0001');
+    expect(result.applied && result.invitationToken).toBe('T'.repeat(43));
+    const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(String(post[0])).toBe('/v1/platform/tenants');
+    expect(new Headers(post[1]?.headers).get('Idempotency-Key')).toBe('web:chave-sintetica-0001');
+    expect(JSON.parse(String(post[1]?.body))).toEqual(body);
+    expect(() => tenantCreated({ ...created, invitationToken: 'curto' })).toThrow();
+    expect(() => tenantCreated({ ...created, applied: false })).toThrow();
+    expect(tenantCreated({ tenant, applied: false, invitationId: null, invitationToken: null, invitationExpiresAt: null }).applied).toBe(false);
+    expect(managerInvitationLink('https://condpulse.example.invalid', 'T'.repeat(43))).toBe(`https://condpulse.example.invalid/convite-gestor#token=${'T'.repeat(43)}`);
+    expect(() => managerInvitationLink('https://x.invalid', 'curto')).toThrow();
+  });
+  it('ficha exige convites coerentes com o estado', () => {
+    const invitation = { invitationId: '40000000-0000-4000-8000-000000000001', displayName: 'G', status: 'ACCEPTED', createdAt: '2030-01-01T12:00:00Z',
+      expiresAt: '2030-01-08T12:00:00Z', acceptedAt: '2030-01-02T12:00:00Z', revokedAt: null };
+    const detail = { tenant, managers: [{ membershipId: '50000000-0000-4000-8000-000000000001', displayName: 'G', status: 'ACTIVE', since: '2030-01-02T12:00:00Z' }],
+      managerInvitations: [invitation], recentEvents: [] };
+    expect(tenantDetail(detail).managerInvitations[0]!.status).toBe('ACCEPTED');
+    expect(() => tenantDetail({ ...detail, managerInvitations: [{ ...invitation, acceptedAt: null }] })).toThrow();
+    expect(() => tenantDetail({ ...detail, managers: [{ ...detail.managers[0], status: 'REVOKED' }] })).toThrow();
   });
 });

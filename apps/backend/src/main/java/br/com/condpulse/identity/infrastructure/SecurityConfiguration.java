@@ -139,6 +139,9 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/platform/outbox","/v1/platform/outbox/tasks").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/outbox/tasks/*/replay").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
+    .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/platform/tenants","/v1/platform/tenants/*/manager-invitations",
+      "/v1/platform/tenants/*/manager-invitations/*/revoke","/v1/manager-invitations/accept").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",
       "/v1/platform/billing/charges").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",
@@ -148,7 +151,7 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.PUT,"/v1/platform/billing/plans/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify",
-      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete","/auth/invitation/accept",
+      "/auth/recovery","/auth/recovery/verify","/auth/recovery/complete","/auth/invitation/accept","/auth/manager-invitation/accept",
       "/auth/permit-links/view").permitAll()
     .anyRequest().denyAll())
    .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults())

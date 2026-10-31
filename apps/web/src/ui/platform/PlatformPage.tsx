@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
-import { platform, type PlatformTenant, type PlatformTenantChange } from '../../api/platform';
+import { platform, type PlatformTenant, type PlatformTenantChange, type TenantCreated } from '../../api/platform';
 import { collapseText, displayText } from '../../api/text';
 import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
@@ -12,6 +12,8 @@ import '../management/Management.css';
 import { OutboxSection } from './Outbox';
 import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
+import { InvitationLinkNotice, TenantCreateForm, TenantDetailView, creationOutcome } from './TenantViews';
+import { billingText, originText, usageText } from './tenants';
 
 export type { Outcome } from './shared';
 const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'financeiro', label: 'Financeiro', icon: 'card' },
@@ -47,13 +49,13 @@ export function tenantChangeOutcome(change: PlatformTenantChange, before: Pick<P
 /** Painel master: papel de plataforma vigente e segundo fator; o servidor confere de novo em cada ação. */
 export function PlatformPage() {
   const { identity } = useAuth();
-  const { section = 'condominios' } = useParams();
+  const { section = 'condominios', tenantId } = useParams();
   if (!identity) return null;
   const current = sections.some((item) => item.id === section) ? section as Section : 'condominios';
-  return <PlatformGate key={identity.accountId} accountId={identity.accountId} section={current} />;
+  return <PlatformGate key={identity.accountId} accountId={identity.accountId} section={current} tenantId={tenantId ?? null} />;
 }
 
-function PlatformGate({ accountId, section }: { accountId: string; section: Section }) {
+function PlatformGate({ accountId, section, tenantId }: { accountId: string; section: Section; tenantId: string | null }) {
   const queries = useQueryClient();
   const session = useQuery({ queryKey: platformKey(accountId, 'session'), queryFn: ({ signal }) => platform.session(signal),
     refetchOnWindowFocus: false, retry: false });
@@ -84,19 +86,21 @@ function PlatformGate({ accountId, section }: { accountId: string; section: Sect
       void queries.invalidateQueries({ queryKey: ['identity'] });
     }} />;
   }
-  return <PlatformContext.Provider value={value}><PlatformConsole section={section} /></PlatformContext.Provider>;
+  return <PlatformContext.Provider value={value}><PlatformConsole section={section} tenantId={tenantId} /></PlatformContext.Provider>;
 }
 
-function PlatformConsole({ section }: { section: Section }) {
+function PlatformConsole({ section, tenantId }: { section: Section; tenantId: string | null }) {
   const scope = usePlatform();
   const visible = visiblePlatformSections(scope.session.capabilities);
   const current = currentPlatformSection(section, scope.session.capabilities);
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
-      <p>Cadastro, estado e assinatura dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
+      <p>Cadastro, uso, estado e assinatura dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
     <SectionTabs label="Seções do painel master" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: `/master/${item.id}` }))} />
-    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'fila' ? <OutboxSection /> : <TenantSection />}
+    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'fila' ? <OutboxSection />
+      : tenantId ? <TenantDetailView key={tenantId} tenantId={tenantId} describe={describeEvent}
+        editor={(tenant, close) => <TenantEditor tenant={tenant} close={close} />} /> : <TenantSection />}
   </>;
 }
 
@@ -108,6 +112,8 @@ function TenantSection() {
   const tenants = useQuery({ queryKey: tenantListKey(scope.accountId, search), queryFn: ({ signal }) => platform.tenants(search, signal) });
   const [editing, setEditing] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<{ result: TenantCreated; manager: string } | null>(null);
   if (useAccessGuard(tenants.error)) return null;
   const manage = scope.session.capabilities.includes('tenants.manage');
   function find(event: FormEvent) {
@@ -119,8 +125,15 @@ function TenantSection() {
   }
   return <section className="management-section" aria-labelledby="tenants-title">
     <div className="section-heading"><div><span className="section-index">01 / CONDOMÍNIOS</span><h2 id="tenants-title">Condomínios da plataforma</h2></div>
-      <button className="button button-secondary button-compact" type="button" disabled={tenants.isFetching} onClick={() => void tenants.refetch()}>Atualizar</button></div>
-    <p className="field-help">O cadastro de um condomínio novo segue pelo onboarding operacional aprovado; aqui só aparecem nome, estado e o recibo do cadastro.</p>
+      <div className="button-row">{manage && !creating ? <button className="button button-compact" type="button"
+        onClick={() => { setOutcome(null); setCreated(null); setCreating(true); }}>Novo condomínio</button> : null}
+        <button className="button button-secondary button-compact" type="button" disabled={tenants.isFetching} onClick={() => void tenants.refetch()}>Atualizar</button></div></div>
+    <p className="field-help">Uso agregado (unidades, vínculos e gestores), sem conteúdo dos moradores. Abra a ficha para ver gestores, convites e eventos.</p>
+    {creating ? <TenantCreateForm onCancel={() => setCreating(false)} onCreated={(result, manager) => {
+      setCreating(false); setCreated({ result, manager }); setOutcome(creationOutcome(result));
+    }} /> : null}
+    {created?.result.applied ? <InvitationLinkNotice token={created.result.invitationToken} expiresAt={created.result.invitationExpiresAt}
+      manager={created.manager} /> : null}
     <form className="reservation-filter tenant-search" role="search" aria-label="Buscar condomínio" onSubmit={find}>
       <label htmlFor="tenant-search">Buscar por trecho do nome ou id</label>
       <input id="tenant-search" type="search" value={draft} onChange={(event) => { setDraft(event.target.value); setSearchInvalid(false); }} />
@@ -136,11 +149,15 @@ function TenantSection() {
           ? 'Nenhum condomínio corresponde à busca.' : 'Os condomínios cadastrados pelo onboarding aparecerão aqui.'}</Empty></div>
           : <ol className="management-list" aria-label="Condomínios">{tenants.data.tenants.map((tenant) => <li key={tenant.tenantId} className="management-row">
             <div><strong><bdi>{tenant.name}</bdi></strong> <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
-              <span>Fuso {tenant.timeZone} · versão {tenant.version} · atualizado em {formatWhen(tenant.updatedAt, PLATFORM_ZONE)}</span>
+              <span>Fuso {tenant.timeZone} · versão {tenant.version} · atualizado em {formatWhen(tenant.updatedAt, PLATFORM_ZONE)} · {originText(tenant.origin)}</span>
+              <span>{usageText(tenant, PLATFORM_ZONE)}</span>
+              {billingText(tenant) ? <span>{billingText(tenant)}</span> : null}
               <span>{tenant.onboarding ? `Onboarding em ${formatWhen(tenant.onboarding.completedAt, PLATFORM_ZONE)}: ${count(tenant.onboarding.units, 'unidade', 'unidades')}, ${count(tenant.onboarding.memberships, 'vínculo', 'vínculos')}, ${count(tenant.onboarding.amenities, 'área', 'áreas')}`
                 : 'Sem recibo de onboarding registrado.'}</span></div>
-            {manage && editing !== tenant.tenantId ? <div className="button-row"><button className="button button-secondary button-compact" type="button"
-              onClick={() => { setOutcome(null); setEditing(tenant.tenantId); }}>Alterar nome ou estado</button></div> : null}
+            <div className="button-row"><Link className="button button-secondary button-compact" to={`/master/condominios/${tenant.tenantId}`}
+              aria-label={`Abrir ficha de ${tenant.name}`}>Abrir ficha</Link>
+              {manage && editing !== tenant.tenantId ? <button className="button button-secondary button-compact" type="button"
+                onClick={() => { setOutcome(null); setEditing(tenant.tenantId); }}>Alterar nome ou estado</button> : null}</div>
             {manage && editing === tenant.tenantId ? <TenantEditor tenant={tenant} close={(result) => { setEditing(null); if (result) setOutcome(result); }} /> : null}
           </li>)}</ol>}
     {tenants.data?.truncated ? <Notice tone="warning">A lista mostra os primeiros 200 condomínios em ordem alfabética. Use a busca por nome ou id para encontrar os demais.</Notice> : null}
@@ -212,8 +229,17 @@ function TenantEditor({ tenant, close }: { tenant: PlatformTenant; close(result:
 
 const actionLabels: Record<string, string> = {
   TENANT_RENAMED: 'Condomínio renomeado', TENANT_SUSPENDED: 'Condomínio suspenso', TENANT_REACTIVATED: 'Condomínio reativado',
-  OUTBOX_TASK_REPLAYED: 'Tarefa devolvida para a fila',
+  TENANT_CREATED: 'Condomínio criado no painel', TENANT_MANAGER_INVITED: 'Convite de gestor emitido',
+  TENANT_MANAGER_INVITATION_REVOKED: 'Convite de gestor revogado', OUTBOX_TASK_REPLAYED: 'Tarefa devolvida para a fila',
 };
+/** Rótulo e detalhes do evento da plataforma, usados na trilha e na ficha do condomínio. */
+function describeEvent(action: string, details: Record<string, string>): string {
+  const label = actionLabels[action] ?? billingActionLabel(action) ?? action;
+  if (action === 'TENANT_CREATED' && details.units) return `${label}: ${details.units} unidade(s), ${details.amenities === '1' ? 'com' : 'sem'} área inicial, fuso ${details.timeZone ?? '—'}`;
+  if (action === 'TENANT_MANAGER_INVITED' && details.displayName) return `${label} para ${details.displayName} (${details.validDays ?? '?'} dia(s))`;
+  if (action === 'TENANT_MANAGER_INVITATION_REVOKED' && details.replaced === 'true') return `${label} (substituído por novo convite)`;
+  return label;
+}
 
 function AuditSection() {
   const scope = usePlatform();
@@ -239,7 +265,7 @@ function AuditSection() {
       : pages.isError && events.length === 0 ? <ErrorState error={pages.error} retry={() => void pages.refetch()} />
         : events.length === 0 ? <div className="panel"><Empty icon="clock" title="Sem registros">As alterações feitas pela plataforma aparecerão aqui.</Empty></div>
           : <ol className="management-list audit-list" aria-label="Eventos da plataforma">{events.map((event) => <li key={event.eventId} className="management-row">
-            <div><strong>{actionLabels[event.action] ?? billingActionLabel(event.action) ?? event.action}</strong>
+            <div><strong>{describeEvent(event.action, event.details)}</strong>
               <span>{formatWhen(event.createdAt, PLATFORM_ZONE)} · <bdi>{tenantName(event.tenantId)}</bdi> · ator {short(event.actorId)}</span>
               {event.action === 'TENANT_RENAMED' && event.details.previousName && event.details.name ? <span>De “<bdi>{event.details.previousName}</bdi>” para “<bdi>{event.details.name}</bdi>”</span> : null}
               {event.action.startsWith('BILLING_') ? billingAuditDetails(event.details) : null}

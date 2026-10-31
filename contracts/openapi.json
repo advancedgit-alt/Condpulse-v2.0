@@ -3078,7 +3078,7 @@
             }
           }
         ],
-        "description": "Catálogo global dos condomínios (tenants.read): nome, fuso, estado, versão e contagens do onboarding. Sem dados de moradores. Criação de condomínio não existe na API: o cadastro segue pelo onboarding operacional.",
+        "description": "Catálogo global dos condomínios (tenants.read): nome, fuso, estado, versão, origem, contagens do onboarding, uso agregado (unidades ativas, vínculos e gestores vigentes, última atividade) e situação da assinatura com o financeiro ligado. Sem conteúdo dos moradores.",
         "responses": {
           "200": {
             "description": "Resultado autorizado",
@@ -3112,6 +3112,102 @@
           },
           "503": {
             "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPlatformTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Cria condomínio ativo, unidades, área inicial opcional e o convite de uso único do primeiro gestor numa transação (tenants.manage com AAL2). O banco só aceita condomínio e unidades da criação registrada na mesma transação e exige o evento TENANT_CREATED no COMMIT. A mesma chave com o mesmo pedido devolve 200 applied=false (sem token); com outro pedido, 409 TENANT_CREATION_KEY_REUSED. A API não usa credencial Auth Admin: o gestor prova o e-mail ao aceitar o convite.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{16,128}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlatformTenant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Condomínio criado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantCreated"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Repetição da mesma operação",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "IDEMPOTENCY_KEY_INVALID, TENANT_NAME_INVALID, TENANT_TIME_ZONE_INVALID, TENANT_UNITS_INVALID, TENANT_UNITS_DUPLICATED, UNIT_LABEL_INVALID, MANAGER_*, AMENITY_*, AUDIT_REASON_REQUIRED ou PLATFORM_INPUT_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "409": {
+            "description": "TENANT_CREATION_KEY_REUSED ou TENANT_CREATION_CONFLICT"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE"
           }
         }
       }
@@ -3195,6 +3291,62 @@
           },
           "503": {
             "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      },
+      "get": {
+        "operationId": "platformTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Ficha do condomínio (tenants.read): dados, uso agregado, assinatura, gestores (nome, situação e início; sem conta ou contato), convites de gestor (sem e-mail nem token) e até 10 eventos recentes da trilha da plataforma (com platform.audit.read).",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE"
           }
         }
       }
@@ -11729,6 +11881,340 @@
           }
         }
       }
+    },
+    "/v1/platform/tenants/{tenantId}/manager-invitations": {
+      "post": {
+        "operationId": "invitePlatformTenantManager",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Novo convite de primeiro gestor (tenants.manage com AAL2): só para condomínio ativo sem gestor vigente. Revoga o convite pendente anterior na mesma transação. Token mostrado uma única vez.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueManagerInvitation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerInvitationIssued"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MANAGER_NAME_INVALID, MANAGER_EMAIL_INVALID, MANAGER_INVITATION_VALIDITY_INVALID ou AUDIT_REASON_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND"
+          },
+          "409": {
+            "description": "TENANT_SUSPENDED ou TENANT_MANAGER_EXISTS"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/platform/tenants/{tenantId}/manager-invitations/{invitationId}/revoke": {
+      "post": {
+        "operationId": "revokePlatformTenantManagerInvitation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Revoga convite de gestor pendente, com motivo e evento TENANT_MANAGER_INVITATION_REVOKED. Devolve a ficha atualizada.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeManagerInvitation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformTenantDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUDIT_REASON_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "TENANT_NOT_FOUND"
+          },
+          "409": {
+            "description": "MANAGER_INVITATION_NOT_PENDING"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/manager-invitations/accept": {
+      "post": {
+        "operationId": "acceptManagerInvitation",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Aceite do convite de primeiro gestor pela própria conta autenticada, com o mesmo e-mail (claim email do token Auth). Cria o vínculo MANAGER ativo, sem unidade; o condomínio vem do convite. Respostas negativas são neutras.",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerInvitationAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Origem/CSRF inválidos ou ACCOUNT_INACTIVE"
+          },
+          "404": {
+            "description": "INVITATION_NOT_AVAILABLE (neutro: inválido, expirado, revogado, usado, outro e-mail ou condomínio suspenso)"
+          },
+          "409": {
+            "description": "MEMBERSHIP_ALREADY_EXISTS"
+          },
+          "503": {
+            "description": "INVITATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/auth/manager-invitation/accept": {
+      "post": {
+        "operationId": "acceptManagerInvitationFirstAccess",
+        "security": [],
+        "x-feature-flag": "CP_PLATFORM_ENABLED",
+        "description": "Primeiro acesso do gestor convidado pela web: senha do provedor e token do convite seguem juntos; o aceite cria o espelho local da conta e o vínculo MANAGER ativo e só então a sessão web é criada. Exige também CP_BFF_ENABLED. Mesmo limite de tentativas do login.",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationFirstAccess"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vínculo MANAGER ativo criado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerInvitationFirstAccessResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_LOGIN_REQUEST"
+          },
+          "401": {
+            "description": "AUTH_CREDENTIALS_REJECTED"
+          },
+          "403": {
+            "description": "Origem ou CSRF inválido; ACCOUNT_INACTIVE"
+          },
+          "404": {
+            "description": "INVITATION_NOT_AVAILABLE (resposta neutra)"
+          },
+          "409": {
+            "description": "MEMBERSHIP_ALREADY_EXISTS"
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED: aguardar antes de nova tentativa; sem retry automático.",
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 900
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_PROVIDER_UNAVAILABLE ou INVITATION_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13428,7 +13914,10 @@
           "version",
           "createdAt",
           "updatedAt",
-          "onboarding"
+          "onboarding",
+          "origin",
+          "usage",
+          "billing"
         ],
         "properties": {
           "tenantId": {
@@ -13467,6 +13956,29 @@
                 "type": "null"
               }
             ]
+          },
+          "origin": {
+            "enum": [
+              "ONBOARDING",
+              "PLATFORM",
+              null
+            ],
+            "description": "ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
+          },
+          "usage": {
+            "$ref": "#/components/schemas/PlatformTenantUsage",
+            "description": "Uso agregado sem conteúdo residencial (V035)."
+          },
+          "billing": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlatformTenantBilling"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Situação da assinatura; null com o financeiro desligado ou sem billing.read."
           }
         }
       },
@@ -19002,6 +19514,467 @@
           "truncated": {
             "type": "boolean",
             "description": "Há mensagens ainda mais antigas."
+          }
+        }
+      },
+      "PlatformTenantUsage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activeUnits",
+          "activeMemberships",
+          "activeManagers",
+          "lastActivityAt"
+        ],
+        "properties": {
+          "activeUnits": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeMemberships": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeManagers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformTenantBilling": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activeSubscription",
+          "openCharges",
+          "overdueCharges"
+        ],
+        "properties": {
+          "activeSubscription": {
+            "type": "boolean"
+          },
+          "openCharges": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "overdueCharges": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "PlatformManager": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "membershipId",
+          "displayName",
+          "status",
+          "since"
+        ],
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "SUSPENDED"
+            ]
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformManagerInvitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "invitationId",
+          "displayName",
+          "status",
+          "createdAt",
+          "expiresAt",
+          "acceptedAt",
+          "revokedAt"
+        ],
+        "properties": {
+          "invitationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "EXPIRED",
+              "ACCEPTED",
+              "REVOKED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformTenantDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenant",
+          "managers",
+          "managerInvitations",
+          "recentEvents"
+        ],
+        "properties": {
+          "tenant": {
+            "$ref": "#/components/schemas/PlatformTenant"
+          },
+          "managers": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/PlatformManager"
+            }
+          },
+          "managerInvitations": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/PlatformManagerInvitation"
+            }
+          },
+          "recentEvents": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/PlatformAuditEvent"
+            },
+            "description": "Vazio sem platform.audit.read."
+          }
+        }
+      },
+      "PlatformManagerInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "email"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "description": "Não é guardado: só o SHA-256 de id:e-mail normalizado."
+          },
+          "validDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 14,
+            "description": "Padrão 7."
+          }
+        }
+      },
+      "PlatformInitialAmenity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "capacity",
+          "approvalRequired",
+          "feeCents",
+          "bufferMinutes",
+          "policy"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "approvalRequired": {
+            "type": "boolean"
+          },
+          "feeCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000
+          },
+          "bufferMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "policy": {
+            "$ref": "#/components/schemas/AmenityPolicyInput"
+          }
+        }
+      },
+      "CreatePlatformTenant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "timeZone",
+          "units",
+          "manager",
+          "reason"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "Zona IANA reconhecida pelo Java e pelo PostgreSQL."
+          },
+          "units": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 250,
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "description": "Identificações distintas (sem diferenciar maiúsculas)."
+          },
+          "manager": {
+            "$ref": "#/components/schemas/PlatformManagerInput"
+          },
+          "amenity": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlatformInitialAmenity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "PlatformTenantCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenant",
+          "applied",
+          "invitationId",
+          "invitationToken",
+          "invitationExpiresAt"
+        ],
+        "properties": {
+          "tenant": {
+            "$ref": "#/components/schemas/PlatformTenant"
+          },
+          "applied": {
+            "type": "boolean",
+            "description": "false: repetição da mesma chave e do mesmo pedido; nada foi gravado."
+          },
+          "invitationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "invitationToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Mostrado uma única vez, só quando applied=true."
+          },
+          "invitationExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "IssueManagerInvitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "email",
+          "reason"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          },
+          "validDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 14
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "ManagerInvitationIssued": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "invitationId",
+          "token",
+          "expiresAt"
+        ],
+        "properties": {
+          "invitationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Mostrado uma única vez."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RevokeManagerInvitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "ManagerInvitationAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "membershipId",
+          "status"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "const": "ACTIVE"
+          }
+        }
+      },
+      "ManagerInvitationFirstAccessResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "membershipId",
+          "status",
+          "sessionStarted",
+          "accountId",
+          "expiresAt"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "const": "ACTIVE"
+          },
+          "sessionStarted": {
+            "type": "boolean"
+          },
+          "accountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }

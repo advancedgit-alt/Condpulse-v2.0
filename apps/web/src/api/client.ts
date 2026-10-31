@@ -11,7 +11,8 @@ import { instantMicros } from './instant';
  * servidor, então as duas rotas compartilham a espera.
  */
 const COOLDOWN_KEYS: Readonly<Record<string, string>> = {
-  '/auth/login': '/auth/login', '/auth/invitation/accept': '/auth/login', '/auth/refresh': '/auth/refresh',
+  '/auth/login': '/auth/login', '/auth/invitation/accept': '/auth/login', '/auth/manager-invitation/accept': '/auth/login',
+  '/auth/refresh': '/auth/refresh',
 };
 const messages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: 'Entre novamente para continuar.',
@@ -328,6 +329,21 @@ const messages: Record<string, string> = {
   TENANT_NAME_INVALID: 'Informe o nome do condomínio com até 160 caracteres.',
   TENANT_STATE_INVALID: 'Informe se o condomínio fica ativo ou suspenso.',
   TENANT_VERSION_REQUIRED: 'Recarregue os dados do condomínio antes de salvar.',
+  TENANT_INPUT_INVALID: 'Informe os dados do condomínio.',
+  TENANT_TIME_ZONE_INVALID: 'Informe um fuso horário IANA válido, por exemplo America/Sao_Paulo.',
+  TENANT_UNITS_INVALID: 'Informe de 1 a 250 unidades.',
+  TENANT_UNITS_DUPLICATED: 'Há unidades repetidas na lista. Cada identificação deve aparecer uma única vez.',
+  TENANT_CREATION_KEY_REUSED: 'Esta criação já foi enviada com outros dados. Atualize a lista e confira antes de iniciar outra.',
+  TENANT_CREATION_CONFLICT: 'Os dados conflitam com um cadastro existente. Atualize a lista e confira.',
+  TENANT_SUSPENDED: 'Reative o condomínio antes de convidar o gestor.',
+  TENANT_MANAGER_EXISTS: 'O condomínio já tem gestor vigente; novos vínculos seguem pela gestão local.',
+  MANAGER_REQUIRED: 'Informe o primeiro gestor do condomínio.',
+  MANAGER_NAME_INVALID: 'Informe o nome do gestor com até 160 caracteres visíveis.',
+  MANAGER_EMAIL_INVALID: 'Informe um e-mail válido para o gestor.',
+  MANAGER_INVITATION_VALIDITY_INVALID: 'A validade do convite deve ter entre 1 e 14 dias.',
+  MANAGER_INVITATION_INPUT_INVALID: 'Informe os dados do convite.',
+  MANAGER_INVITATION_NOT_PENDING: 'O convite não está mais pendente.',
+  PLATFORM_CONFLICT: 'Os dados conflitam com um cadastro existente. Atualize e confira.',
   OCCURRENCE_INPUT_INVALID: 'Informe a categoria, o título e a descrição da ocorrência.',
   OCCURRENCE_CATEGORY_INVALID: 'Escolha uma categoria válida.',
   OCCURRENCE_TITLE_INVALID: 'Informe o título com 3 a 120 caracteres.',
@@ -474,12 +490,13 @@ export function publicPermit(value: unknown): PublicPermit {
     validFrom: value.validFrom, validUntil: value.validUntil, timeZone: value.timeZone, state: value.state };
 }
 
-function invitationAccepted(value: unknown): InvitationAccepted {
-  if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== 'PENDING') throw invalidResponse(true);
-  return { tenantId: value.tenantId, membershipId: value.membershipId, status: 'PENDING' };
+/** Convite da gestão gera vínculo PENDING; convite de primeiro gestor (plataforma) gera vínculo ACTIVE. Outro estado é inválido. */
+function invitationAccepted(value: unknown, expected: InvitationAccepted['status'] = 'PENDING'): InvitationAccepted {
+  if (!record(value) || !isUUID(value.tenantId) || !isUUID(value.membershipId) || value.status !== expected) throw invalidResponse(true);
+  return { tenantId: value.tenantId, membershipId: value.membershipId, status: expected };
 }
-function invitationFirstAccess(value: unknown): InvitationFirstAccess {
-  const accepted = invitationAccepted(value);
+function invitationFirstAccess(value: unknown, expected: InvitationAccepted['status'] = 'PENDING'): InvitationFirstAccess {
+  const accepted = invitationAccepted(value, expected);
   if (!record(value) || typeof value.sessionStarted !== 'boolean'
       || (value.sessionStarted ? !isUUID(value.accountId) || !isDate(value.expiresAt) : value.accountId !== null || value.expiresAt !== null))
     throw invalidResponse(true);
@@ -932,13 +949,15 @@ export class CondPulseApi {
    * Primeiro acesso por convite: entra com a senha do provedor e aceita o convite na mesma chamada, para quem ainda
    * não tem conta local. Com sessão iniciada o CSRF anterior deixa de valer. Resultado incerto não é repetido.
    */
-  async acceptInvitationWithLogin(input: { email: string; password: string; token: string }, signal?: AbortSignal): Promise<InvitationFirstAccess> {
+  async acceptInvitationWithLogin(input: { email: string; password: string; token: string; kind?: InvitationKind }, signal?: AbortSignal): Promise<InvitationFirstAccess> {
     if (!/^[A-Za-z0-9_-]{43}$/.test(input.token)) throw new ApiError(404, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);
+    const manager = input.kind === 'manager';
     const body = JSON.stringify({ email: input.email, password: input.password, token: input.token });
     return this.auth(async () => {
       try {
-        const reply = await this.send('/auth/invitation/accept', { method: 'POST', body, ...(signal ? { signal } : {}) }, this.generation);
-        const result = invitationFirstAccess(reply.value);
+        const reply = await this.send(manager ? '/auth/manager-invitation/accept' : '/auth/invitation/accept',
+          { method: 'POST', body, ...(signal ? { signal } : {}) }, this.generation);
+        const result = invitationFirstAccess(reply.value, manager ? 'ACTIVE' : 'PENDING');
         this.clearSession();
         return result;
       } catch (error) {
@@ -948,12 +967,17 @@ export class CondPulseApi {
       }
     });
   }
-  async acceptInvitation(token: string, signal?: AbortSignal): Promise<InvitationAccepted> {
+  async acceptInvitation(token: string, signal?: AbortSignal, kind: InvitationKind = 'membership'): Promise<InvitationAccepted> {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(400, 'INVITATION_NOT_AVAILABLE', messages.INVITATION_NOT_AVAILABLE!);
-    const reply = await this.request('/v1/invitations/accept', { method: 'POST', body: JSON.stringify({ token }), ...(signal ? { signal } : {}) });
-    return invitationAccepted(reply.value);
+    const manager = kind === 'manager';
+    const reply = await this.request(manager ? '/v1/manager-invitations/accept' : '/v1/invitations/accept',
+      { method: 'POST', body: JSON.stringify({ token }), ...(signal ? { signal } : {}) });
+    return invitationAccepted(reply.value, manager ? 'ACTIVE' : 'PENDING');
   }
 }
+
+/** Convite da gestão (vínculo pendente) ou convite de primeiro gestor emitido pela plataforma (vínculo ativo). */
+export type InvitationKind = 'membership' | 'manager';
 
 /** Uma chave por intenção. Quem oferece retry deve conservar esta chave e os mesmos dados. */
 export function newOperationKey(): string { return `web:${globalThis.crypto.randomUUID()}`; }

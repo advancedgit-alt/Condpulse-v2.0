@@ -25,7 +25,7 @@ export default function App() {
   } }));
   return <QueryClientProvider client={queries}><BrowserRouter><AuthProvider>
     <a href="#main-content" className="skip-link">Ir para o conteúdo</a><OfflineNotice />
-    <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route path="/recuperar-acesso" element={<RecoveryPage />} /><Route path="/visita" element={<PermitLinkPage />} /><Route element={<ProtectedShell />}>
+    <Routes><Route path="/entrar" element={<LoginPage />} /><Route path="/convite" element={<InvitationPage />} /><Route path="/convite-gestor" element={<InvitationPage key="manager" kind="manager" />} /><Route path="/recuperar-acesso" element={<RecoveryPage />} /><Route path="/visita" element={<PermitLinkPage />} /><Route element={<ProtectedShell />}>
       <Route path="/contextos" element={<ContextPage />} />
       <Route path="/morador/:tenantId/:unitId/inicio" element={<DashboardPage />} />
       <Route path="/morador/:tenantId/:unitId/reservas" element={<ReservationsPage />} />
@@ -39,6 +39,7 @@ export default function App() {
       <Route path="/gestao/:tenantId/:section" element={<ManagementPage />} />
       <Route path="/master" element={<PlatformPage />} />
       <Route path="/master/:section" element={<PlatformPage />} />
+      <Route path="/master/condominios/:tenantId" element={<PlatformPage />} />
       <Route path="*" element={<Navigate to="/contextos" replace />} />
     </Route></Routes>
   </AuthProvider></BrowserRouter></QueryClientProvider>;
