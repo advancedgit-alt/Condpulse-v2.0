@@ -271,6 +271,29 @@ public final class PolicyEngine {
   if(reasons.isEmpty()) reasons.add("ALLOWED");
   return new Outcome(result,List.copyOf(reasons),CAPABILITIES.stream().filter(missing::contains).toList());
  }
+ /**
+  * Avaliação com sujeito real (V044): os mesmos impeditivos e regras do cenário sintético, sobre os fatos lidos do
+  * cadastro, e ainda o direito derivado e as revogações. Sem direito vigente ou com revogação, nega; nunca ALLOW por
+  * fato ausente.
+  */
+ public static Outcome evaluateSubject(PolicyModels.PolicyDocument d,PolicyModels.AreaFacts area,PolicyModels.Destination point,int targetCount,
+   PolicyModels.SubjectFacts f,Instant at) {
+  if(f==null || !f.found()) return new Outcome("DENY",List.of("SUBJECT_NOT_FOUND"),List.of());
+  String context=f.contextKind()!=null && CONTEXTS.contains(f.contextKind())?f.contextKind():"UNKNOWN_CONTEXT";
+  var synthetic=new PolicyModels.SyntheticSubject(context,f.ageEvidence()!=null && AGE_EVIDENCE.contains(f.ageEvidence())?f.ageEvidence():"UNKNOWN",
+   f.permitActive(),f.reservationActive(),false);
+  var base=evaluate(d,area,point,targetCount,synthetic,at);
+  var deny=new ArrayList<String>();
+  if(!f.subjectActive()) deny.add("SUBJECT_BLOCKED");
+  if(!f.contextCurrent()) deny.add("CONTEXT_NOT_CURRENT");
+  if(f.revoked()) deny.add("REVOKED");
+  if(!f.grantCurrent()) deny.add("NO_ACTIVE_GRANT");
+  if(deny.isEmpty()) return base;
+  var reasons=new ArrayList<String>(base.reasonCodes().stream().filter(r->!"ALLOWED".equals(r)).toList());
+  for(String r:deny) if(!reasons.contains(r)) reasons.add(r);
+  String result="UNAVAILABLE".equals(base.result())?"UNAVAILABLE":"DENY";
+  return new Outcome(result,List.copyOf(reasons),base.missingCapabilities());
+ }
  /** Janela semanal no fuso da regra, fim exclusivo; janela que vira a noite vale do início até a meia-noite e na manhã seguinte. */
  static boolean inSchedule(PolicyModels.PolicyDocument d,Instant at) {
   ZonedDateTime local=at.atZone(zone(d.timezone()));
@@ -293,7 +316,11 @@ public final class PolicyEngine {
   Map.entry("RESERVATION_REQUIRED","Exige reserva vigente."),Map.entry("COMPANION_NOT_VERIFIED","Exige acompanhamento físico comprovado."),
   Map.entry("ASSISTANCE_REQUIRED","Exige atendimento da equipe."),Map.entry("OUTSIDE_SCHEDULE","Fora do horário permitido."),
   Map.entry("POLICY_BLOCKED","A regra tem impeditivo de validação para esta área ou passagem: ingresso negado."),
-  Map.entry("UNSUPPORTED_RESTRICTION","A regra declara restrição que ainda não é avaliada: ingresso negado."));
+  Map.entry("UNSUPPORTED_RESTRICTION","A regra declara restrição que ainda não é avaliada: ingresso negado."),
+  Map.entry("SUBJECT_NOT_FOUND","Cadastro de acesso ou contexto não encontrado neste condomínio."),
+  Map.entry("SUBJECT_BLOCKED","Cadastro de acesso bloqueado."),Map.entry("CONTEXT_NOT_CURRENT","O vínculo usado não está vigente na origem."),
+  Map.entry("REVOKED","Há revogação registrada para esta pessoa, vínculo ou direito."),
+  Map.entry("NO_ACTIVE_GRANT","Não há direito derivado vigente para esta área neste horário."));
  public static String explain(List<String> reasons) {
   return String.join(" ",reasons.stream().map(r->EXPLAIN.getOrDefault(r,r)).toList());
  }

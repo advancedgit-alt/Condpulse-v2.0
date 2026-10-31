@@ -40,6 +40,9 @@ class AccessSubjectJdbcTest {
  @BeforeEach void reset() throws Exception { db.restoreActiveFixtures(); db.assertEmptyContext(); }
  @AfterEach void clear() throws Exception {
   db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and action like 'SUBJECT\\_%'",db.tenantA,db.tenantB);
+  // Marcas de revogação (V044) citam sujeitos e contextos: saem antes (direitos e marcas na mesma instrução).
+  db.adminUpdate("with g as (delete from cp.access_grants where tenant_id in (?,?)) delete from cp.revocation_markers where tenant_id in (?,?)",
+   db.tenantA,db.tenantB,db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.subject_contexts where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_subjects where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.visit_permits where tenant_id in (?,?)",db.tenantA,db.tenantB);

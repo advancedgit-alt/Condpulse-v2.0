@@ -134,21 +134,30 @@ public class AgeService {
   return mapped(()->transactions.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.MANAGE_MEMBERSHIPS);
    if(!store.subjectExists(tenant,subject)) throw notFound();
-   LocalDate today=LocalDate.now(context.timeZone());
-   var row=store.current(tenant,subject);
-   if(row==null) return new AgeModels.AgeCheck(subject,minimumAge,AgeRule.Outcome.UNKNOWN.name(),today,context.timeZone().getId(),null,null);
-   AgeRule.Outcome outcome;
-   if("AGE_PREDICATE_ATTESTATION".equals(row.method())) {
-    // Limite superior atestado envelhece: só conclui "não atende" enquanto ainda for comprovável na data avaliada.
-    LocalDate attestedOn=row.verifiedAt().toInstant().atZone(context.timeZone()).toLocalDate();
-    outcome=AgeRule.fromAttestation(row.minimumAge(),row.maximumAge(),row.predicate(),minimumAge,attestedOn,today);
-   }
-   else {
-    var rule=AgeRule.LeapDayRule.valueOf(store.settings(tenant).leapDayRule());
-    outcome=AgeRule.fromBirthDate(cipher.decrypt(row.ciphertext(),tenant,subject,row.id()),today,rule,minimumAge);
-   }
-   return new AgeModels.AgeCheck(subject,minimumAge,outcome.name(),today,context.timeZone().getId(),row.id(),row.validUntil().toInstant());
+   return assess(store,cipher,tenant,subject,minimumAge,context.timeZone(),true);
   }));
+ }
+
+ /**
+  * "N anos ou mais" na data civil do fuso, dentro da transação do chamador (mesma regra da conferência da gestão).
+  * strictKey=false: data protegida sem a chave configurada vira UNKNOWN (nega) em vez de 503.
+  */
+ public static AgeModels.AgeCheck assess(AgeStore store,BirthDateCipher cipher,UUID tenant,UUID subject,int minimumAge,java.time.ZoneId zone,boolean strictKey) {
+  LocalDate today=LocalDate.now(zone);
+  var row=store.current(tenant,subject);
+  if(row==null) return new AgeModels.AgeCheck(subject,minimumAge,AgeRule.Outcome.UNKNOWN.name(),today,zone.getId(),null,null);
+  AgeRule.Outcome outcome;
+  if("AGE_PREDICATE_ATTESTATION".equals(row.method())) {
+   // Limite superior atestado envelhece: só conclui "não atende" enquanto ainda for comprovável na data avaliada.
+   LocalDate attestedOn=row.verifiedAt().toInstant().atZone(zone).toLocalDate();
+   outcome=AgeRule.fromAttestation(row.minimumAge(),row.maximumAge(),row.predicate(),minimumAge,attestedOn,today);
+  }
+  else if(!strictKey && (cipher==null || !cipher.available())) outcome=AgeRule.Outcome.UNKNOWN;
+  else {
+   var rule=AgeRule.LeapDayRule.valueOf(store.settings(tenant).leapDayRule());
+   outcome=AgeRule.fromBirthDate(cipher.decrypt(row.ciphertext(),tenant,subject,row.id()),today,rule,minimumAge);
+  }
+  return new AgeModels.AgeCheck(subject,minimumAge,outcome.name(),today,zone.getId(),row.id(),row.validUntil().toInstant());
  }
 
  private static <T> T mapped(Supplier<T> action) {
