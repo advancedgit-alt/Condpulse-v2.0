@@ -1,5 +1,6 @@
 package br.com.condpulse.gateway.adapters;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -106,11 +107,14 @@ class DahuaIntelbrasAdapterContractTest {
   return new IntelbrasCgiAdapter(ctx);
  }
 
+ /** Simula o núcleo: cada página é "gravada" e o cursor devolvido confirma a persistência. */
+ private static String cursor;
  private static java.util.List<EdgeEvent> drain(IntelbrasCgiAdapter a,int expected,java.util.List<String> reasons) throws InterruptedException {
   var out=new ArrayList<EdgeEvent>();
   for(int i=0;i<300 && out.size()<expected;i++) {
-   var page=a.fetchEvents(null,100);
+   var page=a.fetchEvents(cursor,100);
    out.addAll(page.events());
+   cursor=page.nextCursor();
    if(page.reasonCode()!=null) reasons.add(page.reasonCode());
    if(out.size()<expected) Thread.sleep(20);
   }
@@ -122,7 +126,11 @@ class DahuaIntelbrasAdapterContractTest {
    fake.on("GET","/cgi-bin/eventManager.cgi",r->new Reply(200,"multipart/x-mixed-replace; boundary=myboundary",STREAM,Map.of(),0));
    var a=intelbras(fake,ConnectionMode.LOCAL);
    try {
+    cursor=null;
     var reasons=new ArrayList<String>();
+    // Sem confirmação (cursor não gravado), os mesmos eventos voltam: nada sai do buffer antes da persistência.
+    for(int i=0;i<300 && a.fetchEvents(null,100).events().size()<3;i++) Thread.sleep(20);
+    assertEquals(3,a.fetchEvents(null,100).events().size());
     var events=drain(a,3,reasons);
     assertEquals(3,events.size());
     var allowed=events.get(0);
@@ -236,5 +244,36 @@ class DahuaIntelbrasAdapterContractTest {
    assertEquals(page.nextCursor(),again.nextCursor(),"cursor não pula registros que não vieram");
    assertEquals(0,again.events().size());
   }
+ }
+
+ @Test void intelbrasWatchdogReconectaQuandoOHeartbeatPara() throws Exception {
+  var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),4);
+  var connections=new java.util.concurrent.atomic.AtomicInteger();
+  server.createContext("/cgi-bin/eventManager.cgi",ex->{
+   connections.incrementAndGet();
+   ex.getResponseHeaders().set("Content-Type","multipart/x-mixed-replace; boundary=myboundary");
+   ex.sendResponseHeaders(200,0);
+   var os=ex.getResponseBody();
+   os.write("--myboundary\r\nContent-Type: text/plain\r\n\r\nHeartbeat\r\n".getBytes());
+   os.flush();
+   try { Thread.sleep(30_000); } catch(InterruptedException e) { Thread.currentThread().interrupt(); }
+   try { ex.close(); } catch(RuntimeException ignored) {}
+  });
+  server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool(r->{ var t=new Thread(r); t.setDaemon(true); return t; }));
+  server.start();
+  var clock=new TestSupport.TestClock();
+  var device=TestSupport.device("ibw",Brand.INTELBRAS,ConnectionMode.LOCAL,DecisionMode.DEVICE_LOCAL_ACL,
+   java.net.URI.create("http://127.0.0.1:"+server.getAddress().getPort()),List.of(TestSupport.channel("c1","0",null)),Map.of(),Map.of("intelbras.heartbeatSeconds","1"),false);
+  var a=new IntelbrasCgiAdapter(TestSupport.context(device,clock));
+  try {
+   a.health();
+   for(int i=0;i<200 && !a.health().reachable();i++) Thread.sleep(20);
+   assertTrue(a.health().reachable());
+   assertEquals(1,connections.get());
+   clock.advance(Duration.ofSeconds(10)); // heartbeat vencido com a conexão TCP aberta
+   assertFalse(a.health().reachable());
+   for(int i=0;i<300 && connections.get()<2;i++) Thread.sleep(20);
+   assertEquals(2,connections.get(),"watchdog fechou o fluxo parado e a assinatura reconectou");
+  } finally { a.shutdown(); server.stop(0); }
  }
 }

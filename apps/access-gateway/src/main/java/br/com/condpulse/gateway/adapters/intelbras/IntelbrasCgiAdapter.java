@@ -50,8 +50,11 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  private final DeviceHttpClient http;
  private final int heartbeatSeconds;
  // Assinatura contínua (LOCAL): uma linha de execução mantém eventManager.cgi?action=attach aberto e enfileira.
- private final java.util.concurrent.ConcurrentLinkedQueue<EdgeEvent> buffer=new java.util.concurrent.ConcurrentLinkedQueue<>();
- private final java.util.concurrent.atomic.AtomicInteger buffered=new java.util.concurrent.atomic.AtomicInteger();
+ /** Evento recebido com número de sequência desta execução do processo. */
+ private record Buffered(long seq,EdgeEvent event) {}
+ private final java.util.ArrayDeque<Buffered> buffer=new java.util.ArrayDeque<>();
+ private final String session=java.util.UUID.randomUUID().toString();
+ private long nextSeq;
  private final java.util.concurrent.atomic.AtomicLong dropped=new java.util.concurrent.atomic.AtomicLong();
  private final java.util.concurrent.atomic.AtomicInteger gaps=new java.util.concurrent.atomic.AtomicInteger();
  private final java.util.concurrent.atomic.AtomicInteger unmappedSinceDrain=new java.util.concurrent.atomic.AtomicInteger();
@@ -60,7 +63,7 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  private volatile boolean running=true, connected;
  private volatile Instant lastData;
  private volatile DeviceHttpClient.OpenStream current;
- private volatile Thread worker;
+ private volatile Thread worker, watchdogThread;
 
  public IntelbrasCgiAdapter(DeviceContext context) {
   super(context);
@@ -74,7 +77,7 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   var caps=new EnumMap<CapabilityName,Boolean>(CapabilityName.class);
   if(http!=null) {
    ops.put(Operation.FETCH_EVENTS,OperationSupport.implemented(Operation.FETCH_EVENTS,List.of(EVM,PARAM),
-    "Assinatura contínua com fila local e reconexão; sem backfill: eventos ocorridos com o fluxo desconectado não são recuperados (STREAM_GAP).",
+    "Assinatura contínua com fila local confirmada pelo cursor da fila durável, reconexão e watchdog de heartbeat; sem backfill: eventos ocorridos com o fluxo desconectado não são recuperados (STREAM_GAP).",
     "Sem identificador nativo de evento: chave composta (UTC, porta, usuário, método, erro, índice); tentativas idênticas no mesmo segundo colapsam."));
    ops.put(Operation.HEALTH,OperationSupport.implemented(Operation.HEALTH,List.of(EVM),"Assinatura conectada e heartbeat recente (heartbeat de 1 a 5 s)."));
   }
@@ -99,20 +102,50 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
  @Override public EventPage fetchEvents(String cursor,int limit) {
   if(http==null) return super.fetchEvents(cursor,limit);
   ensureSubscribed();
+  watchdog();
   var out=new ArrayList<EdgeEvent>();
-  EdgeEvent e;
-  while(out.size()<limit && (e=buffer.poll())!=null) { buffered.decrementAndGet(); out.add(e); }
+  String next=cursor;
+  synchronized(buffer) {
+   // O cursor gravado na fila durável confirma a persistência: só então os eventos saem do buffer.
+   long acked=ackedSeq(cursor);
+   while(!buffer.isEmpty() && buffer.peekFirst().seq()<=acked) buffer.pollFirst();
+   for(var b:buffer) {
+    if(out.size()>=limit) break;
+    out.add(b.event());
+    next=session+":"+b.seq();
+   }
+  }
   int gap=gaps.getAndSet(0);
-  return new EventPage(OperationState.CONFIRMED,gap>0?"STREAM_GAP":null,out,cursor,unmappedSinceDrain.getAndSet(0));
+  return new EventPage(OperationState.CONFIRMED,gap>0?"STREAM_GAP":null,out,next,unmappedSinceDrain.getAndSet(0));
+ }
+
+ /** Cursor {@code <sessão>:<seq>}; de outra execução do processo não confirma nada deste buffer. */
+ private long ackedSeq(String cursor) {
+  if(cursor==null || !cursor.startsWith(session+":")) return -1;
+  try { return Long.parseLong(cursor.substring(session.length()+1)); } catch(NumberFormatException e) { return -1; }
  }
 
  /** Alcance: assinatura conectada e dado (evento ou heartbeat) recebido dentro de 3 heartbeats. */
  @Override public HealthReport health() {
   if(http==null) return super.health();
   ensureSubscribed();
-  var seen=lastData;
-  boolean recent=connected && seen!=null && Duration.between(seen,context.clock().instant()).getSeconds()<=3L*heartbeatSeconds;
+  boolean recent=connected && !stale();
+  watchdog();
   return new HealthReport(recent,recent?null:connected?"NO_RECENT_HEARTBEAT":"STREAM_DISCONNECTED",null,null,null);
+ }
+
+ private boolean stale() {
+  var seen=lastData;
+  return seen==null || Duration.between(seen,context.clock().instant()).getSeconds()>3L*heartbeatSeconds;
+ }
+
+ /**
+  * Fluxo conectado sem dado além de 3 heartbeats: fecha a conexão para a assinatura reconectar (a leitura bloqueada
+  * termina com erro). Chamado pelos ciclos de coleta e de saúde e pelo temporizador da própria assinatura.
+  */
+ void watchdog() {
+  var s=current;
+  if(connected && s!=null && stale()) s.close();
  }
 
  public long droppedEvents() { return dropped.get(); }
@@ -123,6 +156,15 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   t.setDaemon(true);
   worker=t;
   t.start();
+  var w=new Thread(()->{
+   while(running) {
+    try { Thread.sleep(heartbeatSeconds*1000L); } catch(InterruptedException e) { return; }
+    watchdog();
+   }
+  },"intelbras-watchdog-"+device().deviceId());
+  w.setDaemon(true);
+  watchdogThread=w;
+  w.start();
  }
 
  private void subscribe() {
@@ -136,6 +178,7 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
    try(var stream=http.openStream(P_EVENTS,q)) {
     current=stream;
     if(stream.status()==200) {
+     lastData=context.clock().instant();
      connected=true;
      if(everConnected) gaps.incrementAndGet();
      everConnected=true;
@@ -182,8 +225,10 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
     if(!recent.add(e.nativeEventId())) continue;
     if(recent.size()>RECENT_IDS) { var it=recent.iterator(); it.next(); it.remove(); }
    }
-   buffer.add(e);
-   if(buffered.incrementAndGet()>BUFFER_LIMIT && buffer.poll()!=null) { buffered.decrementAndGet(); dropped.incrementAndGet(); }
+   synchronized(buffer) {
+    buffer.addLast(new Buffered(nextSeq++,e));
+    if(buffer.size()>BUFFER_LIMIT) { buffer.pollFirst(); dropped.incrementAndGet(); }
+   }
   }
  }
 
@@ -193,6 +238,8 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
   if(s!=null) s.close();
   var t=worker;
   if(t!=null) t.interrupt();
+  var w=watchdogThread;
+  if(w!=null) w.interrupt();
  }
 
  record Parsed(List<EdgeEvent> events,int unmapped) {}
