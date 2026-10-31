@@ -104,14 +104,14 @@ class HikvisionIsapiAdapterContractTest {
   }
  }
 
- @Test void exclusaoAindaEmAndamentoFicaComoAck() throws Exception {
+ @Test void exclusaoAindaEmAndamentoFicaIncerta() throws Exception {
   try(var fake=new FakeDeviceServer()) {
    var store=new Store(); store.install(fake);
    var a=adapter(fake);
    a.upsertPerson(new PersonSpec("ref-3","Morador 3",null,null));
    store.deleteStatus="processing";
    var r=a.removePerson("ref-3");
-   assertEquals(OperationState.ACK,r.state());
+   assertEquals(OperationState.UNKNOWN,r.state(),"em processamento: incerto, a fila acompanha com leitura");
    assertEquals("DELETE_IN_PROGRESS",r.reasonCode());
    store.deleteStatus="failed";
    assertEquals("HIKVISION_DELETE_FAILED",a.removePerson("ref-3").reasonCode());
@@ -200,6 +200,20 @@ class HikvisionIsapiAdapterContractTest {
    var gone=a.readState("ref-8");
    assertEquals(Boolean.FALSE,gone.personPresent());
    assertEquals(Set.of(),gone.rightKeys());
+  }
+ }
+
+ @Test void validadeLocalSemOffsetUsaOFusoDoCondominio() throws Exception {
+  try(var fake=new FakeDeviceServer()) {
+   var store=new Store(); store.install(fake);
+   var a=adapter(fake);
+   a.upsertPerson(new PersonSpec("ref-9","Morador 9",null,null));
+   var desired=new RightsSpec("ref-9",List.of(new Right("c1","sempre")),Instant.parse("2030-01-01T03:00:00Z"),Instant.parse("2031-01-01T03:00:00Z"));
+   a.applyRights(desired);
+   store.users.get("ref-9").put("Valid",Map.of("enable",true,"beginTime","2030-01-01T00:00:00","endTime","2031-01-01T00:00:00","timeType","local"));
+   assertEquals(a.rightKeys(desired).orElseThrow(),a.readState("ref-9").rightKeys());
+   store.users.get("ref-9").put("Valid",Map.of("enable",true,"beginTime","2030-01-01T00:00:00","endTime","2031-01-01T00:00:00","timeType","UTC"));
+   assertNull(a.readState("ref-9").rightKeys(),"timeType não local sem offset não é interpretado");
   }
  }
 }
