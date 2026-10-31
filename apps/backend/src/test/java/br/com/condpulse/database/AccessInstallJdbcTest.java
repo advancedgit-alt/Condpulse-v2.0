@@ -157,6 +157,9 @@ class AccessInstallJdbcTest {
    second));
   assertEquals("INSTALLATION_INVALID",code(()->install.updateChannel(MASTER,db.tenantA,AAL2,relay,new InstallModels.UpdateChannel("OTHER","VERIFIED",0L))),
    "Canal em vínculo ativo não muda de função");
+  long deviceVersion=install.devices(MASTER,db.tenantA,AAL2).devices().stream().filter(d->d.deviceId().equals(controller)).findFirst().orElseThrow().version();
+  assertEquals("INSTALLATION_INVALID",code(()->install.updateDevice(MASTER,db.tenantA,AAL2,controller,new InstallModels.UpdateDevice("Controlador social",
+   "BOTH","ACTIVE","r3",PILOT,"CONTROLLER","CLOUD_SERVICE",deviceVersion))),"Equipamento de vínculo ativo não muda hardware sem novo comissionamento");
   assertEquals("TENANT_ACCESS_DENIED",code(()->install.bindings(MANAGER,db.tenantA,AAL2)),"HAC-009: gestor não lê vínculo físico");
   assertEquals("TENANT_ACCESS_DENIED",code(()->install.bindings(MASTER,db.tenantB,AAL2)),"HAC-007: concessão não atravessa condomínio");
   db.assertEmptyContext();

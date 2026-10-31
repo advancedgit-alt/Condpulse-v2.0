@@ -41,6 +41,14 @@ BEGIN
    OR NEW.version<>OLD.version+1 OR OLD.status='RETIRED' THEN
   RAISE EXCEPTION 'equipamento: instância, conector e condomínio fixos; retirada final' USING ERRCODE='23514';
  END IF;
+ -- Equipamento em vínculo ativo ou pendente (controlador ou leitor): só o nome muda; retirada, sentido, hardware, combinação,
+ -- papel ou conexão exigem novo vínculo e novo comissionamento.
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
+ IF (NEW.status,NEW.direction,NEW.hardware_revision,NEW.homologation_id,NEW.device_role,NEW.connection_mode)
+   IS DISTINCT FROM (OLD.status,OLD.direction,OLD.hardware_revision,OLD.homologation_id,OLD.device_role,OLD.connection_mode) AND EXISTS(SELECT 1 FROM cp.point_bindings b WHERE b.tenant_id=NEW.tenant_id AND b.status IN ('ACTIVE','PENDING_COMMISSION')
+   AND NEW.id IN (b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id)) THEN
+  RAISE EXCEPTION 'equipamento em vínculo ativo ou pendente: crie novo vínculo' USING ERRCODE='23514';
+ END IF;
  NEW.updated_at:=clock_timestamp();
  RETURN NEW;
 END $$;
@@ -52,6 +60,7 @@ DROP POLICY access_devices_read ON cp.access_devices;
 CREATE POLICY access_devices_read ON cp.access_devices AS RESTRICTIVE FOR SELECT TO cp_api
  USING(platform.has_capability('memberships.manage') OR platform.has_capability('concierge.operate')
   OR platform.has_technical_scope('installation.read') OR platform.has_technical_scope('installation.manage')
+  OR platform.has_technical_scope('installation.bind_channel') OR platform.has_technical_scope('installation.commission')
   OR EXISTS(SELECT 1 FROM cp.access_credentials c WHERE c.tenant_id=access_devices.tenant_id AND c.connector_id=access_devices.connector_id));
 DROP POLICY access_connectors_read ON cp.access_connectors;
 CREATE POLICY access_connectors_read ON cp.access_connectors AS RESTRICTIVE FOR SELECT TO cp_api
@@ -103,8 +112,9 @@ BEGIN
    OR NEW.version<>OLD.version+1 OR OLD.status='RETIRED' THEN
   RAISE EXCEPTION 'canal: identidade nativa fixa; retirada final' USING ERRCODE='23514';
  END IF;
- -- Canal usado por vínculo ativo não muda de função nem é desligado sem novo vínculo.
- IF (NEW.channel_kind<>OLD.channel_kind OR NEW.status IN ('DISABLED','RETIRED')) AND EXISTS(SELECT 1 FROM cp.point_bindings b
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
+ -- Canal usado por vínculo ativo ou pendente não muda de função nem deixa de estar verificado sem novo vínculo.
+ IF (NEW.channel_kind<>OLD.channel_kind OR NEW.status<>'VERIFIED') AND EXISTS(SELECT 1 FROM cp.point_bindings b
     WHERE b.tenant_id=NEW.tenant_id AND b.status IN ('ACTIVE','PENDING_COMMISSION') AND NEW.id IN (b.actuator_channel_id,b.door_contact_channel_id,
      b.exit_request_channel_id,b.passage_sensor_channel_id)) THEN
   RAISE EXCEPTION 'canal em vínculo ativo ou pendente' USING ERRCODE='23514';
@@ -210,6 +220,32 @@ CREATE INDEX point_bindings_actuator_time ON cp.point_bindings(tenant_id,actuato
 
 CREATE TRIGGER device_channels_guard BEFORE INSERT OR UPDATE ON cp.device_channels FOR EACH ROW EXECUTE FUNCTION cp.device_channels_guard();
 
+-- Conferência física do vínculo, repetida na criação, na submissão ao aceite e na ativação: canal e equipamento podem ter
+-- mudado enquanto o vínculo era rascunho. O lock por condomínio serializa com as mudanças de canal e equipamento.
+CREATE FUNCTION cp.point_binding_check(b cp.point_bindings) RETURNS void
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||b.tenant_id::text,0));
+ IF NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=b.tenant_id AND c.id=b.actuator_channel_id AND c.channel_kind='ACCESS_ACTUATOR' AND c.status='VERIFIED')
+   OR (b.door_contact_channel_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=b.tenant_id AND c.id=b.door_contact_channel_id AND c.channel_kind='DOOR_CONTACT' AND c.status='VERIFIED'))
+   OR (b.exit_request_channel_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=b.tenant_id AND c.id=b.exit_request_channel_id AND c.channel_kind='EXIT_REQUEST' AND c.status='VERIFIED'))
+   OR (b.passage_sensor_channel_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=b.tenant_id AND c.id=b.passage_sensor_channel_id AND c.channel_kind='PASSAGE_SENSOR' AND c.status='VERIFIED')) THEN
+  RAISE EXCEPTION 'função do canal não confere ou canal não verificado' USING ERRCODE='23514';
+ END IF;
+ IF (b.direction_map ? 'entryReader')<>(b.entry_reader_device_id IS NOT NULL) OR (b.direction_map ? 'exitReader')<>(b.exit_reader_device_id IS NOT NULL) THEN
+  RAISE EXCEPTION 'sentido de cada leitor precisa estar no mapa' USING ERRCODE='23514';
+ END IF;
+ -- Falha fechada: ponto e equipamentos precisam estar visíveis e ativos.
+ IF NOT EXISTS(SELECT 1 FROM cp.access_points p WHERE p.tenant_id=b.tenant_id AND p.id=b.point_id AND p.status<>'RETIRED')
+   OR (SELECT count(*) FROM cp.access_devices d WHERE d.tenant_id=b.tenant_id AND d.status='ACTIVE'
+    AND d.id IN (b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id))
+    <>(SELECT count(DISTINCT x) FROM unnest(ARRAY[b.controller_device_id,b.entry_reader_device_id,b.exit_reader_device_id]) x WHERE x IS NOT NULL) THEN
+  RAISE EXCEPTION 'ponto retirado ou equipamento inativo' USING ERRCODE='23514';
+ END IF;
+END $$;
+REVOKE ALL ON FUNCTION cp.point_binding_check(cp.point_bindings) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.point_binding_check(cp.point_bindings) TO cp_api;
+
 -- Vínculo: função de cada canal conferida no banco; revisão e hash calculados; conteúdo físico imutável; transições fixas.
 CREATE FUNCTION cp.point_bindings_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
@@ -219,20 +255,7 @@ BEGIN
   IF NEW.status<>'DRAFT' OR NEW.version<>0 OR NEW.installation_acceptance_id IS NOT NULL OR NEW.valid_from IS NOT NULL OR NEW.valid_until IS NOT NULL THEN
    RAISE EXCEPTION 'vínculo nasce rascunho' USING ERRCODE='23514';
   END IF;
-  IF NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.actuator_channel_id AND c.channel_kind='ACCESS_ACTUATOR' AND c.status='VERIFIED')
-    OR (NEW.door_contact_channel_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.door_contact_channel_id AND c.channel_kind='DOOR_CONTACT' AND c.status='VERIFIED'))
-    OR (NEW.exit_request_channel_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.exit_request_channel_id AND c.channel_kind='EXIT_REQUEST' AND c.status='VERIFIED'))
-    OR (NEW.passage_sensor_channel_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM cp.device_channels c WHERE c.tenant_id=NEW.tenant_id AND c.id=NEW.passage_sensor_channel_id AND c.channel_kind='PASSAGE_SENSOR' AND c.status='VERIFIED')) THEN
-   RAISE EXCEPTION 'função do canal não confere ou canal não verificado' USING ERRCODE='23514';
-  END IF;
-  IF (NEW.direction_map ? 'entryReader')<>(NEW.entry_reader_device_id IS NOT NULL) OR (NEW.direction_map ? 'exitReader')<>(NEW.exit_reader_device_id IS NOT NULL) THEN
-   RAISE EXCEPTION 'sentido de cada leitor precisa estar no mapa' USING ERRCODE='23514';
-  END IF;
-  IF EXISTS(SELECT 1 FROM cp.access_points p WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.point_id AND p.status='RETIRED')
-    OR EXISTS(SELECT 1 FROM cp.access_devices d WHERE d.tenant_id=NEW.tenant_id AND d.status<>'ACTIVE'
-     AND d.id IN (NEW.controller_device_id,NEW.entry_reader_device_id,NEW.exit_reader_device_id)) THEN
-   RAISE EXCEPTION 'ponto retirado ou equipamento inativo' USING ERRCODE='23514';
-  END IF;
+  PERFORM cp.point_binding_check(NEW);
   SELECT coalesce(max(binding_revision),0)+1 INTO NEW.binding_revision FROM cp.point_bindings WHERE tenant_id=NEW.tenant_id AND point_id=NEW.point_id;
   NEW.configuration_hash:=encode(sha256(convert_to(jsonb_build_object('point',NEW.point_id,'revision',NEW.binding_revision,
    'actuator',NEW.actuator_channel_id,'controller',NEW.controller_device_id,'entryReader',NEW.entry_reader_device_id,'exitReader',NEW.exit_reader_device_id,
@@ -257,11 +280,19 @@ BEGIN
  IF OLD.installation_acceptance_id IS NOT NULL AND NEW.installation_acceptance_id IS DISTINCT FROM OLD.installation_acceptance_id THEN
   RAISE EXCEPTION 'aceite do vínculo não muda' USING ERRCODE='23514';
  END IF;
+ -- O conjunto de vínculos de um aceite fecha na assinatura técnica: depois dela nada entra nem sai (salvo rejeição).
+ IF NEW.status IN ('PENDING_COMMISSION','ACTIVE') THEN
+  PERFORM cp.point_binding_check(NEW);
+ END IF;
  IF NEW.status='PENDING_COMMISSION' THEN
-  SELECT status INTO acceptance_status FROM cp.installation_acceptances WHERE tenant_id=NEW.tenant_id AND id=NEW.installation_acceptance_id;
+  SELECT status INTO acceptance_status FROM cp.installation_acceptances WHERE tenant_id=NEW.tenant_id AND id=NEW.installation_acceptance_id
+   AND technical_signed_at IS NULL;
   IF acceptance_status IS NULL OR acceptance_status NOT IN ('DRAFT','TESTING') THEN
-   RAISE EXCEPTION 'vínculo só entra em aceite em preparação' USING ERRCODE='23514';
+   RAISE EXCEPTION 'vínculo só entra em aceite em preparação, antes da assinatura técnica' USING ERRCODE='23514';
   END IF;
+ ELSIF OLD.status='PENDING_COMMISSION' AND NEW.status='SUPERSEDED' AND NOT EXISTS(SELECT 1 FROM cp.installation_acceptances a
+   WHERE a.tenant_id=NEW.tenant_id AND a.id=NEW.installation_acceptance_id AND (a.technical_signed_at IS NULL OR a.status='REJECTED')) THEN
+  RAISE EXCEPTION 'vínculo de aceite assinado só sai pela rejeição do aceite' USING ERRCODE='23514';
  ELSIF NEW.status='ACTIVE' THEN
   SELECT status INTO acceptance_status FROM cp.installation_acceptances WHERE tenant_id=NEW.tenant_id AND id=NEW.installation_acceptance_id;
   IF acceptance_status IS DISTINCT FROM 'APPROVED' THEN RAISE EXCEPTION 'vínculo só ativa com aceite aprovado' USING ERRCODE='23514'; END IF;
@@ -315,6 +346,8 @@ BEGIN
   NEW.technical_signed_at:=clock_timestamp();
  END IF;
  IF OLD.rules_signed_at IS NULL AND NEW.rules_signed_at IS NOT NULL THEN
+  -- A gestão assina o conteúdo técnico já fechado.
+  IF OLD.technical_signed_at IS NULL THEN RAISE EXCEPTION 'regras só se assinam depois da assinatura técnica' USING ERRCODE='23514'; END IF;
   IF NEW.rules_approver_account_id<>platform.current_actor_id() OR NOT platform.has_capability('area.manage')
     OR NOT EXISTS(SELECT 1 FROM cp.memberships m WHERE m.tenant_id=NEW.tenant_id AND m.id=NEW.rules_approver_membership_id
      AND m.account_id=NEW.rules_approver_account_id AND m.role='MANAGER' AND m.status='ACTIVE' AND m.valid_from<=now()
@@ -362,7 +395,7 @@ CREATE TRIGGER installation_acceptances_guard BEFORE INSERT OR UPDATE ON cp.inst
 -- substituição só sem vínculo ativo.
 CREATE FUNCTION cp.installation_acceptances_effects() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
-DECLARE pending record;
+DECLARE pending record; changed bigint;
 BEGIN
  IF NEW.status=OLD.status THEN RETURN NULL; END IF;
  IF NEW.status='APPROVED' THEN
@@ -370,13 +403,21 @@ BEGIN
     ORDER BY point_id FOR UPDATE LOOP
    UPDATE cp.point_bindings SET status='SUPERSEDED',version=version+1 WHERE tenant_id=NEW.tenant_id AND point_id=pending.point_id AND status='ACTIVE';
    UPDATE cp.point_bindings SET status='ACTIVE',version=version+1 WHERE tenant_id=NEW.tenant_id AND id=pending.id;
+   GET DIAGNOSTICS changed=ROW_COUNT;
    UPDATE cp.access_points SET status='COMMISSIONED',updated_by=platform.current_actor_id(),version=version+1
     WHERE tenant_id=NEW.tenant_id AND id=pending.point_id AND status<>'COMMISSIONED';
+   -- Falha fechada: o vínculo precisa ter ativado e o ponto precisa estar comissionado e visível.
+   IF changed<>1 OR NOT EXISTS(SELECT 1 FROM cp.access_points p WHERE p.tenant_id=NEW.tenant_id AND p.id=pending.point_id AND p.status='COMMISSIONED') THEN
+    RAISE EXCEPTION 'ativação incompleta do vínculo ou do ponto' USING ERRCODE='42501';
+   END IF;
   END LOOP;
  ELSIF NEW.status='SUSPENDED' THEN
   UPDATE cp.access_points p SET status='MAPPED',updated_by=platform.current_actor_id(),version=version+1
    WHERE p.tenant_id=NEW.tenant_id AND p.status='COMMISSIONED' AND EXISTS(SELECT 1 FROM cp.point_bindings b WHERE b.tenant_id=p.tenant_id
     AND b.point_id=p.id AND b.installation_acceptance_id=NEW.id AND b.status='ACTIVE');
+  IF EXISTS(SELECT 1 FROM cp.point_bindings b WHERE b.tenant_id=NEW.tenant_id AND b.installation_acceptance_id=NEW.id AND b.status='ACTIVE') THEN
+   RAISE EXCEPTION 'suspensão incompleta dos pontos do aceite' USING ERRCODE='42501';
+  END IF;
  ELSIF NEW.status='REJECTED' THEN
   UPDATE cp.point_bindings SET status='SUPERSEDED',version=version+1
    WHERE tenant_id=NEW.tenant_id AND installation_acceptance_id=NEW.id AND status='PENDING_COMMISSION';
@@ -494,6 +535,12 @@ CREATE POLICY access_points_change ON cp.access_points AS RESTRICTIVE FOR UPDATE
  USING(platform.has_technical_scope('installation.manage') OR platform.has_technical_scope('installation.commission'))
  WITH CHECK((platform.has_technical_scope('installation.manage') OR platform.has_technical_scope('installation.commission'))
   AND updated_by=platform.current_actor_id());
+-- Quem vincula ou comissiona lê o mapa (o comissionamento atualiza o ponto).
+CREATE OR REPLACE FUNCTION cp.access_map_reader() RETURNS boolean
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
+AS $$ SELECT platform.has_capability('area.manage') OR platform.has_capability('concierge.operate')
+  OR platform.has_technical_scope('installation.read') OR platform.has_technical_scope('installation.manage')
+  OR platform.has_technical_scope('installation.bind_channel') OR platform.has_technical_scope('installation.commission') $$;
 -- Quem vincula ou comissiona enxerga a combinação homologada (a aprovação do aceite falha fechada se não enxergar).
 CREATE OR REPLACE FUNCTION platform.access_catalog_reader() RETURNS boolean
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
