@@ -1,4 +1,4 @@
-import type { CurrentIdentity, Membership, TenantModuleId, TenantModules } from '../../api/types';
+import type { CurrentIdentity, Membership, PartnerCapability, PartnerContext, PartnerPanel, PartnerRole, TenantModuleId, TenantModules } from '../../api/types';
 
 /**
  * Entrada única e casca do condomínio (docs/ESTRUTURA.md, fatias 1 e 6). Funções puras: o roteamento automático, as áreas
@@ -21,6 +21,7 @@ export const installationPath = (tenantId: string, section = 'roteiro') => `/c/$
 export const maintenancePath = (tenantId: string, requestId?: string) => `/c/${tenantId}/zeladoria/pedidos${requestId ? `/${requestId}` : ''}`;
 export const centralPath = (section = 'condominios') => `/central/${section}`;
 export const centralTenantPath = (tenantId: string) => `/central/condominios/${tenantId}`;
+export const partnerPath = (partnerId: string, panel: PartnerPanel, section?: string) => `/p/${partnerId}/${panel}${section ? `/${section}` : ''}`;
 
 /**
  * Um condomínio da conta, com os papéis e as unidades dos vínculos vigentes informados por /v1/me e os módulos liberados
@@ -170,16 +171,74 @@ export type PlatformAccess = 'pending' | 'yes' | 'no' | 'unknown';
 export type EntryDecision = { kind: 'wait' } | { kind: 'redirect'; to: string } | { kind: 'select' } | { kind: 'empty' };
 
 /**
- * Roteamento automático depois do login: só plataforma → central; um condomínio → área do papel principal; vários (ou
- * plataforma e condomínio) → seletor só de condomínio. Convite aberto nesta janela ou falha ao consultar a plataforma
- * mantêm o seletor para a pessoa ver o aviso, sem pular para uma tela.
+ * Roteamento automático depois do login (R4.1/R4.2): só plataforma → central; um único contexto (um condomínio ou um
+ * papel de parceiro) → painel dele; vários contextos (ou plataforma e outro contexto) → seletor. Convite aberto nesta
+ * janela ou falha ao consultar a plataforma mantêm o seletor para a pessoa ver o aviso, sem pular para uma tela.
+ * Cada papel de parceiro conta como um contexto: o mesmo parceiro com dois papéis mostra dois cartões.
  */
-export function entryDecision(condos: readonly Condo[], platform: PlatformAccess, invitationOpen: boolean): EntryDecision {
+export function entryDecision(condos: readonly Condo[], platform: PlatformAccess, invitationOpen: boolean,
+  partners: readonly PartnerContext[] = []): EntryDecision {
+  const contexts = condos.length + partners.length;
   if (platform === 'pending') return { kind: 'wait' };
-  if (invitationOpen || platform === 'unknown') return condos.length === 0 && platform !== 'unknown' ? { kind: 'empty' } : { kind: 'select' };
-  if (platform === 'yes') return condos.length === 0 ? { kind: 'redirect', to: centralPath() } : { kind: 'select' };
-  if (condos.length === 1) return { kind: 'redirect', to: principalPath(condos[0]!.tenantId, condos[0]) };
-  return condos.length === 0 ? { kind: 'empty' } : { kind: 'select' };
+  if (invitationOpen || platform === 'unknown') return contexts === 0 && platform !== 'unknown' ? { kind: 'empty' } : { kind: 'select' };
+  if (platform === 'yes') return contexts === 0 ? { kind: 'redirect', to: centralPath() } : { kind: 'select' };
+  if (contexts === 1) return condos.length === 1 ? { kind: 'redirect', to: principalPath(condos[0]!.tenantId, condos[0]) }
+    : { kind: 'redirect', to: partnerHomePath(partners[0]!) };
+  return contexts === 0 ? { kind: 'empty' } : { kind: 'select' };
+}
+
+export const partnerRoleLabels: Record<PartnerRole, string> = { PARTNER_ADMIN: 'Gestor do parceiro', SECURITY_LEAD: 'Gestor líder de segurança',
+  SECURITY_SUPERVISOR: 'Supervisor de operação', REMOTE_OPERATOR: 'Operador de portaria remota', TECHNICIAN: 'Técnico / integrador' };
+export const partnerPanelLabels: Record<PartnerPanel, string> = { gestao: 'Painel do Parceiro', comando: 'Comando de Segurança',
+  turno: 'Painel do Turno', console: 'Console Remoto', tecnico: 'Painel Técnico' };
+const panelOrder: PartnerPanel[] = ['gestao', 'comando', 'turno', 'console', 'tecnico'];
+
+/** Contextos de parceiro da conta em ordem estável: nome do parceiro, id e painel. */
+export function partnerEntries(contexts: readonly PartnerContext[]): PartnerContext[] {
+  return contexts.toSorted((a, b) => a.partnerName.localeCompare(b.partnerName, 'pt-BR') || a.partnerId.localeCompare(b.partnerId)
+    || panelOrder.indexOf(a.panel) - panelOrder.indexOf(b.panel));
+}
+/** Contexto do endereço /p/{parceiro}/{painel}: o papel ativo da conta naquele parceiro com aquele painel. */
+export function partnerContextOf(contexts: readonly PartnerContext[], partnerId: string, panel: string): PartnerContext | undefined {
+  return contexts.find((context) => context.partnerId.toLowerCase() === partnerId.toLowerCase() && context.panel === panel);
+}
+
+/**
+ * Seções de cada painel de parceiro, geradas pelas capacidades do papel (R4.5): sem a capacidade a seção não existe no
+ * menu, e a API recusa de qualquer forma. ready=false marca seção sem backend nesta versão: aparece "em breve", sem
+ * rota nem dado.
+ */
+export type PartnerSectionId = 'equipe' | 'escala' | 'carteira' | 'log' | 'carteira-seguranca' | 'aberturas' | 'politicas' | 'bloqueio'
+  | 'turno' | 'log-turno' | 'fila' | 'equipamentos';
+export interface PartnerSection { id: PartnerSectionId; label: string; capability: PartnerCapability; ready: boolean }
+const partnerSectionCatalog: Record<PartnerPanel, readonly PartnerSection[]> = {
+  gestao: [{ id: 'equipe', label: 'Equipe', capability: 'partner.team.manage', ready: true },
+    { id: 'escala', label: 'Escala', capability: 'partner.team.manage', ready: true },
+    { id: 'carteira', label: 'Carteira', capability: 'partner.manage', ready: true },
+    { id: 'log', label: 'Log de Segurança', capability: 'security.log.read', ready: true }],
+  comando: [{ id: 'carteira-seguranca', label: 'Visão da carteira', capability: 'security.command', ready: false },
+    { id: 'log', label: 'Log de Segurança', capability: 'security.log.read', ready: true },
+    { id: 'aberturas', label: 'Revisão de aberturas', capability: 'security.remote_open.review', ready: false },
+    { id: 'politicas', label: 'Políticas de segurança', capability: 'security.policy.publish', ready: false },
+    { id: 'bloqueio', label: 'Lista de bloqueio', capability: 'security.blocklist.approve', ready: false }],
+  // O servidor ainda recusa a leitura de turno (security.log.read.shift) no log: fica em breve.
+  turno: [{ id: 'turno', label: 'Fila do turno', capability: 'ops.shift.supervise', ready: false },
+    { id: 'log-turno', label: 'Log do turno', capability: 'security.log.read.shift', ready: false }],
+  console: [{ id: 'fila', label: 'Fila de atendimento', capability: 'ops.remote.operate', ready: false }],
+  tecnico: [{ id: 'equipamentos', label: 'Equipamentos', capability: 'devices.commission', ready: false }],
+};
+export function partnerSections(context: Pick<PartnerContext, 'panel' | 'capabilities'>): PartnerSection[] {
+  return partnerSectionCatalog[context.panel].filter((section) => context.capabilities.includes(section.capability));
+}
+/** Seção exibida: a pedida, se liberada e pronta; senão a primeira pronta; sem nenhuma pronta, null (painel em breve). */
+export function currentPartnerSection(context: Pick<PartnerContext, 'panel' | 'capabilities'>, section: string): PartnerSectionId | null {
+  const ready = partnerSections(context).filter((item) => item.ready);
+  return ready.find((item) => item.id === section)?.id ?? ready[0]?.id ?? null;
+}
+/** Destino do papel na entrada: painel do parceiro na primeira seção pronta (ou o painel, em breve). */
+export function partnerHomePath(context: Pick<PartnerContext, 'partnerId' | 'panel' | 'capabilities'>): string {
+  const section = currentPartnerSection(context, '');
+  return partnerPath(context.partnerId, context.panel, section ?? undefined);
 }
 
 const centralRenames: Record<string, string> = { fila: 'operacao' };
@@ -217,15 +276,17 @@ export function legacyTarget(pathname: string, search = '', hash = ''): string |
   }
 }
 
-/** Onde a pessoa está, lido do endereço: entrada, central ou casca de um condomínio (com área e seção). */
+/** Onde a pessoa está, lido do endereço: entrada, central, casca de um condomínio (com área e seção) ou de um parceiro. */
 export type Place =
   | { world: 'entry' }
   | { world: 'central'; section: string }
-  | { world: 'condo'; tenantId: string; area: AreaId | ''; unitId?: string; section: string };
+  | { world: 'condo'; tenantId: string; area: AreaId | ''; unitId?: string; section: string }
+  | { world: 'partner'; partnerId: string; panel: string; section: string };
 
 export function placeOf(pathname: string): Place {
   const parts = pathname.split('/').filter(Boolean);
   if (parts[0] === 'central') return { world: 'central', section: parts[1] ?? 'condominios' };
+  if (parts[0] === 'p' && parts[1]) return { world: 'partner', partnerId: parts[1], panel: parts[2] ?? '', section: parts[3] ?? '' };
   if (parts[0] !== 'c' || !parts[1]) return { world: 'entry' };
   const tenantId = parts[1];
   const area = (['inicio', 'morador', 'portaria', 'zeladoria', 'gestao', 'implantacao'] as const).find((item) => item === parts[2]) ?? '';

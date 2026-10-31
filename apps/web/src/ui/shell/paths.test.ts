@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { Membership, TenantModuleId } from '../../api/types';
-import { activeResidentUnits, conciergeHome, condoAreas, condominiums, entryDecision, legacyTarget, panelEnabled, panelModules, placeModules, placeOf, principalPath,
-  sectionEnabled } from './paths';
+import type { Membership, PartnerContext, TenantModuleId } from '../../api/types';
+import { activeResidentUnits, conciergeHome, condoAreas, condominiums, currentPartnerSection, entryDecision, legacyTarget, panelEnabled, panelModules, partnerContextOf,
+  partnerEntries, partnerHomePath, partnerSections, placeModules, placeOf, principalPath, sectionEnabled } from './paths';
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
@@ -203,5 +203,74 @@ describe('lugar lido do endereço', () => {
     expect(placeOf(`/c/${A}/zeladoria`)).toEqual({ world: 'condo', tenantId: A, area: 'zeladoria', section: 'pedidos' });
     expect(placeOf(`/c/${A}/zeladoria/pedidos/${U1}`)).toEqual({ world: 'condo', tenantId: A, area: 'zeladoria', section: 'pedidos' });
     expect(placeOf(`/c/${A}`)).toEqual({ world: 'condo', tenantId: A, area: '', section: '' });
+  });
+});
+
+const P = '30000000-0000-4000-8000-000000000001';
+const Q = '30000000-0000-4000-8000-000000000002';
+function partner(role: PartnerContext['role'], partnerId = P, partnerName = partnerId === P ? 'Parceiro Sintético' : 'Agência Sintética'): PartnerContext {
+  next += 1;
+  const table: Record<PartnerContext['role'], [PartnerContext['panel'], PartnerContext['capabilities']]> = {
+    PARTNER_ADMIN: ['gestao', ['partner.manage', 'partner.team.manage', 'security.log.read']],
+    SECURITY_LEAD: ['comando', ['security.blocklist.approve', 'security.command', 'security.log.export', 'security.log.read', 'security.policy.publish', 'security.remote_open.review']],
+    SECURITY_SUPERVISOR: ['turno', ['ops.remote.open', 'ops.remote.operate', 'ops.shift.supervise', 'security.log.read.shift']],
+    REMOTE_OPERATOR: ['console', ['ops.remote.open', 'ops.remote.operate']],
+    TECHNICIAN: ['tecnico', ['devices.commission']],
+  };
+  const [panel, capabilities] = table[role];
+  return { memberId: `60000000-0000-4000-8000-${String(next).padStart(12, '0')}`, partnerId, partnerName, role, panel, capabilities, tenants: [] };
+}
+
+describe('entrada por contexto de parceiro (CPX-004)', () => {
+  it('conta só com um papel de parceiro vai direto ao painel dele', () => {
+    expect(entryDecision([], 'no', false, [partner('PARTNER_ADMIN')])).toEqual({ kind: 'redirect', to: `/p/${P}/gestao/equipe` });
+    expect(entryDecision([], 'no', false, [partner('SECURITY_LEAD')])).toEqual({ kind: 'redirect', to: `/p/${P}/comando/log` });
+    // Painel sem seção pronta abre a casca do painel, que mostra "em breve".
+    expect(entryDecision([], 'no', false, [partner('REMOTE_OPERATOR')])).toEqual({ kind: 'redirect', to: `/p/${P}/console` });
+  });
+  it('vários contextos (condomínio + parceiro, ou dois papéis no mesmo parceiro) mostram o seletor', () => {
+    const [condo] = condominiums([membership(A, 'MANAGER')]);
+    expect(entryDecision([condo!], 'no', false, [partner('PARTNER_ADMIN')])).toEqual({ kind: 'select' });
+    expect(entryDecision([], 'no', false, [partner('PARTNER_ADMIN'), partner('SECURITY_LEAD')])).toEqual({ kind: 'select' });
+  });
+  it('plataforma, convite aberto e falha na consulta da plataforma seguem as regras antigas contando o parceiro', () => {
+    const only = [partner('TECHNICIAN')];
+    expect(entryDecision([], 'pending', false, only)).toEqual({ kind: 'wait' });
+    expect(entryDecision([], 'yes', false, only)).toEqual({ kind: 'select' });
+    expect(entryDecision([], 'no', true, only)).toEqual({ kind: 'select' });
+    expect(entryDecision([], 'unknown', false, only)).toEqual({ kind: 'select' });
+    expect(entryDecision([], 'no', false, [])).toEqual({ kind: 'empty' });
+  });
+  it('cartões em ordem de parceiro e painel; endereço casa parceiro e painel sem caixa', () => {
+    const contexts = [partner('SECURITY_LEAD'), partner('TECHNICIAN', Q), partner('PARTNER_ADMIN')];
+    expect(partnerEntries(contexts).map((item) => [item.partnerName, item.panel])).toEqual([['Agência Sintética', 'tecnico'],
+      ['Parceiro Sintético', 'gestao'], ['Parceiro Sintético', 'comando']]);
+    expect(partnerContextOf(contexts, P.toUpperCase(), 'comando')?.role).toBe('SECURITY_LEAD');
+    expect(partnerContextOf(contexts, P, 'console')).toBeUndefined();
+    expect(partnerContextOf(contexts, Q, 'gestao')).toBeUndefined();
+  });
+});
+
+describe('casca do parceiro por capacidade (CPX-005, R4.5)', () => {
+  it('cada painel lista só as seções das capacidades do papel; sem backend fica em breve', () => {
+    expect(partnerSections(partner('PARTNER_ADMIN')).map((item) => [item.id, item.ready])).toEqual([['equipe', true], ['escala', true], ['carteira', true], ['log', true]]);
+    expect(partnerSections(partner('SECURITY_LEAD')).map((item) => [item.id, item.ready])).toEqual([['carteira-seguranca', false], ['log', true],
+      ['aberturas', false], ['politicas', false], ['bloqueio', false]]);
+    expect(partnerSections(partner('SECURITY_SUPERVISOR')).every((item) => !item.ready)).toBe(true);
+    expect(partnerSections(partner('TECHNICIAN')).map((item) => item.id)).toEqual(['equipamentos']);
+  });
+  it('sem a capacidade a seção não existe, mesmo pedida no endereço', () => {
+    const limited = { ...partner('PARTNER_ADMIN'), capabilities: ['partner.team.manage'] as PartnerContext['capabilities'] };
+    expect(partnerSections(limited).map((item) => item.id)).toEqual(['equipe', 'escala']);
+    expect(currentPartnerSection(limited, 'log')).toBe('equipe');
+    expect(currentPartnerSection(limited, 'carteira')).toBe('equipe');
+    expect(currentPartnerSection(partner('PARTNER_ADMIN'), 'carteira')).toBe('carteira');
+    expect(currentPartnerSection(partner('REMOTE_OPERATOR'), 'fila')).toBeNull();
+    expect(partnerHomePath({ ...limited, capabilities: [] })).toBe(`/p/${P}/gestao`);
+  });
+  it('lugar do parceiro lido do endereço', () => {
+    expect(placeOf(`/p/${P}/comando/log`)).toEqual({ world: 'partner', partnerId: P, panel: 'comando', section: 'log' });
+    expect(placeOf(`/p/${P}`)).toEqual({ world: 'partner', partnerId: P, panel: '', section: '' });
+    expect(placeOf('/p')).toEqual({ world: 'entry' });
   });
 });

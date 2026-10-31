@@ -40,7 +40,12 @@ evento `PARTNER_*` da trilha da plataforma, do mesmo ator e versão, conferido n
 - Executor do condomínio: sem vínculo, a conta entra pelo alcance de parceiro e recebe só as capacidades do papel
   (nenhuma capacidade de equipe do condomínio); equipe de parceiro sem alcance recebe 403 `PARTNER_ACCESS_DENIED`.
 - `/v1/me`: campo aditivo `partnerContexts` (papel, painel `/p/{parceiro}/{gestao|comando|turno|console|tecnico}`,
-  capacidades e condomínios alcançados) para a `/entrada` (CPX-004/005, web ainda não feita).
+  capacidades e condomínios alcançados) para a `/entrada` (CPX-004/005).
+- Web (CPX-004/005, fatia web): `/entrada` conta cada papel de parceiro como um contexto (um só → painel direto; vários →
+  cartões "Parceiro – Painel"); casca `/p/{parceiro}/{painel}/{seção}` com seções geradas pelas capacidades (R4.5), AAL2
+  conferido antes de qualquer consulta. Prontas: equipe, escala e carteira (gestão) e Log de Segurança por condomínio
+  alcançado (`security.log.read`; exportação só com `security.log.export`). Comando (exceto o log), turno, console e
+  técnico aparecem "em breve", sem dado. Flags desligadas no servidor (404) e 503 têm mensagem própria.
 
 ## Pendências
 
@@ -50,5 +55,6 @@ evento `PARTNER_*` da trilha da plataforma, do mesmo ator e versão, conferido n
   do parceiro não ganha nenhuma capacidade de equipe do condomínio.
 - Log de Segurança (CPX-006 a CPX-011) e o evento de troca de contexto são de outra fatia; aqui os eventos vão para a
   trilha da plataforma.
-- Web (`/entrada` por contexto e painéis) — CPX-004/005.
+- Web: painéis de comando, turno, console e técnico dependem do backend de E2/E11; `CONTEXT_SWITCHED` (R4.4) ainda não é
+  gravado na troca de contexto; homologação visual com dados reais depende das flags ligadas.
 - Outros tipos de contrato (integradora) aguardam decisão; só `SECURITY_OPERATOR` existe.
