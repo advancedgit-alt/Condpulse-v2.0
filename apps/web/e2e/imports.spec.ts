@@ -115,7 +115,7 @@ async function openImports(page: Page) {
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installImports(page);
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/importacao`);
+  await page.goto(`/c/${TENANT_A}/gestao/importacao`);
   await expect(page.getByRole('heading', { name: 'Importação de unidades' })).toBeVisible();
   return state;
 }

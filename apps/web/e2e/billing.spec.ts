@@ -104,7 +104,7 @@ test('pagamento manual só vira "paga" com a confirmação do servidor; divergê
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installBillingApi(page);
   await signIn(page);
-  await page.goto('/master/financeiro');
+  await page.goto('/central/financeiro');
   await expect(page.getByRole('heading', { name: 'Assinatura dos condomínios' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Financeiro' })).toHaveAttribute('aria-current', 'page');
   const row = page.getByRole('listitem').filter({ hasText: 'Condomínio Sintético A' });
@@ -150,7 +150,7 @@ test('conta sem capacidade financeira não vê a aba nem consulta o financeiro',
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installBillingApi(page, false);
   await signIn(page);
-  await page.goto('/master/financeiro');
+  await page.goto('/central/financeiro');
   await expect(page.getByRole('heading', { name: 'Condomínios da plataforma' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Financeiro' })).toHaveCount(0);
   expect(state.requests.some((request) => request.includes('/billing/'))).toBe(false);
@@ -161,7 +161,7 @@ test('nova assinatura busca o condomínio pelo nome e início sobreposto não vi
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installBillingApi(page);
   await signIn(page);
-  await page.goto('/master/financeiro');
+  await page.goto('/central/financeiro');
   await page.getByRole('button', { name: 'Assinaturas', exact: true }).click();
   const scheduled = page.getByRole('list', { name: 'Assinaturas' }).getByRole('listitem').filter({ hasText: 'Condomínio Sintético B' });
   await expect(scheduled.getByText('Encerramento agendado', { exact: true })).toBeVisible();

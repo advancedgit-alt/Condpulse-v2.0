@@ -82,7 +82,7 @@ test('prestador recorrente: cadastrar com chave, repetir incerto sem duplicar, v
     shareLinkActive: false, reservationId: null, ruleId: RULE });
   state.loseNext = true;
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await expect(page.getByRole('heading', { name: 'Prestadores recorrentes' })).toBeVisible();
   await expect(page.getByText('Nenhum prestador recorrente')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Convites em aberto' }).getByText('Janela de prestador recorrente: revogar aqui cancela só este dia.')).toBeVisible();
@@ -133,7 +133,7 @@ test('regras inválidas não são enviadas; recusa do servidor aparece; versão 
   const state = await installRules(page, api);
   state.rules.push(ruleFixture({ createdByMe: true }));
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await page.getByRole('button', { name: 'Cadastrar prestador' }).click();
   const form = page.getByRole('form', { name: 'Cadastrar prestador recorrente' });
   const submit = form.getByRole('button', { name: 'Cadastrar prestador' });
@@ -174,7 +174,7 @@ test('dependente sem permissão não vê prestadores; dependente só revoga a re
   const state = await installRules(page, api, 'DEPENDENT');
   state.denied = true;
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await expect(page.getByText('Prestadores recorrentes não estão disponíveis para o seu vínculo. Peça a um responsável pela unidade.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cadastrar prestador' })).toHaveCount(0);
 
@@ -199,7 +199,7 @@ test('falha ao consultar prestadores mostra erro com nova tentativa', async ({ p
     await route.fallback();
   });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   const section = page.getByRole('region', { name: 'Prestadores recorrentes' });
   await section.getByRole('button', { name: 'Tentar novamente' }).click();
   await expect(section.getByText('Nenhum prestador recorrente')).toBeVisible();

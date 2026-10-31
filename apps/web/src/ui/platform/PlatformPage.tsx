@@ -11,27 +11,37 @@ import { formatWhen } from '../dateTime';
 import '../management/Management.css';
 import { OutboxSection } from './Outbox';
 import { TechnicalGrantSection } from './TechnicalGrants';
+import { ModuleSection } from './Modules';
 import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 import { InvitationLinkNotice, TenantCreateForm, TenantDetailView, creationOutcome } from './TenantViews';
 import { billingText, originText, usageText } from './tenants';
+import { ENTRY_PATH, centralPath, centralTenantPath } from '../shell/paths';
 
 export type { Outcome } from './shared';
-const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'financeiro', label: 'Financeiro', icon: 'card' },
-  { id: 'auditoria', label: 'Auditoria', icon: 'clock' }, { id: 'fila', label: 'Fila de tarefas', icon: 'list' },
-  { id: 'concessoes', label: 'Concessões técnicas', icon: 'key' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
+const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'modulos', label: 'Módulos por condomínio', icon: 'grid' },
+  { id: 'financeiro', label: 'Financeiro', icon: 'card' },
+  { id: 'concessoes', label: 'Concessões técnicas', icon: 'key' }, { id: 'operacao', label: 'Operação', icon: 'list' },
+  { id: 'auditoria', label: 'Auditoria', icon: 'clock' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
+/**
+ * Seções da central ainda sem backend (docs/ESTRUTURA.md §4): aparecem desabilitadas, sem rota, até a API existir.
+ * Nenhuma delas mostra ou recebe segredo nesta versão.
+ */
+export const upcomingCentralSections = [{ id: 'contas', label: 'Contas e acessos', icon: 'users' }, { id: 'chaves', label: 'Chaves e integrações', icon: 'shield' },
+  { id: 'facial', label: 'Acesso facial', icon: 'door' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 type Section = typeof sections[number]['id'];
 /** Seções liberadas pelas capacidades da sessão; a navegação lateral e as abas usam a mesma regra (o servidor confere de novo). */
 export function visiblePlatformSections(capabilities: readonly string[]) {
   return sections.filter((item) => (item.id !== 'financeiro' || capabilities.includes('billing.read'))
-    && (item.id !== 'fila' || capabilities.includes('outbox.operate'))
+    && (item.id !== 'modulos' || capabilities.includes('tenants.read'))
+    && (item.id !== 'operacao' || capabilities.includes('outbox.operate'))
     && (item.id !== 'concessoes' || capabilities.includes('technical_grants.manage')));
 }
 /** Seção efetivamente exibida: uma seção não liberada cai em Condomínios. */
 export function currentPlatformSection(section: string, capabilities: readonly string[]): Section {
   return visiblePlatformSections(capabilities).find((item) => item.id === section)?.id ?? 'condominios';
 }
-/** Navegação lateral do painel master: só observa a sessão que o painel já consultou, sem requisição própria. */
+/** Navegação lateral da central: só observa a sessão que o painel já consultou, sem requisição própria. */
 export function usePlatformNavigation(accountId: string | undefined, section: string) {
   const session = useQuery({ queryKey: platformKey(accountId ?? '', 'session'), queryFn: ({ signal }) => platform.session(signal),
     enabled: false });
@@ -49,7 +59,7 @@ export function tenantChangeOutcome(change: PlatformTenantChange, before: Pick<P
   return { tone: 'success', text: parts.length ? parts.join(' ') : 'Alteração registrada.' };
 }
 
-/** Painel master: papel de plataforma vigente e segundo fator; o servidor confere de novo em cada ação. */
+/** Central administradora: papel de plataforma vigente e segundo fator; o servidor confere de novo em cada ação. */
 export function PlatformPage() {
   const { identity } = useAuth();
   const { section = 'condominios', tenantId } = useParams();
@@ -72,7 +82,7 @@ function PlatformGate({ accountId, section, tenantId }: { accountId: string; sec
   const value = useMemo(() => session.data ? { accountId, session: session.data, requireMfa, denied: deny } : null,
     [accountId, session.data, requireMfa, deny]);
   if (denied) return <div className="panel"><Notice tone="error">A administração da plataforma não está mais disponível para esta conta. Os dados exibidos foram removidos.</Notice>
-    <Link className="button button-secondary" to="/contextos">Voltar para meus acessos</Link></div>;
+    <Link className="button button-secondary" to={ENTRY_PATH}>Voltar para meus acessos</Link></div>;
   if (session.isPending) return <div className="panel"><Loading label="Conferindo o acesso à plataforma…" /></div>;
   if (session.isError && !session.data) {
     const code = session.error instanceof ApiError ? session.error.code : '';
@@ -97,12 +107,12 @@ function PlatformConsole({ section, tenantId }: { section: Section; tenantId: st
   const visible = visiblePlatformSections(scope.session.capabilities);
   const current = currentPlatformSection(section, scope.session.capabilities);
   return <>
-    <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Painel master</h1>
+    <div className="residence-heading"><div><span className="eyebrow">ADMINISTRAÇÃO DA PLATAFORMA</span><h1>Central administradora</h1>
       <p>Cadastro, uso, estado e assinatura dos condomínios. Sem acesso ao conteúdo dos moradores; toda alteração exige motivo e fica na auditoria da plataforma.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
-    <SectionTabs label="Seções do painel master" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: `/master/${item.id}` }))} />
-    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'fila' ? <OutboxSection />
-      : current === 'concessoes' ? <TechnicalGrantSection />
+    <SectionTabs label="Seções da central" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: centralPath(item.id) }))} />
+    {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'operacao' ? <OutboxSection />
+      : current === 'concessoes' ? <TechnicalGrantSection /> : current === 'modulos' ? <ModuleSection />
       : tenantId ? <TenantDetailView key={tenantId} tenantId={tenantId} describe={describeEvent}
         editor={(tenant, close) => <TenantEditor tenant={tenant} close={close} />} /> : <TenantSection />}
   </>;
@@ -158,7 +168,7 @@ function TenantSection() {
               {billingText(tenant) ? <span>{billingText(tenant)}</span> : null}
               <span>{tenant.onboarding ? `Onboarding em ${formatWhen(tenant.onboarding.completedAt, PLATFORM_ZONE)}: ${count(tenant.onboarding.units, 'unidade', 'unidades')}, ${count(tenant.onboarding.memberships, 'vínculo', 'vínculos')}, ${count(tenant.onboarding.amenities, 'área', 'áreas')}`
                 : 'Sem recibo de onboarding registrado.'}</span></div>
-            <div className="button-row"><Link className="button button-secondary button-compact" to={`/master/condominios/${tenant.tenantId}`}
+            <div className="button-row"><Link className="button button-secondary button-compact" to={centralTenantPath(tenant.tenantId)}
               aria-label={`Abrir ficha de ${tenant.name}`}>Abrir ficha</Link>
               {manage && editing !== tenant.tenantId ? <button className="button button-secondary button-compact" type="button"
                 onClick={() => { setOutcome(null); setEditing(tenant.tenantId); }}>Alterar nome ou estado</button> : null}</div>

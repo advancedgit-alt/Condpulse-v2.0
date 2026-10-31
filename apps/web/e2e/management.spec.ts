@@ -8,7 +8,11 @@ test('gestor AAL1 só vê a exigência do segundo fator e entra na gestão depoi
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page);
   await signIn(page);
-  await page.getByRole('link', { name: /Abrir gestão · Condomínio Sintético A/ }).click();
+  // Seletor só de condomínio: o cartão mostra os papéis e abre direto a área do papel principal (gestão).
+  const card = page.getByRole('list', { name: 'Condomínios' }).getByRole('link', { name: /Condomínio Sintético A/ });
+  await expect(card).toContainText('Gestão · Morador');
+  await card.click();
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/gestao/pendencias$`));
   await expect(page.getByRole('heading', { name: 'Confirme sua identidade para usar a gestão.' })).toBeVisible();
   await expect(page.getByText('Pedidos aguardando decisão')).toHaveCount(0);
   expect(state.managementRequests).toHaveLength(0);
@@ -31,7 +35,7 @@ test('mesma decisão já gravada por outro gestor não aparece como sucesso dest
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   state.decisionAlreadyApplied = true;
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  await page.goto(`/c/${TENANT_A}/gestao/pendencias`);
   const item = page.locator('.management-item').filter({ hasText: 'Área Sintética A' });
   await item.getByRole('button', { name: 'Rejeitar' }).click();
   await item.getByLabel('Motivo da rejeição').fill('Motivo deste gestor');
@@ -45,7 +49,7 @@ test('rejeição de pedido exige motivo e a decisão sai uma única vez', async 
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  await page.goto(`/c/${TENANT_A}/gestao/pendencias`);
   const item = page.locator('.management-item').filter({ hasText: 'Área Sintética A' });
   await expect(item.getByText('Aguardando decisão')).toBeVisible();
   await expect(item.getByText(/Morador Sintético/)).toBeVisible();
@@ -63,7 +67,7 @@ test('vínculo pendente é aprovado pela gestão', async ({ page }) => {
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  await page.goto(`/c/${TENANT_A}/gestao/pendencias`);
   await page.getByRole('button', { name: 'Aprovar vínculo de Pessoa Convidada Sintética' }).click();
   await page.getByRole('button', { name: 'Confirmar aprovação' }).click();
   await expect(page.getByText('Pessoa Convidada Sintética: vínculo aprovado.')).toBeVisible();
@@ -74,7 +78,7 @@ test('link do convite aparece uma vez e o convidado aceita sem expor o token na 
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pessoas`);
+  await page.goto(`/c/${TENANT_A}/gestao/pessoas`);
   await page.getByLabel('Unidade', { exact: true }).selectOption({ label: '101 — Sintética A' });
   await page.getByLabel('Nome', { exact: true }).fill('Pessoa Convidada Sintética');
   await page.getByLabel('E-mail da conta').fill('convidado-sintetico@example.invalid');
@@ -98,8 +102,8 @@ test('morador sem vínculo de gestão não abre a gestão nem consulta a API', a
   await installSyntheticApi(page);
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   await signIn(page);
-  await expect(page.getByRole('link', { name: /Abrir gestão/ })).toHaveCount(0);
-  await page.goto(`/gestao/${TENANT_A}/pendencias`);
+  await expect(page.getByRole('list', { name: 'Condomínios' }).getByText(/Gestão/)).toHaveCount(0);
+  await page.goto(`/c/${TENANT_A}/gestao/pendencias`);
   await expect(page.getByText('Gestão indisponível')).toBeVisible();
   expect(state.managementRequests).toHaveLength(0);
 });
@@ -110,9 +114,13 @@ test('conta só de gestão abre a gestão sem formulário de unidade residencial
   const unitRequests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/units')) unitRequests.push(request.url()); });
   await signIn(page);
-  await expect(page.getByRole('link', { name: /Abrir gestão · Condomínio Sintético A/ })).toBeVisible();
-  await expect(page.getByText('Esta conta não tem unidade vinculada como morador. Use o acesso de gestão acima.')).toBeVisible();
-  await expect(page.getByLabel('Condomínio', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Nenhum vínculo disponível')).toHaveCount(0);
+  // Um só condomínio: a entrada vai direto à gestão, sem seletor nem área do morador.
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/gestao/pendencias$`));
+  await expect(page.getByRole('heading', { name: 'Confirme sua identidade para usar a gestão.' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Condomínios' })).toHaveCount(0);
+  const areas = page.getByRole('navigation', { name: 'Áreas do condomínio' });
+  await expect(areas.getByRole('link')).toHaveText(['Início', 'Gestão']);
+  await expect(areas.getByText('Zeladoria')).toBeVisible();
+  await expect(areas.getByRole('link', { name: 'Zeladoria' })).toHaveCount(0);
   expect(unitRequests).toEqual([]);
 });

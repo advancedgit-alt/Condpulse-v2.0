@@ -305,15 +305,20 @@ export async function signIn(page: Page) {
   await page.getByLabel('E-mail', { exact: true }).fill('morador-sintetico@example.invalid');
   await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
   await page.getByLabel('Senha', { exact: true }).press('Enter');
-  await expect(page).toHaveURL(/\/contextos/);
+  // Entrada única: seletor (/entrada) ou, com um só destino, direto na área do papel principal ou na central.
+  await expect(page).toHaveURL(/\/(entrada|c\/[^/]+\/|central)/);
 }
 
 export async function chooseContext(page: Page, tenant: 'A' | 'B' = 'A', destination: 'reservas' | 'inicio' = 'reservas') {
-  await page.getByLabel('Condomínio', { exact: true }).selectOption(tenant === 'A' ? TENANT_A : TENANT_B);
+  const tenantId = tenant === 'A' ? TENANT_A : TENANT_B;
   const unit = tenant === 'A' ? UNIT_A : UNIT_B;
-  await expect(page.getByLabel('Unidade', { exact: true }).getByRole('option', { name: new RegExp(tenant === 'A' ? '101' : '202') })).toBeAttached();
-  await page.getByLabel('Unidade', { exact: true }).selectOption(unit);
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  // Seletor só de condomínio; dentro dele, a área do morador abre a única unidade da conta sintética.
+  await page.getByRole('list', { name: 'Condomínios' }).getByRole('link', { name: new RegExp(`Condomínio Sintético ${tenant}`) }).click();
+  await expect(page).toHaveURL(new RegExp(`/c/${tenantId}/`));
+  if (!new URL(page.url()).pathname.startsWith(`/c/${tenantId}/morador/`)) {
+    await page.goto(`/c/${tenantId}/morador`);
+  }
+  await expect(page).toHaveURL(new RegExp(`/c/${tenantId}/morador/${unit}/inicio$`));
   await expect(page.getByRole('heading', { name: 'Sua unidade, em dia.', exact: true })).toBeVisible();
   if (destination === 'inicio') return;
   await page.getByRole('link', { name: 'Abrir reservas', exact: true }).click();

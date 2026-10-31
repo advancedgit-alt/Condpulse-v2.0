@@ -148,9 +148,9 @@ transacional, por isso o aceite de CP-023 continua pendente); retenções `HELD`
 prazo de decisão configurável; worker de expiração (hoje a expiração acontece na
 criação seguinte e na decisão tardia); notificações.
 
-## Telas web (`/gestao/{condomínio}`)
+## Telas web (`/c/{condomínio}/gestao`, antes `/gestao/{condomínio}`)
 
-O acesso aparece na escolha de contexto apenas para vínculo `MANAGER` vigente. A
+A área Gestão aparece na casca do condomínio apenas para vínculo `MANAGER` vigente (`/gestao/...` redireciona). A
 porta da gestão consulta `GET /auth/mfa`: sem sessão AAL2 nenhuma rota de gestão é
 chamada; a pessoa cadastra o autenticador (chave e QR exibidos uma única vez, só no
 estado da tela) e verifica o código. A verificação troca a sessão e o CSRF. Uma

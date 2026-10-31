@@ -23,7 +23,7 @@ for (const status of [403, 404, 503]) {
     await page.getByLabel('E-mail', { exact: true }).fill('synthetic@example.invalid');
     await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC_ONLY');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await expect(page).toHaveURL(/\/contextos/);
+    await expect(page).toHaveURL(/\/entrada/);
     expect(state.loginRequests).toBe(1);
   });
 }
@@ -119,6 +119,6 @@ test('login aceito aguarda identidade sem um probe concorrente nem falso aviso d
     await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toHaveCount(0);
     await expect(page.getByText(/Serviço de acesso indisponível/)).toHaveCount(0);
   } finally { release(); }
-  await expect(page).toHaveURL(/\/contextos/);
+  await expect(page).toHaveURL(/\/entrada/);
   expect(state.loginRequests).toBe(1);
 });

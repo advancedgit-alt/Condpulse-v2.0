@@ -51,7 +51,7 @@ test('caixa da unidade lista avisos sem marcar leitura; só abrir registra a lei
   await installSyntheticApi(page);
   const state = await installInbox(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const inbox = page.getByRole('list', { name: 'Avisos da unidade' });
   await expect(page.getByRole('heading', { name: 'Caixa da unidade · 2 novos' })).toBeVisible();
   await expect(page.getByText('Aparecer aqui não quer dizer que alguém leu', { exact: false })).toBeVisible();
@@ -66,7 +66,7 @@ test('caixa da unidade lista avisos sem marcar leitura; só abrir registra a lei
   await expect.poll(() => state.lists).toBeGreaterThan(1);
   expect(state.opens).toEqual([]);
   await waiting.getByRole('button', { name: 'Abrir e ver acessos' }).click();
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/acessos$`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/acessos$`));
   expect(state.opens.map((item) => item.id)).toEqual([WAITING]);
   expect(state.opens[0]!.csrf).toBeTruthy();
 });
@@ -77,11 +77,11 @@ test('oferta da fila de espera aparece só para quem entrou e leva às reservas 
   state.items = [{ notificationId: OFFER, unitId: UNIT_A, kind: 'WAITLIST_OFFERED', resourceId: '82000000-0000-4000-8000-000000000001',
     resourceState: 'OFFERED', state: 'AVAILABLE', createdAt: minutes(-1), readAt: null }];
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const offer = page.getByRole('list', { name: 'Avisos da unidade' }).getByRole('listitem').filter({ hasText: 'Vaga da fila de espera' });
   await expect(offer.getByText('Situação atual: oferta aguardando o seu aceite, com prazo.')).toBeVisible();
   await offer.getByRole('button', { name: 'Abrir e ver reservas' }).click();
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/reservas$`));
   expect(state.opens.map((item) => item.id)).toEqual([OFFER]);
 });
 
@@ -95,7 +95,7 @@ test('resposta do pedido e decisão da mudança abrem na própria página e regi
       state: 'AVAILABLE', createdAt: minutes(-1), readAt: null },
   ];
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const inbox = page.getByRole('list', { name: 'Avisos da unidade' });
   const request = inbox.getByRole('listitem').filter({ hasText: 'Atualização no pedido da unidade' });
   await expect(request.getByText('Situação atual: aguardando a resposta da unidade.')).toBeVisible();
@@ -103,7 +103,7 @@ test('resposta do pedido e decisão da mudança abrem na própria página e regi
   await expect(move.getByText('Situação atual: mudança aprovada.')).toBeVisible();
   await request.getByRole('button', { name: 'Abrir e ver pedidos' }).click();
   await expect(page.getByText('Aviso aberto. O pedido está na seção “Pedidos”, nesta página.')).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/inicio$`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/inicio$`));
   await move.getByRole('button', { name: 'Abrir e ver mudanças' }).click();
   await expect(page.getByText('Aviso aberto. A mudança está na seção “Mudança e entrega de móveis”, nesta página.')).toBeVisible();
   expect(state.opens.map((item) => item.id)).toEqual([REQUEST, MOVE]);
@@ -115,22 +115,22 @@ test('abertura que termina depois de a pessoa sair da página não a leva de vol
   let release!: () => void;
   state.hold = new Promise<void>((resolve) => { release = resolve; });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const waiting = page.getByRole('list', { name: 'Avisos da unidade' }).getByRole('listitem').filter({ hasText: 'Chegada aguardando resposta da unidade' });
   await waiting.getByRole('button', { name: 'Abrir e ver acessos' }).click();
   await expect.poll(() => state.opens.length).toBe(1);
   // Antes da resposta, a pessoa vai para as reservas pela navegação da unidade.
   await page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Reservas' }).click();
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/reservas$`));
   release();
   await page.waitForTimeout(500);
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/reservas$`));
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/reservas$`));
 });
 
 test('caixa desligada no ambiente não aparece nem mostra erro técnico', async ({ page }) => {
   await installSyntheticApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect(page.getByRole('heading', { name: 'Próximas reservas da unidade' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Caixa da unidade/ })).toHaveCount(0);
   await expect(page.getByText('SYNTHETIC_TEST_ROUTE_NOT_FOUND')).toHaveCount(0);

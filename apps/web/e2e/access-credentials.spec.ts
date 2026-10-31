@@ -132,7 +132,7 @@ async function openManagement(page: Page, initial: Partial<CredentialState> = {}
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installCredentialsApi(page, initial);
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/acesso`);
+  await page.goto(`/c/${TENANT_A}/gestao/acesso`);
   return state;
 }
 async function openConcierge(page: Page, api: ApiState) {
@@ -236,7 +236,7 @@ test('portaria vê revogações pendentes com os equipamentos e o vazio quando c
     revokeReason: 'Vínculo encerrado: mudou-se', revokedAt: new Date().toISOString(), version: 1, holderName: null,
     devices: [{ ...devices('CONFIRMED', true)[0]!, lastOutcome: 'APPLIED' }, devices('PENDING')[1]!] })] });
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const section = page.getByRole('region', { name: 'Revogações pendentes' });
   const list = section.getByRole('list', { name: 'Revogações pendentes' });
   await expect(list.locator(':scope > li')).toHaveCount(1);
@@ -255,7 +255,7 @@ test('portaria: falha ao atualizar não afirma que as revogações foram confirm
   await openConcierge(page, api);
   const state = await installCredentialsApi(page);
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const section = page.getByRole('region', { name: 'Revogações pendentes' });
   await expect(section.getByText('Todas as revogações foram confirmadas pelos equipamentos.')).toBeVisible();
   state.pendingFailures = 1;
@@ -292,7 +292,7 @@ test('unidade vê as próprias credenciais e o que os equipamentos informaram, s
     event({ occurredAt: minutesAgo(5), kind: 'DEVICE_OFFLINE', direction: null, credentialLabel: null, unitLabel: null, deviceLabel: null, state: 'QUARANTINED', quarantineReason: 'UNKNOWN_DEVICE' }),
   ] });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   const section = page.getByRole('region', { name: 'Meu acesso pelos equipamentos' });
   await expect(section.getByRole('list', { name: 'Minhas credenciais' }).getByText('Ativa em todos os equipamentos')).toBeVisible();
   const list = section.getByRole('list', { name: 'Eventos dos equipamentos' });
@@ -318,7 +318,7 @@ test('unidade: função desligada esconde a seção; falha na primeira consulta 
   await installSyntheticApi(page);
   const state = await installCredentialsApi(page, { unavailable: true });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/acessos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/acessos`);
   await expect(page.getByRole('heading', { name: 'Entradas e saídas' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Meu acesso pelos equipamentos' })).toHaveCount(0);
   state.unavailable = false; state.eventFailures = 1;
@@ -338,7 +338,7 @@ test('portaria vê os eventos das últimas 24 horas, com quarentena', async ({ p
     event({ kind: 'AUTHORIZED', direction: null, credentialLabel: null, unitLabel: null, state: 'QUARANTINED', quarantineReason: 'INVALID_EVIDENCE' }),
   ] });
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const section = page.getByRole('region', { name: 'Eventos dos equipamentos' });
   const list = section.getByRole('list', { name: 'Eventos dos equipamentos' });
   await expect(list.locator(':scope > li')).toHaveCount(3);
@@ -404,7 +404,7 @@ test('portaria vê a saúde; sem integração mostra o vazio; falha na primeira 
   await openConcierge(page, api);
   const state = await installCredentialsApi(page, { healthFailures: 1 });
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const section = page.getByRole('region', { name: 'Saúde dos equipamentos' });
   await section.getByRole('button', { name: 'Tentar novamente' }).click();
   await expect(section.getByRole('list', { name: 'Equipamentos de Integração sintética' }).locator(':scope > li')).toHaveCount(2);

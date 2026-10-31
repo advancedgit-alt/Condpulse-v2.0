@@ -19,6 +19,7 @@ import { OccurrenceSection } from '../concierge/Occurrences';
 import { FinanceSection } from './Finance';
 import { AccessMapSection } from './AccessMap';
 import { ManagementProvider, type ManagementScope } from './shared';
+import { ENTRY_PATH } from '../shell/paths';
 import './Management.css';
 
 export const managementSections = [
@@ -69,7 +70,7 @@ function StaffGate({ scope, section }: { scope: ManagementScope; section: Manage
   }, [queries, scope.accountId, scope.tenantId]);
   const value = useMemo(() => ({ ...scope, requireMfa, denied: deny }), [scope, requireMfa, deny]);
   if (denied) return <div className="panel"><Notice tone="error">A gestão deste condomínio não está mais disponível para o seu vínculo. Os dados exibidos foram removidos.</Notice>
-    <Link className="button button-secondary" to="/contextos">Escolher outro acesso</Link></div>;
+    <Link className="button button-secondary" to={ENTRY_PATH}>Escolher outro acesso</Link></div>;
   if (status.isPending) return <div className="panel"><Loading label="Conferindo o segundo fator…" /></div>;
   if (status.isError && !status.data) return <ErrorState error={status.error} retry={() => void status.refetch()} />;
   if (!status.data) return null;
@@ -85,7 +86,7 @@ function StaffGate({ scope, section }: { scope: ManagementScope; section: Manage
 }
 
 function ManagementConsole({ scope, section }: { scope: ManagementScope; section: ManagementSection }) {
-  const base = `/gestao/${scope.tenantId}`;
+  const base = `/c/${scope.tenantId}/gestao`;
   return <>
     <div className="residence-heading"><div><span className="eyebrow">GESTÃO DO CONDOMÍNIO</span><h1>{scope.tenantName}</h1>
       <p>Decisões e cadastros ficam registrados na auditoria com autor e motivo. Horários em {scope.timeZone}.</p></div>

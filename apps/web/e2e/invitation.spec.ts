@@ -42,7 +42,7 @@ test('convidado sem conta local aceita o convite e entra na mesma operação', a
   expect(bodies).toEqual([{ email: 'convidada-sintetica@example.invalid', password: 'SYNTHETIC-TEST-PASSWORD', token: INVITATION_TOKEN }]);
   expect(state.loginRequests).toBe(0);
   await page.getByRole('link', { name: 'Ir para meus acessos' }).click();
-  await expect(page.getByRole('heading', { name: 'Escolha seu espaço.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Escolha o condomínio.' })).toBeVisible();
   await expect(page.getByText('Há um convite aberto nesta janela.')).toHaveCount(0);
 });
 

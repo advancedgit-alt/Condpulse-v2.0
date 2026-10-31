@@ -25,7 +25,7 @@ const grantRow = (extra: Record<string, unknown> = {}) => ({ grantId: GRANT, ten
   scopes: ['installation.read', 'installation.manage'], validFrom: '2030-01-01T12:00:00Z', validUntil: '2030-01-08T12:00:00Z', grantedVia: 'PLATFORM_API',
   status: 'ACTIVE', current: true, revokedAt: null, version: 0, ...extra });
 
-async function openGrants(page: Page, initial: Partial<State> = {}, path = '/master/concessoes') {
+async function openGrants(page: Page, initial: Partial<State> = {}, path = '/central/concessoes') {
   await installSyntheticApi(page);
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state: State = { capability: true, facial: true, grants: [], issued: [], revoked: [], loseNextIssue: false, ...initial };
@@ -81,7 +81,7 @@ async function openGrants(page: Page, initial: Partial<State> = {}, path = '/mas
 
 test('emite concessão para outra conta; repetição incerta reenvia o mesmo pedido; a própria conta é recusada', async ({ page }) => {
   const state = await openGrants(page);
-  await expect(page.getByRole('navigation', { name: 'Seções do painel master' }).getByRole('link', { name: 'Concessões técnicas' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Seções da central' }).getByRole('link', { name: 'Concessões técnicas' })).toBeVisible();
   await page.getByLabel('Condomínio', { exact: true }).selectOption(TENANT_A);
   await expect(page.getByText('Este condomínio ainda não tem MASTER de implantação.')).toBeVisible();
   await page.getByRole('button', { name: 'Nova concessão' }).click();
@@ -107,7 +107,7 @@ test('emite concessão para outra conta; repetição incerta reenvia o mesmo ped
 });
 
 test('revogar exige motivo e a versão exibida; versão nova no servidor pede recarga', async ({ page }) => {
-  const state = await openGrants(page, { grants: [grantRow()] }, `/master/concessoes?condominio=${TENANT_A}`);
+  const state = await openGrants(page, { grants: [grantRow()] }, `/central/concessoes?condominio=${TENANT_A}`);
   const row = page.getByRole('list', { name: 'Concessões técnicas' }).getByRole('listitem').first();
   await expect(row.getByText('Vigente', { exact: true })).toBeVisible();
   await row.getByRole('button', { name: 'Revogar' }).click();
@@ -125,18 +125,18 @@ test('revogar exige motivo e a versão exibida; versão nova no servidor pede re
 });
 
 test('sem a capacidade a seção não aparece; com o acesso facial desligado a tela avisa', async ({ page }) => {
-  const state = await openGrants(page, { facial: false }, `/master/concessoes?condominio=${TENANT_A}`);
+  const state = await openGrants(page, { facial: false }, `/central/concessoes?condominio=${TENANT_A}`);
   await expect(page.getByText('Concessões indisponíveis')).toBeVisible();
   state.capability = false;
-  await page.goto('/master/concessoes');
+  await page.goto('/central/concessoes');
   await expect(page.getByRole('heading', { name: 'Condomínios da plataforma' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Concessões técnicas' })).toHaveCount(0);
 });
 
 test('condomínio fora da lista limitada abre pela ficha e pelo link com as concessões dele', async ({ page }) => {
-  await openGrants(page, {}, `/master/condominios/${TENANT_C}`);
+  await openGrants(page, {}, `/central/condominios/${TENANT_C}`);
   await page.getByRole('region', { name: 'Condomínio Sintético Fora da Lista' }).getByRole('link', { name: 'Concessões técnicas' }).click();
-  await expect(page).toHaveURL(new RegExp(`/master/concessoes\\?condominio=${TENANT_C}$`));
+  await expect(page).toHaveURL(new RegExp(`/central/concessoes\\?condominio=${TENANT_C}$`));
   await expect(page.getByLabel('Condomínio', { exact: true })).toHaveValue(TENANT_C);
   await expect(page.getByRole('heading', { name: 'Concessões em Condomínio Sintético Fora da Lista' })).toBeVisible();
   await expect(page.getByText('Este condomínio ainda não tem MASTER de implantação.')).toBeVisible();
