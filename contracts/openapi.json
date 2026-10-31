@@ -18277,7 +18277,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V045).",
+        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V046).",
         "parameters": [
           {
             "name": "tenantId",
@@ -18722,7 +18722,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V045).",
+        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V046).",
         "parameters": [
           {
             "name": "tenantId",
@@ -32989,6 +32989,8 @@
             "required": [
               "byState",
               "total",
+              "destinations",
+              "confirmedDestinations",
               "allConfirmed"
             ],
             "properties": {
@@ -33003,7 +33005,15 @@
               },
               "allConfirmed": {
                 "type": "boolean",
-                "description": "Verdadeiro só quando todos os trabalhos não superados do filtro estão CONFIRMED."
+                "description": "Verdadeiro só quando o trabalho mais novo de cada destino tocado pelo filtro está CONFIRMED (superado nunca encerra o destino)."
+              },
+              "destinations": {
+                "type": "integer",
+                "description": "Destinos (sujeito × equipamento) tocados pelo filtro."
+              },
+              "confirmedDestinations": {
+                "type": "integer",
+                "description": "Destinos cujo trabalho mais novo (em qualquer operação, inclusive sucessor de superado) está CONFIRMED."
               }
             }
           },

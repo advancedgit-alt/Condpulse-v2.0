@@ -73,7 +73,7 @@ public class GrantService implements SubjectFactsPort {
    // 1. Varredura dos ativos da área: vencido expira; o que deixou de valer na origem recebe marca; outra revisão é substituída.
    int expired=0,revoked=0,superseded=0;
    Instant now=Instant.now();
-   // Sujeitos cujo documento por destino pode mudar: publicados no fim da mesma transação (V045).
+   // Sujeitos cujo documento por destino pode mudar: publicados no fim da mesma transação (V046).
    var touched=new java.util.LinkedHashSet<UUID>();
    // Direito com janela futura (reserva ainda por começar) não é "origem inválida": só a origem decide a marca.
    for(var sw:store.activeInArea(tenant,policy.areaId())) {
@@ -118,8 +118,8 @@ public class GrantService implements SubjectFactsPort {
      superseded+=replaced[0];
      created++;
     } catch(DataAccessException error) {
-     String state=SqlStates.of(error);
-     if(!"23514".equals(state) && !"23503".equals(state)) throw error;
+     String sqlState=SqlStates.of(error);
+     if(!"23514".equals(sqlState) && !"23503".equals(sqlState)) throw error;
      skipped.add(new GrantModels.Skip(c.contextId(),"DB_REFUSED"));
     }
    }

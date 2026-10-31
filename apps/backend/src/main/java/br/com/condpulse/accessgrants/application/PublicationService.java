@@ -19,7 +19,7 @@ import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import org.springframework.dao.DataAccessException;
 
 /**
- * Publicação dos direitos por destino (AC-012/AC-013, V045). A gestão com vínculos e publicação (AAL2) compila, sob o lock
+ * Publicação dos direitos por destino (AC-012/AC-013, V046). A gestão com vínculos e publicação (AAL2) compila, sob o lock
  * por condomínio, o documento de cada sujeito em cada equipamento; o banco grava só o que mudou, com versão monotônica, e
  * supera o trabalho anterior em aberto. Revogações são publicadas pelo banco na mesma transação da marca. Nenhum
  * estado de aplicação sai daqui: ACK, aplicado sem comprovação, confirmado, parcial, falha e desconhecido vêm só do
@@ -92,9 +92,9 @@ public class PublicationService {
    var rows=store.publications(tenant,operation,subject,device,PAGE+1);
    var counts=store.countByState(tenant,operation,subject,device);
    int total=counts.values().stream().mapToInt(Integer::intValue).sum();
-   // Superado não conta como sucesso nem como pendência do lote: o trabalho mais novo do destino responde por ele.
-   int live=total-counts.get("SUPERSEDED");
-   var summary=new PublicationModels.Summary(Map.copyOf(counts),total,live>0 && counts.get("CONFIRMED")==live);
+   // Superado não encerra nada: cada destino tocado responde pelo trabalho mais novo dele, mesmo de outra operação.
+   int[] current=store.currentDestinations(tenant,operation,subject,device);
+   var summary=new PublicationModels.Summary(Map.copyOf(counts),total,current[0],current[1],current[0]>0 && current[1]==current[0]);
    return new PublicationModels.PublicationPage(rows.stream().limit(PAGE).toList(),summary,rows.size()>PAGE);
   }));
  }

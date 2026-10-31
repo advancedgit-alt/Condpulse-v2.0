@@ -1,7 +1,7 @@
 -- AC-012/AC-013 (pacote Acesso Facial v1.1): publicação dos direitos da V044 por destino (sujeito × equipamento).
 --  - cp.rights_publications: trabalho (job) com o documento de direitos compilado pelo banco para um equipamento. É
 --    desejo a aplicar, nunca sucesso físico: os estados ACK, APPLIED_UNVERIFIED, CONFIRMED, PARTIAL, FAILED e UNKNOWN
---    vêm só do relatório de quem fala com o equipamento (worker/gateway, V047) e CONFIRMED exige leitura de volta com o
+--    vêm só do relatório de quem fala com o equipamento (worker/gateway, fatia seguinte) e CONFIRMED exige leitura de volta com o
 --    mesmo hash do documento. Versão desejada monotônica (sequência global das gerações da V044): o trabalho novo do
 --    mesmo destino supera o anterior em aberto e resultado de trabalho superado é recusado.
 --  - Origem PLAN: compilada pelo banco a partir dos direitos vigentes e da topologia ativa (gestão com vínculos e
@@ -289,7 +289,7 @@ CREATE POLICY rights_publications_supersede ON cp.rights_publications AS RESTRIC
 GRANT SELECT ON cp.rights_publications TO cp_api;
 GRANT INSERT(id,tenant_id,operation_id,subject_id,device_id,origin,revocation_marker_id,priority,requested_by) ON cp.rights_publications TO cp_api;
 GRANT UPDATE(state,superseded_by,version) ON cp.rights_publications TO cp_api;
--- Executor (worker hoje; API do gateway na V047): lê a fila sem autoria e grava só o resultado.
+-- Executor (worker hoje; API do gateway na fatia seguinte): lê a fila sem autoria e grava só o resultado.
 GRANT SELECT(id,tenant_id,operation_id,subject_id,device_id,origin,action,priority,desired_version,rights_generation,subject_restriction_epoch,
  installation_revision,document,document_hash,grant_ids,state,confirmation_level,observed_hash,result_code,attempts,next_attempt_at,reported_at,
  confirmed_at,superseded_by,version) ON cp.rights_publications TO cp_worker;

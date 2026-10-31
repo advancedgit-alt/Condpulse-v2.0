@@ -18,7 +18,7 @@ import org.springframework.dao.DataAccessException;
 /**
  * Políticas de ingresso (AC-007/AC-008, V043). Gestão com policy.edit (AAL2): cria a política da área, grava revisões
  * imutáveis, valida contra os destinos comissionados e simula cenários sintéticos sem comando físico. policy.publish
- * aprova a revisão validada (a publicação por destino é a V045). O banco repete área, hash, revisão, transições,
+ * aprova a revisão validada (a publicação por destino é a V046). O banco repete área, hash, revisão, transições,
  * vigência da validação e aprovador.
  */
 public class PolicyService {

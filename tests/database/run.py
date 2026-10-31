@@ -4333,7 +4333,7 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
 def publication_checks():
-    """V045 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
+    """V046 (AC-012/AC-013): publicacao dos direitos por destino. Trabalho compilado pelo banco, nunca sucesso fisico;
     estados so por relatorio do executor; revogacao publicada na mesma transacao da marca e antes de ampliacao."""
     caps = ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"]
     ids = facial_installation(7, caps)

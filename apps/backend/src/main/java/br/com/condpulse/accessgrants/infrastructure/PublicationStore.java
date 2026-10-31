@@ -13,7 +13,7 @@ import br.com.condpulse.accessgrants.application.PublicationModels;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * SQL da publicação por destino (V045). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
+ * SQL da publicação por destino (V046). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
  * destinos e se grava a intenção. A varredura de destinos (vínculos) e a de convites ficam ligadas só durante a compilação.
  */
 public class PublicationStore {
@@ -21,9 +21,12 @@ public class PublicationStore {
  public PublicationStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
  private <T> T scan(Supplier<T> action) {
-  jdbc.queryForObject("select set_config('app.policy_destination_scan','on',true),set_config('app.subject_context_scan','on',true)",String.class);
+  setting("app.policy_destination_scan","on"); setting("app.subject_context_scan","on");
   try { return action.get(); }
-  finally { jdbc.queryForObject("select set_config('app.policy_destination_scan','',true),set_config('app.subject_context_scan','',true)",String.class); }
+  finally { setting("app.policy_destination_scan",""); setting("app.subject_context_scan",""); }
+ }
+ private void setting(String name,String value) {
+  jdbc.queryForObject("select set_config(?,?,true)",String.class,name,value);
  }
 
  /** Executa um item dentro de um savepoint: a recusa do banco desfaz só o item, nunca o lote. */
@@ -103,6 +106,27 @@ public class PublicationStore {
   jdbc.query("select state,count(*) from cp.rights_publications where "+FILTER+" group by state",(org.springframework.jdbc.core.RowCallbackHandler)r->
    counts.put(r.getString(1),r.getInt(2)),tenant,operation,operation,subject,subject,device,device);
   return counts;
+ }
+ /**
+  * Situação atual dos destinos do filtro: para cada sujeito × equipamento tocado, o trabalho mais novo do destino em
+  * qualquer operação (o sucessor de um superado). Retorna {destinos, destinos com o trabalho atual CONFIRMED}.
+  */
+ public int[] currentDestinations(UUID tenant,UUID operation,UUID subject,UUID device) {
+  return jdbc.queryForObject("select count(*),count(*) filter (where l.state='CONFIRMED') from (select distinct subject_id,device_id "
+   +"from cp.rights_publications where "+FILTER+") d cross join lateral (select r.state from cp.rights_publications r where r.tenant_id=? "
+   +"and r.subject_id=d.subject_id and r.device_id=d.device_id order by r.desired_version desc limit 1) l",(r,n)->new int[]{r.getInt(1),r.getInt(2)},tenant,operation,operation,subject,subject,device,device,tenant);
+ }
+
+ /**
+  * Relatório do executor (cp_worker; API do gateway na fatia seguinte): grava só o resultado, com a versão lida. O banco
+  * recusa trabalho superado ou confirmado, confirmação sem leitura igual ao hash e volta a pendente. false = versão mudou.
+  */
+ public boolean report(UUID tenant,UUID publication,long expectedVersion,String state,String confirmationLevel,String observedHash,String resultCode,
+   int attempts,long retryDelaySeconds) {
+  return jdbc.update("""
+   update cp.rights_publications set state=?,confirmation_level=?,observed_hash=?,result_code=?,attempts=?,
+    next_attempt_at=clock_timestamp()+make_interval(secs=>?),version=version+1 where tenant_id=? and id=? and version=?
+   """,state,confirmationLevel,observedHash,resultCode,attempts,(double)retryDelaySeconds,tenant,publication,expectedVersion)==1;
  }
 
  private static Instant instant(Timestamp t) { return t==null?null:t.toInstant(); }

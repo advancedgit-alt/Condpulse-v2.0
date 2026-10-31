@@ -20,6 +20,7 @@ import br.com.condpulse.accesssubjects.application.SubjectModels;
 import br.com.condpulse.accesssubjects.application.SubjectService;
 import br.com.condpulse.accesssubjects.infrastructure.SubjectStore;
 import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.notifications.application.WorkerTransactions;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
@@ -45,6 +46,9 @@ class AccessGrantJdbcTest {
  private static PolicyService policies;
  private static GrantService grants;
  private static PublicationService publications;
+ private static PublicationStore workerPublications;
+ private static WorkerTransactions worker;
+ private static JdbcWorkerPool workerDb;
  private static SubjectService subjects;
  private static FacialInstallationFixture fixture;
 
@@ -59,6 +63,9 @@ class AccessGrantJdbcTest {
   policies=new PolicyService(tenants,policyStore,audit,grants);
   subjects=new SubjectService(tenants,new SubjectStore(db.jdbc),audit);
   fixture=new FacialInstallationFixture(db);
+  workerDb=new JdbcWorkerPool();
+  worker=new WorkerTransactions(workerDb.jdbc,workerDb.manager);
+  workerPublications=new PublicationStore(workerDb.jdbc);
   db.extraAccounts.add(MANAGER); db.extraAccounts.add(MASTER); db.extraAccounts.add(CONCIERGE);
   db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE'),(?,'ACTIVE'),(?,'ACTIVE')",MANAGER,MASTER,CONCIERGE);
   db.adminUpdate("insert into cp.memberships(tenant_id,account_id,display_name,role,status) values(?,?,'PORTARIA DIREITOS JDBC','CONCIERGE','ACTIVE')",db.tenantA,CONCIERGE);
@@ -69,7 +76,7 @@ class AccessGrantJdbcTest {
   fixture.grantMaster(MASTER);
  }
  @AfterEach void clear() throws Exception { fixture.clear(); }
- @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }
+ @AfterAll static void cleanup() throws Exception { try { if(workerDb!=null) workerDb.close(); } finally { if(db!=null) db.close(); } }
  private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
  private static PolicyModels.PolicyDocument rule(String zone,UUID area) { return rule(zone,area,List.of("RESIDENT"),"DENY","NOT_REQUIRED"); }
  private static PolicyModels.PolicyDocument rule(String zone,UUID area,List<String> contexts,String visitors,String reservation) {
@@ -182,7 +189,7 @@ class AccessGrantJdbcTest {
  }
 
  /**
-  * V045: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
+  * V046: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
   * geram trabalho novo; bloqueio publica REVOKE_ALL com prioridade e supera a aplicação pendente.
   */
  @Test void publicationIsAJobPerDestinationAndRevocationGoesFirst() throws Exception {
@@ -193,7 +200,8 @@ class AccessGrantJdbcTest {
   var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
   assertEquals(2,derived.created(),derived.toString());
   assertEquals(2,derived.publication().created(),derived.publication().toString());
-  var page=publications.publications(MANAGER,db.tenantA,AAL2,derived.publication().operationId(),null,null);
+  UUID operation=derived.publication().operationId();
+  var page=publications.publications(MANAGER,db.tenantA,AAL2,operation,null,null);
   assertEquals(2,page.summary().byState().get("PENDING")); assertFalse(page.summary().allConfirmed(),"Pendente não é sucesso");
   for(var p:page.publications()) {
    assertEquals("APPLY_RIGHTS",p.action()); assertEquals(1,p.priority()); assertEquals(inst.device(),p.deviceId()); assertEquals(1,p.entries());
@@ -205,14 +213,31 @@ class AccessGrantJdbcTest {
   assertEquals("ACCESS_SUBJECT_NOT_FOUND",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of(UUID.randomUUID())))));
   assertEquals("PUBLICATION_SUBJECTS_INVALID",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of())));
 
+  // Executor confirma um destino (leitura de volta igual ao hash); o outro destino é superado pelo bloqueio.
   var a=subjectOf(db.accountA);
+  var other=page.publications().stream().filter(p->!p.subjectId().equals(a.subjectId())).findFirst().orElseThrow();
+  assertThrows(org.springframework.dao.DataAccessException.class,()->worker.inTenant(db.tenantA,()->workerPublications.report(db.tenantA,
+   other.publicationId(),other.version(),"CONFIRMED","STATE_READ","0".repeat(64),null,1,0)),"Leitura diferente nunca confirma");
+  assertTrue(worker.inTenant(db.tenantA,()->workerPublications.report(db.tenantA,other.publicationId(),other.version(),"CONFIRMED","STATE_READ",
+   other.documentHash(),null,1,0)));
   subjects.block(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.Block("Ordem ficticia da gestao",a.version()));
+  // Lote com um destino confirmado e outro superado: o sucessor (REVOKE_ALL, outra operação) ainda pendente mantém o lote aberto.
+  var open=publications.publications(MANAGER,db.tenantA,AAL2,operation,null,null).summary();
+  assertEquals(1,open.byState().get("CONFIRMED")); assertEquals(1,open.byState().get("SUPERSEDED"));
+  assertEquals(2,open.destinations()); assertEquals(1,open.confirmedDestinations());
+  assertFalse(open.allConfirmed(),"Superado não encerra o destino: vale o trabalho mais novo");
   var rows=publications.publications(MANAGER,db.tenantA,AAL2,null,a.subjectId(),null).publications();
   assertEquals(2,rows.size());
   assertEquals("REVOKE_ALL",rows.getFirst().action()); assertEquals("REVOCATION",rows.getFirst().origin()); assertEquals(0,rows.getFirst().priority());
   assertTrue(rows.getFirst().desiredVersion()>rows.get(1).desiredVersion());
   assertEquals("SUPERSEDED",rows.get(1).state(),"Aplicação pendente superada pela revogação");
   assertEquals(rows.getFirst().publicationId(),rows.get(1).supersededBy());
+  var successor=rows.getFirst();
+  assertTrue(worker.inTenant(db.tenantA,()->workerPublications.report(db.tenantA,successor.publicationId(),successor.version(),"CONFIRMED","STATE_READ",
+   successor.documentHash(),null,1,0)));
+  assertTrue(publications.publications(MANAGER,db.tenantA,AAL2,operation,null,null).summary().allConfirmed(),"Sucessor confirmado fecha o lote");
+  assertThrows(org.springframework.dao.DataAccessException.class,()->worker.inTenant(db.tenantA,()->workerPublications.report(db.tenantA,
+   rows.get(1).publicationId(),rows.get(1).version(),"CONFIRMED","STATE_READ",rows.get(1).documentHash(),null,1,0)),"Trabalho superado não recebe resultado");
   assertEquals("TENANT_ACCESS_DENIED",code(()->publications.publications(MANAGER,db.tenantB,AAL2,null,null,null)),"HAC-007");
   assertTrue(Integer.parseInt(db.adminString("select count(*)::text from cp.audit_log where tenant_id=? and action='RIGHTS_PUBLICATION_PLANNED'",db.tenantA))>=1);
   db.assertEmptyContext();

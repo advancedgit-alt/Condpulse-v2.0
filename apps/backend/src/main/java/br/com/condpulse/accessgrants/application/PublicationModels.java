@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Publicação dos direitos por destino (AC-012/AC-013, V045). Cada trabalho é o documento compilado pelo banco para um
+ * Publicação dos direitos por destino (AC-012/AC-013, V046). Cada trabalho é o documento compilado pelo banco para um
  * sujeito num equipamento: desejo a aplicar, nunca sucesso físico. Só o executor (worker/gateway) relata ACK,
  * APPLIED_UNVERIFIED, CONFIRMED (leitura de volta igual), PARTIAL, FAILED ou UNKNOWN; o lote só está concluído quando
  * todos os destinos estão CONFIRMED.
@@ -20,8 +20,12 @@ public final class PublicationModels {
    int priority,long desiredVersion,long rightsGeneration,long subjectRestrictionEpoch,int installationRevision,int entries,String documentHash,
    String state,String confirmationLevel,String resultCode,int attempts,Instant reportedAt,Instant confirmedAt,UUID supersededBy,Instant createdAt,
    long version) {}
- /** Resumo calculado sobre todas as linhas do filtro (nunca só a página): sucesso só com todos CONFIRMED. */
- public record Summary(Map<String,Integer> byState,int total,boolean allConfirmed) {}
+ /**
+  * Resumo sobre todas as linhas do filtro (nunca só a página). byState conta as linhas; destinations e confirmedDestinations
+  * seguem cada destino até o trabalho mais novo (sucessor de superado, em qualquer operação). allConfirmed só quando o
+  * trabalho atual de todos os destinos tocados está CONFIRMED.
+  */
+ public record Summary(Map<String,Integer> byState,int total,int destinations,int confirmedDestinations,boolean allConfirmed) {}
  public record PublicationPage(List<Publication> publications,Summary summary,boolean truncated) {}
  public record PlanRequest(List<UUID> subjectIds) {}
  public record Failure(UUID subjectId,String reason) {}
