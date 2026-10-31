@@ -113,6 +113,8 @@ function loginFake(state='ABSENT',{outcome}={}){
 }
 /** Bytes determinísticos e distintos a cada chamada (só para teste). */
 const sequence=()=>{let call=0;return n=>{call++;return Buffer.from(Array.from({length:n},(_,i)=>(i*31+call*17)%256));};};
+// Login READY real já tem as flags copiadas gravadas na Fly (vieram na criação do login).
+const READY_NAMES=[...REQUIRED,...Object.keys(await readVercelConfig(vercelFake(vercelEnvs(),singles).request,'SYNTHETIC_VERCEL_TOKEN_NOT_REAL_0000'))];
 const deps=(fly,login,extra={})=>({fly,login,vercel:vercelFake(vercelEnvs(),singles).request,readCa:()=>'U1lOVEhFVElDX0NB',
   randomBytes:sequence(),waitReady:async()=>({status:200,body:'UP',attempt:1}),...extra});
 
@@ -158,7 +160,7 @@ test('ACK de outro estado, segredo desconhecido, credencial já gravada e flag a
 
 test('login READY repete sem escrita; falha de leitura na Fly aborta o login e devolve os dois códigos',async()=>{
   const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true'};
-  const ready=flyFake(REQUIRED),readyLogin=loginFake('READY');
+  const ready=flyFake(READY_NAMES),readyLogin=loginFake('READY');
   const {applyAck}=await execute(base,deps(ready,readyLogin));
   const repeat=await execute({...apply,CP_FLY_ACK:applyAck},deps(ready,readyLogin));
   assert.equal(repeat.alreadyApplied,true);assert.equal(ready.imports.length+readyLogin.calls.length,0);
@@ -173,7 +175,7 @@ test('deploy exige ACK do estado da Fly, segredos completos e termina com uma m�
   const incomplete=flyFake(['PORT']);const i=await execute(base,deps(incomplete,loginFake()));
   await assert.rejects(execute({...deploy,CP_FLY_ACK:i.deployAck},deps(incomplete,null)),/FLY_SECRETS_INCOMPLETE/);
   assert.equal(incomplete.deploys,0);
-  const fly=flyFake(REQUIRED);const {deployAck}=await execute(base,deps(fly,loginFake('READY')));
+  const fly=flyFake(READY_NAMES);const {deployAck}=await execute(base,deps(fly,loginFake('READY')));
   await assert.rejects(execute({...deploy,CP_FLY_ACK:`${APP}:fly-deploy:${SHA}:${'0'.repeat(64)}`},deps(fly,null)),/FLY_STATE_CHANGED/);
   const result=await execute({...deploy,CP_FLY_ACK:deployAck},deps(fly,null));
   assert.equal(fly.deploys,1);assert.deepEqual(result.machines,['gru']);assert.equal(result.readiness.body,'UP');
@@ -262,7 +264,7 @@ test('chave do Storage: formato sb_secret_ estrito; ausente não muda nada; nunc
   assert.deepEqual(created.changed,[...REQUIRED,'CP_BFF_ENABLED','CP_PARCELS_ENABLED',...STORAGE].sort());
   assert.match(fresh.imports[0],/^CP_FILES_ENABLED=true$/m);assert.ok(fresh.imports[0].includes(`CP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}`));
   // Login READY sem chave: inalterado, nada escrito.
-  const ready=flyFake(REQUIRED),readyLogin=loginFake('READY');
+  const ready=flyFake(READY_NAMES),readyLogin=loginFake('READY');
   const i2=await execute(base,deps(ready,readyLogin));
   const unchanged=await execute({...apply,CP_FLY_ACK:i2.applyAck},deps(ready,readyLogin));
   assert.deepEqual(unchanged.changed,[]);assert.equal(ready.imports.length+readyLogin.calls.length,0);
@@ -271,7 +273,7 @@ test('chave do Storage: formato sb_secret_ estrito; ausente não muda nada; nunc
   const added=await execute({...apply,CP_FLY_ACK:i2.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(ready,readyLogin));
   assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
   assert.deepEqual(ready.imports,[`CP_FILES_ENABLED=true\nCP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}\n`]);
-  assert.deepEqual(added.changed,STORAGE);assert.deepEqual(added.secretNames,[...REQUIRED,...STORAGE].sort());
+  assert.deepEqual(added.changed,STORAGE);assert.deepEqual(added.secretNames,[...new Set([...READY_NAMES,...STORAGE])].sort());
   assert.equal(ready.deploys,0,'apply não faz deploy');
   // Repetir com a chave regrava só os dois; repetir sem a chave depois de gravada é recusado sem escrita.
   const i3=await execute(base,deps(ready,readyLogin));
@@ -288,7 +290,7 @@ test('chave do Storage: formato sb_secret_ estrito; ausente não muda nada; nunc
   const i5=await execute(base,deps(ready,readyLogin));
   await assert.rejects(execute({...apply,CP_FLY_ACK:i5.applyAck,CP_STORAGE_SERVICE_KEY:'sb_secret_short'},deps(ready,readyLogin)),/FLY_STORAGE_KEY_INVALID/);
   // Readback divergente depois do import: recusado.
-  const broken=flyFake(REQUIRED),brokenLogin=loginFake('READY');const i6=await execute(base,deps(broken,brokenLogin));
+  const broken=flyFake(READY_NAMES),brokenLogin=loginFake('READY');const i6=await execute(base,deps(broken,brokenLogin));
   broken.importSecrets=()=>{};
   await assert.rejects(execute({...apply,CP_FLY_ACK:i6.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(broken,brokenLogin)),/FLY_SECRETS_READBACK_MISMATCH/);
   assert.equal(brokenLogin.calls.length,0);
@@ -322,7 +324,7 @@ test('chave do Asaas: só sandbox; token gerado no runner configura o webhook an
     assert.throws(()=>financeKey({CP_ASAAS_API_KEY:bad}),e=>e.code==='FLY_ASAAS_KEY_INVALID'&&!e.message.includes(bad));
   const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',CP_ASAAS_WEBHOOK_EMAIL:'financeiro@example.invalid'};
   // Login READY, sem token na Fly: gera, configura o webhook (POST) e grava os três nomes.
-  const ready=flyFake(REQUIRED),readyLogin=loginFake('READY'),asaas=asaasFake();
+  const ready=flyFake(READY_NAMES),readyLogin=loginFake('READY'),asaas=asaasFake();
   const i1=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
   const first=await execute({...apply,CP_FLY_ACK:i1.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(ready,readyLogin,{asaas:asaas.request}));
   assert.deepEqual(first.changed,[...FINANCE].sort());assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
@@ -339,7 +341,7 @@ test('chave do Asaas: só sandbox; token gerado no runner configura o webhook an
   const i3=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
   await assert.rejects(execute({...apply,CP_FLY_ACK:i3.applyAck},deps(ready,readyLogin,{asaas:asaas.request})),/FLY_ASAAS_KEY_REQUIRED/);
   // Webhook já existente pela URL: atualiza (PUT), não duplica; sem e-mail configurado não chama o Asaas.
-  const other=flyFake(REQUIRED),otherLogin=loginFake('READY'),existing=asaasFake([{id:'wh_9',url:WEBHOOK_URL,enabled:false,interrupted:true,authToken:'x'.repeat(40)}]);
+  const other=flyFake(READY_NAMES),otherLogin=loginFake('READY'),existing=asaasFake([{id:'wh_9',url:WEBHOOK_URL,enabled:false,interrupted:true,authToken:'x'.repeat(40)}]);
   const i4=await execute(base,deps(other,otherLogin,{asaas:existing.request}));
   await assert.rejects(execute({...apply,CP_ASAAS_WEBHOOK_EMAIL:'',CP_FLY_ACK:i4.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(other,otherLogin,{asaas:existing.request})),/FLY_ASAAS_WEBHOOK_EMAIL_REQUIRED/);
   assert.equal(existing.calls.length+other.imports.length,0);
@@ -347,7 +349,7 @@ test('chave do Asaas: só sandbox; token gerado no runner configura o webhook an
   assert.deepEqual(existing.calls.map(c=>`${c.method} ${c.path}`),['GET /webhooks?limit=100&offset=0','PUT /webhooks/wh_9']);
   assert.deepEqual(updated.asaasWebhook,{webhookId:'wh_9',created:false});assert.equal(existing.hooks.length,1);
   // Falha no Asaas: nada é gravado na Fly.
-  const broken=flyFake(REQUIRED),brokenLogin=loginFake('READY');const i5=await execute(base,deps(broken,brokenLogin));
+  const broken=flyFake(READY_NAMES),brokenLogin=loginFake('READY');const i5=await execute(base,deps(broken,brokenLogin));
   await assert.rejects(execute({...apply,CP_FLY_ACK:i5.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(broken,brokenLogin,{asaas:async()=>{throw Object.assign(new Error('x'),{code:'FLY_ASAAS_HTTP_DENIED'});}})));
   assert.equal(broken.imports.length,0);
   // Login novo com a chave: tudo junto.
@@ -375,4 +377,16 @@ test('Asaas: só webhooks do sandbox, sem redirecionamento, e resposta conferida
   await assert.rejects(configureWebhook(async()=>({data:[{id:'a',url:WEBHOOK_URL},{id:'b',url:WEBHOOK_URL}]}),'k','t'.repeat(43),'a@b.co'),/FLY_ASAAS_WEBHOOK_DUPLICATE/);
   await assert.rejects(configureWebhook(async(m)=>m==='GET'?{data:[]}:{id:'wh_1',url:WEBHOOK_URL,enabled:false},'k','t'.repeat(43),'a@b.co'),/FLY_ASAAS_WEBHOOK_UNCONFIRMED/);
   assert.equal(secretLines({CP_ASAAS_API_KEY:ASAAS_SECRET}),`CP_ASAAS_API_KEY=${ASAAS_SECRET}\n`);
+});
+
+test('login READY: flag copiada nova na Vercel entra na Fly sem tocar no banco; repetição não escreve',async()=>{
+  const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true'};
+  const ready=flyFake(READY_NAMES.filter(n=>n!=='CP_BFF_ENABLED')),readyLogin=loginFake('READY');
+  const first=await execute(base,deps(ready,readyLogin));
+  const applied=await execute({...apply,CP_FLY_ACK:first.applyAck},deps(ready,readyLogin));
+  assert.deepEqual(applied.changed,['CP_BFF_ENABLED']);assert.equal(readyLogin.calls.length,0);
+  assert.equal(ready.imports.length,1);assert.match(ready.imports[0],/^CP_BFF_ENABLED=true$/m);
+  const again=await execute(base,deps(ready,readyLogin));
+  const repeat=await execute({...apply,CP_FLY_ACK:again.applyAck},deps(ready,readyLogin));
+  assert.deepEqual(repeat.changed,[]);assert.equal(ready.imports.length,1);
 });
