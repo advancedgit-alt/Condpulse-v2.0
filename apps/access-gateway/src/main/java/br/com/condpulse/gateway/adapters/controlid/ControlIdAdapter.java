@@ -64,7 +64,7 @@ public final class ControlIdAdapter extends BaseAdapter {
  public ControlIdAdapter(DeviceContext context) {
   super(context);
   if(context.device().connectionMode()==ConnectionMode.LOCAL) {
-   lan=new ControlIdTransport.Lan(context.http(ControlIdTransport.Lan.paths()),context.credential());
+   lan=new ControlIdTransport.Lan(context.http(ControlIdTransport.Lan.paths()),context.credential(),context.clock());
    push=null;
    transport=lan;
   } else {
@@ -84,7 +84,8 @@ public final class ControlIdAdapter extends BaseAdapter {
   ops.put(Operation.ENROLL_FACE,OperationSupport.implemented(Operation.ENROLL_FACE,List.of(t,FACE),"Foto até 2 MB; resultado por pessoa (success/errors)."));
   ops.put(Operation.REMOVE_FACE,OperationSupport.implemented(Operation.REMOVE_FACE,List.of(t,FACE),"Nunca usa all/dangling; resposta vazia: APPLIED_UNVERIFIED."));
   for(CredentialKind k:CredentialKind.values()) {
-   String limit=k==CredentialKind.QR?"qrcodes só armazena valor no modo alfanumérico (CI-LIST).":"Valor nunca registrado em log.";
+   String limit=k==CredentialKind.QR?"qrcodes só armazena valor no modo alfanumérico (CI-LIST).":k==CredentialKind.PIN
+    ?"pins.user_id é único: PIN existente é substituído por modify_objects.":"Valor nunca registrado em log.";
    ops.put(setOperation(k),OperationSupport.implemented(setOperation(k),List.of(t,CREATE,LOAD,LIST),limit));
    ops.put(removeOperation(k),OperationSupport.implemented(removeOperation(k),List.of(t,DESTROY,LIST)));
   }
@@ -115,6 +116,9 @@ public final class ControlIdAdapter extends BaseAdapter {
   caps.put(CapabilityName.eventBackfill,true);
   return new Manifest(Brand.CONTROL_ID,ADAPTER_VERSION,device().connectionMode(),ops,caps);
  }
+
+ /** Comandos push entregues aguardando resultado (diagnóstico; 0 fora do modo nuvem). */
+ public int pushAwaitingResults() { return push==null?0:push.awaitingResults(); }
 
  // ----- pessoa -----
 
@@ -187,6 +191,11 @@ public final class ControlIdAdapter extends BaseAdapter {
    Object value=credential.kind()==CredentialKind.CARD?new BigDecimal(credential.value()):credential.value();
    var existing=load(object,Map.of(object,Map.of("user_id",id)));
    for(var row:existing) if(String.valueOf(row.get("value")).equals(String.valueOf(value))) return OperationResult.of(OperationState.APPLIED_UNVERIFIED,"ALREADY_PRESENT");
+   if(credential.kind()==CredentialKind.PIN && !existing.isEmpty()) {
+    // pins.user_id é único: PIN existente é substituído no próprio registro.
+    transport.call("modify_objects",Map.of("object",object,"values",Map.of("value",value),"where",Map.of(object,Map.of("user_id",id))),false,null);
+    return OperationResult.of(OperationState.APPLIED_UNVERIFIED,"REPLACED");
+   }
    var values=new LinkedHashMap<String,Object>();
    values.put("value",value);
    values.put("user_id",id);
@@ -194,6 +203,20 @@ public final class ControlIdAdapter extends BaseAdapter {
    return OperationResult.of(OperationState.APPLIED_UNVERIFIED,null);
   } catch(DeviceCallException e) { return failure(e); }
   catch(ControlIdTransport.ControlIdHttpError e) { return OperationResult.of(OperationState.FAILED,"CONTROLID_HTTP_"+e.status); }
+ }
+
+ /** Compara o valor exato aplicado (load_objects por user_id). */
+ @Override public Optional<Boolean> credentialPresent(CredentialSpec credential) {
+  try {
+   Long id=userId(credential.subjectRef());
+   if(id==null) return Optional.of(false);
+   String object=object(credential.kind());
+   String expected=credential.kind()==CredentialKind.CARD?new BigDecimal(credential.value()).toPlainString():credential.value();
+   for(var row:load(object,Map.of(object,Map.of("user_id",id)))) if(String.valueOf(row.get("value")).equals(expected)) return Optional.of(true);
+   return Optional.of(false);
+  } catch(DeviceCallException|ControlIdTransport.ControlIdHttpError e) {
+   throw new IllegalStateException("Leitura de credencial indisponível.");
+  }
  }
 
  @Override public OperationResult removeCredential(String subjectRef,CredentialKind kind) {

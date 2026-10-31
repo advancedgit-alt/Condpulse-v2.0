@@ -27,6 +27,11 @@ public interface AccessProviderAdapter {
  OperationResult applyRights(RightsSpec rights);
  OperationResult revokeRights(String subjectRef);
  AppliedState readState(String subjectRef);
+ /**
+  * O valor exato desta credencial está vinculado à pessoa no equipamento? Vazio quando o adaptador não consegue
+  * comparar o valor (só contar não basta para confirmar substituição).
+  */
+ default Optional<Boolean> credentialPresent(CredentialSpec credential) { return Optional.empty(); }
  /** Chaves nativas que {@link #applyRights} gravaria, para comparar com a leitura de volta. Vazio se não representável. */
  Optional<Set<String>> rightKeys(RightsSpec rights);
  OpenResult open(OpenAction action);

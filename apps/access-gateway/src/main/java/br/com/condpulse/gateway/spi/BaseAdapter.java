@@ -34,7 +34,7 @@ public abstract class BaseAdapter implements AccessProviderAdapter {
    :OperationResult.of(OperationState.UNKNOWN,e.getMessage());
  }
  protected static OpenResult openFailure(DeviceCallException e) {
-  return e.failure()==DeviceHttpClient.Failure.NOT_SENT?new OpenResult(OpenOutcome.NOT_SENT,"DEVICE_UNREACHABLE"):new OpenResult(OpenOutcome.AMBIGUOUS,e.getMessage());
+  return new OpenResult(e.failure()==DeviceHttpClient.Failure.NOT_SENT?OpenOutcome.NOT_SENT:OpenOutcome.AMBIGUOUS,e.getMessage());
  }
 
  /** Evento com os campos fixos deste equipamento e evidência DEVICE_REPORTED. */

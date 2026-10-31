@@ -35,6 +35,7 @@ public final class GatewayRuntime implements AutoCloseable {
  private final OpenDispatcher opens;
  private final EventOutbox outbox;
  private final LocalDecisionEngine decisions;
+ private final br.com.condpulse.gateway.central.DecisionOutbox decisionOutbox;
  private final GatewayService service;
  private final InboundServer inbound;
  private final ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(2,r->{ var t=new Thread(r,"gateway-loop"); t.setDaemon(false); return t; });
@@ -51,7 +52,8 @@ public final class GatewayRuntime implements AutoCloseable {
   opens=new OpenDispatcher(dataDir,clock,config,registry,id->java.util.Optional.ofNullable(adapters.get(id)));
   outbox=new EventOutbox(dataDir,clock,50_000);
   decisions=new LocalDecisionEngine(dataDir,clock,config);
-  service=new GatewayService(config,registry,adapters,queue,opens,outbox,decisions,central,clock);
+  decisionOutbox=new br.com.condpulse.gateway.central.DecisionOutbox(dataDir,clock,10_000);
+  service=new GatewayService(config,registry,adapters,queue,opens,outbox,decisions,decisionOutbox,central,clock);
   inbound=config.inbound()==null?null:new InboundServer(config,secrets,service::handleInbound);
  }
 
@@ -59,8 +61,8 @@ public final class GatewayRuntime implements AutoCloseable {
 
  public void start() {
   if(inbound!=null) inbound.start();
-  scheduler.scheduleWithFixedDelay(guard("plataforma",()->{ service.pullFromCentral(); service.processQueues(20); }),0,2,TimeUnit.SECONDS);
-  scheduler.scheduleWithFixedDelay(guard("eventos",()->{ service.pollEvents(); service.forwardEvents(); service.checkHealth(); }),1,10,TimeUnit.SECONDS);
+  scheduler.scheduleWithFixedDelay(guard("plataforma",()->{ service.pullFromCentral(); service.processQueues(20); service.publishPendingResults(); }),0,2,TimeUnit.SECONDS);
+  scheduler.scheduleWithFixedDelay(guard("eventos",()->{ service.pollEvents(); service.forwardEvents(); service.forwardDecisions(); service.checkHealth(); }),1,10,TimeUnit.SECONDS);
   LOG.log(System.Logger.Level.INFO,"Gateway iniciado.");
  }
 
@@ -74,7 +76,7 @@ public final class GatewayRuntime implements AutoCloseable {
  @Override public void close() {
   scheduler.shutdownNow();
   if(inbound!=null) inbound.close();
-  queue.close(); opens.close(); outbox.close(); decisions.close();
+  queue.close(); opens.close(); outbox.close(); decisions.close(); decisionOutbox.close();
   try { lock.release(); lockChannel.close(); } catch(IOException ignored) {}
  }
 }
