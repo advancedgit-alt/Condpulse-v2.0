@@ -296,7 +296,7 @@ class DahuaIntelbrasAdapterContractTest {
   }
   var ok=endpoint.handle(new InboundEndpoint.Request("POST","/notification",Map.of(),null,one.getBytes(),"127.0.0.1"),new Ctx(true,false));
   assertEquals(200,ok.status());
-  assertEquals("true",Json.object(new String(ok.body())).get("auth"),"falha da fila de eventos não muda a decisão");
+  assertEquals("false",Json.object(new String(ok.body())).get("auth"),"sem registro durável do evento: negativa segura, resposta 200");
   var failed=endpoint.handle(new InboundEndpoint.Request("POST","/notification",Map.of(),null,one.getBytes(),"127.0.0.1"),new Ctx(true,true));
   assertEquals(200,failed.status());
   assertEquals("false",Json.object(new String(failed.body())).get("auth"),"falha na decisão: negativa segura");

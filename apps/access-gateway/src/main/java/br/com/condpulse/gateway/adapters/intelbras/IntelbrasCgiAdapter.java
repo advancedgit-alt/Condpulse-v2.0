@@ -333,8 +333,9 @@ public final class IntelbrasCgiAdapter extends BaseAdapter {
        break;
       }
      } catch(RuntimeException e) { allow=false; }
-     // Gravação dos eventos fora do caminho da decisão: falha não muda nem atrasa a resposta já decidida.
-     try { ctx.events(events(body).events()); } catch(RuntimeException ignored) {}
+     // Eventos gravados de forma durável antes de responder; se a gravação falhar, não se confirma liberação
+     // sem registro: a resposta sai mesmo assim, com negativa segura (nunca erro HTTP).
+     try { ctx.events(events(body).events()); } catch(RuntimeException e) { allow=false; }
      var response=new LinkedHashMap<String,Object>();
      response.put("message",allow?"Acesso liberado":"Acesso negado");
      response.put("code","200");
