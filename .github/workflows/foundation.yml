@@ -300,6 +300,15 @@ jobs:
         env:
           CP_E2E_BASE_URL: http://127.0.0.1:4180
         run: npm run test:e2e
+      # Evidência visual da identidade (ADR-0010): capturas por perfil, tema e tamanho, só com dados sintéticos.
+      - name: Upload visual identity captures
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: identidade-visual-capturas
+          path: apps/web/test-results/identidade/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Remove disposable web image container
         if: always()
         working-directory: .

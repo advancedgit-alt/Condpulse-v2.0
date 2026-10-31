@@ -1,4 +1,4 @@
-.availability-panel{padding:20px 0;margin-bottom:22px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.availability-panel{padding:20px 0;margin-bottom:22px;border-top:1px solid var(--cp-color-border-decorative);border-bottom:1px solid var(--cp-color-border-decorative)}
 .availability-panel .section-heading{align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
 .availability-panel h4{font-size:1rem;margin:0 0 8px}
 .availability-panel .section-heading p{font-size:.875rem;line-height:1.6;margin:0;max-width:430px}
@@ -7,8 +7,8 @@
 .availability-panel .reservation-filter label,.availability-panel .reservation-filter input,.availability-panel .reservation-filter>span{font-size:.875rem}
 .availability-observed,.availability-empty{font-size:.875rem;line-height:1.7;margin:14px 0 0}
 .availability-intervals{display:grid;gap:9px;list-style:none;margin:14px 0 0;padding:0}
-.availability-intervals li{display:flex;flex-wrap:wrap;gap:8px 15px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#f4f7fa;font-size:.875rem;line-height:1.6}
-.availability-intervals strong{color:#52667a;font-weight:700}
+.availability-intervals li{display:flex;flex-wrap:wrap;gap:8px 15px;padding:12px 14px;border:1px solid var(--cp-color-border-decorative);border-radius:9px;background:var(--cp-color-surface-canvas);font-size:.875rem;line-height:1.6}
+.availability-intervals strong{color:var(--cp-color-text-secondary);font-weight:var(--cp-font-weight-strong)}
 .availability-intervals span{overflow-wrap:anywhere}
-.availability-selection{font-size:.875rem;line-height:1.7;margin:0;color:var(--muted)}
+.availability-selection{font-size:.875rem;line-height:1.7;margin:0;color:var(--cp-color-text-secondary)}
 .waitlist-join{display:grid;gap:8px;margin:8px 0}
