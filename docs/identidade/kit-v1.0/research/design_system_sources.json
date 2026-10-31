@@ -1,0 +1,240 @@
+{
+  "research_date": "2026-10-31",
+  "notes": "Fontes primárias verificadas. Reabrir no agente principal para usar as referências em citações web. Especificações CondPulse são propostas; exemplo não foi aplicado ao sistema.",
+  "sources": [
+    {
+      "id": "linear",
+      "title": "Linear — How we redesigned the Linear UI",
+      "url": "https://linear.app/now/how-we-redesigned-the-linear-ui",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Navegação, hierarquia, alinhamento, temas e imagens do redesign de 2024.",
+      "caveats": "Artigo datado; princípios e telas de referência, não prova da UI atual."
+    },
+    {
+      "id": "stripe",
+      "title": "Stripe — Web Dashboard",
+      "url": "https://docs.stripe.com/dashboard/basics",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Navegação por recursos, filtros, atalhos, métricas e notificações.",
+      "caveats": "Documentação de produto; não avaliação de usabilidade do CondPulse."
+    },
+    {
+      "id": "polaris_components",
+      "title": "Shopify — Polaris Web Components",
+      "url": "https://shopify.dev/docs/api/app-home/latest/web-components",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Catálogo de componentes administrativos e estrutura.",
+      "caveats": "Biblioteca voltada ao ecossistema Shopify; não recomendação de dependência."
+    },
+    {
+      "id": "polaris_table",
+      "title": "Shopify — Table",
+      "url": "https://shopify.dev/docs/api/app-home/latest/web-components/layout-and-structure/table",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Tabela responsiva que se apresenta como lista em telas pequenas, filtros e paginação.",
+      "caveats": "Referência de padrão; implementar sobre componentes existentes se adequado."
+    },
+    {
+      "id": "polaris_patterns",
+      "title": "Shopify — Page patterns",
+      "url": "https://shopify.dev/docs/api/app-home/latest/patterns",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Padrões de páginas e composições administrativas.",
+      "caveats": "Links e versões podem mudar; consulta em 31/10/2026."
+    },
+    {
+      "id": "polaris_legacy",
+      "title": "Shopify — Polaris 101 React legado",
+      "url": "https://polaris-site-prod-kit.shopify.prod.shopifyapps.com/getting-started/polaris-101",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Aviso de descontinuação de Polaris React e indicação de Web Components.",
+      "caveats": "Somente para evitar recomendação da biblioteca React legada."
+    },
+    {
+      "id": "atlassian_tokens",
+      "title": "Atlassian — Design tokens explained",
+      "url": "https://atlassian.design/tokens/design-tokens/",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Tokens semânticos e temas; escolher tokens por significado.",
+      "caveats": "Não é necessário instalar Atlaskit."
+    },
+    {
+      "id": "atlassian_code",
+      "title": "Atlassian — Use tokens in code",
+      "url": "https://atlassian.design/foundations/tokens/use-tokens-in-code/",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Temas claro/escuro e inicialização de tokens.",
+      "caveats": "Exemplos são da biblioteca Atlassian; adaptar conceito ao CSS próprio."
+    },
+    {
+      "id": "carbon_table",
+      "title": "IBM Carbon — Data table",
+      "url": "https://www.carbondesignsystem.com/building-blocks/core/components/data-table/guidelines",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Anatomia, filtros, seleção, expansão, paginação e densidade da tabela.",
+      "caveats": "URL original redirecionou; link final registrado."
+    },
+    {
+      "id": "ant_calendar",
+      "title": "Ant Design — Calendar",
+      "url": "https://ant.design/components/calendar/",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Visualização de agenda/mês/ano e exemplos de eventos.",
+      "caveats": "Referência complementar; não propor instalar biblioteca apenas pela tela."
+    },
+    {
+      "id": "lato_download",
+      "title": "Lato — Download",
+      "url": "https://www.latofonts.com/download/",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Arquivos web e licença SIL OFL1.1.",
+      "caveats": "Usar arquivos compatíveis com a versão auditada; não implica migração."
+    },
+    {
+      "id": "lato_license",
+      "title": "Lato — LICENSE.txt oficial",
+      "url": "https://github.com/latofonts/lato-source/blob/master/LICENSE.txt",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "SIL OFL1.1 e Reserved Font Name Lato.",
+      "caveats": "Preservar avisos e licença; regras de nomes se houver modificação."
+    },
+    {
+      "id": "inter",
+      "title": "Inter — site oficial",
+      "url": "https://rsms.me/inter/",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Pesos, optical size, números tabulares e licença aberta.",
+      "caveats": "Alternativa futura; Lato é o padrão confirmado do CondPulse."
+    },
+    {
+      "id": "inter_license",
+      "title": "Inter — SIL Open Font License",
+      "url": "https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Termos OFL1.1 para distribuir/incorporar fonte.",
+      "caveats": "Manter a licença e os avisos da versão efetivamente distribuída."
+    },
+    {
+      "id": "lucide_license",
+      "title": "Lucide — License",
+      "url": "https://lucide.dev/license",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "ISC e aviso MIT para ícones derivados do Feather.",
+      "caveats": "Alternativa de iconografia; não afirmar que já é utilizada."
+    },
+    {
+      "id": "wcag22",
+      "title": "W3C — WCAG 2.2",
+      "url": "https://www.w3.org/TR/WCAG22/",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Norma de acessibilidade e níveis A/AA/AAA.",
+      "caveats": "Aprovar paleta ou protótipo não certifica conformidade do sistema."
+    },
+    {
+      "id": "wcag_text",
+      "title": "W3C — Contrast Minimum",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "4,5:1 texto comum; 3:1 grande; exceções.",
+      "caveats": "Documento Understanding explica requisito normativo."
+    },
+    {
+      "id": "wcag_nontext",
+      "title": "W3C — Non-text Contrast",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "3:1 para informação visual necessária de controles, estados e gráficos.",
+      "caveats": "Não aplicar a todos os divisores decorativos; não arredondar falha."
+    },
+    {
+      "id": "wcag_color",
+      "title": "W3C — Use of Color",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Cor não é único meio de comunicar significado.",
+      "caveats": "Critério nível A."
+    },
+    {
+      "id": "wcag_focus",
+      "title": "W3C — Focus Visible",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Foco visível em interação por teclado.",
+      "caveats": "Critério AA; aparência 2.4.13 tem nível diferente."
+    },
+    {
+      "id": "wcag_unobscured",
+      "title": "W3C — Focus Not Obscured Minimum",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Foco não inteiramente encoberto por conteúdo criado pelo autor.",
+      "caveats": "Critério AA; totalmente não encoberto é a referência aprimorada."
+    },
+    {
+      "id": "wcag_focus_appearance",
+      "title": "W3C — Focus Appearance",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Área equivalente a perímetro de 2px e contraste 3:1 entre estados, com exceções.",
+      "caveats": "É AAA, não AA."
+    },
+    {
+      "id": "wcag_target",
+      "title": "W3C — Target Size Minimum",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "24×24 CSSpx com exceções incluindo espaçamento.",
+      "caveats": "Critério AA; 44px proposto por CondPulse é decisão mais exigente."
+    },
+    {
+      "id": "wcag_target_enhanced",
+      "title": "W3C — Target Size Enhanced",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "44×44 CSSpx com exceções.",
+      "caveats": "Critério AAA."
+    },
+    {
+      "id": "wcag_reflow",
+      "title": "W3C — Reflow",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Adaptação de conteúdo a 320CSSpx; exceções de conteúdo bidimensional.",
+      "caveats": "Tabela complexa pode precisar de região com rolagem horizontal."
+    },
+    {
+      "id": "owasp_tenant",
+      "title": "OWASP — Multi Tenant Security Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multi_Tenant_Security_Cheat_Sheet.html",
+      "accessed_on": "2026-10-31",
+      "source_type": "OFFICIAL",
+      "supports": "Tenant derivado de identidade verificada e autorização; escopo em consultas, cache e armazenamento.",
+      "caveats": "Modelo de herança de marca e publicação do documento são proposta CondPulse, não padrão prescrito pela OWASP."
+    }
+  ]
+}

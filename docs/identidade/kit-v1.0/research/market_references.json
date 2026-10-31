@@ -1,0 +1,431 @@
+{
+  "title": "CondPulse — referências visuais do mercado condominial",
+  "researched_at": "2026-10-31",
+  "language": "pt-BR",
+  "scope": "Fontes oficiais públicas; padrões de produto e fluxos; sem login em produtos concorrentes.",
+  "limitations": [
+    "Seleção por relevância funcional e disponibilidade de evidência, não ranking de mercado.",
+    "Quatro referências de UI tiveram seus pixels inspecionados após download público; as demais permanecem referências textuais/links. Consulte market_assets/attribution.json.",
+    "A aparência de uma landing page não prova a interface autenticada.",
+    "Nenhuma paleta hexadecimal de concorrente foi validada; não inferir códigos oficiais.",
+    "Materiais públicos dos fornecedores permanecem sujeitos aos direitos e condições de seus titulares.",
+    "A proposta CondPulse preserva navy #102A43 e teal #007F86 como direção própria informada pelo projeto.",
+    "CondoConta Banking-1.webp e a imagem principal da landing uCondo foram inspecionadas e são fotografias/composições comerciais sem interface. Excluídas do caderno de telas."
+  ],
+  "products": [
+    {
+      "id": "townsq",
+      "name": "TownSq",
+      "focus": [
+        "reservas",
+        "morador",
+        "comunicação"
+      ],
+      "evidence_level": "tutorial_operacional_publico_com_imagens",
+      "public_evidence": "Tutorial descreve menu lateral de Reservas/Dependências, calendário e aprovação; há imagem PNG. Kits institucionais exigem formulário.",
+      "use_for_condpulse": [
+        "Fluxo área → data → detalhe → decisão",
+        "Confirmação e histórico de reserva",
+        "Estado por texto e ícone além da cor"
+      ],
+      "avoid_in_condpulse": [
+        "Estado identificável só por ponto colorido",
+        "Confundir reserva da área com permissão física de entrada"
+      ],
+      "color_status": "Observado na captura: verde vivo, verde acinzentado, branco e cinza claro. O tutorial também descreve marcador bordô. Não são especificações oficiais de paleta.",
+      "sources": [
+        {
+          "id": "T1",
+          "type": "tutorial",
+          "url": "https://suporte.townsq.com.br/reservas-como-aprovar-uma-reserva-pela-web",
+          "title": "Reservas | Como aprovar uma reserva pela web?"
+        },
+        {
+          "id": "T2",
+          "type": "image",
+          "url": "https://suporte.townsq.com.br/hubfs/Knowledge%20Base%20Import/AAo-OhNEUONhK1h1BsV8R.png",
+          "caption": "TownSq: exemplo público de navegação para reservas; fonte: Central de Ajuda TownSq",
+          "pixels_audited": true,
+          "usable_for_ui_reference": true,
+          "asset_class": "Captura de tutorial público da aplicação web"
+        },
+        {
+          "id": "T3",
+          "type": "screen_kit_form",
+          "url": "https://condominio.townsq.com.br/townsq-telas",
+          "form_submitted": false
+        },
+        {
+          "id": "T4",
+          "type": "brand_kit_form",
+          "url": "https://condominio.townsq.com.br/townsq-press-kit-br",
+          "form_submitted": false
+        },
+        {
+          "id": "T5",
+          "type": "official_institutional",
+          "url": "https://www.home.townsq.com.br/sobre-nos/"
+        }
+      ]
+    },
+    {
+      "id": "superlogica_gruvi",
+      "name": "Superlógica / Gruvi",
+      "focus": [
+        "administradora",
+        "carteira",
+        "unidades"
+      ],
+      "evidence_level": "tutorial_operacional_publico_com_gif",
+      "public_evidence": "Manual de 08/10/2026 descreve menu lateral, resumo da quantidade de condomínios com e sem grupos e entrada no Dashboard Gruvi.",
+      "use_for_condpulse": [
+        "Contexto do condomínio persistente",
+        "Carteira MASTER separada da visão por condomínio",
+        "Indicador com acesso à lista que o explica"
+      ],
+      "avoid_in_condpulse": [
+        "Banners comerciais disputando atenção com tarefas críticas",
+        "Perder o condomínio ativo ao navegar"
+      ],
+      "color_status": "Observado nos quadros do GIF: carvão, ciano, superfícies claras, verde, amarelo e roxo. Material de arquivo; sem hex oficial validado.",
+      "sources": [
+        {
+          "id": "S1",
+          "type": "tutorial",
+          "url": "https://condominios.superlogica.com/hc/pt-br/articles/10440036697623-Como-acessar-a-Dashboard-Gruvi",
+          "title": "Como acessar a Dashboard Gruvi"
+        },
+        {
+          "id": "S2",
+          "type": "animation",
+          "url": "https://condominios.superlogica.com/hc/article_attachments/10436431826199",
+          "format": "gif",
+          "caption": "Superlógica: caminho público de acesso ao Dashboard Gruvi; fonte: Central de Ajuda Superlógica",
+          "pixels_audited": true,
+          "retrieval_note": "GIF baixado; quadros 0 e 117 inspecionados. Quadro 117 recomendado; captura de arquivo com indícios de 2022.",
+          "usable_for_ui_reference": true,
+          "asset_class": "Quadros extraídos de GIF de tutorial público"
+        },
+        {
+          "id": "S3",
+          "type": "further_reading",
+          "url": "https://condominios.superlogica.com/hc/pt-br/articles/41295968786583-Como-consultar-as-informa%C3%A7%C3%B5es-de-uma-unidade",
+          "inspected": false
+        }
+      ]
+    },
+    {
+      "id": "condomob",
+      "name": "Condomob",
+      "focus": [
+        "portaria",
+        "encomendas",
+        "ocorrências",
+        "reservas"
+      ],
+      "evidence_level": "manual_operacional_publico_com_imagem",
+      "public_evidence": "Manual documenta buscas por pessoa/placa, nova encomenda, ocorrência, troca de turno e listas das últimas mensagens/ocorrências e próximas reservas/eventos.",
+      "use_for_condpulse": [
+        "Busca persistente por pessoa ou placa",
+        "Ações rápidas de portaria",
+        "Filas curtas de itens acionáveis",
+        "Última atualização e sincronização visíveis"
+      ],
+      "avoid_in_condpulse": [
+        "Home da portaria repleta de gráficos gerenciais",
+        "Misturar credenciais de integração com tarefas do porteiro"
+      ],
+      "color_status": "Observado na captura: carvão, cinza escuro, verde nas ações e laranja na troca de turno. Sem validação de hex oficial.",
+      "sources": [
+        {
+          "id": "C1",
+          "type": "tutorial",
+          "url": "https://suporte.condomob.net/hc/pt-br/articles/49712719681435-Guia-de-Navega%C3%A7%C3%A3o-na-Tela-Inicial-da-Interface-da-Portaria",
+          "title": "Guia de Navegação na Tela Inicial da Interface da Portaria"
+        },
+        {
+          "id": "C2",
+          "type": "image",
+          "url": "https://suporte.condomob.net/hc/article_attachments/49712795461275",
+          "caption": "Condomob: tela pública de referência para a interface da portaria; fonte: Central de Ajuda Condomob",
+          "pixels_audited": true,
+          "usable_for_ui_reference": true,
+          "asset_class": "Captura de tutorial público da aplicação web"
+        },
+        {
+          "id": "C3",
+          "type": "product_page_with_tutorials",
+          "url": "https://condomob.net/painel-administrativo-sistema-condominio/"
+        },
+        {
+          "id": "C4",
+          "type": "archive_image",
+          "url": "https://condomob.net/wp-content/uploads/2021/09/Gerenciamento-de-condominio-para-administracao.png",
+          "caption": "Condomob: imagem administrativa de arquivo publicada em página institucional; fonte: Condomob",
+          "pixels_audited": false,
+          "current_version_verified": false
+        }
+      ]
+    },
+    {
+      "id": "ucondo",
+      "name": "uCondo",
+      "focus": [
+        "reservas",
+        "financeiro",
+        "comunicação",
+        "manual_de_marca"
+      ],
+      "evidence_level": "tutorial_operacional_publico_e_demos_indicadas",
+      "public_evidence": "Tutorial de reserva documenta menu lateral, dependência/data/horário, revisão e aceite de termos quando houver. Página oficial encaminha a vídeos financeiro e comunicação. Manual de marca público localizado.",
+      "use_for_condpulse": [
+        "Revisão explícita antes de confirmar",
+        "Regras apresentadas no contexto da operação",
+        "Separar rascunho e publicação",
+        "Manual de marca com versões e uso documentados"
+      ],
+      "avoid_in_condpulse": [
+        "Transformar a landing page em template da aplicação",
+        "Impor passos repetidos desnecessários a operadores frequentes"
+      ],
+      "color_status": "Logo na central identificado como roxo; PDF de marca localizado, mas seus hex e fontes não foram extraídos.",
+      "sources": [
+        {
+          "id": "U1",
+          "type": "tutorial_with_gifs",
+          "url": "https://suporte.ucondo.com.br/reservas-como-criar-uma-reserva-via-web",
+          "caption": "uCondo: sequência pública para reservar uma área comum; fonte: Central de Ajuda uCondo"
+        },
+        {
+          "id": "U2",
+          "type": "official_demo_index",
+          "url": "https://www.ucondo.com.br/condominios/aplicativo-de-condominios"
+        },
+        {
+          "id": "U3",
+          "type": "video",
+          "url": "https://www.youtube.com/watch?v=8XrFH5uCHcM",
+          "title": "Módulo financeiro do sistema e aplicativo uCondo",
+          "provenance": "Embed oficial em U2",
+          "watched": false
+        },
+        {
+          "id": "U4",
+          "type": "video",
+          "url": "https://www.youtube.com/watch?v=AMLaBwYAbT4",
+          "title": "Todas as soluções para a comunicação no condominio: o sistema uCondo",
+          "provenance": "Embed oficial em U2",
+          "watched": false
+        },
+        {
+          "id": "U5",
+          "type": "official_brand_manual_page",
+          "url": "https://www.ucondo.com.br/manual-da-marca"
+        },
+        {
+          "id": "U6",
+          "type": "brand_manual_pdf_link",
+          "url": "https://drive.google.com/file/d/1MaTgYsjFKDUnsX1_MN3WfCC67TiEP5PK/view",
+          "title": "uCondo_Manual de Marca [2026] (1).pdf",
+          "provenance": "Link oficial em U5",
+          "contents_extracted": false
+        }
+      ]
+    },
+    {
+      "id": "condoconta",
+      "name": "CondoConta",
+      "focus": [
+        "financeiro",
+        "pagamentos",
+        "prestação_de_contas"
+      ],
+      "evidence_level": "pagina_comercial_sem_tela_de_interface_validada",
+      "public_evidence": "Página anuncia operações financeiras e acesso app/web. Imagem Banking-1.webp foi inspecionada e é uma fotografia, não uma captura de software.",
+      "use_for_condpulse": [
+        "Hierarquia de valor, período, origem e estado",
+        "Saldos com acesso à movimentação",
+        "Tabela financeira legível",
+        "Confirmação contextual de operações"
+      ],
+      "avoid_in_condpulse": [
+        "Interpretar cor de marca como resultado financeiro positivo",
+        "Afirmar capacidades não demonstradas a partir de imagem comercial"
+      ],
+      "color_status": "Paleta institucional não validada nesta pesquisa.",
+      "sources": [
+        {
+          "id": "F1",
+          "type": "official_product_page",
+          "url": "https://condoconta.com.br/conta-bancaria/",
+          "title": "Conta Bancária para Condomínios"
+        },
+        {
+          "id": "F2",
+          "type": "marketing_photo_no_ui",
+          "url": "https://condoconta.com.br/wp-content/uploads/2024/05/Banking-1.webp",
+          "caption": "CondoConta: fotografia comercial de pessoa com tablet; não é captura de interface; fonte: CondoConta",
+          "pixels_audited": true,
+          "current_version_verified": false,
+          "usable_for_ui_reference": false,
+          "asset_class": "Fotografia comercial"
+        }
+      ]
+    },
+    {
+      "id": "mycond",
+      "name": "MyCond",
+      "focus": [
+        "personalização",
+        "home_do_morador",
+        "carteira",
+        "encomendas"
+      ],
+      "evidence_level": "pagina_de_atualizacao_com_telas_e_changelog",
+      "public_evidence": "Página anuncia cores por condomínio e Home reorganizável. Changelog de 10/04/2026 descreve Minha Carteira com condomínios, estados de emissão de boletos e ações diretas.",
+      "use_for_condpulse": [
+        "Acento e logo por tenant",
+        "Ordem de atalhos por usuário",
+        "Permissões independentes da personalização",
+        "Carteira com estados e ações"
+      ],
+      "avoid_in_condpulse": [
+        "Permitir troca dos significados de erro/bloqueio pelo tema",
+        "Confundir preferência pessoal e autorização",
+        "Afirmar isolamento técnico de tenant por evidência visual"
+      ],
+      "color_status": "Observado no mockup: navy, branco/cinza claro, amarelo no símbolo e vermelho/coral nos contadores. A página confirma temas por condomínio; não inferir paleta universal.",
+      "sources": [
+        {
+          "id": "M1",
+          "type": "official_update_page",
+          "url": "https://mycond.com.br/novo_mycond/",
+          "title": "Novo app MyCond"
+        },
+        {
+          "id": "M2",
+          "type": "image",
+          "url": "https://mycond.com.br/wp-content/uploads/2026/06/hero-1.png",
+          "caption": "MyCond: Home e Login divulgados na apresentação do novo app; fonte: MyCond",
+          "pixels_audited": true,
+          "usable_for_ui_reference": true,
+          "asset_class": "Mockup comercial com telas de Home e Login"
+        },
+        {
+          "id": "M3",
+          "type": "animation",
+          "url": "https://mycond.com.br/wp-content/uploads/2026/06/app-reorganizar.gif",
+          "format": "gif",
+          "caption": "MyCond: reorganização de módulos da Home; fonte: MyCond",
+          "pixels_audited": false
+        },
+        {
+          "id": "M4",
+          "type": "official_changelog",
+          "url": "https://mycond.com.br/suporte/"
+        },
+        {
+          "id": "M5",
+          "type": "image",
+          "url": "https://mycond.com.br/wp-content/uploads/2026/06/myia-encomendas-2-telas.png",
+          "caption": "MyCond: telas de leitura de etiqueta publicadas pelo fornecedor; fonte: MyCond",
+          "pixels_audited": false
+        },
+        {
+          "id": "M6",
+          "type": "animation",
+          "url": "https://mycond.com.br/wp-content/uploads/2026/04/Adobe-Express-3-WhatsApp-Video-2026-04-09-at-17.40.14.gif",
+          "format": "gif",
+          "caption": "MyCond: demonstração de Minha Carteira ligada no changelog de abril de 2026; fonte: MyCond",
+          "pixels_audited": false
+        }
+      ]
+    }
+  ],
+  "historical_only": [
+    {
+      "name": "NokNox",
+      "url": "https://noknox.com/",
+      "status": "A página oficial encontrada em busca informa encerramento das atividades e direcionamento para MyCond.",
+      "retrieval_note": "Abertura direta posterior teve timeout; não tratar tutoriais antigos como prova de atividade atual."
+    }
+  ],
+  "condpulse_board_proposals": [
+    {
+      "screen": "MASTER",
+      "content": [
+        "carteira",
+        "homologação",
+        "integração",
+        "falhas",
+        "publicação",
+        "auditoria"
+      ]
+    },
+    {
+      "screen": "Gestor",
+      "content": [
+        "pendências",
+        "reservas",
+        "cadastros",
+        "regras de área",
+        "histórico"
+      ]
+    },
+    {
+      "screen": "Portaria",
+      "content": [
+        "busca",
+        "fila",
+        "encomendas",
+        "resultado da regra",
+        "ação autorizada",
+        "retorno do equipamento"
+      ]
+    },
+    {
+      "screen": "Áreas e regras",
+      "content": [
+        "área",
+        "público elegível",
+        "horários",
+        "idade",
+        "visitantes",
+        "versão publicada"
+      ]
+    },
+    {
+      "screen": "Financeiro",
+      "content": [
+        "período",
+        "resumo",
+        "movimentação",
+        "cobrança",
+        "conciliação",
+        "confirmação"
+      ]
+    },
+    {
+      "screen": "Morador",
+      "content": [
+        "unidade ativa",
+        "reservas",
+        "visitantes",
+        "encomendas",
+        "comunicados"
+      ]
+    },
+    {
+      "screen": "Personalização",
+      "content": [
+        "tema claro e escuro",
+        "logo",
+        "acento",
+        "contraste",
+        "prévia",
+        "publicar",
+        "reverter"
+      ]
+    }
+  ]
+}

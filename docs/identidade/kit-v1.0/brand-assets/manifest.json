@@ -1,0 +1,277 @@
+{
+  "proposal": true,
+  "date": "2026-10-31",
+  "source_repository": "advancedgit-alt/Condpulse-v2.0",
+  "commit": "7130b52769ad2acaac420fd2896b32b1ad7484ad",
+  "geometry_check": "12 SVG variants preserve path d, transform, stroke width and linecap",
+  "color_contrast_srgb": [
+    {
+      "foreground": "#102A43",
+      "background": "#FFFFFF",
+      "ratio": 14.64
+    },
+    {
+      "foreground": "#007F86",
+      "background": "#FFFFFF",
+      "ratio": 4.79
+    },
+    {
+      "foreground": "#FFFFFF",
+      "background": "#007F86",
+      "ratio": 4.79
+    },
+    {
+      "foreground": "#FFFFFF",
+      "background": "#102A43",
+      "ratio": 14.64
+    },
+    {
+      "foreground": "#5DD6C7",
+      "background": "#102A43",
+      "ratio": 8.3
+    },
+    {
+      "foreground": "#5DD6C7",
+      "background": "#FFFFFF",
+      "ratio": 1.76
+    }
+  ],
+  "files": [
+    {
+      "file": "README.md",
+      "bytes": 7283,
+      "sha256": "2ebda155b251108657d42bb5d659b6dc5b79d61d8897b92ae654b0e2865c5624"
+    },
+    {
+      "file": "condpulse-prancha-variantes.png",
+      "bytes": 178523,
+      "sha256": "b57841e84def3d43f9191997f8adeccac39965c53465cf07304c514b3879bd97"
+    },
+    {
+      "file": "favicons/condpulse-favicon-180.png",
+      "bytes": 6328,
+      "sha256": "3fba7776ddb8c62e5b1f985dca45e004e228e02dcb559a41a9b03777ae0d299b"
+    },
+    {
+      "file": "favicons/condpulse-favicon-32.png",
+      "bytes": 1252,
+      "sha256": "b23378db1c38367f032f7d8e976a08118a5b3c201196ef36ecd6fdbad82c3411"
+    },
+    {
+      "file": "favicons/condpulse-favicon-512.png",
+      "bytes": 19159,
+      "sha256": "b75e7853e89b871ce21ce152e1bb399f091c7045961608dcde44b48a1e085251"
+    },
+    {
+      "file": "favicons/condpulse-favicon-escuro-180.png",
+      "bytes": 6837,
+      "sha256": "501776fe6d0cb55158f4d1daa611a6e22f1fc760c3c84da08a3b6524679aaec5"
+    },
+    {
+      "file": "favicons/condpulse-favicon-escuro-32.png",
+      "bytes": 1335,
+      "sha256": "24f67d0b896f162ade8b50a709f12e3f96247695cc27ba304ecfced031893a42"
+    },
+    {
+      "file": "favicons/condpulse-favicon-escuro-512.png",
+      "bytes": 20743,
+      "sha256": "67dbfed11f91f13dea9939480c92949286de9358ddf2f60de75505da8b274aef"
+    },
+    {
+      "file": "favicons/favicon.ico",
+      "bytes": 1216,
+      "sha256": "cf8cb47c8b497826bae28a8b5fe947b6eb1a44969079a98561049d7bfae601cf"
+    },
+    {
+      "file": "png/condpulse-app-icon-mono-branca@2x.png",
+      "bytes": 44496,
+      "sha256": "34c610a3c137cecb5332e29ccfc9679a4d8ce5768b4caae6e8c46f9376fe2b4d"
+    },
+    {
+      "file": "png/condpulse-app-icon-mono-branca@4x.png",
+      "bytes": 99349,
+      "sha256": "bce462561b10205e219207c9a0cf0c5a96612e5ae3770df124012aed6339b08c"
+    },
+    {
+      "file": "png/condpulse-app-icon-mono-navy@2x.png",
+      "bytes": 41078,
+      "sha256": "c18be4c871af5c4fb961d03de52d2bbbcb78dc02e8f3319f67071e56856bf09a"
+    },
+    {
+      "file": "png/condpulse-app-icon-mono-navy@4x.png",
+      "bytes": 92075,
+      "sha256": "cd9b8d122fcb3fff70ce8cda21a6c98aa74e4f036da61bb9a1cb464f3361b378"
+    },
+    {
+      "file": "png/condpulse-app-icon-negativa@2x.png",
+      "bytes": 44329,
+      "sha256": "5161d79f819a9cfbbb26478e06344234421f818997cd6ea54fb8029d6bab26a3"
+    },
+    {
+      "file": "png/condpulse-app-icon-negativa@4x.png",
+      "bytes": 98890,
+      "sha256": "7f1f67b8440db0adba8a552be9555227e7f2c204f548c80e3b33c2afc0354fad"
+    },
+    {
+      "file": "png/condpulse-app-icon-positiva@2x.png",
+      "bytes": 41061,
+      "sha256": "8f808acc93791a4d9315037414fb4316e64cbf0f4c6803fecc0f3ae3d813871f"
+    },
+    {
+      "file": "png/condpulse-app-icon-positiva@4x.png",
+      "bytes": 91991,
+      "sha256": "0e59781b487d8caca3990615ebef4a6773ddbf2957c1385a8559a0463f9f5949"
+    },
+    {
+      "file": "png/condpulse-horizontal-mono-branca@2x.png",
+      "bytes": 25784,
+      "sha256": "c618f9e8b25819d4536e028cfcf805b001fd2490bef304d2aeb194330324d430"
+    },
+    {
+      "file": "png/condpulse-horizontal-mono-branca@4x.png",
+      "bytes": 57362,
+      "sha256": "c12cdbaf0c126d39aadfa43c718c779334f43cb5741ff3c3e01ba635350cdb37"
+    },
+    {
+      "file": "png/condpulse-horizontal-mono-navy@2x.png",
+      "bytes": 36762,
+      "sha256": "281d3538767545ef6a7131a07b7a7998527334ea3d2b226dbdefc2e9889933af"
+    },
+    {
+      "file": "png/condpulse-horizontal-mono-navy@4x.png",
+      "bytes": 80256,
+      "sha256": "6d999461f74dc1a7aa2444b349736aea27cd44446a8365eeb4e40fc951ecab07"
+    },
+    {
+      "file": "png/condpulse-horizontal-negativa@2x.png",
+      "bytes": 30381,
+      "sha256": "33a83b67a335c8e7449e0a63fb30b4c0d34487218e5afcc3a076ccb4732749c9"
+    },
+    {
+      "file": "png/condpulse-horizontal-negativa@4x.png",
+      "bytes": 66516,
+      "sha256": "46a4625ecb0e8a2cb027dbda28c2da36ddadb3a34ec7e0af89a6b447dcdf95de"
+    },
+    {
+      "file": "png/condpulse-horizontal-positiva@2x.png",
+      "bytes": 36496,
+      "sha256": "5f4fee966f8f19ab7267f6b678a9f0493e2b1338dcc2dad023f315492e1e9bbf"
+    },
+    {
+      "file": "png/condpulse-horizontal-positiva@4x.png",
+      "bytes": 79509,
+      "sha256": "34a4cf30a8bde38fb49ed1c0c80dc031371b49639cf3e77dbaff338c2dfd5e3b"
+    },
+    {
+      "file": "png/condpulse-simbolo-mono-branca@2x.png",
+      "bytes": 8690,
+      "sha256": "dac47baded556c1416decf837be524f6b44e1b6ebc67a83dfa3887b3d6a7958f"
+    },
+    {
+      "file": "png/condpulse-simbolo-mono-branca@4x.png",
+      "bytes": 19447,
+      "sha256": "8f8577ad32cda21b76491e18da77e743ca49d4c5610ff5be0a7baf1c61378105"
+    },
+    {
+      "file": "png/condpulse-simbolo-mono-navy@2x.png",
+      "bytes": 11702,
+      "sha256": "32d5b93294e2c1d99a4962835afc4b1334f59780ea51466268953e703c7e03ec"
+    },
+    {
+      "file": "png/condpulse-simbolo-mono-navy@4x.png",
+      "bytes": 25882,
+      "sha256": "08ebfff186e2e2bb656999a903733a286e5236fbb16c3070d85a33e9c3d12870"
+    },
+    {
+      "file": "png/condpulse-simbolo-negativa@2x.png",
+      "bytes": 8936,
+      "sha256": "55b145645db813a37ceee0a2a53ead5b42309210197c7811b1a26ad04db59fa5"
+    },
+    {
+      "file": "png/condpulse-simbolo-negativa@4x.png",
+      "bytes": 19956,
+      "sha256": "11037a22356eec2f9bf9294b057c0249a39fb024b9f5b9f058bb9f3b6b1f78b9"
+    },
+    {
+      "file": "png/condpulse-simbolo-positiva@2x.png",
+      "bytes": 11714,
+      "sha256": "2f2cde6d8e89eb185eaa8f0704622196ea8cf258f2873fc89fba62d04c8051e6"
+    },
+    {
+      "file": "png/condpulse-simbolo-positiva@4x.png",
+      "bytes": 25817,
+      "sha256": "4c7f7b9827d8057f52d7ac599ca18908027883c1f201d870355e41dbbdb1e139"
+    },
+    {
+      "file": "reference/condpulse-app-icon-original.svg",
+      "bytes": 492,
+      "sha256": "aac6acbf07ccad519913a57ee3fdec845d81f3c9031bfc8cb246f47c4f0133e4"
+    },
+    {
+      "file": "reference/condpulse-horizontal-original.svg",
+      "bytes": 5537,
+      "sha256": "375e0a22af6ee044aab294586d4faf6d8b3b395da45a1f50d1a34a1e0436c77a"
+    },
+    {
+      "file": "svg/condpulse-app-icon-mono-branca.svg",
+      "bytes": 605,
+      "sha256": "b381227560ee944fc585416aef5cc323adc55ddd8e33c18605c387ca50cd4d76"
+    },
+    {
+      "file": "svg/condpulse-app-icon-mono-navy.svg",
+      "bytes": 601,
+      "sha256": "2e70c46262cb1f5e95941ae46caa751f08c791c5af31f67e0fa0097309613cf1"
+    },
+    {
+      "file": "svg/condpulse-app-icon-negativa.svg",
+      "bytes": 599,
+      "sha256": "8ab9e01cd21090e0d0f67bf45ae281142430cd08104505fd6be2690434e81496"
+    },
+    {
+      "file": "svg/condpulse-app-icon-positiva.svg",
+      "bytes": 599,
+      "sha256": "ceea8ae25a2975a16428297caff9e20893d9caaef3f4d4cd4c2ed33506d52aa3"
+    },
+    {
+      "file": "svg/condpulse-horizontal-mono-branca.svg",
+      "bytes": 5572,
+      "sha256": "d536408a70aa78be981d81a1f61dff36e19b83072162c7f50416c3cd98f3eb24"
+    },
+    {
+      "file": "svg/condpulse-horizontal-mono-navy.svg",
+      "bytes": 5568,
+      "sha256": "50b2fe6e8d73134260214b980d28679d5460febb9e6512350c85b805031b0886"
+    },
+    {
+      "file": "svg/condpulse-horizontal-negativa.svg",
+      "bytes": 5566,
+      "sha256": "0ffaeee70ced46f201672419af3741b76878ee2a65577cdb3d87ad123f334a56"
+    },
+    {
+      "file": "svg/condpulse-horizontal-positiva.svg",
+      "bytes": 5566,
+      "sha256": "4e54bc009ae1d569858d6226a35068dde335e84a16a5f989978b0bc41dbda937"
+    },
+    {
+      "file": "svg/condpulse-simbolo-mono-branca.svg",
+      "bytes": 502,
+      "sha256": "4dbbb3cb5acb1c775673f79cd17d76f8e57550ef4f8252e4678a4b2203b83709"
+    },
+    {
+      "file": "svg/condpulse-simbolo-mono-navy.svg",
+      "bytes": 498,
+      "sha256": "4ef778701efe1acd677e713262e997a349e25a3b5a54d0cee8be2f398690cfc0"
+    },
+    {
+      "file": "svg/condpulse-simbolo-negativa.svg",
+      "bytes": 496,
+      "sha256": "f36e92b581c4ae54783bd07ac0433b6d7ed1535842b618deb0eec7d2a20c87b7"
+    },
+    {
+      "file": "svg/condpulse-simbolo-positiva.svg",
+      "bytes": 496,
+      "sha256": "4861483467d069979306fd46b61868ab4243ca0ab7ec04390a8f01d9da7ced9a"
+    }
+  ],
+  "app_geometry_check": "Group transform and plate width, height and radius verified unchanged for 4 app variants"
+}

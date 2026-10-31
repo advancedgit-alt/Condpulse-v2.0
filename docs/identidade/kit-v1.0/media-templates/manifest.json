@@ -1,0 +1,338 @@
+{
+  "brand": "CondPulse",
+  "purpose": "Amostras editáveis para adaptação de comunicação da marca; não publicadas.",
+  "palette": {
+    "navy": "#102A43",
+    "teal": "#007F86",
+    "white": "#FFFFFF"
+  },
+  "fonts": [
+    "Lato Regular",
+    "Lato Bold"
+  ],
+  "font_note": "TTFs originais incorporados aos SVGs. Para edição, instalar também as fontes fornecidas no pacote.",
+  "logo_note": "Paths dos SVGs do kit copiados sem redesenho ou alteração de cores. Usadas versões mono branca e positiva.",
+  "cta": "Conheça o CondPulse",
+  "url": null,
+  "external_images": false,
+  "files": [
+    {
+      "name": "condpulse-feed-1080x1350",
+      "svg": "condpulse-feed-1080x1350.svg",
+      "png": "condpulse-feed-1080x1350.png",
+      "width": 1080,
+      "height": 1350,
+      "logo_sources": [
+        {
+          "variant": "white",
+          "source": "condpulse-horizontal-mono-branca.svg",
+          "sha256": "d536408a70aa78be981d81a1f61dff36e19b83072162c7f50416c3cd98f3eb24",
+          "x": 80,
+          "y": 60,
+          "width": 350
+        }
+      ],
+      "text_boxes": [
+        {
+          "text": "A rotina do seu",
+          "x": 80,
+          "baseline": 337,
+          "width": 499.35,
+          "size": 74
+        },
+        {
+          "text": "condomínio,",
+          "x": 80,
+          "baseline": 429,
+          "width": 405.59,
+          "size": 74
+        },
+        {
+          "text": "organizada.",
+          "x": 80,
+          "baseline": 521,
+          "width": 375.96,
+          "size": 74
+        },
+        {
+          "text": "Pessoas, reservas e comunicação",
+          "x": 80,
+          "baseline": 635,
+          "width": 475.74,
+          "size": 33
+        },
+        {
+          "text": "em um só lugar.",
+          "x": 80,
+          "baseline": 682,
+          "width": 228.0,
+          "size": 33
+        },
+        {
+          "text": "Pessoas",
+          "x": 106,
+          "baseline": 919,
+          "width": 95.94,
+          "size": 27
+        },
+        {
+          "text": "Reservas",
+          "x": 421,
+          "baseline": 919,
+          "width": 107.96,
+          "size": 27
+        },
+        {
+          "text": "Comunicação",
+          "x": 736,
+          "baseline": 919,
+          "width": 162.27,
+          "size": 27
+        },
+        {
+          "text": "Conheça o CondPulse",
+          "x": 108,
+          "baseline": 1179.54,
+          "width": 301.37,
+          "size": 31
+        }
+      ],
+      "qa": {
+        "logo_paths_match_source": true,
+        "png_dimensions_checked": true,
+        "render_visually_inspected": true,
+        "visible_text_clipped": false
+      }
+    },
+    {
+      "name": "condpulse-story-1080x1920",
+      "svg": "condpulse-story-1080x1920.svg",
+      "png": "condpulse-story-1080x1920.png",
+      "width": 1080,
+      "height": 1920,
+      "logo_sources": [
+        {
+          "variant": "white",
+          "source": "condpulse-horizontal-mono-branca.svg",
+          "sha256": "d536408a70aa78be981d81a1f61dff36e19b83072162c7f50416c3cd98f3eb24",
+          "x": 90,
+          "y": 178,
+          "width": 370
+        }
+      ],
+      "text_boxes": [
+        {
+          "text": "A rotina do seu",
+          "x": 90,
+          "baseline": 486,
+          "width": 553.34,
+          "size": 82
+        },
+        {
+          "text": "condomínio,",
+          "x": 90,
+          "baseline": 588,
+          "width": 449.44,
+          "size": 82
+        },
+        {
+          "text": "organizada.",
+          "x": 90,
+          "baseline": 690,
+          "width": 416.6,
+          "size": 82
+        },
+        {
+          "text": "Pessoas, reservas e comunicação",
+          "x": 90,
+          "baseline": 812,
+          "width": 518.99,
+          "size": 36
+        },
+        {
+          "text": "em um só lugar.",
+          "x": 90,
+          "baseline": 861,
+          "width": 248.72,
+          "size": 36
+        },
+        {
+          "text": "Pessoas",
+          "x": 210,
+          "baseline": 1044,
+          "width": 113.71,
+          "size": 32
+        },
+        {
+          "text": "Reservas",
+          "x": 210,
+          "baseline": 1202,
+          "width": 127.95,
+          "size": 32
+        },
+        {
+          "text": "Comunicação",
+          "x": 210,
+          "baseline": 1360,
+          "width": 192.32,
+          "size": 32
+        },
+        {
+          "text": "Conheça o CondPulse",
+          "x": 118,
+          "baseline": 1594.24,
+          "width": 349.97,
+          "size": 36
+        }
+      ],
+      "qa": {
+        "logo_paths_match_source": true,
+        "png_dimensions_checked": true,
+        "render_visually_inspected": true,
+        "visible_text_clipped": false
+      }
+    },
+    {
+      "name": "condpulse-anuncio-1200x628",
+      "svg": "condpulse-anuncio-1200x628.svg",
+      "png": "condpulse-anuncio-1200x628.png",
+      "width": 1200,
+      "height": 628,
+      "logo_sources": [
+        {
+          "variant": "white",
+          "source": "condpulse-horizontal-mono-branca.svg",
+          "sha256": "d536408a70aa78be981d81a1f61dff36e19b83072162c7f50416c3cd98f3eb24",
+          "x": 56,
+          "y": 30,
+          "width": 273
+        }
+      ],
+      "text_boxes": [
+        {
+          "text": "A rotina do seu",
+          "x": 56,
+          "baseline": 205,
+          "width": 371.14,
+          "size": 55
+        },
+        {
+          "text": "condomínio, organizada.",
+          "x": 56,
+          "baseline": 273,
+          "width": 594.25,
+          "size": 55
+        },
+        {
+          "text": "Pessoas, reservas e comunicação",
+          "x": 56,
+          "baseline": 361,
+          "width": 374.83,
+          "size": 26
+        },
+        {
+          "text": "em um só lugar.",
+          "x": 56,
+          "baseline": 399,
+          "width": 179.63,
+          "size": 26
+        },
+        {
+          "text": "Conheça o CondPulse",
+          "x": 84,
+          "baseline": 518.0,
+          "width": 243.04,
+          "size": 25
+        },
+        {
+          "text": "Pessoas",
+          "x": 906,
+          "baseline": 147,
+          "width": 88.84,
+          "size": 25
+        },
+        {
+          "text": "Reservas",
+          "x": 868,
+          "baseline": 310,
+          "width": 99.96,
+          "size": 25
+        },
+        {
+          "text": "Comunicação",
+          "x": 906,
+          "baseline": 473,
+          "width": 150.25,
+          "size": 25
+        }
+      ],
+      "qa": {
+        "logo_paths_match_source": true,
+        "png_dimensions_checked": true,
+        "render_visually_inspected": true,
+        "visible_text_clipped": false
+      }
+    },
+    {
+      "name": "condpulse-assinatura-email-600x180",
+      "svg": "condpulse-assinatura-email-600x180.svg",
+      "png": "condpulse-assinatura-email-600x180.png",
+      "width": 600,
+      "height": 180,
+      "logo_sources": [
+        {
+          "variant": "positive",
+          "source": "condpulse-horizontal-positiva.svg",
+          "sha256": "4e54bc009ae1d569858d6226a35068dde335e84a16a5f989978b0bc41dbda937",
+          "x": 24,
+          "y": 56,
+          "width": 182
+        }
+      ],
+      "text_boxes": [
+        {
+          "text": "A rotina do seu condomínio,",
+          "x": 251,
+          "baseline": 46,
+          "width": 199.55,
+          "size": 16
+        },
+        {
+          "text": "organizada.",
+          "x": 251,
+          "baseline": 67,
+          "width": 81.29,
+          "size": 16
+        },
+        {
+          "text": "Pessoas, reservas e comunicação",
+          "x": 251,
+          "baseline": 96,
+          "width": 173.0,
+          "size": 12
+        },
+        {
+          "text": "em um só lugar.",
+          "x": 251,
+          "baseline": 113,
+          "width": 82.91,
+          "size": 12
+        },
+        {
+          "text": "Conheça o CondPulse",
+          "x": 251,
+          "baseline": 144,
+          "width": 126.38,
+          "size": 13
+        }
+      ],
+      "qa": {
+        "logo_paths_match_source": true,
+        "png_dimensions_checked": true,
+        "render_visually_inspected": true,
+        "visible_text_clipped": false
+      }
+    }
+  ],
+  "qa_note": "Quatro renders inspecionados visualmente após geração; logo preservado e dimensões confirmadas."
+}
