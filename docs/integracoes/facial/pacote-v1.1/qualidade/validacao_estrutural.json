@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-30",
+  "kind": "DOCUMENTARY_STRUCTURAL_VALIDATION",
+  "checks": 1139,
+  "failures": [],
+  "catalog_models": 27,
+  "source_records": 69,
+  "official_sources": 68,
+  "tests_planned": 100,
+  "test_priorities": {
+    "P0": 94,
+    "P1": 6
+  },
+  "backlog_items": 35,
+  "entities": 20,
+  "logical_fields": 392,
+  "proposed_foreign_keys": 103,
+  "api_paths": 27,
+  "api_operations": 32,
+  "api_schemas": 62,
+  "api_refs": 435,
+  "pdf_pages": {
+    "CondPulse_Acesso_Facial_v1.1": 45,
+    "Dossie_Condominio_Template": 19
+  },
+  "physical_tests_executed": 0,
+  "production_changes": 0
+}

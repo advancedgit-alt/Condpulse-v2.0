@@ -1,0 +1,58 @@
+{
+  "document": {
+    "schemaVersion": "1.0",
+    "name": "EXEMPLO SINTETICO — Academia 18+",
+    "areaId": "00000000-0000-4000-8000-000000000101",
+    "timezone": "America/Sao_Paulo",
+    "ruleCombination": "ALL",
+    "eligibleContexts": [
+      "RESIDENT",
+      "DEPENDENT"
+    ],
+    "visitorPolicy": "DENY",
+    "minimumAgeYears": 18,
+    "requireVerifiedAgeEvidence": true,
+    "weeklyWindows": [
+      {
+        "weekdays": [
+          "MON",
+          "TUE",
+          "WED",
+          "THU",
+          "FRI",
+          "SAT",
+          "SUN"
+        ],
+        "startLocalTime": "06:00",
+        "endLocalTime": "22:00",
+        "crossesMidnight": false
+      }
+    ],
+    "holidayCalendarIds": [],
+    "calendarPrecedence": "HOLIDAY_OVERRIDES_WEEKLY",
+    "reservation": {
+      "mode": "NOT_REQUIRED",
+      "entryGraceBeforeSeconds": 0,
+      "entryGraceAfterSeconds": 0
+    },
+    "companion": {
+      "mode": "NONE",
+      "maximumPairingSeconds": 0
+    },
+    "offline": {
+      "mode": "SAFE_LOCAL_SUBSET",
+      "maximumStalenessSeconds": 300,
+      "requireLocalExpiry": true
+    },
+    "failure": {
+      "onMissingAttribute": "DENY",
+      "onServiceFailure": "DENY"
+    },
+    "antiPassbackMode": "OFF",
+    "maximumOccupancy": null,
+    "emergencyEgressIndependent": true,
+    "maximumAgeYears": null,
+    "defaultEffect": "DENY"
+  },
+  "changeReason": "EXEMPLO SINTETICO para discutir regra local; exige validação e comissionamento antes de qualquer uso real."
+}

@@ -1,0 +1,556 @@
+[
+  {
+    "id": "BASE01",
+    "titulo": "CondPulse Pacote Completo v1.0 fornecido pelo solicitante",
+    "url": null,
+    "arquivo_origem": "CondPulse_Pacote_Completo_v1.0(1).zip",
+    "sha256": "dd2b3d9bb57ebfa4caa8e50509466caeb32ffd8cc80f0c69f460fac8db227b20",
+    "revisao_ou_assunto": "README, PRD, contrato de integração, V001/V002, OpenAPI e guia de marca; 27/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "DOCUMENTO_FORNECIDO_PELO_SOLICITANTE"
+  },
+  {
+    "id": "CI01",
+    "titulo": "Control iD iDFace",
+    "url": "https://www.controlid.com.br/controle-de-acesso/idface/",
+    "revisao_ou_assunto": "Página atual; capacidade conflitante no próprio texto; ramos de firmware por série",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI02",
+    "titulo": "Control iD iDFace Max",
+    "url": "https://www.controlid.com.br/controle-de-acesso/idface-max/",
+    "revisao_ou_assunto": "Página atual; licença por capacidade; interfaces e ramos de firmware",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI03",
+    "titulo": "Control iD iDBlock Next",
+    "url": "https://www.controlid.com.br/controle-de-acesso/idblock-next/",
+    "revisao_ou_assunto": "Página atual; catraca, capacidade e passagem",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI04",
+    "titulo": "Control iD iDBlock Balcão Facial",
+    "url": "https://www.controlid.com.br/controle-de-acesso/idblock-balcao-facial/",
+    "revisao_ou_assunto": "Página atual; catraca com iDFace Max",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI05",
+    "titulo": "Control iD iDBox V2",
+    "url": "https://www.controlid.com.br/controle-de-acesso/idbox-v2/",
+    "revisao_ou_assunto": "Página atual; quatro portas e OSDP Secure Channel declarado",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI06",
+    "titulo": "Control iD Introdução à API",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/",
+    "revisao_ou_assunto": "Documentação pública; API e modos",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI07",
+    "titulo": "Control iD Modos de operação",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/modos-de-operacao/introducao-aos-modos-de-operacao/",
+    "revisao_ou_assunto": "Standalone Pro Enterprise e contingência",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI08",
+    "titulo": "Control iD Cadastro facial por fotos",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/reconhecimento-facial/cadastro-facial/",
+    "revisao_ou_assunto": "Cadastro leitura remoção e tratamento da imagem original",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI09",
+    "titulo": "Control iD Introdução ao Monitor",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/monitor/introducao-ao-monitor/",
+    "revisao_ou_assunto": "Notificações assíncronas por tipo",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI10",
+    "titulo": "Control iD Cadastrar usuários e suas regras",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/primeiros-passos/cadastrar-usuarios-e-suas-regras/",
+    "revisao_ou_assunto": "Objetos grupos regras e horários",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI11",
+    "titulo": "Control iD Abertura remota de porta e catraca",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/acoes/abertura-remota-porta-e-catraca/",
+    "revisao_ou_assunto": "Ações específicas door sec_box e catra",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI12",
+    "titulo": "Control iD Particularidades dos terminais",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/particularidade-dos-produtos/particulariade-terminais-control-id/",
+    "revisao_ou_assunto": "Diferenças por produto; tipo de ação e evento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "CI13",
+    "titulo": "Control iD Eventos de identificação online",
+    "url": "https://www.controlid.com.br/docs/access-api-pt/modos-de-operacao/eventos-de-identificacao-online/",
+    "revisao_ou_assunto": "Contrato de identificação no modo Pro",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "LG01",
+    "titulo": "Câmara dos Deputados LGPD texto atualizado",
+    "url": "https://www2.camara.leg.br/legin/fed/lei/2018/lei-13709-14-agosto-2018-787077-normaatualizada-pl.html",
+    "revisao_ou_assunto": "Lei 13.709 de 2018; artigos 5 11 14 e controles relacionados",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "LG02",
+    "titulo": "ANPD Enunciado sobre crianças e adolescentes",
+    "url": "https://www.gov.br/anpd/pt-br/assuntos/noticias/anpd-divulga-enunciado-sobre-o-tratamento-de-dados-pessoais-de-criancas-e-adolescentes",
+    "revisao_ou_assunto": "24/05/2023; melhor interesse e hipóteses legais",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "LG03",
+    "titulo": "ANPD Guia de legítimo interesse",
+    "url": "https://www.gov.br/anpd/pt-br/assuntos/noticias/anpd-lanca-guia-orientativo-sobre-legitimo-interesse",
+    "revisao_ou_assunto": "02/02/2024; hipótese não aplicável a dados sensíveis",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DB01",
+    "titulo": "Supabase Row Level Security",
+    "url": "https://supabase.com/docs/guides/database/postgres/row-level-security",
+    "revisao_ou_assunto": "Documentação atual; grants RLS papéis e user_metadata",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DB02",
+    "titulo": "PostgreSQL Row Security Policies",
+    "url": "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+    "revisao_ou_assunto": "Documentação current consultada; confirmar versão real do banco",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK01",
+    "titulo": "DS-K1T341AMF, Datasheet V1.1, arquivo 08/03/2023.",
+    "url": "https://www.hikvision.com/content/dam/hikvision/products/S000000001/S000000080/S000000103/S000000107/OFR000141/M000039878/Data_Sheet/DS-K1T341AMF-Face-Recognition-Terminal_Datasheet_V1.1_20230308.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK02",
+    "titulo": "DS-K1T342MFWX, Datasheet, arquivo 06/05/2026.",
+    "url": "https://assets.hikvision.com/prd/normal/all/doc/m000054133/DS-K1T342MFWX_Datasheet_20260506.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK03",
+    "titulo": "DS-K1T343MWX, página oficial global, sem data editorial.",
+    "url": "https://securitylab.hikvision.com/en/products/Access-Control-Products/terminals/face-recognition-terminal/ds-k1t343mwx/",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK04",
+    "titulo": "DS-K1T344MBWX-QRE1, Datasheet, arquivo 25/07/2025.",
+    "url": "https://assets.hikvision.com/prd/normal/all/doc/m000126763/DS-K1T344MBWX-QRE1_Datasheet_20250725.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK05",
+    "titulo": "DS-K1T671M-L, ficha PT-BR, sem data editorial identificada.",
+    "url": "https://www.hikvision.com/content/dam/hikvision/pt-br/DS-K1T671M-L-PTBR.PDF",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK06",
+    "titulo": "DS-K1T671M-L, ficha global antiga, sem data editorial identificada.",
+    "url": "https://www.hikvision.com/content/dam/hikvision/products/S000000001/S000000080/S000000103/S000000105/OFR000135/M000029752/Data_Sheet/DS-K1T671M-L.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK07",
+    "titulo": "DS-K1T673DWX, Datasheet, arquivo 28/04/2026.",
+    "url": "https://assets.hikvision.com/prd/normal/all/doc/m000049932/DS-K1T673DWX_Datasheet_20260428.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK08",
+    "titulo": "DS-K1T673DWX-E1, Datasheet, arquivo 23/12/2025.",
+    "url": "https://assets.hikvision.com/prd/normal/all/doc/m000173870/DS-K1T673DWX-E1_Datasheet_20251223.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK09",
+    "titulo": "DS-K1T680DW, Datasheet, arquivo 27/12/2023.",
+    "url": "https://assets.hikvision.com/prd/public/all/doc/m000039971/DS-K1T680DW_Datasheet_20231227.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK10",
+    "titulo": "TPP, ISAPI & OTAP Developer Guide, sem data editorial.",
+    "url": "https://tpp.hikvision.com/download/",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK11",
+    "titulo": "Hikvision Open Capabilities, sem data editorial; conteúdo primário indexado, abertura direta expirou.",
+    "url": "https://tpp.hikvision.com/tpp/OpenCapabilities",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK12",
+    "titulo": "明眸门禁, documentação oficial pública de protocolo de acesso, sem data editorial identificada.",
+    "url": "https://open.hikvision.com/hardware/v2/08%E5%8D%8F%E8%AE%AE%E9%80%8F%E4%BC%A0/%E6%98%8E%E7%9C%B8%E9%97%A8%E7%A6%81.html",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK13",
+    "titulo": "HikCentral Professional OpenAPI V3.1.1, documentação oficial, caminho de publicação 23/07/2026.",
+    "url": "https://enpinfo.hikvision.com/hkwsen/unzip/20260723200832_95640_doc/index.html",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "HK14",
+    "titulo": "How to use Minmoe to connect to security module DS-K2M061 by RS485, data impressa 03/03/2025.",
+    "url": "https://www.hikvision.com/content/dam/hikvision/en/support/how-to/how-to-document/video-intercom/How-to-use-Minmoe-to-connect-to-security-module-DS-K2M061-by-RS485.pdf",
+    "revisao_ou_assunto": "Conforme título e documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH01",
+    "titulo": "Dahua Brasil — DHI-ASI6214D-W",
+    "url": "https://www.dahuasecurity.com/br/products/Access-Control/AI/Standalone/Lite/DHI-ASI6214D-W",
+    "revisao_ou_assunto": "2025-08-15; manual 2026-08-10",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH02",
+    "titulo": "Dahua — ASI6214J-MFW-V1",
+    "url": "https://www.dahuasecurity.com/products/access-control-%26-time-attendance/ai/standalone/pro/asi6214j-mfw-v1",
+    "revisao_ou_assunto": "2025-08-08; manual 2026-10-15",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH03",
+    "titulo": "Dahua Brasil — ASI8214S-W-V1",
+    "url": "https://www.dahuasecurity.com/br/products/Access-Control/AI/Standalone/ASI8214S-W-V1",
+    "revisao_ou_assunto": "2025-07-23",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH04",
+    "titulo": "Dahua — ASI3214A-W-E1",
+    "url": "https://www.dahuasecurity.com/products/access-control-%26-time-attendance/ai/standalone/lite/asi3214a-w-e1",
+    "revisao_ou_assunto": "2026-08-07",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH05",
+    "titulo": "Dahua — ASI3213G-MW",
+    "url": "https://www.dahuasecurity.com/products/Access-ControlTime-Attendance/AI/Standalone/ASI3213G-MW",
+    "revisao_ou_assunto": "2020-06-22",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH06",
+    "titulo": "Dahua — ASI7213X-T1",
+    "url": "https://www.dahuasecurity.com/products/Access-ControlTime-Attendance/AI/Standalone/ASI7213X-T1",
+    "revisao_ou_assunto": "2021-03-11",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH07",
+    "titulo": "Dahua Brasil — ASC3202B",
+    "url": "https://www.dahuasecurity.com/br/products/Access-Control/Controllers/ASC3202B",
+    "revisao_ou_assunto": "ficha 20231108; manual 2025-12-18",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH08",
+    "titulo": "Dahua — ASC2204C-H",
+    "url": "https://www.dahuasecurity.com/id/products/Access-Control/Controllers/ASC2204C-H",
+    "revisao_ou_assunto": "2022-11-06",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH09",
+    "titulo": "Dahua Partner Alliances — SDK downloads",
+    "url": "https://previous-depp.dahuasecurity.com/integration/guide/download/sdk",
+    "revisao_ou_assunto": "índice 2025-12-25",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH09B",
+    "titulo": "Dahua Brasil — Controle de Acesso",
+    "url": "https://www.dahuasecurity.com/br/products/All-Products/Access-Control",
+    "revisao_ou_assunto": null,
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH10",
+    "titulo": "Dahua — Integration With DSS",
+    "url": "https://www.dahuasecurity.com/products/software/ecosystem/integration-with-dss",
+    "revisao_ou_assunto": null,
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH10B",
+    "titulo": "Dahua Security System Integration Solution",
+    "url": "https://materialfile.dahuasecurity.com/uploads/file/20250326/20250326172706_14341.pdf",
+    "revisao_ou_assunto": "arquivo 2025-03-26",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DH11",
+    "titulo": "Face Recognition Access Controller Web 5.0 User Manual V1.5.1",
+    "url": "https://materialfile.dahuasecurity.com/uploads/cpq/72637/user_manual/Face_Recognition_Access_Controller_Web_5.0_User_Manual_V1.5.1.pdf",
+    "revisao_ou_assunto": "vinculado 2026-10-15",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB01",
+    "titulo": "SS 3532 MF W — página de produto",
+    "url": "https://www.intelbras.com/pt-br/controlador-de-acesso-facial-ss-3532-mf-w",
+    "revisao_ou_assunto": "Página atual consultada em 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB02",
+    "titulo": "SS 3532 MF W — ficha técnica abril/2026",
+    "url": "https://backend.intelbras.com/sites/default/files/2026-04/Datasheet%20SS%203532%20MF%20W.pdf",
+    "revisao_ou_assunto": "2026-04, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB03",
+    "titulo": "SS 3542 MF W — página de produto",
+    "url": "https://www.intelbras.com/pt-br/controlador-de-acesso-facial-com-biometria-digital-ss-3542-mf-w",
+    "revisao_ou_assunto": "Página atual consultada em 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB04",
+    "titulo": "Manual usuário SS 3532 MF W / SS 3542 MF W",
+    "url": "https://manuais.intelbras.com.br/manual-interface-web-linha-bio-t/manual-usuario-pt-BR/manual_SS35x2_MF_W.html",
+    "revisao_ou_assunto": "Versão 6.26",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB05",
+    "titulo": "Comparativo — Leitores Faciais e Telas Condominial/Corporativo",
+    "url": "https://backend.intelbras.com/sites/default/files/2026-01/Comparativo%20-%20Leitores%20Faciais%20e%20Telas%20Condominial%20%20Corporativo.pdf",
+    "revisao_ou_assunto": "2026-01, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB06",
+    "titulo": "SS 5532 MF W — ficha técnica fevereiro/2026",
+    "url": "https://backend.intelbras.com/sites/default/files/2026-02/Datasheet%20SS%205532%20MF%20W.pdf",
+    "revisao_ou_assunto": "2026-02, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB07",
+    "titulo": "SS 5532 MF W — ficha técnica novembro/2025",
+    "url": "https://backend.intelbras.com/sites/default/files/2025-11/Datasheet%20SS%205532%20MF%20W.pdf",
+    "revisao_ou_assunto": "2025-11, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB08",
+    "titulo": "SS 5542 MF W — ficha técnica janeiro/2026",
+    "url": "https://backend.intelbras.com/sites/default/files/2026-01/Datasheet%20SS%205542%20MF%20W.pdf",
+    "revisao_ou_assunto": "2026-01, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB09",
+    "titulo": "SS 5531 MF EX — ficha técnica julho/2026",
+    "url": "https://backend.intelbras.com/sites/default/files/2026-07/Datasheet%20SS%205531%20MF%20EX.pdf",
+    "revisao_ou_assunto": "Ajuda/download: 23/07/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB10",
+    "titulo": "SS 3531 MF LITE — ficha técnica abril/2026",
+    "url": "https://backend.intelbras.com/sites/default/files/2026-04/Datasheet%20SS%203531%20MF%20Lite.pdf",
+    "revisao_ou_assunto": "2026-04, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB11",
+    "titulo": "SS 3531 MF LITE — ficha técnica setembro/2025",
+    "url": "https://backend.intelbras.com/sites/default/files/2025-09/Datasheet%20SS%203531%20MF%20Lite_0.pdf",
+    "revisao_ou_assunto": "2025-09, caminho do documento",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB12",
+    "titulo": "SS 7530 FACE — ficha técnica 2020",
+    "url": "https://backend.intelbras.com/sites/default/files/2020-06/Datasheet-SS-7530-FACE.01.20.pdf",
+    "revisao_ou_assunto": "01.20; Ajuda/download 30/06/2020",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB13",
+    "titulo": "SS 7530 FACE — Ajuda e downloads",
+    "url": "https://www.intelbras.com/pt-br/ajuda-download/download/controlador-de-acesso-facial-ss-7530-face",
+    "revisao_ou_assunto": "Consulta 30/10/2026; tutorial SDK/API 09/09/2024",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB14",
+    "titulo": "InControl Web — manual oficial",
+    "url": "https://manual-incontrol.intelbras.com.br/pt-BR/manual_pt-BR.html",
+    "revisao_ou_assunto": "Manual online consultado 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB15",
+    "titulo": "Intelbras — catálogo reconhecimento facial",
+    "url": "https://www.intelbras.com/pt-br/seguranca-eletronica/controles-de-acesso-corporativo/reconhecimento-facial",
+    "revisao_ou_assunto": "Consulta 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB16",
+    "titulo": "Intelbras — Softwares Parceiros",
+    "url": "https://software-parceiro.intelbras.com.br/",
+    "revisao_ou_assunto": "Consulta 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB17",
+    "titulo": "Documento de Integração via API — Controle de Acesso",
+    "url": "https://suporte.intelbras.com.br/images/d/dd/Documento_de_Integrao_via_API_V1.3.pdf",
+    "revisao_ou_assunto": "Versão 1.3 — 25/11/2020",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB18",
+    "titulo": "Documentação API — Linha Bio-t",
+    "url": "https://backend.intelbras.com/sites/default/files/2022-03/INTEGRA%C3%87%C3%83O%20-%20API.pdf",
+    "revisao_ou_assunto": "14/03/2022",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB19",
+    "titulo": "Interface Web Bio-T — SS3532/3542 MF W",
+    "url": "https://manuais.intelbras.com.br/manual-interface-web-linha-bio-t/pt-BR/manual_SS3532_SS3542_MFW_pt-BR.html?lang=pt",
+    "revisao_ou_assunto": "Manual online consultado 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB20",
+    "titulo": "Manual usuário SS5532/SS5532 V2/SS5542/SS5532 T W",
+    "url": "https://manuais.intelbras.com.br/manual-interface-web-linha-bio-t/manual-usuario-pt-BR/manual_SS55x2_MF_T-W.html?lang=pt",
+    "revisao_ou_assunto": "Versão 7.26",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB21",
+    "titulo": "SS5530 MF FACE — Ajuda e Downloads",
+    "url": "https://www.intelbras.com/pt-br/ajuda-download/download/controlador-de-acesso-facial-ss-5530-mf-face",
+    "revisao_ou_assunto": "Consulta 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "IB22",
+    "titulo": "SS3540 MF FACE EX — Ajuda e Downloads",
+    "url": "https://www.intelbras.com/pt-br/ajuda-download/download/controlador-de-acesso-facial-ss-3540-mf-face-ex",
+    "revisao_ou_assunto": "Consulta 30/10/2026",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  },
+  {
+    "id": "DB03",
+    "titulo": "PostgreSQL Constraints",
+    "url": "https://www.postgresql.org/docs/current/ddl-constraints.html",
+    "revisao_ou_assunto": "Documentação oficial: CHECK, UNIQUE e chaves estrangeiras compostas; usada no anexo do modelo de dados",
+    "consultado_em": "2026-10-30",
+    "tipo": "FONTE_OFICIAL_PRIMARIA"
+  }
+]

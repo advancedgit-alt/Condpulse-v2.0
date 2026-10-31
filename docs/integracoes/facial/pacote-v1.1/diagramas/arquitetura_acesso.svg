@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1160" viewBox="0 0 1700 1160"><rect width="100%" height="100%" fill="white"/>
+<text x="850" y="44" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="40" font-weight="700" fill="#000000">Decisão de acesso e confirmação física</text>
+<rect x="495" y="105" width="710" height="105" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="137" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Morador  Portaria  Gestor</text>
+<text x="850.0" y="175" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Operações autorizadas no CondPulse</text>
+<rect x="495" y="265" width="710" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="297" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">BFF e módulo de acesso</text>
+<text x="850.0" y="335" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Vínculos, regras, versões e auditoria</text>
+<text x="850.0" y="366" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Sem credenciais do fabricante no navegador</text>
+<rect x="30" y="280" width="380" height="105" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="220.0" y="312" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">PostgreSQL</text>
+<text x="220.0" y="350" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Dados isolados por tenant</text>
+<rect x="1290" y="280" width="380" height="105" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="1480.0" y="312" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Cofre</text>
+<text x="1480.0" y="350" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Identidades técnicas</text>
+<path d="M850 210 L850 265" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,265 843.0405514542203,250.59284636235716 856.9594485457797,250.59284636235716" fill="#007F86"/>
+<path d="M495 325 L410 325" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="410,325 424.4071536376428,318.0405514542203 424.4071536376428,331.9594485457797" fill="#007F86"/>
+<path d="M1290 325 L1205 325" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="1205,325 1219.4071536376428,318.0405514542203 1219.4071536376428,331.9594485457797" fill="#007F86"/>
+<rect x="495" y="455" width="710" height="125" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="487" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Worker e adaptadores</text>
+<text x="850.0" y="525" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Publicação e reconciliação por destino</text>
+<text x="850.0" y="556" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Revogação prioritária e eventos normalizados</text>
+<path d="M850 395 L850 455" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,455 843.0405514542203,440.5928463623572 856.9594485457797,440.5928463623572" fill="#007F86"/>
+<rect x="435" y="660" width="830" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="692" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Gateway local do condomínio</text>
+<text x="850.0" y="730" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Conexão de saída autenticada com a plataforma</text>
+<text x="850.0" y="761" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Decisão pré-relé somente no modo homologado</text>
+<path d="M850 580 L850 660" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,660 843.0405514542203,645.5928463623571 856.9594485457797,645.5928463623571" fill="#007F86"/>
+<text x="965.0" y="615.0" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="23" font-weight="400" fill="#102A43">Canal restrito</text>
+<rect x="35" y="895" width="510" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="290.0" y="927" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Terminal facial</text>
+<text x="290.0" y="965" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Identifica a referência da pessoa</text>
+<text x="290.0" y="996" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Sem inferir idade pela imagem</text>
+<rect x="595" y="895" width="510" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="927" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Controlador e relé</text>
+<text x="850.0" y="965" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Executam o direito aprovado</text>
+<text x="850.0" y="996" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Vigência local a comprovar</text>
+<rect x="1155" y="895" width="510" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="1410.0" y="927" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Porta e sensores</text>
+<text x="1410.0" y="965" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Abertura e passagem são distintas</text>
+<text x="1410.0" y="996" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Saída física independente</text>
+<path d="M615 790 L290 895" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="290,895 301.56987637986094,883.948395566492 305.84896963670616,897.1932080281556" fill="#007F86"/>
+<path d="M850 790 L850 895" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,895 843.0405514542203,880.5928463623571 856.9594485457797,880.5928463623571" fill="#007F86"/>
+<path d="M545 960 L595 960" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="595,960 580.5928463623571,966.9594485457797 580.5928463623571,953.0405514542203" fill="#007F86"/>
+<path d="M1105 960 L1155 960" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="1155,960 1140.5928463623572,966.9594485457797 1140.5928463623572,953.0405514542203" fill="#007F86"/>
+<text x="850" y="1090" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#102A43">A nuvem não deve ser requisito de cada abertura em modo local aprovado.</text>
+</svg>

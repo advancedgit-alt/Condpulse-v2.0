@@ -1,0 +1,4812 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://spec.openapis.org/oas/3.1/dialect/base
+info:
+  title: CondPulse — Delta PROPOSTO de acesso físico e homologação
+  version: 1.1.0-proposta
+  summary: Contrato proposto para integração com o CondPulse; não é API de fabricante nem release implantada.
+  description: 'Especificação de projeto de 30/10/2026. Deve ser reconciliada com autenticação, erros, rotas e operations
+    existentes antes da implementação. Não declara testes físicos, integração concluída ou publicação em produção.
+    Todo tenant e ator efetivo é resolvido pelo servidor. UUID no caminho é seletor de escopo validado, não autoridade.
+    Nenhuma resposta contém senha, token de fabricante, chave privada ou referência de cofre. HTTP 202 indica aceitação
+    assíncrona; não aplicação, homologação, abertura ou passagem. Os exemplos são sintéticos. Segurança de escrita:
+    cookie de sessão E CSRF juntos, OU bearer exclusivamente para cliente não-browser aprovado; uma chamada com
+    sessão de navegador não usa bearer para contornar CSRF. Validar Origin e vínculo atual no backend. mTLS de máquina
+    é obrigatório no edge; nunca confiar em tenant no payload.'
+servers:
+- url: https://api.condpulse.example
+  description: Endereço ilustrativo reservado .example; substituir apenas após definir ambiente. Nenhum endpoint
+    real foi provisionado.
+x-status: PROPOSTA_NAO_IMPLEMENTADA_NAO_HOMOLOGADA
+x-specification-date: '2026-10-30'
+x-authentication-policy:
+  browser: sessionCookie + csrfToken para POST/PATCH e validação de Origin; nome do cookie é proposto e deve coincidir
+    com BFF atual.
+  nonBrowser: bearerAuth de cliente aprovado; sem aceitar este ramo como fuga de CSRF de sessão browser.
+  edge: Identidade e tenant derivados do certificado registrado; payload não aceita tenantId/actorId.
+  authorization: Verificar vínculo atual, grants técnicos, escopo físico e estado do recurso em toda operação.
+x-idempotency-policy: 'Retenção de recibos cobre a janela de reentrega aprovada. Abertura é distinta de sincronização:
+  depois de DISPATCH_COMMITTED, falha ambígua, expiração ou failover, não reatribuir/reexecutar o mesmo comando.
+  Desativar retries implícitos de HTTP/SDK/proxy para operações físicas sem idempotência nativa ensaiada.'
+tags:
+- name: Catalogo
+- name: Homologacao
+- name: Areas
+- name: Pontos
+- name: Politicas
+- name: Publicacao
+- name: Idade
+- name: Abertura
+- name: Implantacao
+- name: Segredos
+- name: Operacoes
+- name: Edge
+security:
+- sessionCookie: []
+- bearerAuth: []
+paths:
+  /v1/platform/access-models:
+    get:
+      operationId: listAccessModelProfiles
+      tags:
+      - Catalogo
+      summary: Consultar catálogo técnico candidato
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - platform.access_models.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessModelList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/platform/access-models/{modelId}:
+    get:
+      operationId: getAccessModelProfile
+      tags:
+      - Catalogo
+      summary: Consultar variante e fontes oficiais
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - platform.access_models.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/modelId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessModelProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/platform/access-homologations:
+    get:
+      operationId: listAccessHomologations
+      tags:
+      - Homologacao
+      summary: Consultar dossiês de homologação
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - platform.access_homologations.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomologationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+    post:
+      operationId: createAccessHomologation
+      tags:
+      - Homologacao
+      summary: Criar dossiê candidato sem aprovar hardware
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - platform.access_homologations.create
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Homologation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HomologationCreateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/platform/access-homologations/{homologationId}:
+    get:
+      operationId: getAccessHomologation
+      tags:
+      - Homologacao
+      summary: Consultar combinação, limites e restrições
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - platform.access_homologations.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/homologationId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Homologation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/platform/access-homologations/{homologationId}/decisions:
+    post:
+      operationId: decideAccessHomologation
+      tags:
+      - Homologacao
+      summary: Registrar decisão técnica pelo MASTER
+      description: A decisão exige evidência real dos gates correspondentes e autoridade MASTER. P0 impeditivo não
+        pode ser convertido em aprovado. Não comissiona instalação automaticamente.
+      x-status: PROPOSTA
+      x-permissions:
+      - platform.access_homologations.decide
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/homologationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Homologation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: access_homologation.revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HomologationDecisionRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-areas:
+    get:
+      operationId: listAccessAreas
+      tags:
+      - Areas
+      summary: Listar áreas no escopo
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_areas.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+    post:
+      operationId: createAccessArea
+      tags:
+      - Areas
+      summary: Criar área lógica
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_areas.manage
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessArea'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AreaCreateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-areas/{areaId}:
+    get:
+      operationId: getAccessArea
+      tags:
+      - Areas
+      summary: Consultar área
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_areas.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/areaId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessArea'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+    patch:
+      operationId: patchAccessArea
+      tags:
+      - Areas
+      summary: Editar área com revisão esperada
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_areas.manage
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/areaId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessArea'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: access_area.revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AreaPatchRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-points:
+    get:
+      operationId: listAccessPoints
+      tags:
+      - Pontos
+      summary: Consultar passagens em projeção autorizada
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_points.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+    post:
+      operationId: createAccessPoint
+      tags:
+      - Pontos
+      summary: Criar passagem lógica na implantação
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.installation.manage
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPoint'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointCreateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-points/{pointId}:
+    get:
+      operationId: getAccessPoint
+      tags:
+      - Pontos
+      summary: Consultar passagem e revisão física
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_points.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/pointId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPoint'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/point-bindings:
+    post:
+      operationId: createPointBinding
+      tags:
+      - Pontos
+      summary: Criar revisão de vínculo físico
+      description: Cria revisão completa do mesmo vínculo físico, incorporando leitores dos dois sentidos e sensores.
+        Nunca cria dois bindings ativos por relé. X-Expected-Revision confere revisão da instalação; expectedPreviousBindingRevision
+        confere revisão física atual do ponto. Troca de revisão invalida comandos prévios e exige ensaios/aceite
+        aplicáveis.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.installation.bind_channels
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointBinding'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: installation.revision identified by body.installationId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointBindingCreateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/point-bindings/{bindingId}:
+    get:
+      operationId: getPointBinding
+      tags:
+      - Pontos
+      summary: Consultar vínculo sem segredo
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.installation.read_bindings
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/bindingId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointBinding'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies:
+    get:
+      operationId: listAccessPolicies
+      tags:
+      - Politicas
+      summary: Consultar regras locais
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+    post:
+      operationId: createAccessPolicy
+      tags:
+      - Politicas
+      summary: Criar política lógica em rascunho
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.manage
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies/{policyId}:
+    get:
+      operationId: getAccessPolicy
+      tags:
+      - Politicas
+      summary: Consultar revisões ativas de política
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/policyId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies/{policyId}/versions:
+    post:
+      operationId: createAccessPolicyVersion
+      tags:
+      - Politicas
+      summary: Criar versão imutável da política
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.manage
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/policyId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: access_policy.revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyVersionCreateRequest'
+            examples:
+              policy18plus:
+                summary: Exemplo sintético de academia 18+, sem visitantes
+                value:
+                  document:
+                    schemaVersion: '1.0'
+                    name: EXEMPLO SINTETICO — Academia 18+
+                    areaId: 00000000-0000-4000-8000-000000000101
+                    timezone: America/Sao_Paulo
+                    ruleCombination: ALL
+                    eligibleContexts:
+                    - RESIDENT
+                    - DEPENDENT
+                    visitorPolicy: DENY
+                    minimumAgeYears: 18
+                    requireVerifiedAgeEvidence: true
+                    weeklyWindows:
+                    - weekdays:
+                      - MON
+                      - TUE
+                      - WED
+                      - THU
+                      - FRI
+                      - SAT
+                      - SUN
+                      startLocalTime: 06:00
+                      endLocalTime: '22:00'
+                      crossesMidnight: false
+                    holidayCalendarIds: []
+                    calendarPrecedence: HOLIDAY_OVERRIDES_WEEKLY
+                    reservation:
+                      mode: NOT_REQUIRED
+                      entryGraceBeforeSeconds: 0
+                      entryGraceAfterSeconds: 0
+                    companion:
+                      mode: NONE
+                      maximumPairingSeconds: 0
+                    offline:
+                      mode: SAFE_LOCAL_SUBSET
+                      maximumStalenessSeconds: 300
+                      requireLocalExpiry: true
+                    failure:
+                      onMissingAttribute: DENY
+                      onServiceFailure: DENY
+                    antiPassbackMode: 'OFF'
+                    maximumOccupancy: null
+                    emergencyEgressIndependent: true
+                    maximumAgeYears: null
+                    defaultEffect: DENY
+                  changeReason: EXEMPLO SINTETICO para discutir regra local; exige validação e comissionamento antes
+                    de qualquer uso real.
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies/{policyId}/versions/{versionId}:
+    get:
+      operationId: getAccessPolicyVersion
+      tags:
+      - Politicas
+      summary: Consultar conteúdo de versão
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/policyId'
+      - $ref: '#/components/parameters/versionId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies/{policyId}/validate:
+    post:
+      operationId: validateAccessPolicy
+      tags:
+      - Politicas
+      summary: Validar regras, destinos e capacidades sem abrir portas
+      description: POST de avaliação sem atuação. Não exige Idempotency-Key porque não concede nem publica direitos;
+        a validade do resultado depende das revisões atuais e é conferida no publish.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.validate
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/policyId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyValidateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies/{policyId}/simulate:
+    post:
+      operationId: simulateAccessPolicy
+      tags:
+      - Politicas
+      summary: Simular decisão autorizada sem comando físico
+      description: Simulação sem efeitos no hardware. Sujeito real exige permissão de consulta específica e projeção
+        minimizada; cenário sintético não gera autorização reutilizável.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.simulate
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/policyId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicySimulationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySimulateRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-policies/{policyId}/publish:
+    post:
+      operationId: publishAccessPolicy
+      tags:
+      - Publicacao
+      summary: Publicar revisão com confirmação por destino
+      description: Exige envelope técnico comissionado, validação válida e aprovação de negócio atual. 202 não significa
+        aplicação; dispositivos com APPLIED_UNVERIFIED, OFFLINE ou UNKNOWN impedem confirmação global necessária.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_policies.publish
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/policyId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '202':
+          description: Aceitação assíncrona; consulte o recurso/recibo para aplicação e resultado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationAccepted'
+          headers:
+            Location:
+              description: URI relativa de consulta de recibo/operação; não é URL de hardware.
+              schema:
+                type: string
+                format: uri-reference
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: access_policy.revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyPublishRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-deployments/{deploymentId}:
+    get:
+      operationId: getAccessDeployment
+      tags:
+      - Publicacao
+      summary: Consultar aplicação, evidências e pendências
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.access_deployments.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/deploymentId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/age-evidence:
+    post:
+      operationId: createAgeEvidence
+      tags:
+      - Idade
+      summary: Registrar evidência etária por verificador autorizado
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.age_evidence.verify
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgeEvidenceReceipt'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgeEvidenceRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-points/{pointId}/open-requests:
+    post:
+      operationId: requestPointOpen
+      tags:
+      - Abertura
+      summary: Solicitar abertura pontual de curta validade
+      description: Permissão física é distinta de papel administrativo. Servidor revalida contexto, vínculo, ponto
+        comissionado e revisões; gera comando e prazo. Mesmo Idempotency-Key nunca reexecuta. UNKNOWN/EXPIRED exigem
+        avaliação local e nova intenção consciente; nenhuma fila reproduz abertura antiga.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.physical_access.open
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/pointId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Aceitação assíncrona; consulte o recurso/recibo para aplicação e resultado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenCommandReceipt'
+          headers:
+            Location:
+              description: URI relativa de consulta de recibo/operação; não é URL de hardware.
+              schema:
+                type: string
+                format: uri-reference
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/access-points/{pointId}/open-requests/{commandId}:
+    get:
+      operationId: getPointOpenReceipt
+      tags:
+      - Abertura
+      summary: Consultar comando e evidência física separadamente
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.physical_access.read_commands
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/pointId'
+      - $ref: '#/components/parameters/commandId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenCommandReceipt'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/installations/{installationId}/commission:
+    post:
+      operationId: commissionInstallation
+      tags:
+      - Implantacao
+      summary: Solicitar aceite de instalação com evidência
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.installation.commission
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/installationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '202':
+          description: Aceitação assíncrona; consulte o recurso/recibo para aplicação e resultado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            Location:
+              description: URI relativa de consulta de recibo/operação; não é URL de hardware.
+              schema:
+                type: string
+                format: uri-reference
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: installation.revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/connectors/{connectorId}/rotate-secret:
+    post:
+      operationId: rotateConnectorSecret
+      tags:
+      - Segredos
+      summary: Iniciar rotação controlada sem expor credencial
+      description: Operação PROPOSTA CondPulse, sujeita a reconciliação com a implementação atual. Sem acesso direto
+        a API de fabricante pelo cliente.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.technical_secrets.rotate
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/connectorId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '202':
+          description: Aceitação assíncrona; consulte o recurso/recibo para aplicação e resultado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            Location:
+              description: URI relativa de consulta de recibo/operação; não é URL de hardware.
+              schema:
+                type: string
+                format: uri-reference
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-concurrency-resource: connector.revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateSecretRequest'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/tenants/{tenantId}/operations/{operationId}:
+    get:
+      operationId: getAccessOperation
+      tags:
+      - Operacoes
+      summary: Consultar operação preservando contrato existente
+      description: Projeção proposta a unificar com operations existente no CondPulse. Não criar segundo executor
+        ou fonte divergente. Restringir resultado ao escopo da operação e do ator.
+      x-status: PROPOSTA
+      x-permissions:
+      - tenant.operations.read
+      x-permission-combination: ALL
+      security:
+      - sessionCookie: []
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/operationId'
+      responses:
+        '200':
+          description: Resultado no escopo autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-tenant-resolution: authenticated_actor_and_authorized_path_scope
+  /v1/edge/events:
+    post:
+      operationId: ingestEdgeEvents
+      tags:
+      - Edge
+      summary: Receber eventos em inbox durável via mTLS
+      description: Tenant resolvido do certificado; sourceConnectorId deve coincidir com identidade autenticada.
+        Deduplicar sem usar conector como identidade do evento. ACK após persistência. REJECTED por item é explícito;
+        nenhuma ingestão aciona hardware.
+      x-status: PROPOSTA
+      x-permissions:
+      - machine.edge.events.write
+      x-permission-combination: ALL
+      security:
+      - edgeMutualTLS: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Aceitação assíncrona; consulte o recurso/recibo para aplicação e resultado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventBatchAccepted'
+          headers:
+            Location:
+              description: URI relativa de consulta de recibo/operação; não é URL de hardware.
+              schema:
+                type: string
+                format: uri-reference
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdgeEventBatch'
+            examples:
+              event:
+                summary: Evento sintético de reconhecimento; não comprova abertura
+                value:
+                  schemaVersion: '1.0'
+                  events:
+                  - schemaVersion: '1.0'
+                    eventId: 00000000-0000-4000-8000-000000000201
+                    deviceId: 00000000-0000-4000-8000-000000000202
+                    deviceProvisioningId: 00000000-0000-4000-8000-000000000203
+                    eventEpoch: EXEMPLO-BOOT-0001
+                    nativeEventId: EXEMPLO-000042
+                    sourceConnectorId: 00000000-0000-4000-8000-000000000204
+                    bindingRevision: null
+                    pointId: null
+                    subjectRef: EXEMPLO-PESSOA-001
+                    kind: IDENTITY_RECOGNIZED
+                    occurredAt: '2026-10-30T15:00:00-03:00'
+                    direction: UNKNOWN
+                    timeQuality: DEVICE_UNVERIFIED
+                    correlationId: 00000000-0000-4000-8000-000000000205
+                    policyVersion: null
+                    evidence:
+                      level: DEVICE_REPORTED
+                      sourceKind: DEVICE_EVENT
+                      nativeKind: EXEMPLO_RECONHECIMENTO
+                      evidenceRef: null
+                      inferenceReason: null
+                    deviceChannelId: null
+                    nativeChannelId: null
+      x-tenant-resolution: certificate_registry_only
+  /v1/edge/decisions:
+    post:
+      operationId: ingestEdgeDecision
+      tags:
+      - Edge
+      summary: Registrar decisão já tomada no gateway, sem poder de abertura
+      description: Ingestão autenticada e idempotente de telemetria. O motor de regras e adaptador de EDGE_ONLINE
+        executam localmente; WAN/nuvem não é dependência obrigatória do caminho pré-relé. Persistir registro antes
+        do ACK. A resposta apenas reconhece entrega e nunca cria grant, autoriza abertura ou repete comando. Reentrega
+        de decisão antiga preserva o registro histórico; nenhuma validade é renovada. A perda desta resposta não
+        induz nova abertura.
+      x-status: PROPOSTA
+      x-permissions:
+      - machine.edge.decisions.write
+      x-permission-combination: ALL
+      security:
+      - edgeMutualTLS: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '202':
+          description: Telemetria recebida de forma durável ou duplicata reconhecida; não autoriza atuação.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EdgeDecisionIngestReceipt'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdgeDecisionRequest'
+      x-tenant-resolution: certificate_registry_only
+      x-side-effects: durable_telemetry_only_no_hardware_command
+      x-decision-authority: local_gateway_or_homologated_local_adapter
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: condpulse_session
+      description: Nome proposto a reconciliar com BFF existente. Cookie HttpOnly/Secure; servidor resolve ator
+        e sessão atual.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Validar contra sessão/canal e Origin; apenas presença não basta. AND com sessionCookie em escritas
+        browser.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token aprovado para cliente não-browser; validar emissor, audiência, assinatura, expiração, revogação
+        e vínculo atual.
+    edgeMutualTLS:
+      type: mutualTLS
+      description: Certificado de máquina por conector/provisionamento; tenant e autoridade derivados do registro.
+        Validar cadeia, expiração, revogação e escopo do dispositivo.
+  parameters:
+    tenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    modelId:
+      name: modelId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    homologationId:
+      name: homologationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    areaId:
+      name: areaId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    pointId:
+      name: pointId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    bindingId:
+      name: bindingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    policyId:
+      name: policyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    versionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    deploymentId:
+      name: deploymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    installationId:
+      name: installationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    connectorId:
+      name: connectorId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    commandId:
+      name: commandId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    operationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID do recurso. Existência, vínculo atual e escopo são conferidos no servidor; o identificador
+        não concede permissão.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Chave única por intenção, escopada no servidor por ator/tenant/operação. Mesmo payload retorna
+        recibo existente sem novo efeito; payload diferente retorna 409. Para abertura, nunca provoca reenvio de
+        comando comprometido, UNKNOWN ou EXPIRED.
+    ExpectedRevision:
+      name: X-Expected-Revision
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+      description: Revisão numérica atual do recurso indicado em x-concurrency-resource. Divergência retorna 409.
+        Header proposto a reconciliar com o mecanismo de concorrência existente; não usa If-Match com semântica
+        HTTP incorreta.
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1024
+      description: Cursor opaco, vinculado ao escopo autorizado e filtros.
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+  responses:
+    BadRequest:
+      description: Requisição inválida ou JSON fora do contrato.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: Autenticação ausente, inválida ou expirada.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Sem escopo, vínculo, autorização física, CSRF válido ou permissão técnica.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso inexistente ou não visível; não revela outro tenant.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflito de revisão/estado/idempotência; sem repetição automática de efeito físico.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: Política/capacidade/evidência/contexto incompatível.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Limite de taxa ou concorrência atingido; retentar operação administrativa conforme Retry-After,
+        nunca repetir abertura ambígua.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      headers:
+        Retry-After:
+          description: Espera sugerida em segundos; não autoriza replay de abertura.
+          schema:
+            type: integer
+            minimum: 1
+    Unavailable:
+      description: Dependência indisponível. Não afirma que operação transmitida jamais ocorreu; consultar recibo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      headers:
+        Retry-After:
+          description: Espera sugerida em segundos; não autoriza replay de abertura.
+          schema:
+            type: integer
+            minimum: 1
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum:
+          - BAD_REQUEST
+          - UNAUTHENTICATED
+          - FORBIDDEN
+          - NOT_FOUND
+          - VERSION_CONFLICT
+          - IDEMPOTENCY_CONFLICT
+          - STATE_CONFLICT
+          - CAPABILITY_NOT_SUPPORTED
+          - POLICY_INCOMPATIBLE
+          - EVIDENCE_MISSING
+          - RATE_LIMITED
+          - DEPENDENCY_UNAVAILABLE
+          - VALIDATION_ERROR
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        requestId:
+          type: string
+          format: uuid
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+          minItems: 0
+          maxItems: 50
+      required:
+      - code
+      - message
+      - requestId
+      description: Envelope proposto. Mensagens não revelam existência de recurso de outro tenant nem segredos,
+        fotos ou payload bruto de fabricante.
+    ValidationIssue:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+        pointer:
+          type: string
+          minLength: 1
+          maxLength: 300
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        severity:
+          type: string
+          enum:
+          - BLOCKER
+          - WARNING
+          - INFO
+        pointId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        capability:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+      required:
+      - code
+      - pointer
+      - message
+      - severity
+    CapabilityEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        documented:
+          type:
+          - boolean
+          - 'null'
+        observed:
+          type:
+          - boolean
+          - 'null'
+        approved:
+          type:
+          - boolean
+          - 'null'
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 0
+          maxItems: 100
+          uniqueItems: true
+        limitations:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 400
+          minItems: 0
+          maxItems: 30
+      required:
+      - documented
+      - observed
+      - approved
+      - evidenceRefs
+      - limitations
+      description: null significa desconhecido, nunca true implícito. Aprovação exige evidência de execução própria
+        e decisão do MASTER.
+    Capabilities:
+      type: object
+      additionalProperties: false
+      properties:
+        faceEnrollment:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        faceDeletion:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        perDoorRights:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        localValidity:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        onlineDecisionBeforeRelay:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        offlineRestriction:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        doorContactEvents:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        passageEvents:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        scopedRemoteOpen:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        eventBackfill:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        secureTransport:
+          $ref: '#/components/schemas/CapabilityEvidence'
+        safeRecovery:
+          $ref: '#/components/schemas/CapabilityEvidence'
+      required:
+      - faceEnrollment
+      - faceDeletion
+      - perDoorRights
+      - localValidity
+      - onlineDecisionBeforeRelay
+      - offlineRestriction
+      - doorContactEvents
+      - passageEvents
+      - scopedRemoteOpen
+      - eventBackfill
+      - secureTransport
+      - safeRecovery
+    DeviceLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        faces:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        users:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        imagesPerPerson:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        cards:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        groups:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        plans:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        timeWindows:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        maximumImageBytes:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        concurrentSessions:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+        eventsStored:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 2147483647
+      required:
+      - faces
+      - users
+      - imagesPerPerson
+      - cards
+      - groups
+      - plans
+      - timeWindows
+      - maximumImageBytes
+      - concurrentSessions
+      - eventsStored
+      description: Limites declarados/aplicáveis ao modo exato; null não autoriza capacidade ilimitada. Tetos operacionais
+        ensaiados podem ser menores.
+    OfficialSource:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        url:
+          type: string
+          format: uri
+          maxLength: 2000
+        accessedOn:
+          type: string
+          format: date
+        documentVersion:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+      required:
+      - title
+      - url
+      - accessedOn
+      description: Referência documental; URL não é executada como destino livre por este contrato.
+    AccessModelProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        manufacturer:
+          type: string
+          enum:
+          - HIKVISION
+          - CONTROL_ID
+          - DAHUA
+          - INTELBRAS
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 120
+        hardwareRevision:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+        region:
+          type: string
+          minLength: 1
+          maxLength: 80
+        category:
+          type: string
+          enum:
+          - FACE_TERMINAL
+          - ACCESS_CONTROLLER
+          - READER
+          - EXPANSION_MODULE
+        lifecycle:
+          type: string
+          enum:
+          - DOCUMENTED_CANDIDATE
+          - CURRENT_DECLARED
+          - DISCONTINUED_DECLARED
+          - SUPPORT_UNKNOWN
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfficialSource'
+          minItems: 1
+          maxItems: 30
+        notes:
+          type: string
+          minLength: 0
+          maxLength: 2000
+      required:
+      - id
+      - manufacturer
+      - sku
+      - hardwareRevision
+      - region
+      - category
+      - lifecycle
+      - sources
+      - notes
+      description: Metadados de catálogo. Nenhuma classificação documental comprova homologação de bancada ou instalação.
+    AccessModelList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessModelProfile'
+          minItems: 0
+          maxItems: 200
+        nextCursor:
+          type:
+          - string
+          - 'null'
+          maxLength: 1024
+      required:
+      - items
+      - nextCursor
+    HomologationCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        modelProfileId:
+          type: string
+          format: uuid
+        firmwareVersion:
+          type: string
+          minLength: 1
+          maxLength: 120
+        adapterVersion:
+          type: string
+          minLength: 1
+          maxLength: 120
+        apiContractVersion:
+          type: string
+          minLength: 1
+          maxLength: 120
+        operatingMode:
+          type: string
+          enum:
+          - DEVICE_LOCAL_ACL
+          - EDGE_ONLINE
+          - PROVIDER_LOCAL
+          - ASSISTED
+          description: Modo aprovado. ASSISTED descreve procedimento operacional com ação local confirmada, não
+            capacidade automática do hardware.
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        limits:
+          $ref: '#/components/schemas/DeviceLimits'
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 0
+          maxItems: 300
+          uniqueItems: true
+        limitations:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+          minItems: 0
+          maxItems: 100
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - modelProfileId
+      - firmwareVersion
+      - adapterVersion
+      - apiContractVersion
+      - operatingMode
+      - capabilities
+      - limits
+      - evidenceRefs
+      - limitations
+      - reason
+      description: Cria dossiê candidato; não aprova equipamento e não habilita atuação. Evidências são referências
+        a registros autorizados, não arquivos arbitrários.
+    Homologation:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          readOnly: true
+        modelProfileId:
+          type: string
+          format: uuid
+        firmwareVersion:
+          type: string
+          minLength: 1
+          maxLength: 120
+        adapterVersion:
+          type: string
+          minLength: 1
+          maxLength: 120
+        apiContractVersion:
+          type: string
+          minLength: 1
+          maxLength: 120
+        operatingMode:
+          type: string
+          enum:
+          - DEVICE_LOCAL_ACL
+          - EDGE_ONLINE
+          - PROVIDER_LOCAL
+          - ASSISTED
+          description: Modo aprovado. ASSISTED descreve procedimento operacional com ação local confirmada, não
+            capacidade automática do hardware.
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        limits:
+          $ref: '#/components/schemas/DeviceLimits'
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 0
+          maxItems: 300
+          uniqueItems: true
+        limitations:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+          minItems: 0
+          maxItems: 100
+        status:
+          type: string
+          enum:
+          - CANDIDATO_DOCUMENTADO
+          - EM_ENSAIO
+          - APROVADO_BANCADA
+          - APROVADO_PILOTO
+          - HOMOLOGADO
+          - REPROVADO
+          - SUSPENSO
+          - EXPIRADO
+        approvedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decisionRef:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - id
+      - revision
+      - modelProfileId
+      - firmwareVersion
+      - adapterVersion
+      - apiContractVersion
+      - operatingMode
+      - capabilities
+      - limits
+      - evidenceRefs
+      - limitations
+      - status
+      - approvedAt
+      - validUntil
+      - decisionRef
+      description: Estados técnicos propostos para a combinação; uso real exige também aceite local. Identidade
+        do aprovador é resolvida no servidor.
+    HomologationList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Homologation'
+          minItems: 0
+          maxItems: 200
+        nextCursor:
+          type:
+          - string
+          - 'null'
+          maxLength: 1024
+      required:
+      - items
+      - nextCursor
+    HomologationDecisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVE_LAB
+          - APPROVE_PILOT
+          - APPROVE_PRODUCTION
+          - REJECT
+          - SUSPEND
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 300
+          uniqueItems: true
+        approvedCapabilityNames:
+          type: array
+          items:
+            type: string
+            enum:
+            - faceEnrollment
+            - faceDeletion
+            - perDoorRights
+            - localValidity
+            - onlineDecisionBeforeRelay
+            - offlineRestriction
+            - doorContactEvents
+            - passageEvents
+            - scopedRemoteOpen
+            - eventBackfill
+            - secureTransport
+            - safeRecovery
+          minItems: 0
+          maxItems: 12
+          uniqueItems: true
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        restrictions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+          minItems: 0
+          maxItems: 100
+      required:
+      - decision
+      - reason
+      - evidenceRefs
+      - approvedCapabilityNames
+      - validUntil
+      - restrictions
+      description: Servidor verifica gate, evidência real, escopo e ausência de P0 impeditivo. IDs fornecidos não
+        substituem a conferência da evidência.
+    AreaCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          minLength: 0
+          maxLength: 1000
+        kind:
+          type: string
+          enum:
+          - COMMON_AREA
+          - AMENITY
+          - RECEPTION
+          - TECHNICAL_AREA
+          - RESIDENTIAL_ROUTE
+        amenityId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        parentAreaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - name
+      - description
+      - kind
+      - amenityId
+      - parentAreaId
+      description: Criação lógica sem atuação física. Rotas essenciais são classificadas pelo comissionamento técnico,
+        não por uma permissão livre do gestor.
+    AreaPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          minLength: 0
+          maxLength: 1000
+        operationalStatus:
+          type: string
+          enum:
+          - ACTIVE
+          - INTERDICTED
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - reason
+      description: PATCH exige ao menos um campo alterável além do motivo; backend impede interdição de acesso essencial
+        indevido e preserva saída física. ACTIVE significa cadastro lógico ativo, não comissionamento.
+      anyOf:
+      - required:
+        - name
+      - required:
+        - description
+      - required:
+        - operationalStatus
+    AccessArea:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          readOnly: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          minLength: 0
+          maxLength: 1000
+        kind:
+          type: string
+          enum:
+          - COMMON_AREA
+          - AMENITY
+          - RECEPTION
+          - TECHNICAL_AREA
+          - RESIDENTIAL_ROUTE
+        amenityId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        parentAreaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        operationalStatus:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INTERDICTED
+          - RETIRED
+        essentialRoute:
+          type: boolean
+          readOnly: true
+      required:
+      - id
+      - revision
+      - name
+      - description
+      - kind
+      - amenityId
+      - parentAreaId
+      - operationalStatus
+      - essentialRoute
+    AreaList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessArea'
+          minItems: 0
+          maxItems: 200
+        nextCursor:
+          type:
+          - string
+          - 'null'
+          maxLength: 1024
+      required:
+      - items
+      - nextCursor
+    PointCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        installationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sourceAreaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        destinationAreaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        pointType:
+          type: string
+          enum:
+          - DOOR
+          - GATE
+          - TURNSTILE
+          - PASSAGE
+        directionMode:
+          type: string
+          enum:
+          - UNIDIRECTIONAL
+          - BIDIRECTIONAL
+        requestedRouteClass:
+          type: string
+          enum:
+          - AMENITY_ACCESS
+          - ESSENTIAL_RESIDENTIAL
+          - EMERGENCY_EGRESS
+          - TECHNICAL
+        accessibleRoute:
+          type: boolean
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - installationId
+      - name
+      - sourceAreaId
+      - destinationAreaId
+      - pointType
+      - directionMode
+      - requestedRouteClass
+      - accessibleRoute
+      - reason
+      description: 'Passagem lógica: pelo menos uma área deve ser resolvida no tenant. Não define relé, não abre
+        porta e não substitui o projeto técnico.'
+      anyOf:
+      - properties:
+          sourceAreaId:
+            type: string
+            format: uuid
+      - properties:
+          destinationAreaId:
+            type: string
+            format: uuid
+    AccessPoint:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          readOnly: true
+        installationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sourceAreaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        destinationAreaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        pointType:
+          type: string
+          enum:
+          - DOOR
+          - GATE
+          - TURNSTILE
+          - PASSAGE
+        directionMode:
+          type: string
+          enum:
+          - UNIDIRECTIONAL
+          - BIDIRECTIONAL
+        requestedRouteClass:
+          type: string
+          enum:
+          - AMENITY_ACCESS
+          - ESSENTIAL_RESIDENTIAL
+          - EMERGENCY_EGRESS
+          - TECHNICAL
+        accessibleRoute:
+          type: boolean
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - MAPPED
+          - COMMISSIONED
+          - SUSPENDED
+          - RETIRED
+        installationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        activeBindingRevision:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da revisão física ativa por ponto no tenant; null enquanto ausente.
+      required:
+      - id
+      - revision
+      - installationId
+      - name
+      - sourceAreaId
+      - destinationAreaId
+      - pointType
+      - directionMode
+      - requestedRouteClass
+      - accessibleRoute
+      - status
+      - installationRevision
+      - activeBindingRevision
+      description: Projeção operacional sem IP de gestão, segredo ou parâmetros elétricos brutos.
+    PointList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPoint'
+          minItems: 0
+          maxItems: 200
+        nextCursor:
+          type:
+          - string
+          - 'null'
+          maxLength: 1024
+      required:
+      - items
+      - nextCursor
+    PointBindingCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        installationId:
+          type: string
+          format: uuid
+        pointId:
+          type: string
+          format: uuid
+        deviceProvisioningId:
+          type: string
+          format: uuid
+        actuatorChannelId:
+          type: string
+          format: uuid
+        controllerDeviceId:
+          type: string
+          format: uuid
+        entryReaderDeviceId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        exitReaderDeviceId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        doorContactChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        exitRequestChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        passageSensorChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        homologationId:
+          type: string
+          format: uuid
+        directionMap:
+          $ref: '#/components/schemas/BindingDirectionMap'
+        wiringEvidenceRef:
+          type: string
+          format: uuid
+        expectedInstallationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        expectedPreviousBindingRevision:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 2147483647
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - installationId
+      - pointId
+      - deviceProvisioningId
+      - actuatorChannelId
+      - controllerDeviceId
+      - entryReaderDeviceId
+      - exitReaderDeviceId
+      - doorContactChannelId
+      - exitRequestChannelId
+      - passageSensorChannelId
+      - homologationId
+      - directionMap
+      - wiringEvidenceRef
+      - expectedInstallationRevision
+      - expectedPreviousBindingRevision
+      - reason
+      description: Snapshot completo proposto de NOVA REVISÃO do vínculo físico único. expectedPreviousBindingRevision=null
+        significa primeiro vínculo; se já houver revisão, exige seu número atual. Leitores de entrada e saída compõem
+        a mesma revisão por ponto+atuador; alterar um sentido deve preservar explicitamente o outro. Servidor verifica
+        todos os IDs no tenant, unicidade de vínculo ACTIVE por ponto e por actuatorChannelId, coerência da planta
+        e revisão esperada. Não cria segundo binding ativo para o outro sentido, não aciona relé e exige novo comissionamento
+        quando aplicável.
+    PointBinding:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        bindingRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        installationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        installationId:
+          type: string
+          format: uuid
+        pointId:
+          type: string
+          format: uuid
+        deviceProvisioningId:
+          type: string
+          format: uuid
+        actuatorChannelId:
+          type: string
+          format: uuid
+        controllerDeviceId:
+          type: string
+          format: uuid
+        entryReaderDeviceId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        exitReaderDeviceId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        doorContactChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        exitRequestChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        passageSensorChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        homologationId:
+          type: string
+          format: uuid
+        directionMap:
+          $ref: '#/components/schemas/BindingDirectionMap'
+        wiringEvidenceRef:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_COMMISSION
+          - ACTIVE
+          - SUPERSEDED
+          - SUSPENDED
+        validFrom:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        configurationHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+      required:
+      - id
+      - bindingRevision
+      - installationRevision
+      - installationId
+      - pointId
+      - deviceProvisioningId
+      - actuatorChannelId
+      - controllerDeviceId
+      - entryReaderDeviceId
+      - exitReaderDeviceId
+      - doorContactChannelId
+      - exitRequestChannelId
+      - passageSensorChannelId
+      - homologationId
+      - directionMap
+      - wiringEvidenceRef
+      - status
+      - validFrom
+      - validUntil
+      - configurationHash
+      description: Uma linha representa uma revisão física com os dois sentidos. id é UUID dessa linha; bindingRevision
+        é sequência por ponto. No máximo um ACTIVE por tenant+ponto e tenant+atuador. Substituição é atômica no
+        domínio, invalida comandos antigos e não presume mudança física concluída sem evidência.
+    WeeklyWindow:
+      type: object
+      additionalProperties: false
+      properties:
+        weekdays:
+          type: array
+          items:
+            type: string
+            enum:
+            - MON
+            - TUE
+            - WED
+            - THU
+            - FRI
+            - SAT
+            - SUN
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+        startLocalTime:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+        endLocalTime:
+          type: string
+          pattern: ^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$
+        crossesMidnight:
+          type: boolean
+      required:
+      - weekdays
+      - startLocalTime
+      - endLocalTime
+      - crossesMidnight
+      description: Intervalo de ingresso com fim exclusivo. Relações entre início/fim e virada de dia são validadas
+        no servidor; não restringe saída física.
+    ReservationRule:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          type: string
+          enum:
+          - NOT_REQUIRED
+          - VALID_RESERVATION
+          - HOST_OR_LISTED_GUEST
+        entryGraceBeforeSeconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+        entryGraceAfterSeconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+      required:
+      - mode
+      - entryGraceBeforeSeconds
+      - entryGraceAfterSeconds
+    CompanionRule:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          type: string
+          enum:
+          - NONE
+          - VERIFIED_PHYSICAL_COMPANION
+          - ASSISTED_BY_STAFF
+        maximumPairingSeconds:
+          type: integer
+          minimum: 0
+          maximum: 120
+      required:
+      - mode
+      - maximumPairingSeconds
+      description: VERIFIED_PHYSICAL_COMPANION exige topologia/evidência própria; duas autenticações não provam
+        acompanhamento físico.
+    OfflineRule:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          type: string
+          enum:
+          - DENY_ENTRY
+          - SAFE_LOCAL_SUBSET
+          - ASSISTED_OPERATION
+        maximumStalenessSeconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+        requireLocalExpiry:
+          type: boolean
+      required:
+      - mode
+      - maximumStalenessSeconds
+      - requireLocalExpiry
+      description: Subconjunto offline deve ser comprovado por ponto. ASSISTED_OPERATION só é eficaz após ação local
+        confirmada que impeça abertura indevida. Limites são parâmetros propostos, sujeitos ao comissionamento;
+        não se aplicam para bloquear saída ou rotas essenciais indevidamente.
+    FailureRule:
+      type: object
+      additionalProperties: false
+      properties:
+        onMissingAttribute:
+          type: string
+          enum:
+          - DENY
+          - ASSISTED_VERIFICATION
+        onServiceFailure:
+          type: string
+          enum:
+          - DENY
+          - ASSISTED_OPERATION
+      required:
+      - onMissingAttribute
+      - onServiceFailure
+    PolicyDocument:
+      type: object
+      additionalProperties: false
+      properties:
+        schemaVersion:
+          type: string
+          const: '1.0'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        areaId:
+          type: string
+          format: uuid
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: Identificador IANA validado pelo servidor; exemplo America/Sao_Paulo.
+        ruleCombination:
+          type: string
+          const: ALL
+        eligibleContexts:
+          type: array
+          items:
+            type: string
+            enum:
+            - RESIDENT
+            - DEPENDENT
+            - OWNER_NONRESIDENT
+            - VISITOR
+            - SERVICE_PROVIDER
+            - EMPLOYEE
+            - EMERGENCY_RESPONDER
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+        visitorPolicy:
+          type: string
+          enum:
+          - DENY
+          - ALLOW_WITH_VALID_PERMIT
+          - ONLY_VISITORS
+        minimumAgeYears:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 120
+        requireVerifiedAgeEvidence:
+          type: boolean
+        weeklyWindows:
+          type: array
+          items:
+            $ref: '#/components/schemas/WeeklyWindow'
+          minItems: 1
+          maxItems: 128
+        holidayCalendarIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 0
+          maxItems: 128
+          uniqueItems: true
+        calendarPrecedence:
+          type: string
+          const: HOLIDAY_OVERRIDES_WEEKLY
+        reservation:
+          $ref: '#/components/schemas/ReservationRule'
+        companion:
+          $ref: '#/components/schemas/CompanionRule'
+        offline:
+          $ref: '#/components/schemas/OfflineRule'
+        failure:
+          $ref: '#/components/schemas/FailureRule'
+        antiPassbackMode:
+          type: string
+          enum:
+          - 'OFF'
+          - LOCAL
+          - GLOBAL
+        maximumOccupancy:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 100000
+        emergencyEgressIndependent:
+          type: boolean
+          const: true
+        maximumAgeYears:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 120
+          description: Máximo inclusivo em anos completos no fuso da instalação; null desativa limite máximo. Servidor
+            rejeita maximumAgeYears menor que minimumAgeYears e reavalia no aniversário.
+        defaultEffect:
+          type: string
+          const: DENY
+          description: Ingresso sem autorização é negado; não bloqueia saída física nem permite interditar rota
+            residencial essencial indevidamente.
+      required:
+      - schemaVersion
+      - name
+      - areaId
+      - timezone
+      - ruleCombination
+      - eligibleContexts
+      - visitorPolicy
+      - minimumAgeYears
+      - requireVerifiedAgeEvidence
+      - weeklyWindows
+      - holidayCalendarIds
+      - calendarPrecedence
+      - reservation
+      - companion
+      - offline
+      - failure
+      - antiPassbackMode
+      - maximumOccupancy
+      - emergencyEgressIndependent
+      - maximumAgeYears
+      - defaultEffect
+      description: Documento de regra de ingresso proposto. O backend verifica precedência, multivínculo, rotas
+        essenciais, todas as passagens, limites do hardware e validade das origens. Nenhum campo implica idade inferida
+        por face. Sem capacidade, publicação é bloqueada. OWNER_NONRESIDENT não herda automaticamente direitos do
+        ocupante. EMERGENCY_RESPONDER exige procedimento operacional e autorização contextual transitória; não cria
+        credencial genérica permanente nem interfere na saída física. Limites etários são inclusivos; se ambos existirem,
+        máximo deve ser maior ou igual ao mínimo (422 caso contrário). Faixa etária não substitui aprovação específica
+        de tratamento biométrico de menores.
+      allOf:
+      - if:
+          anyOf:
+          - properties:
+              minimumAgeYears:
+                type: integer
+            required:
+            - minimumAgeYears
+          - properties:
+              maximumAgeYears:
+                type: integer
+            required:
+            - maximumAgeYears
+        then:
+          properties:
+            requireVerifiedAgeEvidence:
+              const: true
+    PolicyCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        areaId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          minLength: 0
+          maxLength: 1000
+      required:
+      - areaId
+      - name
+      - description
+      description: Cria regra lógica DRAFT; conteúdo entra em versões imutáveis por rota própria.
+    Policy:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          readOnly: true
+        areaId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          minLength: 0
+          maxLength: 1000
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+        draftVersionId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        publishedVersionId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - id
+      - revision
+      - areaId
+      - name
+      - description
+      - status
+      - draftVersionId
+      - publishedVersionId
+    PolicyList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Policy'
+          minItems: 0
+          maxItems: 200
+        nextCursor:
+          type:
+          - string
+          - 'null'
+          maxLength: 1024
+      required:
+      - items
+      - nextCursor
+    PolicyVersionCreateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        document:
+          $ref: '#/components/schemas/PolicyDocument'
+        changeReason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - document
+      - changeReason
+      description: Cria versão nova; não edita versão publicada. areaId do documento deve coincidir com a política
+        no tenant.
+    PolicyVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        policyId:
+          type: string
+          format: uuid
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        document:
+          $ref: '#/components/schemas/PolicyDocument'
+        contentHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - VALIDATED
+          - APPROVED
+          - PUBLISHED
+          - SUPERSEDED
+          - REJECTED
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - id
+      - policyId
+      - revision
+      - document
+      - contentHash
+      - status
+      - createdAt
+      - publishedAt
+      description: Hash identifica conteúdo, não anonimiza dados. Versão publicada permanece imutável.
+    PolicyValidateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        policyVersionId:
+          type: string
+          format: uuid
+      required:
+      - policyVersionId
+      description: Avalia sem comando de hardware. Versões de instalação e dependências ficam vinculadas ao resultado;
+        validação perde validade se o contexto mudar.
+    ValidationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        validationId:
+          type: string
+          format: uuid
+        policyVersionId:
+          type: string
+          format: uuid
+        installationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        validatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - VALIDATED
+          - BLOCKED
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+          minItems: 0
+          maxItems: 300
+        affectedPointIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 0
+          maxItems: 1000
+          uniqueItems: true
+        requiredCapabilityNames:
+          type: array
+          items:
+            type: string
+            enum:
+            - faceEnrollment
+            - faceDeletion
+            - perDoorRights
+            - localValidity
+            - onlineDecisionBeforeRelay
+            - offlineRestriction
+            - doorContactEvents
+            - passageEvents
+            - scopedRemoteOpen
+            - eventBackfill
+            - secureTransport
+            - safeRecovery
+          minItems: 0
+          maxItems: 12
+          uniqueItems: true
+      required:
+      - validationId
+      - policyVersionId
+      - installationRevision
+      - validatedAt
+      - expiresAt
+      - status
+      - issues
+      - affectedPointIds
+      - requiredCapabilityNames
+      description: VALIDATED não é aprovação de hardware nem aplicação. A lista completa de destinos é calculada
+        no servidor.
+    SyntheticSimulationSubject:
+      type: object
+      additionalProperties: false
+      properties:
+        context:
+          type: string
+          enum:
+          - RESIDENT
+          - DEPENDENT
+          - OWNER_NONRESIDENT
+          - VISITOR
+          - SERVICE_PROVIDER
+          - EMPLOYEE
+          - EMERGENCY_RESPONDER
+        ageEvidence:
+          type: string
+          enum:
+          - VERIFIED_BELOW_MINIMUM
+          - VERIFIED_MEETS_MINIMUM
+          - UNKNOWN
+        permitActive:
+          type: boolean
+        reservationActive:
+          type: boolean
+        physicalCompanionVerified:
+          type: boolean
+      required:
+      - context
+      - ageEvidence
+      - permitActive
+      - reservationActive
+      - physicalCompanionVerified
+      description: Somente cenário sintético; nunca reutilizar esses atributos para uma abertura real.
+    SimulateExistingSubjectRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          type: string
+          const: AUTHORIZED_EXISTING_SUBJECT
+        policyVersionId:
+          type: string
+          format: uuid
+        pointId:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        subjectContextId:
+          type: string
+          format: uuid
+        at:
+          type: string
+          format: date-time
+      required:
+      - mode
+      - policyVersionId
+      - pointId
+      - subjectId
+      - subjectContextId
+      - at
+      description: Consulta apenas sujeito autorizado ao ator. Dados reais e vínculos são resolvidos no servidor;
+        não aceita idade ou autorização fornecida pelo cliente.
+    SimulateSyntheticRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          type: string
+          const: SYNTHETIC
+        policyVersionId:
+          type: string
+          format: uuid
+        pointId:
+          type: string
+          format: uuid
+        subject:
+          $ref: '#/components/schemas/SyntheticSimulationSubject'
+        at:
+          type: string
+          format: date-time
+      required:
+      - mode
+      - policyVersionId
+      - pointId
+      - subject
+      - at
+    PolicySimulateRequest:
+      oneOf:
+      - $ref: '#/components/schemas/SimulateExistingSubjectRequest'
+      - $ref: '#/components/schemas/SimulateSyntheticRequest'
+      description: Simulação sem atuação. Não cria authorizationRef reutilizável nem permite enumerar atributos
+        de pessoas fora do escopo.
+    PolicySimulationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        result:
+          type: string
+          enum:
+          - ALLOW
+          - DENY
+          - REQUIRE_ASSISTANCE
+          - UNAVAILABLE
+        reasonCodes:
+          type: array
+          items:
+            type: string
+            enum:
+            - ALLOWED
+            - NO_ELIGIBLE_CONTEXT
+            - TENANT_MISMATCH
+            - AGE_BELOW_MINIMUM
+            - AGE_NOT_VERIFIED
+            - VISITOR_NOT_ALLOWED
+            - PERMIT_EXPIRED
+            - PERMIT_REVOKED
+            - RESERVATION_REQUIRED
+            - RESERVATION_CANCELLED
+            - OUTSIDE_SCHEDULE
+            - AREA_INTERDICTED
+            - CAPABILITY_MISSING
+            - COMPANION_NOT_VERIFIED
+            - OCCUPANCY_LIMIT
+            - ANTIPASSBACK_DENIED
+            - REVOKED
+            - STALE_POLICY
+            - STALE_BINDING
+            - CLOCK_UNTRUSTED
+            - DEPENDENCY_UNAVAILABLE
+            - NOT_COMMISSIONED
+            - CONTEXT_CHANGED
+            - ASSISTANCE_REQUIRED
+            - CONTEXT_AMBIGUOUS
+          minItems: 1
+          maxItems: 30
+          uniqueItems: true
+        safeExplanation:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        policyVersionId:
+          type: string
+          format: uuid
+        bindingRevision:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica por ponto no tenant; não é UUID.
+        missingCapabilities:
+          type: array
+          items:
+            type: string
+            enum:
+            - faceEnrollment
+            - faceDeletion
+            - perDoorRights
+            - localValidity
+            - onlineDecisionBeforeRelay
+            - offlineRestriction
+            - doorContactEvents
+            - passageEvents
+            - scopedRemoteOpen
+            - eventBackfill
+            - secureTransport
+            - safeRecovery
+          minItems: 0
+          maxItems: 12
+          uniqueItems: true
+        simulated:
+          type: boolean
+          const: true
+        hardwareCommandCreated:
+          type: boolean
+          const: false
+      required:
+      - result
+      - reasonCodes
+      - safeExplanation
+      - policyVersionId
+      - bindingRevision
+      - missingCapabilities
+      - simulated
+      - hardwareCommandCreated
+      description: Simulação sem comando físico. REQUIRE_ASSISTANCE e UNAVAILABLE negam atuação automática; orientar
+        atendimento autorizado, nunca converter silenciosamente em ALLOW.
+    PolicyPublishRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        policyVersionId:
+          type: string
+          format: uuid
+        validationId:
+          type: string
+          format: uuid
+        expectedInstallationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        activateAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - policyVersionId
+      - validationId
+      - expectedInstallationRevision
+      - activateAt
+      - reason
+      description: Servidor deriva todos os destinos necessários. Validação expirada, evidência insuficiente ou
+        revisão divergente impedem publicação. Não aceita lista arbitrária para excluir entrada que contornaria
+        a regra.
+    DeploymentTarget:
+      type: object
+      additionalProperties: false
+      properties:
+        deviceProvisioningId:
+          type: string
+          format: uuid
+        deviceChannelId:
+          type: string
+          format: uuid
+        pointId:
+          type: string
+          format: uuid
+        bindingRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica por ponto no tenant; não é UUID.
+        desiredPolicyVersion:
+          type: string
+          format: uuid
+        observedPolicyVersion:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        status:
+          type: string
+          enum:
+          - PENDING
+          - PUBLISHING
+          - APPLIED_UNVERIFIED
+          - CONFIRMED
+          - FAILED
+          - OFFLINE
+          - UNKNOWN
+        lastObservedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        evidenceRef:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        errorCode:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+      required:
+      - deviceProvisioningId
+      - deviceChannelId
+      - pointId
+      - bindingRevision
+      - desiredPolicyVersion
+      - observedPolicyVersion
+      - status
+      - lastObservedAt
+      - evidenceRef
+      - errorCode
+      description: APPLIED_UNVERIFIED é aceite sem comprovação suficiente. CONFIRMED é restrito ao destino e à evidência
+        indicada.
+    Deployment:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        operationId:
+          type: string
+          format: uuid
+        policyId:
+          type: string
+          format: uuid
+        policyVersionId:
+          type: string
+          format: uuid
+        installationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        status:
+          type: string
+          enum:
+          - VALIDATED
+          - APPROVED
+          - PUBLISHING
+          - CONFIRMED
+          - PARTIAL
+          - FAILED
+        acceptedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentTarget'
+          minItems: 1
+          maxItems: 2000
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+          minItems: 0
+          maxItems: 300
+        allRequiredTargetsConfirmed:
+          type: boolean
+      required:
+      - id
+      - operationId
+      - policyId
+      - policyVersionId
+      - installationRevision
+      - status
+      - acceptedAt
+      - completedAt
+      - targets
+      - issues
+      - allRequiredTargetsConfirmed
+      description: HTTP 202 e estado PUBLISHING não significam aplicação. Estado global exige confirmação de todos
+        os destinos obrigatórios, sem esconder pendências de revogação.
+    PublicationAccepted:
+      type: object
+      additionalProperties: false
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        deploymentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - APPROVED
+          - PUBLISHING
+        acceptedAt:
+          type: string
+          format: date-time
+        statusUrl:
+          type: string
+          format: uri-reference
+        applicationConfirmed:
+          type: boolean
+          const: false
+      required:
+      - operationId
+      - deploymentId
+      - status
+      - acceptedAt
+      - statusUrl
+      - applicationConfirmed
+      description: Recibo inicial e imutável de publicação aceita. Idempotency-Key repetida devolve este recibo
+        sem novo efeito; estado atual é consultado em GET access-deployments. applicationConfirmed=false descreve
+        a ausência de confirmação neste recibo inicial, não substitui o resultado posterior.
+    AgeEvidenceByDateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        subjectId:
+          type: string
+          format: uuid
+        evidenceRef:
+          type: string
+          format: uuid
+        verificationMethod:
+          type: string
+          enum:
+          - DOCUMENT_REVIEW
+          - TRUSTED_EXISTING_RECORD
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+        evidenceType:
+          type: string
+          const: DATE_OF_BIRTH_VERIFIED
+        protectedDateOfBirth:
+          type: string
+          format: date
+          writeOnly: true
+      required:
+      - subjectId
+      - evidenceRef
+      - verificationMethod
+      - validUntil
+      - reason
+      - evidenceType
+      - protectedDateOfBirth
+      description: Campo protegido, acesso restrito, sem log. Verificador/instante de verificação são definidos
+        no servidor; foto facial não é evidência de idade.
+    AgeEvidenceByThresholdRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        subjectId:
+          type: string
+          format: uuid
+        evidenceRef:
+          type: string
+          format: uuid
+        verificationMethod:
+          type: string
+          enum:
+          - DOCUMENT_REVIEW
+          - TRUSTED_EXISTING_RECORD
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+        evidenceType:
+          type: string
+          const: AGE_THRESHOLD_ATTESTED
+        thresholdYears:
+          type: integer
+          minimum: 1
+          maximum: 120
+        thresholdSatisfied:
+          type: boolean
+      required:
+      - subjectId
+      - evidenceRef
+      - verificationMethod
+      - validUntil
+      - reason
+      - evidenceType
+      - thresholdYears
+      - thresholdSatisfied
+      description: Atestação exige referência verificável e operador autorizado; a evidência não pode ser fabricada
+        pelo morador ou inferida por IA facial.
+    AgeEvidenceRequest:
+      oneOf:
+      - $ref: '#/components/schemas/AgeEvidenceByDateRequest'
+      - $ref: '#/components/schemas/AgeEvidenceByThresholdRequest'
+    AgeEvidenceReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - VERIFIED
+          - PENDING_REVIEW
+          - REJECTED
+        verifiedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+      required:
+      - id
+      - subjectId
+      - status
+      - verifiedAt
+      - validUntil
+      - revision
+      description: Não devolve nascimento, documento ou imagem. Recalcular grants e expirar atributos derivados
+        quando a evidência mudar.
+    OpenRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedBindingRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica por ponto no tenant; não é UUID.
+        expectedInstallationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        purpose:
+          type: string
+          enum:
+          - APPROVED_ARRIVAL
+          - ASSISTED_ACCESS
+          - AUTHORIZED_TECHNICAL_TEST
+        contextRef:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        requestedTtlSeconds:
+          type: integer
+          minimum: 1
+          maximum: 10
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - expectedBindingRevision
+      - expectedInstallationRevision
+      - purpose
+      - contextRef
+      - requestedTtlSeconds
+      - reason
+      description: Ator, tenant, nonce, commandId, authorizationRef e prazo efetivo são emitidos pelo servidor.
+        Escopo físico separado do papel administrativo. Prazo máximo inicial proposto de 10 s pode ser reduzido;
+        não existe bypass livre.
+    PhysicalEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        relayTriggered:
+          type:
+          - boolean
+          - 'null'
+        doorOpened:
+          type:
+          - boolean
+          - 'null'
+        passageDetected:
+          type:
+          - boolean
+          - 'null'
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 0
+          maxItems: 30
+          uniqueItems: true
+      required:
+      - relayTriggered
+      - doorOpened
+      - passageDetected
+      - evidenceRefs
+      description: null significa ausência de comprovação. Aceite de API não preenche estado físico automaticamente.
+    OpenCommandReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        commandId:
+          type: string
+          format: uuid
+        pointId:
+          type: string
+          format: uuid
+        bindingRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica por ponto no tenant; não é UUID.
+        installationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - REJECTED
+          - DISPATCH_COMMITTED
+          - SENT
+          - CONFIRMED
+          - UNKNOWN
+          - EXPIRED
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUpdatedAt:
+          type: string
+          format: date-time
+        dispatchCommittedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reasonCode:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+        physicalEvidence:
+          $ref: '#/components/schemas/PhysicalEvidence'
+        replayProhibited:
+          type: boolean
+          const: true
+        statusUrl:
+          type: string
+          format: uri-reference
+      required:
+      - commandId
+      - pointId
+      - bindingRevision
+      - installationRevision
+      - status
+      - issuedAt
+      - expiresAt
+      - lastUpdatedAt
+      - dispatchCommittedAt
+      - reasonCode
+      - physicalEvidence
+      - replayProhibited
+      - statusUrl
+      description: CONFIRMED refere-se à confirmação documentada do comando, não prova porta aberta ou passagem.
+        UNKNOWN após envio ambíguo não admite retry automático. Registro durável no transmissor e não reatribuição
+        após compromisso priorizam possível perda à abertura duplicada.
+    CommissionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedInstallationRevision:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        testMatrixRef:
+          type: string
+          format: uuid
+        technicalAcceptanceRef:
+          type: string
+          format: uuid
+        rulesApprovalRef:
+          type: string
+          format: uuid
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 1000
+          uniqueItems: true
+        restrictions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+          minItems: 0
+          maxItems: 100
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - expectedInstallationRevision
+      - testMatrixRef
+      - technicalAcceptanceRef
+      - rulesApprovalRef
+      - evidenceRefs
+      - restrictions
+      - reason
+      description: Solicita conferência do aceite local. Servidor verifica evidências/assinaturas e bloqueia P0
+        não executado/falho. Não aceita um booleano do cliente como prova de teste físico.
+    RotateSecretRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        scope:
+          type: string
+          enum:
+          - GATEWAY_IDENTITY
+          - DEVICE_AUTH
+          - PROVIDER_API
+        targetDeviceId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        plannedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reason:
+          type: string
+          minLength: 8
+          maxLength: 1000
+      required:
+      - scope
+      - targetDeviceId
+      - plannedAt
+      - reason
+      description: Inicia rotação por serviço/cofre. Nenhuma senha, token, chave privada ou secret_ref é recebida
+        ou retornada nesta rota. DEVICE_AUTH exige destino cadastrado neste conector; outros escopos exigem targetDeviceId
+        null.
+    OperationAccepted:
+      type: object
+      additionalProperties: false
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - COMMISSION_INSTALLATION
+          - ROTATE_SECRET
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - COMPLETED
+          - PARTIAL
+          - FAILED
+          - UNKNOWN
+        acceptedAt:
+          type: string
+          format: date-time
+        statusUrl:
+          type: string
+          format: uri-reference
+      required:
+      - operationId
+      - kind
+      - status
+      - acceptedAt
+      - statusUrl
+      description: 202 confirma aceitação assíncrona; não certifica comissionamento nem rotação concluída.
+    OperationStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - PUBLISH_POLICY
+          - COMMISSION_INSTALLATION
+          - ROTATE_SECRET
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - COMPLETED
+          - PARTIAL
+          - FAILED
+          - UNKNOWN
+        acceptedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        resultRef:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+          minItems: 0
+          maxItems: 300
+      required:
+      - operationId
+      - kind
+      - status
+      - acceptedAt
+      - updatedAt
+      - completedAt
+      - resultRef
+      - issues
+      description: Unificar com operations existente no CondPulse; esta projeção jamais contém credencial do fabricante.
+    EventEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        level:
+          type: string
+          enum:
+          - DEVICE_REPORTED
+          - SENSOR_OBSERVED
+          - GATEWAY_OBSERVED
+          - INFERRED
+          - UNKNOWN
+        sourceKind:
+          type: string
+          enum:
+          - DEVICE_EVENT
+          - DOOR_CONTACT
+          - PASSAGE_SENSOR
+          - GATEWAY_RECEIPT
+          - PLATFORM_INFERENCE
+        nativeKind:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+        evidenceRef:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        inferenceReason:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+      required:
+      - level
+      - sourceKind
+      - nativeKind
+      - evidenceRef
+      - inferenceReason
+      description: Sem foto/base64/payload livre. Força da evidência nativa não aumenta porque o gateway usa mTLS.
+        Inferência deve ser identificada.
+    EdgeEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        schemaVersion:
+          type: string
+          const: '1.0'
+        eventId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        deviceProvisioningId:
+          type: string
+          format: uuid
+        eventEpoch:
+          type: string
+          minLength: 1
+          maxLength: 128
+        nativeEventId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        sourceConnectorId:
+          type: string
+          format: uuid
+        bindingRevision:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica por ponto no tenant; não é UUID.
+        pointId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        subjectRef:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+        kind:
+          type: string
+          enum:
+          - IDENTITY_RECOGNIZED
+          - ACCESS_ALLOWED
+          - ACCESS_DENIED
+          - OPEN_COMMAND_ACCEPTED
+          - RELAY_TRIGGERED
+          - DOOR_OPENED
+          - PASSAGE_DETECTED
+          - DOOR_FORCED
+          - DOOR_HELD
+          - ENTITLEMENT_APPLIED
+          - CREDENTIAL_REVOKED
+        occurredAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        direction:
+          type: string
+          enum:
+          - IN
+          - OUT
+          - UNKNOWN
+        timeQuality:
+          type: string
+          enum:
+          - VERIFIED
+          - DEVICE_UNVERIFIED
+          - UNKNOWN
+        correlationId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        policyVersion:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        evidence:
+          $ref: '#/components/schemas/EventEvidence'
+        deviceChannelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        nativeChannelId:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: Identificador nativo observado; não seleciona porta por texto livre. Backend resolve pelo
+            inventário histórico da instância provisionada.
+      required:
+      - schemaVersion
+      - eventId
+      - deviceId
+      - deviceProvisioningId
+      - eventEpoch
+      - nativeEventId
+      - sourceConnectorId
+      - bindingRevision
+      - pointId
+      - subjectRef
+      - kind
+      - occurredAt
+      - direction
+      - timeQuality
+      - correlationId
+      - policyVersion
+      - evidence
+      - deviceChannelId
+      - nativeChannelId
+      description: 'Evento sintaticamente submetido pelo gateway, não uma declaração livre de tenant. O servidor
+        deriva tenant e conector autenticado do certificado, confere sourceConnectorId e o vínculo do dispositivo.
+        Deduplicação: tenant + deviceProvisioningId + eventEpoch + nativeEventId; sourceConnectorId é somente proveniência.
+        Sem ID nativo confiável, adaptador usa chave comprovada e indica limitação. receivedAt é atribuído pelo
+        servidor. Resolver binding histórico; se incerto, bindingRevision/pointId ficam null e direção UNKNOWN.
+        Canal desconhecido permanece null; um evento de controlador multiponto não é atribuído ao primeiro canal
+        por padrão.'
+    EdgeEventBatch:
+      type: object
+      additionalProperties: false
+      properties:
+        schemaVersion:
+          type: string
+          const: '1.0'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EdgeEvent'
+          minItems: 1
+          maxItems: 100
+      required:
+      - schemaVersion
+      - events
+      description: Máximo proposto de 100 eventos por lote. Limites de bytes/profundidade/taxa também são aplicados
+        no gateway e backend. Não dispara abertura.
+    EventIngestResult:
+      type: object
+      additionalProperties: false
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - ACCEPTED
+          - DUPLICATE
+          - REJECTED
+        receivedAt:
+          type: string
+          format: date-time
+        reasonCode:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+      required:
+      - eventId
+      - status
+      - receivedAt
+      - reasonCode
+    EventBatchAccepted:
+      type: object
+      additionalProperties: false
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventIngestResult'
+          minItems: 1
+          maxItems: 100
+        durableInboxAcknowledged:
+          type: boolean
+          const: true
+      required:
+      - batchId
+      - results
+      - durableInboxAcknowledged
+      description: ACK somente depois de persistir inbox ou reconhecer duplicata durável. REJECTED não significa
+        persistência como evento válido. Aceitação não confirma acesso físico nem processamento de todos os efeitos.
+    EdgeDecisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        schemaVersion:
+          type: string
+          const: '1.0'
+        decisionId:
+          type: string
+          format: uuid
+        attemptId:
+          type: string
+          format: uuid
+        sourceConnectorId:
+          type: string
+          format: uuid
+        deviceProvisioningId:
+          type: string
+          format: uuid
+        deviceChannelId:
+          type: string
+          format: uuid
+        pointId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        bindingRevision:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica por ponto no tenant; não é UUID.
+        installationRevision:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 2147483647
+          description: Sequência monotônica da instalação por tenant; não é UUID.
+        policyVersion:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        recognizedSubjectRef:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+        subjectContextRef:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        recognitionEventId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        result:
+          type: string
+          enum:
+          - ALLOW
+          - DENY
+          - REQUIRE_ASSISTANCE
+          - UNAVAILABLE
+        reasonCodes:
+          type: array
+          items:
+            type: string
+            enum:
+            - ALLOWED
+            - NO_ELIGIBLE_CONTEXT
+            - TENANT_MISMATCH
+            - AGE_BELOW_MINIMUM
+            - AGE_NOT_VERIFIED
+            - VISITOR_NOT_ALLOWED
+            - PERMIT_EXPIRED
+            - PERMIT_REVOKED
+            - RESERVATION_REQUIRED
+            - RESERVATION_CANCELLED
+            - OUTSIDE_SCHEDULE
+            - AREA_INTERDICTED
+            - CAPABILITY_MISSING
+            - COMPANION_NOT_VERIFIED
+            - OCCUPANCY_LIMIT
+            - ANTIPASSBACK_DENIED
+            - REVOKED
+            - STALE_POLICY
+            - STALE_BINDING
+            - CLOCK_UNTRUSTED
+            - DEPENDENCY_UNAVAILABLE
+            - NOT_COMMISSIONED
+            - CONTEXT_CHANGED
+            - ASSISTANCE_REQUIRED
+            - CONTEXT_AMBIGUOUS
+          minItems: 1
+          maxItems: 30
+          uniqueItems: true
+        evaluatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        executionMode:
+          type: string
+          const: EDGE_ONLINE
+        automaticActuationAllowed:
+          type: boolean
+          description: Metadado da decisão já tomada no gateway, não um comando. Deve ser false para DENY, REQUIRE_ASSISTANCE
+            e UNAVAILABLE.
+        policySnapshotHash:
+          type:
+          - string
+          - 'null'
+          pattern: ^[a-f0-9]{64}$
+        clockQuality:
+          type: string
+          enum:
+          - TRUSTED
+          - UNTRUSTED
+          - UNKNOWN
+        evaluationDurationMs:
+          type: integer
+          minimum: 0
+          maximum: 60000
+      required:
+      - schemaVersion
+      - decisionId
+      - attemptId
+      - sourceConnectorId
+      - deviceProvisioningId
+      - deviceChannelId
+      - pointId
+      - bindingRevision
+      - installationRevision
+      - policyVersion
+      - recognizedSubjectRef
+      - subjectContextRef
+      - recognitionEventId
+      - result
+      - reasonCodes
+      - evaluatedAt
+      - expiresAt
+      - executionMode
+      - automaticActuationAllowed
+      - policySnapshotHash
+      - clockQuality
+      - evaluationDurationMs
+      description: 'Telemetria de decisão tomada localmente no gateway/adaptador, conforme modo EDGE_ONLINE. Não
+        é RPC de autorização na nuvem e não condiciona abertura à resposta desta rota. Tenant e identidade técnica
+        são derivados do certificado; sourceConnectorId e referências devem corresponder ao escopo registrado. O
+        motor local usa dados/revisões confiáveis e executa as verificações pré-relé homologadas. REQUIRE_ASSISTANCE
+        significa negar atuação automática e orientar atendimento; UNAVAILABLE também não autoriza. Registro histórico
+        pode chegar após expiresAt: ingestão preserva a ocorrência e nunca transforma resultado passado em autorização
+        atual. Não recebe actorId, tenantId, idade ou grants livres.'
+      allOf:
+      - if:
+          properties:
+            result:
+              const: ALLOW
+          required:
+          - result
+        then:
+          properties:
+            automaticActuationAllowed:
+              const: true
+            pointId:
+              type: string
+              format: uuid
+            bindingRevision:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+              description: Sequência monotônica por ponto no tenant; não é UUID.
+            installationRevision:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+              description: Sequência monotônica da instalação por tenant; não é UUID.
+            policyVersion:
+              type: string
+              format: uuid
+            policySnapshotHash:
+              type: string
+              pattern: ^[a-f0-9]{64}$
+            clockQuality:
+              const: TRUSTED
+        else:
+          properties:
+            automaticActuationAllowed:
+              const: false
+    EdgeDecisionIngestReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        decisionId:
+          type: string
+          format: uuid
+        ingestId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - ACCEPTED
+          - DUPLICATE
+          - REJECTED
+        receivedAt:
+          type: string
+          format: date-time
+        reasonCode:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        actuationAuthorizedByThisResponse:
+          type: boolean
+          const: false
+      required:
+      - decisionId
+      - ingestId
+      - status
+      - receivedAt
+      - reasonCode
+      - actuationAuthorizedByThisResponse
+      description: Recibo de telemetria após gravação durável ou reconhecimento de duplicata. Não devolve ALLOW
+        operacional, authorizationRef, token ou comando. A resposta nunca autoriza abertura, renova validade ou
+        reexecuta decisão. Identidade de deduplicação é tenant + decisionId; conector de entrega é proveniência
+        verificada, sem multiplicar a decisão registrada.
+    BindingDirectionMap:
+      type: object
+      additionalProperties: false
+      properties:
+        entry:
+          type:
+          - string
+          - 'null'
+          enum:
+          - SOURCE_TO_DESTINATION
+          - DESTINATION_TO_SOURCE
+          - null
+        exit:
+          type:
+          - string
+          - 'null'
+          enum:
+          - SOURCE_TO_DESTINATION
+          - DESTINATION_TO_SOURCE
+          - null
+      required:
+      - entry
+      - exit
+      description: Mapeia leitores de entrada/saída às áreas de origem/destino do ponto. null significa ausência
+        de leitura nesse sentido, nunca ausência de saída física. Servidor confere coerência com leitores, planta
+        e procedimento aprovado.
+x-edge-decision-policy: POST /v1/edge/decisions é ingestão de decisão local e não RPC de autorização em nuvem. REQUIRE_ASSISTANCE
+  e UNAVAILABLE não autorizam atuação automática. ACK/retry de telemetria nunca reexecuta abertura.

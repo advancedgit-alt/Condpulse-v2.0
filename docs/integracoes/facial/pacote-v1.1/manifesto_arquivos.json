@@ -1,0 +1,169 @@
+{
+  "pacote": "CondPulse_Acesso_Facial_v1.1",
+  "versao": "1.1",
+  "data": "2026-10-30",
+  "escopo": "Pesquisa e especificação; ensaios físicos não executados",
+  "manifesto_exclui_a_si_proprio": true,
+  "arquivos": [
+    {
+      "caminho": "00_LEIA_PRIMEIRO.md",
+      "bytes": 6395,
+      "sha256": "03edcde8a4f79d3e6f0807e9cdaaa2c73be9060b00a8051fde4db7ec8b77dce7"
+    },
+    {
+      "caminho": "HANDOFF_CLAUDE_CODE.md",
+      "bytes": 6443,
+      "sha256": "4daf172b758608764853c144fe6b6f7c36d6829f4e1f5a11b3cfb128a95f2d9c"
+    },
+    {
+      "caminho": "catalogo/fontes_oficiais.json",
+      "bytes": 22802,
+      "sha256": "d05cdbcf2f6b80ac8c28ef69f7a024dbe71de2770366cad89434c087df446206"
+    },
+    {
+      "caminho": "catalogo/matriz_homologacao_por_modelo.csv",
+      "bytes": 5611,
+      "sha256": "4da3865609a6f708537517f35a2093f8aac776f5e4d007b389766941f0d18ccc"
+    },
+    {
+      "caminho": "catalogo/modelos_candidatos.csv",
+      "bytes": 9936,
+      "sha256": "f16036248f5befa6ee80d9e0034f21105e8452fecd5fdb63d821503c87e1e5bd"
+    },
+    {
+      "caminho": "catalogo/modelos_candidatos.json",
+      "bytes": 29570,
+      "sha256": "48df3e53ff30c72945136dae93450e850b2bd36ed0d6cc1bdc6d0ccfb385f29f"
+    },
+    {
+      "caminho": "contratos/README.md",
+      "bytes": 6510,
+      "sha256": "e0550438756c61d2599680e63dbe6dace19012ce47361a7fcefbe9b9186bb293"
+    },
+    {
+      "caminho": "contratos/exemplos/event.json",
+      "bytes": 1043,
+      "sha256": "1cb89466a272d4e92e1afb95c2a3545d47c3dbcb7ab3a9115918550f5ed4bb66"
+    },
+    {
+      "caminho": "contratos/exemplos/policy18plus.json",
+      "bytes": 1490,
+      "sha256": "cc9d8a200ad0d44aabb4c88e33723512c6970d4e0954e2b9686622e7598779cc"
+    },
+    {
+      "caminho": "contratos/openapi_acesso_proposto.yaml",
+      "bytes": 145926,
+      "sha256": "7648f34a46c5424055d769841cdde6ddb30efb6eb7ce7a38bdc81eed21174902"
+    },
+    {
+      "caminho": "dados/Extensao_Modelo_Dados.md",
+      "bytes": 78774,
+      "sha256": "30b6ce361072fcfa751cf6199a0898f62426727d94f27f9030b9088191280158"
+    },
+    {
+      "caminho": "dados/modelo_logico.json",
+      "bytes": 209147,
+      "sha256": "90f33efef30db12c9259f7722002d4e064bc0e8374b6bdae03fdbd785028b187"
+    },
+    {
+      "caminho": "diagramas/arquitetura_acesso.png",
+      "bytes": 117500,
+      "sha256": "1abfe42ec8fb3071aecfff9e5ffbb34ee9bdf20eff2710884597952820b23af5"
+    },
+    {
+      "caminho": "diagramas/arquitetura_acesso.svg",
+      "bytes": 8119,
+      "sha256": "1a8c68a2ef874f097b3287df10d9ea59bacb6f211d73dbea4c98c91e2d639579"
+    },
+    {
+      "caminho": "diagramas/mapa_areas.png",
+      "bytes": 89004,
+      "sha256": "0060737285b9a1454a859d83571c725baf38b82d7d3d158c093c519001b7f8e3"
+    },
+    {
+      "caminho": "diagramas/mapa_areas.svg",
+      "bytes": 7567,
+      "sha256": "3421591e2ffb60b4a7a06a66d51a370763b9510497225b00757cb71491b45aa6"
+    },
+    {
+      "caminho": "documentacao/CondPulse_Acesso_Facial_v1.1.docx",
+      "bytes": 333364,
+      "sha256": "283acb295811284109171541b9cda7a78d3c3472ecd70ca6e46b6784764040b4"
+    },
+    {
+      "caminho": "documentacao/CondPulse_Acesso_Facial_v1.1.md",
+      "bytes": 112767,
+      "sha256": "16b72f1ce908e355629a3c59fe3fe162fe0635412cb3cc5b6b6e71f5f3e2b41d"
+    },
+    {
+      "caminho": "documentacao/CondPulse_Acesso_Facial_v1.1.pdf",
+      "bytes": 978812,
+      "sha256": "43b6c76f1400b2fe3bb59354181dcf045a85549cd26ffaf131f6f196e8711e9f"
+    },
+    {
+      "caminho": "homologacao/Termo_Homologacao_Tecnica.md",
+      "bytes": 1936,
+      "sha256": "cf2a8b7f0b0765deb1b7fbf4fb8defa45cc97fe7f0287164501956ee7823d2cc"
+    },
+    {
+      "caminho": "homologacao/testes_homologacao.csv",
+      "bytes": 53953,
+      "sha256": "2b99c3c5bf27ea18b69ee4f53d46c01071cffbd8d3459a31bb4631c599ed85a0"
+    },
+    {
+      "caminho": "homologacao/testes_homologacao.json",
+      "bytes": 81002,
+      "sha256": "29ae7678e4a67980b2573e1e036d2ebe2d22d80c5b3d69ad8d973622f3b51d3a"
+    },
+    {
+      "caminho": "implantacao/Dossie_Condominio_Template.docx",
+      "bytes": 109189,
+      "sha256": "502259b9df7f4ea7672054bd6c2fde1edcad57bddbebfb19f2ea6d458dccca66"
+    },
+    {
+      "caminho": "implantacao/Dossie_Condominio_Template.md",
+      "bytes": 28742,
+      "sha256": "eb4b8ca4d4bdce102ccad0f097ae9b5467a19b21ae1d94d00b1094598d96cbb1"
+    },
+    {
+      "caminho": "implantacao/Dossie_Condominio_Template.pdf",
+      "bytes": 450315,
+      "sha256": "87194e5ed66586bcdae0fe6ffe4115a7083abf2d16e34547f1d0920577e1ec2d"
+    },
+    {
+      "caminho": "implantacao/inventario_condominio_template.csv",
+      "bytes": 1497,
+      "sha256": "bc9f73d2774c2d16ab00540f46538de6a44aef0a9cd891e17e4279e068855d01"
+    },
+    {
+      "caminho": "implantacao/matriz_areas_template.csv",
+      "bytes": 1771,
+      "sha256": "645eb24935ea3f683df001a68b6f978058e8e9880ff62085bbec150a8edf47ab"
+    },
+    {
+      "caminho": "planejamento/backlog.csv",
+      "bytes": 25530,
+      "sha256": "ace48ed6694d10cb50755ceedcde3a97b8964c1aa131fc58e5836e687f726405"
+    },
+    {
+      "caminho": "planejamento/backlog.json",
+      "bytes": 38191,
+      "sha256": "c298fbe65678ff62cd7387320c267a7ee0b088cdc764edbbf8912003c6a595f2"
+    },
+    {
+      "caminho": "qualidade/VALIDACAO_DOCUMENTAL.md",
+      "bytes": 4536,
+      "sha256": "b885ec4e3a38989cbfbf8af96817f16021b98caec228604e64be6530d6838c2b"
+    },
+    {
+      "caminho": "qualidade/auditoria_contrato.json",
+      "bytes": 2942,
+      "sha256": "5c51078ea02e379f0627c62399e40e7364bd11f378d7a1c80ad68aa03f172c8c"
+    },
+    {
+      "caminho": "qualidade/validacao_estrutural.json",
+      "bytes": 601,
+      "sha256": "a3e4dccb0a6c94519b858bb017810affcecbd2b1d7b5e684a8bdbd38374cd386"
+    }
+  ]
+}
