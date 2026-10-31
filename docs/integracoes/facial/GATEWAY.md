@@ -28,6 +28,7 @@ matriz da seção 6 descreve o conjunto completo; cada adaptador só existe no c
 | Telemetria de decisão em fila de memória, gravada e enviada no ciclo de fundo | Segurar a resposta ao equipamento esperando a plataforma |
 | Resultado terminal não publicado fica pendente no diário e só o relatório é reenviado | Repetir operação física para republicar resultado |
 | Diário trunca cauda incompleta (queda no meio da escrita) antes de acrescentar | Colar registro novo em linha parcial |
+| Escrita (POST/PUT) e ação física, inclusive por GET, vão numa única requisição HTTP/1.1 por conexão própria (`SingleShotHttp`); conexão que cai depois do envio é resultado incerto | Deixar o `HttpClient` do JDK reenviar sozinho GET/PUT quando a conexão cai antes dos cabeçalhos (ele só faz leituras GET) |
 
 Invariantes verificados por teste (`InvariantsTest`): (1) nada é consumido ou confirmado antes de persistido; (2) queda
 entre dois passos do diário não ressuscita estado antigo — a recuperação deriva fila e cópia de decisão dos registros,
