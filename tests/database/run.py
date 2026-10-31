@@ -3052,6 +3052,24 @@ def finance_checks():
                 f"cancel_reason='Excluída no Asaas (conciliação)',version=2 WHERE id='{C3}'", **as_manager)
     expect(value(f"select state||':'||cancelled_by||':'||(cancelled_at is not null) from cp.finance_charges where id='{C3}'") == f"CANCELLED:{MGF}:true",
            "conciliacao cancela com autoria, motivo e horario do banco")
+    # Lote de emissao: 20 falhas permanentes nao bloqueiam as 5 seguintes (recuo exponencial por tentativa).
+    batch = [f"55000000-0000-4000-8000-0000000{i:05d}" for i in range(1, 26)]
+    for identifier in batch:
+        query(fin + charge(identifier), **as_manager)
+    fail = (f"UPDATE cp.finance_charges SET issue_error='ASAAS_REJECTED',issue_lease_until=null,issue_attempts=issue_attempts+1,"
+            f"next_issue_at=clock_timestamp()+least(interval '1 minute'*power(2,least(issue_attempts,9)),interval '6 hours'),version=version+1 "
+            f"WHERE id in ({','.join(repr(x) for x in batch[:20])})")
+    query(fin + fail, **as_manager)
+    queue = ("select string_agg(id::text,',' order by next_issue_at nulls first,created_at,id) from (select id,next_issue_at,created_at from cp.finance_charges "
+             "where state='PENDING_ISSUE' and (issue_lease_until is null or issue_lease_until<=clock_timestamp()) "
+             "and (next_issue_at is null or next_issue_at<=clock_timestamp()) order by next_issue_at nulls first,created_at,id limit 20) q")
+    expect(value(fin + queue, **as_manager) == ",".join(batch[20:]), "lote de emissao alcanca as 5 validas depois de 20 falhas")
+    expect(value(f"select min(issue_attempts)||':'||bool_and(next_issue_at>clock_timestamp()) from cp.finance_charges where id in ({','.join(repr(x) for x in batch[:20])})")
+           == "1:true", "falha registra tentativa e proxima tentativa futura")
+    expect(error(fin + f"UPDATE cp.finance_charges SET issue_attempts=issue_attempts+5,version=version+1 WHERE id='{batch[0]}'", "23514", **as_manager),
+           "tentativas so avancam uma a uma")
+    expect(error(fin + f"UPDATE cp.finance_charges SET next_issue_at=clock_timestamp()+interval '2 days',version=version+1 WHERE id='{batch[0]}'", "23514", **as_manager),
+           "espera maxima de 6 horas")
     # Locacao: proprietario de unidade alugada perde a visao do financeiro da unidade.
     query(f"SET LOCAL app.capabilities='memberships.manage'; INSERT INTO cp.unit_rentals(tenant_id,unit_id,owner_membership_id,owner_account_id,started_by) "
           f"VALUES('{TA}','{UF}','{MOW}','{OWF}','{MGF}')", **as_manager)

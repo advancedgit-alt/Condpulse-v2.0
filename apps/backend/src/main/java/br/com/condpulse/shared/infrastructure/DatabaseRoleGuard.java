@@ -180,9 +180,10 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.finance_charges') and c.attnum>0 and not c.attisdropped
         and c.attname not in ('state','asaas_payment_id','asaas_status','invoice_url','bank_slip_url','paid_at','paid_cents','issue_error',
-         'issue_lease_until','cancelled_by','cancel_reason','version')),false)
+         'issue_lease_until','issue_attempts','next_issue_at','cancelled_by','cancel_reason','version')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.finance_charges') and c.attname in ('state','asaas_payment_id','paid_at','paid_cents','created_by',
+        'issue_attempts','next_issue_at',
         'created_at','cancelled_by','cancelled_at','updated_at','version')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);

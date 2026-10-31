@@ -152,6 +152,10 @@ CREATE TABLE cp.finance_charges (
  paid_cents bigint CHECK(paid_cents IS NULL OR paid_cents BETWEEN 0 AND 200000000),
  issue_error text CHECK(issue_error IS NULL OR issue_error ~ '^[A-Z][A-Z0-9_]{2,63}$'),
  issue_lease_until timestamptz,
+ -- Falhas de emissão: tentativas e próxima tentativa do lote "emitir pendentes" (recuo exponencial); emitir uma
+ -- cobrança específica ignora a espera.
+ issue_attempts integer NOT NULL DEFAULT 0 CHECK(issue_attempts>=0),
+ next_issue_at timestamptz,
  created_by uuid NOT NULL REFERENCES platform.accounts(id),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  cancelled_by uuid REFERENCES platform.accounts(id),
@@ -176,6 +180,7 @@ CREATE UNIQUE INDEX finance_charges_competence ON cp.finance_charges(tenant_id,r
  WHERE recurring_fee_id IS NOT NULL;
 CREATE INDEX finance_charges_unit ON cp.finance_charges(tenant_id,unit_id,due_date DESC,id);
 CREATE INDEX finance_charges_state ON cp.finance_charges(tenant_id,state,due_date,id);
+CREATE INDEX finance_charges_issue_queue ON cp.finance_charges(tenant_id,next_issue_at NULLS FIRST,created_at,id) WHERE state='PENDING_ISSUE';
 
 CREATE FUNCTION cp.finance_charges_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog
@@ -197,6 +202,7 @@ BEGIN
   END IF;
   NEW.state:='PENDING_ISSUE'; NEW.asaas_payment_id:=NULL; NEW.asaas_status:=NULL; NEW.invoice_url:=NULL; NEW.bank_slip_url:=NULL;
   NEW.paid_at:=NULL; NEW.paid_cents:=NULL; NEW.issue_error:=NULL; NEW.issue_lease_until:=NULL;
+  NEW.issue_attempts:=0; NEW.next_issue_at:=NULL;
   NEW.cancelled_by:=NULL; NEW.cancelled_at:=NULL; NEW.cancel_reason:=NULL;
   NEW.created_by:=platform.current_actor_id(); NEW.created_at:=clock_timestamp(); NEW.updated_at:=NEW.created_at; NEW.version:=0;
   RETURN NEW;
@@ -217,8 +223,14 @@ BEGIN
  IF NEW.issue_lease_until IS DISTINCT FROM OLD.issue_lease_until AND NEW.issue_lease_until>clock_timestamp()+interval '2 minutes' THEN
   RAISE EXCEPTION 'reserva de emissão longa demais' USING ERRCODE='23514';
  END IF;
- IF webhook AND ((NEW.asaas_payment_id,NEW.invoice_url,NEW.bank_slip_url,NEW.issue_error,NEW.issue_lease_until,NEW.cancelled_by,NEW.cancel_reason)
-    IS DISTINCT FROM (OLD.asaas_payment_id,OLD.invoice_url,OLD.bank_slip_url,OLD.issue_error,OLD.issue_lease_until,OLD.cancelled_by,OLD.cancel_reason)) THEN
+ IF NEW.issue_attempts<OLD.issue_attempts OR NEW.issue_attempts>OLD.issue_attempts+1
+    OR (NEW.next_issue_at IS DISTINCT FROM OLD.next_issue_at AND NEW.next_issue_at>clock_timestamp()+interval '6 hours 1 minute') THEN
+  RAISE EXCEPTION 'tentativas de emissão só avançam uma a uma, com espera de até 6 horas' USING ERRCODE='23514';
+ END IF;
+ IF webhook AND ((NEW.asaas_payment_id,NEW.invoice_url,NEW.bank_slip_url,NEW.issue_error,NEW.issue_lease_until,NEW.cancelled_by,NEW.cancel_reason,
+     NEW.issue_attempts,NEW.next_issue_at)
+    IS DISTINCT FROM (OLD.asaas_payment_id,OLD.invoice_url,OLD.bank_slip_url,OLD.issue_error,OLD.issue_lease_until,OLD.cancelled_by,OLD.cancel_reason,
+     OLD.issue_attempts,OLD.next_issue_at)) THEN
   RAISE EXCEPTION 'webhook só sincroniza a situação da cobrança' USING ERRCODE='42501';
  END IF;
  IF NEW.state<>OLD.state THEN
@@ -240,7 +252,7 @@ BEGIN
   RAISE EXCEPTION 'cancelamento só com a transição' USING ERRCODE='23514';
  END IF;
  IF NEW.state IN ('OPEN','OVERDUE') THEN NEW.paid_at:=NULL; NEW.paid_cents:=NULL; END IF;
- IF NEW.state<>'PENDING_ISSUE' THEN NEW.issue_lease_until:=NULL; END IF;
+ IF NEW.state<>'PENDING_ISSUE' THEN NEW.issue_lease_until:=NULL; NEW.next_issue_at:=NULL; END IF;
  NEW.cancelled_at:=CASE WHEN NEW.state='CANCELLED' THEN coalesce(NEW.cancelled_at,OLD.cancelled_at,clock_timestamp()) END;
  NEW.updated_at:=clock_timestamp();
  RETURN NEW;
@@ -280,7 +292,7 @@ GRANT UPDATE(state,version) ON cp.finance_recurring_fees TO cp_api;
 GRANT INSERT(id,tenant_id,unit_id,payer_id,kind,description,amount_cents,due_date,billing_type,recurring_fee_id,competence)
  ON cp.finance_charges TO cp_api;
 GRANT UPDATE(state,asaas_payment_id,asaas_status,invoice_url,bank_slip_url,paid_at,paid_cents,issue_error,issue_lease_until,
- cancelled_by,cancel_reason,version) ON cp.finance_charges TO cp_api;
+ issue_attempts,next_issue_at,cancelled_by,cancel_reason,version) ON cp.finance_charges TO cp_api;
 GRANT INSERT(tenant_id,event_id,event_type,charge_id,asaas_status,resulting_state) ON cp.finance_webhook_events TO cp_api;
 
 DO $$

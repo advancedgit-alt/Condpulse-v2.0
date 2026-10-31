@@ -199,7 +199,10 @@ class FinanceJdbcTest {
   assertTrue(finance.unitCharges(db.accountA,db.tenantA,db.unitA).charges().stream().noneMatch(c->c.chargeId().equals(pending.chargeId())),
    "Não emitida não aparece para a unidade");
   asaas.down=false;
-  assertEquals(new FinanceModels.IssueResult(1,0,0),finance.issuePending(MANAGER,db.tenantA,AAL2));
+  // Falha recente fica em espera no lote (não trava as demais); emitir a cobrança específica ignora a espera.
+  assertEquals(new FinanceModels.IssueResult(0,0,1),finance.issuePending(MANAGER,db.tenantA,AAL2));
+  assertEquals("1",db.adminString("select issue_attempts from cp.finance_charges where id=?",pending.chargeId()));
+  assertEquals("OPEN",finance.issue(MANAGER,db.tenantA,AAL2,pending.chargeId()).state());
   int before=asaas.created.get();
   assertEquals("OPEN",finance.issue(MANAGER,db.tenantA,AAL2,pending.chargeId()).state());
   assertEquals(before,asaas.created.get(),"Reemitir não cria outro pagamento");

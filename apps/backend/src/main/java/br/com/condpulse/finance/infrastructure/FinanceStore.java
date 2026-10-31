@@ -143,7 +143,8 @@ public class FinanceStore {
  }
  public boolean markIssueFailed(UUID tenant,UUID id,long version,String code) {
   return jdbc.update("""
-   update cp.finance_charges set issue_error=?,issue_lease_until=null,version=version+1
+   update cp.finance_charges set issue_error=?,issue_lease_until=null,issue_attempts=issue_attempts+1,
+    next_issue_at=clock_timestamp()+least(interval '1 minute'*power(2,least(issue_attempts,9)),interval '6 hours'),version=version+1
    where tenant_id=? and id=? and state='PENDING_ISSUE' and version=?
    """,code,tenant,id,version)==1;
  }
@@ -167,10 +168,13 @@ public class FinanceStore {
    """,target.state(),target.asaasStatus(),date(target.paidAt()),target.paidCents(),cancelled?actor:null,cancelled?DELETED_IN_ASAAS:null,
    tenant,id,version)==1;
  }
+ /** Lote de "emitir pendentes": nunca tentadas primeiro; falhas só depois da espera (recuo), sem travar o lote. */
  public List<UUID> pendingIssue(UUID tenant,int limit) {
   return jdbc.query("""
    select id from cp.finance_charges where tenant_id=? and state='PENDING_ISSUE'
-    and (issue_lease_until is null or issue_lease_until<=clock_timestamp()) order by due_date,created_at,id limit ?
+    and (issue_lease_until is null or issue_lease_until<=clock_timestamp())
+    and (next_issue_at is null or next_issue_at<=clock_timestamp())
+    order by next_issue_at nulls first,created_at,id limit ?
    """,(r,n)->r.getObject(1,UUID.class),tenant,limit);
  }
  public int pendingCount(UUID tenant) {
