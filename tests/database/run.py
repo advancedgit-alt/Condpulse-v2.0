@@ -4855,6 +4855,16 @@ def security_log_checks():
         reason,evidence_ref,correlation_id,trace_id,corrects_id,details)::text from cp.security_log where tenant_id='{S1}' and seq=4""")
     prev, stored, payload = canon.split("#", 2)
     expect(hashlib.sha256(f"cpsl1|{prev}|{payload}".encode()).hexdigest() == stored, "hash recalculado fora do banco confere com a forma canonica")
+    # Worker (sem ator e sem leitura de vinculos) grava eventos: o papel do ator nao consulta vinculos sem ator.
+    query("REVOKE SELECT ON cp.memberships FROM cp_worker")
+    try:
+        expect(value("select coalesce(cp.security_log_actor_role(platform.current_tenant_id()),'-')", tenant=S1, actor=None, role="cp_worker") == "-",
+               "papel do ator sem ator nao le cp.memberships (worker sem privilegio)")
+        expect(value(f"INSERT INTO cp.security_log(tenant_id,event_type,severity,source) VALUES('{S1}','DEVICE_ONLINE','INFO','SYSTEM'); "
+                     "select count(*) from cp.security_log_heads", tenant=S1, actor=None, role="cp_worker") == "1",
+               "worker grava no log sem ler vinculos")
+    finally:
+        query("GRANT SELECT(id,tenant_id,account_id,unit_id,role,status,valid_from,valid_until,permissions) ON cp.memberships TO cp_worker")
     expect(error(f"INSERT INTO cp.security_log(tenant_id,seq,event_type,severity,source) VALUES('{S1}',99,'SENSITIVE_VIEWED','INFO','MANAGEMENT')",
                  "42501", tenant=S1, actor=MG, role="cp_api"), "R5.1: runtime nao escolhe seq (grant por coluna)")
     for column in ("hash", "prev_hash", "recorded_at", "actor_account_id", "actor_role"):

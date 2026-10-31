@@ -104,16 +104,22 @@ LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
 REVOKE ALL ON FUNCTION cp.security_log_digest(text,cp.security_log) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.security_log_digest(text,cp.security_log) TO cp_api,cp_worker,cp_onboarding;
 
--- Papel do ator no condomínio (equipe antes de unidade); plataforma e escopo técnico quando não há vínculo.
+-- Papel do ator no condomínio (equipe antes de unidade); plataforma e escopo técnico quando não há vínculo. Sem ator
+-- (worker, gateway, sistema) retorna antes de qualquer consulta: o PostgreSQL confere os privilégios de toda tabela da
+-- instrução mesmo no ramo não executado, e o worker não lê vínculos.
 CREATE FUNCTION cp.security_log_actor_role(target_tenant uuid) RETURNS text
-LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
- SELECT CASE WHEN platform.current_actor_id() IS NULL THEN NULL ELSE coalesce(
-  (SELECT m.role FROM cp.memberships m WHERE m.tenant_id=target_tenant AND m.account_id=platform.current_actor_id()
-    AND m.status='ACTIVE' AND m.valid_from<=now() AND (m.valid_until IS NULL OR m.valid_until>now())
-   ORDER BY (m.unit_id IS NOT NULL),CASE m.role WHEN 'MANAGER' THEN 0 WHEN 'CONCIERGE' THEN 1 WHEN 'MAINTENANCE' THEN 2
-    WHEN 'SUPPORT' THEN 3 WHEN 'RESPONSIBLE' THEN 4 WHEN 'OWNER' THEN 5 WHEN 'RESIDENT' THEN 6 ELSE 7 END LIMIT 1),
+LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
+DECLARE actor uuid:=platform.current_actor_id(); found_role text;
+BEGIN
+ IF actor IS NULL THEN RETURN NULL; END IF;
+ SELECT m.role INTO found_role FROM cp.memberships m WHERE m.tenant_id=target_tenant AND m.account_id=actor
+   AND m.status='ACTIVE' AND m.valid_from<=now() AND (m.valid_until IS NULL OR m.valid_until>now())
+  ORDER BY (m.unit_id IS NOT NULL),CASE m.role WHEN 'MANAGER' THEN 0 WHEN 'CONCIERGE' THEN 1 WHEN 'MAINTENANCE' THEN 2
+   WHEN 'SUPPORT' THEN 3 WHEN 'RESPONSIBLE' THEN 4 WHEN 'OWNER' THEN 5 WHEN 'RESIDENT' THEN 6 ELSE 7 END LIMIT 1;
+ RETURN coalesce(found_role,
   CASE WHEN nullif(current_setting('app.platform_capabilities',true),'') IS NOT NULL THEN 'PLATFORM_ADMIN'
-   WHEN nullif(current_setting('app.technical_scopes',true),'') IS NOT NULL THEN 'TECHNICAL_GRANT' END) END $$;
+   WHEN nullif(current_setting('app.technical_scopes',true),'') IS NOT NULL THEN 'TECHNICAL_GRANT' END);
+END $$;
 REVOKE ALL ON FUNCTION cp.security_log_actor_role(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.security_log_actor_role(uuid) TO cp_api,cp_worker,cp_onboarding;
 
