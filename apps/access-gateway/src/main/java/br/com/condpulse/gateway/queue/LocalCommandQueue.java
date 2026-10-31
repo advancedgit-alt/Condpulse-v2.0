@@ -36,7 +36,11 @@ public final class LocalCommandQueue implements AutoCloseable {
   CommandType(boolean revocation) { this.revocation=revocation; }
   public boolean revocation() { return revocation; }
  }
- public enum Status { PENDING, IN_FLIGHT, NEEDS_READBACK, DONE, FAILED, SUPERSEDED, REJECTED_STALE }
+ /**
+  * HELD: aplicação ambígua que a leitura não consegue provar; aguarda decisão humana, não é reselecionada por
+  * {@link #next} (não trava a fila), continua visível como pendência e pode ser superada por revogação.
+  */
+ public enum Status { PENDING, IN_FLIGHT, NEEDS_READBACK, HELD, DONE, FAILED, SUPERSEDED, REJECTED_STALE }
  public enum EnqueueOutcome { ACCEPTED, DUPLICATE, REJECTED_STALE, REJECTED_FULL }
 
  /** Comando tipado da plataforma. payload não contém segredo nem biometria (só referências). */
@@ -61,7 +65,8 @@ public final class LocalCommandQueue implements AutoCloseable {
  /** reported: o resultado terminal já foi publicado na plataforma (publicação pendente sobrevive a reinício). */
  public record Entry(SyncCommand command,long sequence,Status status,OperationState lastState,String lastReason,int attempts,
      Instant enqueuedAt,Instant lastAttemptAt,boolean reported) {
-  public boolean terminal() { return status==Status.DONE || status==Status.FAILED || status==Status.SUPERSEDED || status==Status.REJECTED_STALE; }
+  /** Estados com resultado a publicar (HELD é publicado como UNKNOWN para decisão humana). */
+  public boolean terminal() { return status==Status.DONE || status==Status.FAILED || status==Status.SUPERSEDED || status==Status.REJECTED_STALE || status==Status.HELD; }
  }
  public record EnqueueResult(EnqueueOutcome outcome,Entry entry,List<String> superseded) {}
 
@@ -152,7 +157,7 @@ public final class LocalCommandQueue implements AutoCloseable {
  }
  public synchronized long activeCount() { return byId.values().stream().filter(LocalCommandQueue::active).count(); }
 
- private static boolean active(Entry e) { return e.status()==Status.PENDING || e.status()==Status.IN_FLIGHT || e.status()==Status.NEEDS_READBACK; }
+ private static boolean active(Entry e) { return e.status()==Status.PENDING || e.status()==Status.IN_FLIGHT || e.status()==Status.NEEDS_READBACK || e.status()==Status.HELD; }
 
  /** A revogação cobre o escopo da outra mensagem? */
  static boolean covers(SyncCommand revocation,SyncCommand other) {

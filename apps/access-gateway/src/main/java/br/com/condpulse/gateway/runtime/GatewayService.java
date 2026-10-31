@@ -41,8 +41,13 @@ import br.com.condpulse.gateway.spi.Spi.*;
 public final class GatewayService {
  private static final System.Logger LOG=System.getLogger(GatewayService.class.getName());
 
- /** Situação de cada equipamento vista pelo gateway. */
- public record DeviceStatus(boolean reachable,String reasonCode,Instant lastCheckedAt,Instant lastHeartbeatAt,IdentityCheck identity,boolean quarantined) {}
+ /**
+  * Situação de cada equipamento vista pelo gateway.
+  * identityPending: a identidade ainda não foi conferida desde a última (re)conexão observada pela sonda de saúde.
+  * Batimento recebido do equipamento não torna o equipamento "alcançável" nem dispensa essa conferência.
+  */
+ public record DeviceStatus(boolean reachable,String reasonCode,Instant lastCheckedAt,Instant lastHeartbeatAt,IdentityCheck identity,boolean quarantined,
+     boolean identityPending) {}
 
  private final GatewayConfig config;
  private final CapabilityRegistry registry;
@@ -55,6 +60,7 @@ public final class GatewayService {
  private final DecisionOutbox decisionOutbox;
  private final Clock clock;
  private final Map<String,DeviceStatus> status=new ConcurrentHashMap<>();
+ private final java.util.concurrent.atomic.AtomicLong rejectedRevocations=new java.util.concurrent.atomic.AtomicLong();
  /** Eventos recebidos dos equipamentos que não puderam ser gravados na hora; regravados no ciclo de coleta. */
  private final java.util.concurrent.ConcurrentLinkedQueue<Object[]> inboundBacklog=new java.util.concurrent.ConcurrentLinkedQueue<>();
 
@@ -62,7 +68,7 @@ public final class GatewayService {
      OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,DecisionOutbox decisionOutbox,CentralApiClient central,Clock clock) {
   this.config=config; this.registry=registry; this.adapters=Map.copyOf(adapters); this.queue=queue; this.opens=opens;
   this.outbox=outbox; this.decisions=decisions; this.decisionOutbox=decisionOutbox; this.central=central; this.clock=clock;
-  opens.quarantineCheck(id->{ var st=status.get(id); return st!=null && st.quarantined(); });
+  opens.quarantineCheck(this::actuationBlock);
   reconcileDecisions();
  }
 
@@ -76,6 +82,15 @@ public final class GatewayService {
  public EnqueueResult submit(SyncCommand command) {
   var device=config.device(command.deviceId()).orElseThrow(()->new IllegalArgumentException("Equipamento desconhecido."));
   var result=queue.enqueue(command);
+  if(command.type().revocation()) {
+   // Revogação vale na decisão local mesmo se a fila recusar por estar cheia (negativa durável, fail-closed).
+   applyToDecisions(command,false);
+   if(result.outcome()==LocalCommandQueue.EnqueueOutcome.REJECTED_FULL) {
+    rejectedRevocations.incrementAndGet();
+    LOG.log(System.Logger.Level.ERROR,"ALARME: fila cheia recusou revogação; negativa local aplicada, equipamento pendente.");
+   }
+   return result;
+  }
   if(result.outcome()!=LocalCommandQueue.EnqueueOutcome.ACCEPTED) return result;
   applyToDecisions(command,false);
   return result;
@@ -145,7 +160,8 @@ public final class GatewayService {
     case UNPROVEN,NOT_SUPPORTED -> {
      // Retirada é idempotente e restringe: pode ser reenviada. Aplicação ambígua sem prova fica para decisão humana.
      if(!command.type().revocation()) {
-      queue.mark(command.commandId(),Status.NEEDS_READBACK,OperationState.UNKNOWN,"READBACK_CANNOT_PROVE");
+      // Fora da seleção da fila (não trava os demais), visível e publicado como UNKNOWN para decisão humana.
+      finish(command,Status.HELD,OperationState.UNKNOWN,"READBACK_CANNOT_PROVE");
       return true;
      }
     }
@@ -419,10 +435,14 @@ public final class GatewayService {
  /** Busca comandos e aberturas. Falha mantém tudo como está; nada é inventado localmente. */
  public void pullFromCentral() {
   try {
+   boolean complete=true;
    for(var c:central.pullSyncCommands(200)) {
-    try { submit(c); } catch(IllegalArgumentException e) { LOG.log(System.Logger.Level.WARNING,"Comando recusado: equipamento desconhecido."); }
+    try {
+     if(submit(c).outcome()==LocalCommandQueue.EnqueueOutcome.REJECTED_FULL) complete=false;
+    } catch(IllegalArgumentException e) { LOG.log(System.Logger.Level.WARNING,"Comando recusado: equipamento desconhecido."); }
    }
-   decisions.markSynced(clock.instant());
+   // Política só é "atual" quando todos os comandos recebidos foram aceitos; senão envelhece até STALE_POLICY.
+   if(complete) decisions.markSynced(clock.instant());
    for(var o:central.pullOpenCommands(20)) {
     var receipt=opens.dispatch(o);
     try { central.reportOpenReceipt(receipt); } catch(CentralUnavailable e) { LOG.log(System.Logger.Level.INFO,"Recibo de abertura guardado localmente."); }
@@ -445,20 +465,36 @@ public final class GatewayService {
    HealthReport report;
    try { report=adapter.health(); } catch(RuntimeException e) { report=new HealthReport(false,"ADAPTER_ERROR",null,null,null); }
    var previous=status.get(d.deviceId());
-   boolean reconnect=report.reachable() && (previous==null || !previous.reachable());
    IdentityCheck identity=previous==null?IdentityCheck.UNVERIFIED:previous.identity();
    boolean quarantined=previous!=null && previous.quarantined();
-   if(reconnect) {
+   boolean pending=previous==null || previous.identityPending() || !previous.reachable();
+   if(!report.reachable()) pending=true; // perda de conexão: confere de novo na volta
+   else if(pending) {
     try { identity=registry.checkIdentity(d,adapter.identify()); } catch(RuntimeException e) { identity=IdentityCheck.UNVERIFIED; }
     quarantined=identity==IdentityCheck.MISMATCH;
+    pending=false;
    }
-   status.put(d.deviceId(),new DeviceStatus(report.reachable(),report.reasonCode(),clock.instant(),previous==null?null:previous.lastHeartbeatAt(),identity,quarantined));
+   status.put(d.deviceId(),new DeviceStatus(report.reachable(),report.reasonCode(),clock.instant(),previous==null?null:previous.lastHeartbeatAt(),
+    identity,quarantined,pending));
   }
+ }
+
+ /**
+  * Motivo para recusar atuação (abertura) pela identidade do equipamento, ou null. Fail-closed: sem conferência
+  * desde a conexão, recusa; em PRODUCAO só identidade confirmada (OK) libera.
+  */
+ String actuationBlock(String deviceId) {
+  var st=status.get(deviceId);
+  if(st!=null && st.quarantined()) return "DEVICE_IDENTITY_MISMATCH";
+  if(st==null || st.identityPending()) return "DEVICE_IDENTITY_NOT_VERIFIED";
+  var device=config.device(deviceId).orElse(null);
+  if(device!=null && device.phase()==GatewayConfig.Phase.PRODUCAO && st.identity()!=IdentityCheck.OK) return "DEVICE_IDENTITY_NOT_VERIFIED";
+  return null;
  }
 
  private void markReachable(Device d,boolean reachable,String reason) {
   status.compute(d.deviceId(),(k,v)->new DeviceStatus(reachable,reason,clock.instant(),v==null?null:v.lastHeartbeatAt(),
-   v==null?IdentityCheck.UNVERIFIED:v.identity(),v!=null && v.quarantined()));
+   v==null?IdentityCheck.UNVERIFIED:v.identity(),v!=null && v.quarantined(),!reachable || v==null || v.identityPending()));
  }
 
  /** Resumo para a plataforma e para diagnóstico local: sem nomes, fotos ou credenciais. */
@@ -470,6 +506,7 @@ public final class GatewayService {
   out.put("eventsPending",outbox.pendingCount());
   out.put("eventsQuarantined",outbox.quarantinedCount());
   out.put("resultsUnpublished",queue.unreported().size());
+  out.put("revocationsRejectedQueueFull",rejectedRevocations.get());
   out.put("decisionsPending",decisionOutbox.pendingCount());
   out.put("decisionsDropped",decisionOutbox.dropped());
   var devices=new ArrayList<Object>();
@@ -483,6 +520,8 @@ public final class GatewayService {
    m.put("reasonCode",s==null?"NEVER_CHECKED":s.reasonCode());
    m.put("identity",s==null?IdentityCheck.UNVERIFIED.name():s.identity().name());
    m.put("quarantined",s!=null && s.quarantined());
+   m.put("identityPending",s==null || s.identityPending());
+   m.put("pendingHuman",queue.pending(d.deviceId()).stream().filter(e->e.status()==Status.HELD).count());
    m.put("lastHeartbeatAt",s==null || s.lastHeartbeatAt()==null?null:s.lastHeartbeatAt().toString());
    var pending=queue.pending(d.deviceId());
    m.put("pending",pending.size());
@@ -507,7 +546,9 @@ public final class GatewayService {
     InboundEndpoint.LocalDecision decision;
     try {
      var st=status.get(deviceId);
-     if(st!=null && st.quarantined()) decision=new InboundEndpoint.LocalDecision(false,List.of("NOT_COMMISSIONED"),null,null);
+     boolean production=device.phase()==GatewayConfig.Phase.PRODUCAO;
+     if((st!=null && st.quarantined()) || (production && (st==null || st.identity()!=IdentityCheck.OK)))
+      decision=new InboundEndpoint.LocalDecision(false,List.of("NOT_COMMISSIONED"),null,null);
      else if(device.decisionMode()!=DecisionMode.EDGE_ONLINE || !registry.allows(device,adapter.manifest(),CapabilityName.onlineDecisionBeforeRelay).allowed())
       decision=new InboundEndpoint.LocalDecision(false,List.of("CAPABILITY_MISSING"),null,null);
      else decision=decisions.decide(deviceId,nativeUserRef,nativeChannel);
@@ -524,7 +565,9 @@ public final class GatewayService {
     catch(RuntimeException e) { inboundBacklog.add(new Object[]{deviceId,List.copyOf(events)}); }
    }
    @Override public void heartbeat() {
-    status.compute(deviceId,(k,v)->new DeviceStatus(true,null,clock.instant(),clock.instant(),v==null?IdentityCheck.UNVERIFIED:v.identity(),v!=null && v.quarantined()));
+    // Só registra o batimento: alcance e identidade continuam sendo da sonda de saúde.
+    status.compute(deviceId,(k,v)->v==null?new DeviceStatus(false,"NEVER_CHECKED",null,clock.instant(),IdentityCheck.UNVERIFIED,false,true)
+     :new DeviceStatus(v.reachable(),v.reasonCode(),v.lastCheckedAt(),clock.instant(),v.identity(),v.quarantined(),v.identityPending()));
    }
   });
  }
