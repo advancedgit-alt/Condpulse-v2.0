@@ -32,8 +32,9 @@ public final class AdapterFactory {
    Duration.ofMillis(config.limits().pushPickupTimeoutMillis()),clock,config.zone());
   return Optional.ofNullable(switch(device.brand()) {
    case CONTROL_ID -> new br.com.condpulse.gateway.adapters.controlid.ControlIdAdapter(context);
-   // Adaptadores entram nos PRs empilhados seguintes (Hikvision, Dahua e Intelbras).
-   case HIKVISION,DAHUA,INTELBRAS -> unavailable(device);
+   case HIKVISION -> new br.com.condpulse.gateway.adapters.hikvision.HikvisionIsapiAdapter(context);
+   // Adaptadores entram no PR empilhado seguinte (Dahua e Intelbras).
+   case DAHUA,INTELBRAS -> unavailable(device);
   });
  }
 }
