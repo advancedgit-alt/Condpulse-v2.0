@@ -188,7 +188,7 @@ public class RequestStore {
  }
 
 
- // Zeladoria (V045): somente pedidos atribuídos ao próprio vínculo MAINTENANCE; a política do banco repete a regra.
+ // Zeladoria (V046): somente pedidos atribuídos ao próprio vínculo MAINTENANCE; a política do banco repete a regra.
  private static final String MAINTENANCE_SELECT="""
   select r.id,r.unit_id,u.label as unit_label,r.category,r.title,r.description,r.state,r.due_on,r.resolution,r.created_at,
    r.updated_at,r.resolved_at,r.version

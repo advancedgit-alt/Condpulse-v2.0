@@ -214,7 +214,7 @@ opções de confirmação e troca segura de e-mail e a normalização do e-mail 
 provedor. Resposta idempotente para convite já aceito pela mesma conta (hoje `404`
 neutro) é melhoria registrada. Ensaio com Auth real pendente.
 
-## Zeladoria — papel MAINTENANCE (V045)
+## Zeladoria — papel MAINTENANCE (V046)
 
 Fatia 3 do desenho `docs/ESTRUTURA_CENTRAL_E_CONDOMINIO.md`. Zelador é **equipe**: vínculo sem unidade (o banco recusa
 `MAINTENANCE` com unidade, no vínculo e no convite), convidado pela gestão (`memberships.manage`) como a portaria,

@@ -1,5 +1,7 @@
 package br.com.condpulse.accessgrants.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accessgrants.application.GrantModels;
 import br.com.condpulse.accessgrants.application.GrantService;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Direitos derivados e revogações da gestão (memberships.manage + policy.publish, AAL2) — AC-009/AC-015, V044. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessGrantController {
  private final GrantService grants;
  public AccessGrantController(GrantService grants) { this.grants=grants; }

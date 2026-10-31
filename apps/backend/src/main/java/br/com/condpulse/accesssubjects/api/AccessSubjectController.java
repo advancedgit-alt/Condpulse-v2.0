@@ -1,5 +1,7 @@
 package br.com.condpulse.accesssubjects.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accesssubjects.application.SubjectModels;
 import br.com.condpulse.accesssubjects.application.SubjectService;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Sujeitos e contextos (AC-005, V038): gestão materializa, bloqueia e encerra; portaria materializa visitantes. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessSubjectController {
  private final SubjectService subjects;
  public AccessSubjectController(SubjectService subjects) { this.subjects=subjects; }

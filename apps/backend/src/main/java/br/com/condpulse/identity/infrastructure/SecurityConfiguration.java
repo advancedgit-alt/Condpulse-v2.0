@@ -115,7 +115,7 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/requests/*","/v1/tenants/*/requests/*/messages","/v1/tenants/*/management/requests/*/messages").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/units/*/requests","/v1/tenants/*/requests/*/messages",
       "/v1/tenants/*/management/requests/*/messages","/v1/tenants/*/management/requests/*/state").authenticated()
-    // Zeladoria (V045): maintenance.operate e AAL2 no serviço; pedido atribuído ao próprio vínculo no serviço e no banco.
+    // Zeladoria (V046): maintenance.operate e AAL2 no serviço; pedido atribuído ao próprio vínculo no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/maintenance/requests","/v1/tenants/*/maintenance/requests/*",
       "/v1/tenants/*/maintenance/requests/*/messages").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/maintenance/requests/*/state","/v1/tenants/*/maintenance/requests/*/messages").authenticated()
@@ -207,6 +207,9 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/platform/outbox/tasks/*/replay").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*").authenticated()
+    // Módulos por condomínio (V045): tenants.read para ler, tenant_modules.manage para alterar (no serviço e no banco).
+    .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*/modules").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*/modules").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/tenants","/v1/platform/tenants/*/manager-invitations",
       "/v1/platform/tenants/*/manager-invitations/*/revoke","/v1/manager-invitations/accept").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/billing/plans","/v1/platform/billing/subscriptions",

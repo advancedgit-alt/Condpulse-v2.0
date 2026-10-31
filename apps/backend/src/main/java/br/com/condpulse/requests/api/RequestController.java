@@ -1,5 +1,7 @@
 package br.com.condpulse.requests.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.requests.application.RequestModels;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Pedidos da unidade (CP-033) atrás de CP_REQUESTS_ENABLED=false. Vínculo e capacidade conferidos no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.requests.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.REQUESTS)
 public class RequestController {
  private final RequestService service;
  public RequestController(RequestService service) { this.service=service; }
@@ -81,7 +84,7 @@ public class RequestController {
      @PathVariable UUID requestId,@RequestBody RequestModels.Update request) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.update(account(jwt),tenantId,assurance(jwt),requestId,request));
  }
- // Zeladoria (V045): pedidos atribuídos ao próprio vínculo MAINTENANCE.
+ // Zeladoria (V046): pedidos atribuídos ao próprio vínculo MAINTENANCE.
  @GetMapping("/v1/tenants/{tenantId}/maintenance/requests")
  public ResponseEntity<RequestModels.MaintenancePage> maintenance(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.maintenance(account(jwt),tenantId,assurance(jwt)));

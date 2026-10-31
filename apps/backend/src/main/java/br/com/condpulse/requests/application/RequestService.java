@@ -212,7 +212,7 @@ public class RequestService {
   });
  }
 
- // Zeladoria (V045): só pedidos atribuídos ao próprio vínculo MAINTENANCE, com maintenance.operate e AAL2.
+ // Zeladoria (V046): só pedidos atribuídos ao próprio vínculo MAINTENANCE, com maintenance.operate e AAL2.
  public RequestModels.MaintenancePage maintenance(UUID actor,UUID tenant,AssuranceLevel assurance) {
   return maintenanceStaff(actor,tenant,assurance,Map.of(),(context,membership)->store.maintenance(tenant,membership));
  }
@@ -227,7 +227,7 @@ public class RequestService {
  /**
   * Mensagens anteriores do pedido atribuído ao próprio vínculo de zeladoria (inclui comentários internos, como o detalhe),
   * com os mesmos limites da gestão. Pedido não atribuído, referência de outro pedido ou inexistente: não encontrado. A
-  * política do banco repete a regra pela atribuição (V045).
+  * política do banco repete a regra pela atribuição (V046).
   */
  public RequestModels.MessagePage maintenanceOlderMessages(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,UUID before) {
   if(requestId==null || before==null) throw notFound();

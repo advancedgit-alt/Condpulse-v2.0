@@ -1,5 +1,6 @@
 package br.com.condpulse.notifications.api;
 
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import java.util.UUID;
 import br.com.condpulse.notifications.application.NotificationModels;
 import br.com.condpulse.notifications.application.NotificationService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Caixa interna da unidade, atrás de CP_NOTIFICATIONS_ENABLED=false. Destinatário e vínculo conferidos no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.notifications.enabled",havingValue="true")
+@TenantModuleExempt("Caixa interna da unidade: transversal; o aviso só nasce de operação já liberada.")
 public class NotificationController {
  private final NotificationService service;
  public NotificationController(NotificationService service) { this.service=service; }

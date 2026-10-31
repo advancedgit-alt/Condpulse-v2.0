@@ -26,7 +26,7 @@ import org.springframework.dao.DataAccessException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * V045 com PostgreSQL real e o login da API: zelador (MAINTENANCE) convidado e aprovado pela gestão pelos fluxos reais,
+ * V046 com PostgreSQL real e o login da API: zelador (MAINTENANCE) convidado e aprovado pela gestão pelos fluxos reais,
  * com capacidade própria (maintenance.operate, AAL2), que lê e registra o andamento somente dos pedidos atribuídos ao
  * próprio vínculo; não muda responsável nem prazo, não encerra e não enxerga cadastro nem pedidos de terceiros.
  */
@@ -190,7 +190,7 @@ class MaintenanceJdbcTest {
 
  /**
   * A trava do gatilho vale só para quem atua pela zeladoria: a gestão continua atribuindo, dando prazo e encerrando, e a
-  * manutenção do dono do schema (sem capacidade publicada) continua encerrando pedido, como antes da V045.
+  * manutenção do dono do schema (sem capacidade publicada) continua encerrando pedido, como antes da V046.
   */
  @Test void maintenanceGuardDoesNotReachManagementNorSchemaOwnerFlows() throws Exception {
   UUID zelador=hireMaintenance();
