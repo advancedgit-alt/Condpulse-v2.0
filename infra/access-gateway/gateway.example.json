@@ -1,0 +1,39 @@
+{
+  "gatewayId": "gw-condominio-teste-1",
+  "connectorId": "00000000-0000-4000-8000-000000000204",
+  "condoLabel": "Condomínio Teste 1 (homologação)",
+  "zone": "America/Sao_Paulo",
+  "central": {
+    "baseUrl": "https://api.condpulse.example",
+    "keystorePath": "/run/secrets/gateway-mtls.p12",
+    "keystorePasswordRef": "gateway-mtls-password",
+    "truststorePath": "/run/secrets/central-ca.p12"
+  },
+  "inbound": { "bindAddress": "0.0.0.0", "port": 8443, "tlsKeystorePath": "/run/secrets/inbound-tls.p12", "tlsKeystorePasswordRef": "inbound-tls-password", "maxBodyBytes": 262144 },
+  "limits": { "queueSoftLimit": 5000, "queueHardLimit": 6000, "maxPolicyAgeSeconds": 900, "maxClockSkewSeconds": 5, "maxOpenTtlSeconds": 10, "deviceTimeoutMillis": 5000, "pushPickupTimeoutMillis": 30000 },
+  "openPolicy": { "allowedOrigins": [], "residentAppOpenEnabled": false },
+  "schedules": {
+    "sempre": [ { "days": ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"], "start": "00:00", "end": "23:59:59" } ],
+    "piscina": [ { "days": ["SATURDAY","SUNDAY"], "start": "08:00", "end": "20:00" } ]
+  },
+  "profiles": [
+    { "brand": "CONTROL_ID", "sku": "EXEMPLO-SKU", "firmware": "EXEMPLO-FW", "apiVersion": "EXEMPLO-API", "decisionMode": "DEVICE_LOCAL_ACL", "connectionMode": "LOCAL", "observed": {}, "approved": {} }
+  ],
+  "devices": [
+    {
+      "deviceId": "00000000-0000-4000-8000-000000000202",
+      "deviceProvisioningId": "00000000-0000-4000-8000-000000000203",
+      "label": "Portaria social - entrada",
+      "brand": "CONTROL_ID", "sku": "EXEMPLO-SKU", "firmware": "EXEMPLO-FW", "apiVersion": "EXEMPLO-API",
+      "connectionMode": "LOCAL", "decisionMode": "DEVICE_LOCAL_ACL",
+      "baseUrl": "http://192.0.2.10",
+      "credentialRef": "device-portaria-social",
+      "eventEpoch": "EXEMPLO-EPOCA-1",
+      "enabled": false, "phase": "BANCADA", "openEnabled": false, "openOrigins": [],
+      "installationRevision": 1,
+      "channels": [ { "channelId": "00000000-0000-4000-8000-000000000301", "pointId": "00000000-0000-4000-8000-000000000401", "bindingRevision": 1, "nativeChannel": "1", "nativeOpenAction": "sec_box:id=65793,reason=3", "direction": "IN" } ],
+      "nativeSchedules": { "sempre": "1" },
+      "params": {}
+    }
+  ]
+}

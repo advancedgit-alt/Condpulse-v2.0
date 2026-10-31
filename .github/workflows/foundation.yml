@@ -227,6 +227,37 @@ jobs:
         run: |
           docker build -f infra/fly-worker/Dockerfile -t condpulse-fly-worker:ci .
           bash tests/database/fly-worker-image-smoke.sh
+  access-gateway:
+    # Gateway de acesso facial (apps/access-gateway): sem banco, sem credencial gerenciada e sem equipamento real.
+    # Testes de contrato usam servidores HTTP falsos; simulador não é homologação (docs/integracoes/facial/GATEWAY.md).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Register failure annotations
+        run: echo "::add-matcher::${GITHUB_WORKSPACE}/.github/problem-matchers/condpulse.json"
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Gateway compile, domain and vendor contract tests
+        run: |
+          set +e
+          mvn -B -ntp -f apps/access-gateway/pom.xml verify 2>&1 | tee "$RUNNER_TEMP/gateway-verify.log"
+          status=${PIPESTATUS[0]}
+          [ "$status" -eq 0 ] || bash tests/ci/annotate-tail.sh "$RUNNER_TEMP/gateway-verify.log" "Gateway verify" 80
+          exit "$status"
+      - name: Build pinned gateway image and verify it starts switched off
+        run: |
+          docker build -f infra/access-gateway/Dockerfile -t condpulse-access-gateway:ci .
+          output=$(docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --network none \
+            --tmpfs /tmp --tmpfs /data condpulse-access-gateway:ci 2>&1)
+          status=$?
+          echo "$output" | tail -n 20
+          test "$status" -eq 0
+          echo "$output" | grep -q "Gateway desligado"
   release-config:
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -1,0 +1,8 @@
+# Gateway de acesso: sem servidor web do Spring e sem banner. Toda configuração operacional vem de
+# CP_GATEWAY_CONFIG (JSON sem segredos), CP_GATEWAY_SECRETS_DIR e CP_GATEWAY_DATA_DIR.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: "off"
+  application:
+    name: condpulse-access-gateway
