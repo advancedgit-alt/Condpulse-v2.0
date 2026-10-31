@@ -28,12 +28,12 @@ test('inspect não escreve; apply liga a flag, gera a chave sem devolver o valor
  const envs=[{key:'CP_ACCESS_CREDENTIALS_ENABLED',type:'plain',value:'false',target:['production']}];
  const first=fake(envs);
  const inspected=await execute(base,{request:first.request});
- assert.deepEqual(inspected.state,{flags:{CP_ACCESS_CREDENTIALS_ENABLED:'false'},secrets:{CP_PARCEL_CODE_KEY:false}});
+ assert.deepEqual(inspected.state,{flags:{CP_ACCESS_CREDENTIALS_ENABLED:'false',CP_FACIAL_ACCESS_ENABLED:null},secrets:{CP_PARCEL_CODE_KEY:false}});
  assert.ok(first.calls.every(c=>c.method==='GET'));
  const second=fake(envs);
  const applied=await execute({...base,CP_FLAGS_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',CP_FLAGS_ACK:inspected.ack},
   {request:second.request,randomBytes:n=>Buffer.alloc(n,7)});
- assert.deepEqual(applied.changed,['CP_ACCESS_CREDENTIALS_ENABLED','CP_PARCEL_CODE_KEY']);
+ assert.deepEqual(applied.changed,['CP_ACCESS_CREDENTIALS_ENABLED','CP_FACIAL_ACCESS_ENABLED','CP_PARCEL_CODE_KEY']);
  assert.equal(JSON.stringify(applied).includes(Buffer.alloc(32,7).toString('base64')),false,'Valor gerado nunca volta no resultado');
  const secretPost=second.calls.find(c=>c.body?.key==='CP_PARCEL_CODE_KEY');
  assert.equal(secretPost.body.type,'sensitive');

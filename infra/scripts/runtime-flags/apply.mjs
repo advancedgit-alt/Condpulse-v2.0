@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
  * inspect mostra o estado e o fingerprint; apply exige o ACK com esse fingerprint (o estado não mudou entre os dois).
  */
 export const TARGET=Object.freeze({project:'prj_IeUa4Zjg1IwaPqJQwv525H14I837',team:'team_6fzA029jxhDb1LpnrnphWGQ0'});
-export const FLAGS=Object.freeze({CP_ACCESS_CREDENTIALS_ENABLED:'true'});
+export const FLAGS=Object.freeze({CP_ACCESS_CREDENTIALS_ENABLED:'true',CP_FACIAL_ACCESS_ENABLED:'true'});
 export const GENERATED=Object.freeze(['CP_PARCEL_CODE_KEY']);
 const ENV_PATH=`/v10/projects/${TARGET.project}/env?teamId=${TARGET.team}`;
 const PROJECT_PATH=`/v9/projects/${TARGET.project}?teamId=${TARGET.team}`;
