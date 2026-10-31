@@ -61,7 +61,7 @@ O executor só fala com `https://api-sandbox.asaas.com/v3/webhooks` (GET da list
 - **Webhook** `POST /v1/finance/asaas/webhook`: sem sessão nem CSRF; token conferido antes de qualquer leitura; o corpo
   não é confiável: a situação é relida no Asaas (`GET /payments/{id}`) fora da transação; numa transação dedicada (sem
   ator, sem capacidade, só `app.finance_webhook_charge`) grava o evento (id único), a situação e o outbox
-  `FINANCE_CHARGE_UPDATED`. Evento repetido: `DUPLICATE`, nada muda. Pagamento alheio ou não vinculado: `IGNORED` (200).
+  `FINANCE_CHARGE_UPDATED`. Evento repetido: `DUPLICATE`, nada muda. Cobrança ainda em emissão (reserva ativa, pagamento não vinculado): 503 sem registrar o evento, para o Asaas reenviar. Pagamento alheio ou não vinculado sem emissão em andamento: `IGNORED` (200); a emissão seguinte adota o pagamento pela referência externa e lê a situação no Asaas.
   Asaas indisponível: 503 (o Asaas reenvia). Status sem equivalente (estorno solicitado, chargeback...) só atualiza o
   status bruto exibido à gestão. Pagamento restaurado no Asaas depois de cancelado não reabre a cobrança.
 - **Inadimplência**: cobranças `OPEN`/`OVERDUE` com vencimento antes de hoje (fuso do condomínio), por unidade.

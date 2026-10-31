@@ -38,17 +38,25 @@ public class FinanceWebhookStore {
      "app.permit_link_hash","app.occupancy_scan","app.actor_id"})
     jdbc.queryForObject("select set_config(?,'',true)",String.class,setting);
    jdbc.queryForObject("select set_config('app.finance_webhook_charge',?,true)",String.class,chargeId.toString());
-   var tenants=jdbc.query("select tenant_id from cp.finance_charges where id=? and asaas_payment_id=?",
-    (r,n)->r.getObject(1,UUID.class),chargeId,paymentId);
-   if(tenants.size()!=1) return FinanceWebhookService.Outcome.IGNORED;
-   UUID tenant=tenants.getFirst();
+   record Link(UUID tenant,String paymentId,boolean issuing) {}
+   var links=jdbc.query("""
+    select tenant_id,asaas_payment_id,(state='PENDING_ISSUE' and issue_lease_until is not null and issue_lease_until>clock_timestamp()) as issuing
+    from cp.finance_charges where id=?
+    """,(r,n)->new Link(r.getObject("tenant_id",UUID.class),r.getString("asaas_payment_id"),r.getBoolean("issuing")),chargeId);
+   if(links.size()!=1) return FinanceWebhookService.Outcome.IGNORED;
+   var link=links.getFirst();
+   // Emissão em andamento: o pagamento ainda não foi vinculado. Nada é registrado; o Asaas reenvia depois do vínculo.
+   if(link.paymentId()==null && link.issuing()) throw new IssueInProgress();
+   // Sem vínculo e sem emissão em andamento, a próxima emissão adota o pagamento e lê a situação no Asaas.
+   if(!paymentId.equals(link.paymentId())) return FinanceWebhookService.Outcome.IGNORED;
+   UUID tenant=link.tenant();
    jdbc.queryForObject("select set_config('app.tenant_id',?,true)",String.class,tenant.toString());
    var current=jdbc.query("""
     select c.tenant_id,c.unit_id,c.state,c.paid_at,c.paid_cents,c.asaas_status,c.version
-    from cp.finance_charges c where c.tenant_id=? and c.id=? for update
+    from cp.finance_charges c where c.tenant_id=? and c.id=? and c.asaas_payment_id=? for update
     """,(r,n)->new Current(r.getObject("tenant_id",UUID.class),r.getObject("unit_id",UUID.class),r.getString("state"),
      r.getDate("paid_at")==null?null:r.getDate("paid_at").toLocalDate(),r.getObject("paid_cents")==null?null:r.getLong("paid_cents"),
-     r.getString("asaas_status"),r.getLong("version")),tenant,chargeId);
+     r.getString("asaas_status"),r.getLong("version")),tenant,chargeId,paymentId);
    if(current.size()!=1) return FinanceWebhookService.Outcome.IGNORED;
    var row=current.getFirst();
    LocalDate today=LocalDate.now(ZONE);
@@ -75,5 +83,9 @@ public class FinanceWebhookStore {
      """,tenant,chargeId,row.version()+1,chargeId,row.unit(),target.state(),row.version()+1);
    return FinanceWebhookService.Outcome.PROCESSED;
   });
+ }
+ /** Webhook de cobrança ainda em emissão: a transação é desfeita e o Asaas reenvia. */
+ public static final class IssueInProgress extends RuntimeException {
+  public IssueInProgress() { super("Emissão em andamento."); }
  }
 }

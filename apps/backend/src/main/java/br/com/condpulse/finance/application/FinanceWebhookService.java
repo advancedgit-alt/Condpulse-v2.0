@@ -50,6 +50,9 @@ public class FinanceWebhookService {
   catch(IllegalArgumentException notOurs) { chargeId=null; }
   if(chargeId==null) return Outcome.IGNORED;
   try { return store.apply(eventId,type,chargeId,paymentId,current); }
+  catch(FinanceWebhookStore.IssueInProgress issuing) {
+   throw new BusinessProblem("FINANCE_CHARGE_ISSUING",503,"Cobrança em emissão; o evento será reenviado.");
+  }
   catch(DataAccessException | TransactionException failure) {
    throw new BusinessProblem("FINANCE_DEPENDENCY_UNAVAILABLE",503,"Não foi possível registrar o evento; ele será reenviado.");
   }

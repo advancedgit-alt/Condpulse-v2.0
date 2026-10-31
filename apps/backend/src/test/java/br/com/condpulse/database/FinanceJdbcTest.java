@@ -279,4 +279,27 @@ class FinanceJdbcTest {
   assertEquals("PAID",synced.state()); assertEquals(15000L,synced.paidCents());
   db.assertEmptyContext();
  }
+
+ @Test void webhookDuringIssuanceIsRetriedAndTheLaterIssueAdoptsThePaidPayment() throws Exception {
+  payer();
+  asaas.down=true;
+  var pending=charge("PIX");
+  asaas.down=false;
+  // Pagamento já criado no Asaas com a referência da cobrança, ainda não vinculado (emissão em andamento) e já pago.
+  var created=asaas.createPayment(new AsaasGateway.PaymentRequest("cus_1000","PIX",15000,today().plusDays(5),"Multa",pending.chargeId().toString()));
+  asaas.set(created.id(),"RECEIVED",today());
+  db.adminUpdateWithoutTriggers("update cp.finance_charges set issue_lease_until=clock_timestamp()+interval '60 seconds' where id=?",pending.chargeId());
+  var retry=assertThrows(BusinessProblem.class,()->webhook.handle(TOKEN,event("evt_i1","PAYMENT_RECEIVED",created.id())));
+  assertEquals("FINANCE_CHARGE_ISSUING",retry.code()); assertEquals(503,retry.status());
+  assertEquals("0",db.adminString("select count(*) from cp.finance_webhook_events where event_id='evt_i1'"),"Evento não fica registrado");
+  // Sem emissão em andamento: o evento não vinculado é ignorado e a emissão seguinte adota o pagamento já pago.
+  db.adminUpdateWithoutTriggers("update cp.finance_charges set issue_lease_until=null where id=?",pending.chargeId());
+  assertEquals(FinanceWebhookService.Outcome.IGNORED,webhook.handle(TOKEN,event("evt_i2","PAYMENT_RECEIVED",created.id())));
+  int before=asaas.created.get();
+  var issued=finance.issue(MANAGER,db.tenantA,AAL2,pending.chargeId());
+  assertEquals("PAID",issued.state()); assertEquals(before,asaas.created.get(),"Adota o pagamento existente");
+  // Reenvio do Asaas depois do vínculo: processado normalmente.
+  assertEquals(FinanceWebhookService.Outcome.PROCESSED,webhook.handle(TOKEN,event("evt_i1","PAYMENT_RECEIVED",created.id())));
+  db.assertEmptyContext();
+ }
 }
