@@ -129,7 +129,9 @@ class InvariantsTest {
    var now=clock.instant();
    var expired=new OpenDispatcher.OpenCommand("e","ne","d1","c1","ponto-c1",1,1,now.minusSeconds(6),now.minusSeconds(1),OpenOrigin.PORTARIA_LOCAL,"a",null);
    assertEquals(OpenDispatcher.Status.EXPIRED,f.opens().dispatch(expired).status());
-   f.opens().quarantineCheck(id->true);
+   assertEquals("DEVICE_IDENTITY_NOT_VERIFIED",f.opens().dispatch(new OpenDispatcher.OpenCommand("v","nv","d1","c1","ponto-c1",1,1,now,now.plusSeconds(5),
+    OpenOrigin.PORTARIA_LOCAL,"a",null)).reasonCode(),"sem sonda de identidade desde a conexão: recusa");
+   f.opens().quarantineCheck(id->"DEVICE_IDENTITY_MISMATCH");
    assertEquals("DEVICE_IDENTITY_MISMATCH",f.opens().dispatch(new OpenDispatcher.OpenCommand("q","nq","d1","c1","ponto-c1",1,1,now,now.plusSeconds(5),
     OpenOrigin.PORTARIA_LOCAL,"a",null)).reasonCode());
    var noProfile=new OpenDispatcher(dir.resolve("np"),clock,f.config(),new CapabilityRegistry(List.of()),id->Optional.of(f.adapter()));
