@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { ACCOUNT, TENANT_A, UNIT_A, chooseContext, installSyntheticApi, signIn } from './fixtures';
@@ -30,7 +31,8 @@ async function capture(page: Page, profile: string, ready: () => Promise<void>) 
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport);
       await ready();
-      await page.screenshot({ path: test.info().outputPath(`../identidade/${profile}-${theme}-${viewport.width}x${viewport.height}.png`), animations: 'disabled' });
+      // Fora da pasta de cada teste (outputPath não aceita sair dela), para o CI publicar um único conjunto.
+      await page.screenshot({ path: join(test.info().project.outputDir, 'identidade', `${profile}-${theme}-${viewport.width}x${viewport.height}.png`), animations: 'disabled' });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${profile} ${theme} ${viewport.width}px sem rolagem horizontal`).toBe(true);
       if (viewport.width === 1366) await contrastScan(page, `${profile} ${theme}`);
     }
