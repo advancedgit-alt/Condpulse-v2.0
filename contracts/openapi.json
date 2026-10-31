@@ -32816,9 +32816,10 @@
                   "enum": [
                     "DB_REFUSED",
                     "DB_CONFLICT",
-                    "SCHEDULE_NOT_REPRESENTABLE"
+                    "SCHEDULE_NOT_REPRESENTABLE",
+                    "DOCUMENT_TOO_LARGE"
                   ],
-                  "description": "SCHEDULE_NOT_REPRESENTABLE: regra com janela semanal que o documento ainda não representa; nada é publicado como acesso contínuo."
+                  "description": "SCHEDULE_NOT_REPRESENTABLE: direito de regra com janela semanal fora do documento; DOCUMENT_TOO_LARGE: mais de 512 entradas, o destino recebe retirada. Nunca acesso contínuo nem direito removido mantido."
                 },
                 "deviceId": {
                   "type": "string",

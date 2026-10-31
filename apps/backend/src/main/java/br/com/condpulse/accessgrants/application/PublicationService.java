@@ -73,6 +73,8 @@ public class PublicationService {
    // Direito de regra com horário fica fora do documento (nunca acesso contínuo): registrado por destino.
    for(UUID device:store.scheduleExcluded(tenant,subject))
     failures.add(new PublicationModels.Failure(subject,device,"SCHEDULE_NOT_REPRESENTABLE"));
+   for(UUID device:store.oversized(tenant,subject))
+    failures.add(new PublicationModels.Failure(subject,device,"DOCUMENT_TOO_LARGE"));
    List<UUID> devices=store.changedDevices(tenant,subject);
    // Cada destino num savepoint: a recusa do banco fica registrada por sujeito × destino sem desfazer os demais.
    for(UUID device:devices) {

@@ -249,29 +249,34 @@ class AccessGrantJdbcTest {
  }
 
  /**
-  * Recusa do banco num sujeito (documento acima de 512 entradas) fica registrada como DB_REFUSED e não desfaz a
-  * derivação nem a publicação dos demais (savepoint por item; a limpeza da varredura não roda na transação abortada).
+  * Documento acima de 512 entradas: falha fechada por destino. O compilado retira o que estava publicado (nunca mantém
+  * direito removido), a impossibilidade fica registrada (DOCUMENT_TOO_LARGE) e os demais sujeitos seguem; a limpeza da
+  * varredura não roda em transação abortada.
   */
- @Test void refusedSubjectIsRecordedWhileOthersArePublished() throws Exception {
+ @Test void oversizedDocumentRetractsAndIsRecordedWhileOthersArePublished() throws Exception {
   var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.5.2");
   String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
   UUID version=approvedPolicy(inst.area(),rule(zone,inst.area(),List.of("RESIDENT","EMPLOYEE"),"DENY","NOT_REQUIRED"));
   subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
   var a=subjectOf(db.accountA);
   var c=subjectOf(db.accountC);
+  var first=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
+  assertEquals(2,first.publication().created(),first.publication().toString());
   Instant until=Instant.now().plus(java.time.Duration.ofDays(10));
   for(int i=0;i<512;i++)
    subjects.addFunctional(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.FunctionalAuthorization(UUID.randomUUID(),"EMPLOYEE","func-jdbc-"+i,until));
   var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
-  assertEquals(514,derived.created(),"Direitos gravados apesar da recusa na publicação: "+derived.skippedByReason());
+  assertEquals(512,derived.created(),"Direitos gravados apesar do limite do documento: "+derived.skippedByReason());
   var published=derived.publication();
-  assertEquals(1,published.created(),published.toString());
-  assertEquals(Map.of("DB_REFUSED",1),published.failedByReason());
+  assertEquals(Map.of("DOCUMENT_TOO_LARGE",1),published.failedByReason());
   assertEquals(a.subjectId(),published.failedSample().getFirst().subjectId());
-  assertEquals(0,publications.publications(MANAGER,db.tenantA,AAL2,null,a.subjectId(),null).publications().size(),"Sujeito recusado sem trabalho");
-  assertEquals(1,publications.publications(MANAGER,db.tenantA,AAL2,null,c.subjectId(),null).publications().size(),"Os demais publicados");
+  assertEquals(inst.device(),published.failedSample().getFirst().deviceId());
+  assertEquals(1,published.created(),"Só a retirada segura de A; C sem mudança");
+  var retract=publications.publications(MANAGER,db.tenantA,AAL2,published.operationId(),a.subjectId(),null).publications().getFirst();
+  assertEquals("REVOKE_RIGHTS",retract.action()); assertEquals(0,retract.priority()); assertEquals(0,retract.entries());
+  assertEquals(1,publications.publications(MANAGER,db.tenantA,AAL2,null,c.subjectId(),null).publications().size(),"Os demais seguem publicados");
   var again=publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of(a.subjectId(),c.subjectId())));
-  assertEquals(0,again.created()); assertEquals(Map.of("DB_REFUSED",1),again.failedByReason(),"Plano explícito também registra por item");
+  assertEquals(0,again.created()); assertEquals(Map.of("DOCUMENT_TOO_LARGE",1),again.failedByReason(),"Plano explícito também registra por destino");
   db.assertEmptyContext();
  }
 

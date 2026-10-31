@@ -135,13 +135,16 @@ REVOKE ALL ON FUNCTION cp.rights_document_hash(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_document_hash(jsonb) TO cp_api,cp_worker;
 
 -- Documento que a compilação gravaria agora para o destino (mesma função do gatilho e do planejador).
+-- Acima de 512 entradas o documento não é publicável: falha fechada, o compilado retira tudo do destino (nunca mantém
+-- direito já removido publicado) e o planejador relata DOCUMENT_TOO_LARGE.
 CREATE FUNCTION cp.rights_compiled(target_tenant uuid,target_subject uuid,target_device uuid) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog
 AS $$ SELECT CASE WHEN s.status<>'ACTIVE' THEN jsonb_build_object('schemaVersion','1.0','subjectRef',s.external_ref,'action','REVOKE_ALL',
     'subjectRestrictionEpoch',s.restriction_epoch,'coveredMethods',jsonb_build_array('FACE','CARD','PIN','QR','INTERMEDIARY_GRANT'),'entries','[]'::jsonb)
    ELSE (SELECT jsonb_build_object('schemaVersion','1.0','subjectRef',s.external_ref,
-     'action',CASE WHEN jsonb_array_length(e)>0 THEN 'APPLY_RIGHTS' ELSE 'REVOKE_RIGHTS' END,
-     'subjectRestrictionEpoch',s.restriction_epoch,'coveredMethods','[]'::jsonb,'entries',e)
+     'action',CASE WHEN jsonb_array_length(e)>0 AND jsonb_array_length(e)<=512 THEN 'APPLY_RIGHTS' ELSE 'REVOKE_RIGHTS' END,
+     'subjectRestrictionEpoch',s.restriction_epoch,'coveredMethods','[]'::jsonb,
+     'entries',CASE WHEN jsonb_array_length(e)<=512 THEN e ELSE '[]'::jsonb END)
     FROM cp.rights_entries(target_tenant,target_subject,target_device) e) END
   FROM cp.access_subjects s WHERE s.tenant_id=target_tenant AND s.id=target_subject $$;
 REVOKE ALL ON FUNCTION cp.rights_compiled(uuid,uuid,uuid) FROM PUBLIC;
@@ -206,7 +209,6 @@ BEGIN
   END IF;
   doc:=cp.rights_compiled(NEW.tenant_id,NEW.subject_id,NEW.device_id);
   IF doc IS NULL THEN RAISE EXCEPTION 'sujeito inexistente' USING ERRCODE='23503'; END IF;
-  IF jsonb_array_length(doc->'entries')>512 THEN RAISE EXCEPTION 'documento acima de 512 entradas' USING ERRCODE='23514'; END IF;
   IF last.id IS NULL AND doc->>'action'<>'APPLY_RIGHTS' THEN
    RAISE EXCEPTION 'nada a retirar de destino que nunca recebeu' USING ERRCODE='23514';
   END IF;

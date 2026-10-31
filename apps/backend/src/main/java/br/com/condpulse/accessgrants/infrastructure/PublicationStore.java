@@ -94,6 +94,13 @@ public class PublicationStore {
    order by 1
    """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,tenant));
  }
+ /** Destinos cujo documento passaria de 512 entradas (o compilado retira tudo do destino: falha fechada). */
+ public List<UUID> oversized(UUID tenant,UUID subject) {
+  return scan(()->jdbc.query("""
+   select d.device from (select distinct device from cp.rights_destinations(?,?) device) d
+   where jsonb_array_length(cp.rights_entries(?,?,d.device))>512 order by 1
+   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject));
+ }
  /** Grava o trabalho de um destino; o banco compila de novo e recusa o que não pode publicar. */
  public void planDevice(UUID tenant,UUID operation,UUID subject,UUID device,UUID actor) {
   scan(()->jdbc.update("insert into cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) values(?,?,?,?,'PLAN',?)",
