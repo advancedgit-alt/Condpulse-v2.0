@@ -20,7 +20,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** V037 com PostgreSQL real e o login da API: concessão técnica em três níveis (AC-003), dois condomínios. */
+/**
+ * V037 com PostgreSQL real e o login da API: concessão técnica em três níveis (AC-003), dois condomínios. Casos do pacote
+ * (homologacao/testes_homologacao.json), nível CONTRATO: HAC-007 (isolamento), HAC-009 (gestor sem ação técnica), HAC-010
+ * (MASTER de implantação só no escopo delegado), HAC-012 (revogação/inativação fecham a sessão) e HAC-018 (trilha).
+ */
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class TechnicalGrantJdbcTest {
  private static final AssuranceLevel AAL1=AssuranceLevel.AAL1,AAL2=AssuranceLevel.AAL2;
@@ -71,8 +75,8 @@ class TechnicalGrantJdbcTest {
   var session=grants.session(MASTER,db.tenantA,AAL2);
   assertEquals(scopes,session.scopes());
   assertEquals("MFA_REQUIRED",code(()->grants.session(MASTER,db.tenantA,AAL1)));
-  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MASTER,db.tenantB,AAL2)),"Concessão não atravessa condomínio");
-  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MANAGER,db.tenantA,AAL2)),"Gestor não tem sessão técnica");
+  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MASTER,db.tenantB,AAL2)),"HAC-007: concessão não atravessa condomínio");
+  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MANAGER,db.tenantA,AAL2)),"HAC-009: gestor não tem sessão técnica");
   // O banco confere de novo: escopo publicado só vale se concedido e vigente.
   assertTrue(technical.execute(MASTER,db.tenantA,AAL2,context->{
    context.require(TechnicalScope.INSTALLATION_BIND_CHANNEL);
@@ -101,10 +105,10 @@ class TechnicalGrantJdbcTest {
   assertEquals("TENANT_NOT_FOUND",code(()->grants.revoke(db.accountA,AAL2,db.tenantB,id,
    new TechnicalGrantModels.RevokeTechnicalGrant(0L,"Fim do ensaio"))));
   assertEquals("PLATFORM_ACCESS_DENIED",code(()->grants.revoke(MANAGER,AAL2,db.tenantA,id,
-   new TechnicalGrantModels.RevokeTechnicalGrant(0L,"Fim do ensaio"))),"Gestor não revoga");
+   new TechnicalGrantModels.RevokeTechnicalGrant(0L,"Fim do ensaio"))),"HAC-009: gestor não revoga");
   var revoked=grants.revoke(db.accountA,AAL2,db.tenantA,id,new TechnicalGrantModels.RevokeTechnicalGrant(0L,"Fim do ensaio"));
   assertEquals("REVOKED",revoked.status()); assertFalse(revoked.current()); assertNotNull(revoked.revokedAt()); assertEquals(1,revoked.version());
-  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MASTER,db.tenantA,AAL2)),"Revogada fecha a sessão técnica");
+  assertEquals("TENANT_ACCESS_DENIED",code(()->grants.session(MASTER,db.tenantA,AAL2)),"HAC-012: revogada fecha a sessão técnica");
   assertEquals("TECHNICAL_GRANT_STALE",code(()->grants.revoke(db.accountA,AAL2,db.tenantA,id,
    new TechnicalGrantModels.RevokeTechnicalGrant(1L,"Fim do ensaio"))));
   assertEquals("1",db.adminString("select count(*) from platform.platform_audit_log where action='TECHNICAL_GRANT_REVOKED' and tenant_id=?",db.tenantA));

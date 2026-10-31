@@ -185,7 +185,7 @@ test('contrato publica somente a superficie implementada da fundacao',()=>{
   if(path.includes('/management/')) assert.equal(method,'get',path);
   if(method==='post') assert.ok(operation.parameters.some(p=>p.name==='X-CSRF-Token'),path);
  }
- assert.ok(!JSON.stringify(spec.components.schemas.TechnicalGrant).match(/secret_ref|secretRef|password|token|email/i),'concessão sem segredo nem e-mail');
+ assert.ok(!JSON.stringify(spec.components.schemas.TechnicalGrant).match(/secret_ref|secretRef|password|token|email/i),'HAC-013: concessão sem segredo nem e-mail');
  assert.ok(!spec.components.schemas.IssueTechnicalGrant.properties.scopes.items.enum.includes('*'),'sem curinga de escopo');
  const webhook=spec.paths['/v1/finance/asaas/webhook'].post;
  assert.deepEqual(webhook.security,[],'webhook do Asaas não usa sessão');

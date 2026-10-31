@@ -3282,13 +3282,13 @@ def technical_grant_checks():
                 f"granted_via,granted_by_account_id,reason) VALUES('{identifier}','{tenant}','{account}','MASTER_IMPLANTACAO',{extra_scopes},"
                 f"now(),now()+interval '{days} days','PLATFORM_API','{by}','Implantacao piloto ficticia')")
     expect(error(issue(G1).replace(plat, "SET LOCAL app.platform_capabilities='tenants.read'; "), "42501", actor=PL, role="cp_api"),
-           "sem technical_grants.manage nao emite concessao tecnica")
-    expect(error(issue(G1, account=PL), "42501", actor=PL, role="cp_api"), "MASTER plataforma nao concede a si proprio")
-    expect(error(issue(G1, extra_scopes="ARRAY['*']"), "23514", actor=PL, role="cp_api"), "escopo fora da lista fechada e recusado")
+           "HAC-010: sem technical_grants.manage nao emite concessao tecnica")
+    expect(error(issue(G1, account=PL), "42501", actor=PL, role="cp_api"), "HAC-010: MASTER plataforma nao concede a si proprio")
+    expect(error(issue(G1, extra_scopes="ARRAY['*']"), "23514", actor=PL, role="cp_api"), "HAC-010: escopo fora da lista fechada e recusado")
     expect(error(issue(G1, extra_scopes="ARRAY['installation.manage','installation.manage']"), "23514", actor=PL, role="cp_api"),
            "escopo repetido e recusado")
     expect(error(issue(G1, days=91), "23514", actor=PL, role="cp_api"), "validade acima de 90 dias e recusada")
-    expect(error(issue(G1, audit=False), "23514", actor=PL, role="cp_api"), "emissao sem trilha da plataforma nao conclui")
+    expect(error(issue(G1, audit=False), "23514", actor=PL, role="cp_api"), "HAC-018: emissao sem trilha da plataforma nao conclui")
     expect(error(issue(G1).replace("'PLATFORM_API'", "'OPERATIONS'"), "42501", actor=PL, role="cp_api"),
            "role runtime nao usa o caminho operacional")
     query(issue(G1), actor=PL, role="cp_api")
@@ -3296,45 +3296,47 @@ def technical_grant_checks():
            "concessao nasce ativa na versao 0 com identidade do banco")
     tech = "SET LOCAL app.technical_scopes='installation.manage,installation.bind_channel,connector.rotate_secret'; "
     expect(value(tech + "select platform.has_technical_scope('installation.bind_channel')", tenant=TA, actor=MI, role="cp_api") == "t",
-           "MASTER de implantacao tem o escopo concedido no condominio")
+           "HAC-010: MASTER de implantacao tem o escopo concedido no condominio")
+    expect(value("SET LOCAL app.technical_scopes='installation.manage,access.request_open'; select platform.has_technical_scope('access.request_open')",
+                 tenant=TA, actor=MI, role="cp_api") == "f", "HAC-011: concessao administrativa nao da abertura fisica sem escopo explicito")
     expect(value(tech + "select platform.has_technical_scope('connector.rotate_secret')", tenant=TA, actor=MI, role="cp_api") == "f",
-           "escopo publicado mas nao concedido no banco nao vale")
+           "HAC-010: escopo publicado mas nao concedido no banco nao vale")
     expect(value(tech + "select platform.has_technical_scope('installation.bind_channel')", tenant=TB, actor=MI, role="cp_api") == "f",
-           "concessao nao atravessa condominio")
+           "HAC-007: concessao nao atravessa condominio")
     expect(value("select platform.has_technical_scope('installation.bind_channel')", tenant=TA, actor=MI, role="cp_api") == "f",
            "sem escopo publicado pela API (AAL2) nao vale")
     expect(value(tech + "select platform.has_technical_scope('installation.bind_channel')", tenant=TA, actor=MG, role="cp_api") == "f",
-           "gestor nao herda escopo tecnico mesmo publicando o contexto")
+           "HAC-009: gestor nao herda escopo tecnico mesmo publicando o contexto")
     expect(value(f"select count(*) from platform.tenants where id='{TA}'", actor=MI, role="cp_api") == "1",
            "MASTER de implantacao enxerga o condominio da concessao")
     expect(value(f"select count(*) from platform.tenants where id='{TB}'", actor=MI, role="cp_api") == "0",
-           "e nao enxerga outro condominio")
+           "HAC-007: e nao enxerga outro condominio")
     expect(value("select count(*) from cp.technical_grants", tenant=TA, actor=MI, role="cp_api") == "1", "beneficiado ve a propria concessao")
     expect(value("SET LOCAL app.capabilities='memberships.manage'; select count(*) from cp.technical_grants", tenant=TA, actor=MG, role="cp_api") == "1",
            "gestor ve concessoes do proprio condominio")
     expect(value("SET LOCAL app.capabilities='memberships.manage'; select count(*) from cp.technical_grants", tenant=TB, actor=MG, role="cp_api") == "0",
-           "gestor nao ve concessoes de outro condominio")
+           "HAC-007: gestor nao ve concessoes de outro condominio")
     expect(value("select count(*) from cp.technical_grants", tenant=TA, actor=AA, role="cp_api") == "0", "morador nao ve concessoes")
     expect(error("SET LOCAL app.capabilities='memberships.manage'; " + issue(G2, by=MG).replace(plat, ""), "42501", tenant=TA, actor=MG, role="cp_api"),
-           "gestor nao emite concessao tecnica")
+           "HAC-009: gestor nao emite concessao tecnica")
     expect(error(f"SET LOCAL app.capabilities='memberships.manage'; UPDATE cp.technical_grants SET status='REVOKED',revoke_reason='abc',"
                  f"revoked_by_account_id='{MG}',version=1 WHERE id='{G1}'", "42501", tenant=TA, actor=MG, role="cp_api") or
-           value(f"select status from cp.technical_grants where id='{G1}'") == "ACTIVE", "gestor nao revoga concessao tecnica")
+           value(f"select status from cp.technical_grants where id='{G1}'") == "ACTIVE", "HAC-009: gestor nao revoga concessao tecnica")
     expect(error(plat + f"UPDATE cp.technical_grants SET valid_until=now()+interval '60 days' WHERE id='{G1}'", "42501", actor=PL, role="cp_api"),
            "validade nao muda depois de emitida")
     expect(error(plat + f"UPDATE cp.technical_grants SET scopes=ARRAY['installation.read'],version=1 WHERE id='{G1}'", "42501", actor=PL, role="cp_api"),
            "escopos nao mudam depois de emitidos")
     expect(error(plat + f"DELETE FROM cp.technical_grants WHERE id='{G1}'", "42501", actor=PL, role="cp_api"), "concessao nao e apagada")
     revoke = (f"UPDATE cp.technical_grants SET status='REVOKED',revoke_reason='Fim do ensaio',revoked_by_account_id='{PL}',version=1 WHERE id='{G1}'")
-    expect(error(plat + revoke, "23514", actor=PL, role="cp_api"), "revogacao sem trilha da plataforma nao conclui")
+    expect(error(plat + revoke, "23514", actor=PL, role="cp_api"), "HAC-018: revogacao sem trilha da plataforma nao conclui")
     query(plat + f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) VALUES('{PL}','TECHNICAL_GRANT_REVOKED',"
           f"'{TA}','Fim do ensaio','{{\"grantId\":\"{G1}\"}}'); " + revoke, actor=PL, role="cp_api")
     expect(value(f"select status||':'||version||':'||(revoked_at is not null) from cp.technical_grants where id='{G1}'") == "REVOKED:1:true",
            "revogacao final com horario do banco")
     expect(value(tech + "select platform.has_technical_scope('installation.bind_channel')", tenant=TA, actor=MI, role="cp_api") == "f",
-           "revogacao invalida o escopo na proxima instrucao, mesmo com contexto publicado")
+           "HAC-012: revogacao invalida o escopo na proxima instrucao, mesmo com contexto publicado")
     expect(value(f"select count(*) from platform.tenants where id='{TA}'", actor=MI, role="cp_api") == "0",
-           "revogado deixa de enxergar o condominio")
+           "HAC-012: revogado deixa de enxergar o condominio")
     expect(error(plat + f"UPDATE cp.technical_grants SET status='ACTIVE',revoke_reason=NULL,revoked_by_account_id=NULL,version=2 WHERE id='{G1}'",
                  "42501", actor=PL, role="cp_api") or value(f"select status from cp.technical_grants where id='{G1}'") == "REVOKED",
            "concessao revogada nao volta a valer")
@@ -3342,10 +3344,10 @@ def technical_grant_checks():
     query(issue(G3), actor=PL, role="cp_api")
     query(f"SET session_replication_role=replica; UPDATE cp.technical_grants SET valid_from=now()-interval '2 days',valid_until=now()-interval '1 day' WHERE id='{G3}'")
     expect(value(tech + "select platform.has_technical_scope('installation.manage')", tenant=TA, actor=MI, role="cp_api") == "f",
-           "concessao vencida nao vale sem depender de job")
+           "HAC-012: concessao vencida nao vale sem depender de job")
     expect(error(f"INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) "
                  f"VALUES('{G2}','{TA}','{MI}','TECHNICAL_SUPPORT',ARRAY['connector.rotate_secret'],now(),now()+interval '1 day','OPERATIONS',"
-                 f"'Suporte ficticio sem escopo')", "23514"), "suporte tecnico nao recebe rotacao de segredo")
+                 f"'Suporte ficticio sem escopo')", "23514"), "HAC-010: suporte tecnico nao recebe rotacao de segredo")
     expect(error(f"INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) "
                  f"VALUES('{G2}','{TA}','{MI}','MASTER_IMPLANTACAO',ARRAY['installation.read'],now()-interval '1 day',now()+interval '1 day','OPERATIONS',"
                  f"'Inicio retroativo ficticio')", "23514"), "inicio retroativo e recusado")
