@@ -75,7 +75,7 @@ class AccessPolicyJdbcTest {
   db.adminUpdateWithoutTriggers("delete from cp.device_channels where id=?",CHANNEL);
   db.adminUpdateWithoutTriggers("delete from cp.access_devices where id=?",DEVICE);
   db.adminUpdateWithoutTriggers("delete from cp.access_connectors where id=?",CONNECTOR);
-  db.adminUpdateWithoutTriggers("delete from cp.access_points where id=?",POINT);
+  db.adminUpdateWithoutTriggers("delete from cp.access_points where id=? or (tenant_id=? and code like 'PX%')",POINT,db.tenantA);
   db.adminUpdateWithoutTriggers("delete from cp.access_areas where id in (?,?)",HALL,GYM);
   db.adminUpdateWithoutTriggers("delete from platform.access_homologations where id=?",HOMOLOGATION);
  }
@@ -88,6 +88,24 @@ class AccessPolicyJdbcTest {
    new PolicyModels.FailureRule("DENY","DENY"),"OFF",null,true,null,"DENY");
  }
 
+ @Test void largeInstallationPersistsAnAggregatedBlockedReport() throws Exception {
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  db.adminUpdateWithoutTriggers("insert into cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,"
+   +"created_by,updated_by) select gen_random_uuid(),?,'PX'||g,'Porta '||g,?,?,'DOOR','FROM_TO','FREE_EGRESS','MAPPED',?,? from generate_series(1,450) g",
+   db.tenantA,HALL,GYM,MASTER,MASTER);
+  UUID policyId=UUID.randomUUID(),versionId=UUID.randomUUID();
+  policies.createPolicy(MANAGER,db.tenantA,AAL2,new PolicyModels.CreatePolicy(policyId,GYM,"Academia"));
+  policies.createVersion(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.CreateVersion(versionId,gym(zone),"Regra da academia ficticia"));
+  var report=policies.validate(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.ValidateRequest(versionId));
+  assertEquals("BLOCKED",report.status(),"Relatório entregue, não 422");
+  assertEquals(451,report.affectedPointIds().size());
+  assertTrue(report.issues().size()<=300);
+  var uncommissioned=report.issues().stream().filter(i->"NOT_COMMISSIONED".equals(i.code())).findFirst().orElseThrow();
+  assertEquals(450,uncommissioned.occurrences());
+  assertTrue(report.issues().stream().anyMatch(i->"CAPABILITY_MISSING".equals(i.code()) && "localValidity".equals(i.capability())));
+  assertEquals("DRAFT",policies.versions(MANAGER,db.tenantA,AAL2,policyId).versions().getFirst().state());
+  db.assertEmptyContext();
+ }
  @Test void managerValidatesAgainstCommissionedPointsApprovesAndSimulatesWithoutCommands() throws Exception {
   String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
   UUID policyId=UUID.randomUUID(),versionId=UUID.randomUUID();

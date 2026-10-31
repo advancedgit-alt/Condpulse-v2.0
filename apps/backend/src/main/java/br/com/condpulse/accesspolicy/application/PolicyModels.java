@@ -35,7 +35,8 @@ public final class PolicyModels {
  public record RejectVersion(String reason,Long expectedVersion) {}
 
  public record ValidateRequest(UUID policyVersionId) {}
- public record ValidationIssue(String code,String pointer,String message,String severity,UUID pointId,String capability) {}
+ /** Problema agregado por código, gravidade e capacidade: occurrences conta as passagens; pointIds é amostra (até 20). */
+ public record ValidationIssue(String code,String pointer,String message,String severity,UUID pointId,String capability,int occurrences,List<UUID> pointIds) {}
  public record ValidationResult(UUID validationId,UUID policyVersionId,int installationRevision,Instant validatedAt,Instant expiresAt,String status,
    List<ValidationIssue> issues,List<UUID> affectedPointIds,List<String> requiredCapabilityNames) {}
 

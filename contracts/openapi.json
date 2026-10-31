@@ -31557,7 +31557,9 @@
           "message",
           "severity",
           "pointId",
-          "capability"
+          "capability",
+          "occurrences",
+          "pointIds"
         ],
         "properties": {
           "code": {
@@ -31610,8 +31612,22 @@
               "safeRecovery",
               null
             ]
+          },
+          "occurrences": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pointIds": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
-        }
+        },
+        "description": "Problema agregado por código, gravidade e capacidade: occurrences conta todas as passagens afetadas; pointIds é amostra de até 20; pointId é a primeira."
       },
       "AccessPolicyValidation": {
         "type": "object",

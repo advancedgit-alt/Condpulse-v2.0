@@ -87,6 +87,24 @@ class PolicyEngineTest {
    assertTrue(outcome.reasonCodes().contains("UNSUPPORTED_RESTRICTION"),entry.getKey());
   }
  }
+ @Test void largeInstallationsAggregateIssuesWithinTheStoredLimit() {
+  var d=doc(List.of("RESIDENT"),"DENY",18,DAY,"SAFE_LOCAL_SUBSET","DENY");
+  var destinations=new java.util.ArrayList<PolicyModels.Destination>();
+  for(int i=0;i<400;i++) destinations.add(new PolicyModels.Destination(UUID.randomUUID(),"MAPPED","FROM_TO",null,null,null,List.of()));
+  for(int i=0;i<600;i++) destinations.add(new PolicyModels.Destination(UUID.randomUUID(),"COMMISSIONED","FROM_TO",1,"APROVADO_PILOTO",null,
+   List.of("faceEnrollment","perDoorRights")));
+  var issues=PolicyEngine.validate(d,ACTIVE,destinations,SAT_10);
+  assertTrue(issues.size()<=300,"Cabe no limite do banco: "+issues.size());
+  assertTrue(PolicyEngine.blocked(issues));
+  var notCommissioned=issues.stream().filter(i->"NOT_COMMISSIONED".equals(i.code())).toList();
+  assertEquals(1,notCommissioned.size()); assertEquals(400,notCommissioned.getFirst().occurrences());
+  assertEquals(PolicyEngine.POINT_SAMPLE,notCommissioned.getFirst().pointIds().size());
+  var missing=issues.stream().filter(i->"CAPABILITY_MISSING".equals(i.code())).toList();
+  assertEquals(List.of("faceDeletion","localValidity","offlineRestriction","secureTransport"),missing.stream().map(PolicyModels.ValidationIssue::capability).toList(),
+   "Todas as capacidades ausentes preservadas");
+  assertTrue(missing.stream().allMatch(i->i.occurrences()==600 && "BLOCKER".equals(i.severity())));
+  assertEquals(issues,PolicyEngine.validate(d,ACTIVE,destinations,SAT_10),"Agregação determinística");
+ }
  @Test void evaluationIsDeterministicAndDeniesByDefault() {
   var d=doc(List.of("RESIDENT","DEPENDENT"),"DENY",18,DAY,"SAFE_LOCAL_SUBSET","DENY");
   assertEquals("ALLOW",PolicyEngine.evaluate(d,ACTIVE,COMMISSIONED,subject("RESIDENT","VERIFIED_MEETS_MINIMUM"),SAT_10).result());

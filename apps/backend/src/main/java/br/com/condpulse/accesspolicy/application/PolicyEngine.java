@@ -158,7 +158,26 @@ public final class PolicyEngine {
    for(String capability:required) if(!p.approvedCapabilities().contains(capability))
     issues.add(issue("CAPABILITY_MISSING","/areaId","Capacidade não aprovada para esta passagem.","BLOCKER",p.pointId(),capability));
   }
-  return List.copyOf(issues);
+  return aggregate(issues);
+ }
+ /** Amostra de passagens por problema agregado. */
+ public static final int POINT_SAMPLE=20;
+ /**
+  * Agrega por código, gravidade e capacidade, na ordem da primeira ocorrência: o relatório cabe no limite do banco
+  * (300 problemas) qualquer que seja o número de passagens, e nenhum impeditivo se perde (occurrences conta todos).
+  */
+ public static List<PolicyModels.ValidationIssue> aggregate(List<PolicyModels.ValidationIssue> raw) {
+  var groups=new java.util.LinkedHashMap<String,List<PolicyModels.ValidationIssue>>();
+  for(var i:raw) groups.computeIfAbsent(i.code()+"|"+i.severity()+"|"+i.capability(),k->new ArrayList<>()).add(i);
+  var out=new ArrayList<PolicyModels.ValidationIssue>();
+  for(var group:groups.values()) {
+   var first=group.getFirst();
+   var points=group.stream().map(PolicyModels.ValidationIssue::pointId).filter(Objects::nonNull).distinct().toList();
+   int occurrences=group.stream().mapToInt(PolicyModels.ValidationIssue::occurrences).sum();
+   out.add(new PolicyModels.ValidationIssue(first.code(),first.pointer(),first.message(),first.severity(),points.isEmpty()?null:points.getFirst(),
+    first.capability(),occurrences,points.stream().limit(POINT_SAMPLE).toList()));
+  }
+  return List.copyOf(out);
  }
  static boolean approved(PolicyModels.Destination p,Instant now) {
   return ("APROVADO_PILOTO".equals(p.homologationStatus()) || "HOMOLOGADO".equals(p.homologationStatus()))
@@ -166,7 +185,7 @@ public final class PolicyEngine {
  }
  public static boolean blocked(List<PolicyModels.ValidationIssue> issues) { return issues.stream().anyMatch(i->"BLOCKER".equals(i.severity())); }
  private static PolicyModels.ValidationIssue issue(String code,String pointer,String message,String severity,UUID point,String capability) {
-  return new PolicyModels.ValidationIssue(code,pointer,message,severity,point,capability);
+  return new PolicyModels.ValidationIssue(code,pointer,message,severity,point,capability,1,point==null?List.of():List.of(point));
  }
 
  /** Restrição declarada que o motor ainda não avalia: impede a validação e nega a avaliação (nunca ALLOW). */
