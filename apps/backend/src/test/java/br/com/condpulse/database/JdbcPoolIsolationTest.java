@@ -137,7 +137,9 @@ class JdbcPoolIsolationTest {
     context.requireCapability(StaffCapability.MANAGE_UNITS);
     return db.jdbc.queryForObject("select current_setting('app.capabilities',true)",String.class);
    });
-   assertEquals("amenities.manage,announcements.publish,area.manage,audit.read,finance.manage,memberships.manage,policy.edit,policy.publish,requests.manage,reservations.decide,units.manage",elevated);
+   // PRD complementar §4.4 (ADR-0011): a gestão local tem security.blocklist.approve (co-aprovação) e
+   // security.log.read.tenant (log do próprio condomínio); o banco confere o vínculo MANAGER vigente (V049).
+   assertEquals("amenities.manage,announcements.publish,area.manage,audit.read,finance.manage,memberships.manage,policy.edit,policy.publish,requests.manage,reservations.decide,security.blocklist.approve,security.log.read.tenant,units.manage",elevated);
    db.assertEmptyContext();
    String weak=transactions.execute(db.accountC,db.tenantB,AssuranceLevel.AAL1,
     context->db.jdbc.queryForObject("select coalesce(current_setting('app.capabilities',true),'')",String.class));

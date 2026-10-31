@@ -46,10 +46,10 @@ class PartnerHierarchyJdbcTest {
    new PartnerStore(db.jdbc),new PlatformStore(db.jdbc));
   tenants=new TenantTransactionExecutor(db.jdbc,db.manager);
   admin=UUID.randomUUID(); lead=UUID.randomUUID(); operator=UUID.randomUUID(); stranger=UUID.randomUUID();
-  for(UUID account:List.of(admin,lead,operator,stranger)) {
-   db.extraAccounts.add(account);
+  // Contas sintéticas únicas deste ensaio: ficam no banco descartável, porque a trilha da plataforma (append-only)
+  // referencia o ator; nunca são apagadas.
+  for(UUID account:List.of(admin,lead,operator,stranger))
    db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",account);
-  }
  }
  @BeforeEach void reset() throws Exception {
   db.restoreActiveFixtures(); db.clearPlatformFixtures(); db.grantPlatformAdmin(db.accountA); db.assertEmptyContext();
