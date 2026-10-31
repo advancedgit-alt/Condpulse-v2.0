@@ -88,7 +88,7 @@ test('proprietário sem locação vê a indicação e mantém as demais áreas',
   await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inquilinos`);
   await expect(page.getByText('Unidade não alugada')).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
-  await expect(navigation.getByRole('link')).toHaveText(['Início', 'Reservas', 'Inquilinos']);
+  await expect(navigation.getByRole('link')).toHaveText(['Início', 'Reservas', 'Financeiro', 'Inquilinos']);
   await expect(page.getByRole('form', { name: 'Convidar inquilino' })).toHaveCount(0);
 });
 

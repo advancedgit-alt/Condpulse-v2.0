@@ -2920,6 +2920,132 @@ def occurrence_checks():
     query(f"SET session_replication_role=replica; DELETE FROM cp.concierge_occurrences WHERE id in ('{O1}','{O2}'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{CO}','{MG}','{RO}'); DELETE FROM platform.accounts WHERE id in ('{CO}','{MG}','{RO}')")
 
+def finance_checks():
+    """V036: financeiro condominial (ADR-0008). Pagador, taxas e cobrancas so pela gestao (finance.manage); unidade ve
+    somente cobrancas emitidas da propria unidade; proprietario de unidade alugada nao ve; webhook sem ator so sincroniza a
+    situacao da cobranca identificada; nada e apagado; worker sem acesso."""
+    MGF, OWF, REF, OTHER = (f"10000000-0000-4000-8000-0000000009a{i}" for i in range(1, 5))
+    UF = "20000000-0000-4000-8000-0000000009a1"
+    MOW, MRE, MOT = (f"51000000-0000-4000-8000-0000000009a{i}" for i in range(1, 4))
+    PY1, PY2, FEE = "53000000-0000-4000-8000-0000000009a1", "53000000-0000-4000-8000-0000000009a2", "54000000-0000-4000-8000-0000000009a1"
+    C1, C2, C3, C4 = (f"55000000-0000-4000-8000-0000000009a{i}" for i in range(1, 5))
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MGF}','ACTIVE'),('{OWF}','ACTIVE'),('{REF}','ACTIVE'),('{OTHER}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UF}','{TA}','FINANCEIRO 301');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          ('{MOW}','{TA}','{OWF}','{UF}','PROPRIETARIO FINANCEIRO','OWNER','ACTIVE'),
+          ('{MRE}','{TA}','{REF}','{UF}','RESPONSAVEL FINANCEIRO','RESPONSIBLE','ACTIVE'),
+          ('{MOT}','{TA}','{OTHER}','{UA}','MORADOR OUTRA UNIDADE','RESIDENT','ACTIVE'),
+          (gen_random_uuid(),'{TA}','{MGF}',NULL,'GESTAO FINANCEIRO','MANAGER','ACTIVE');
+    """)
+    fin = "SET LOCAL app.capabilities='finance.manage,memberships.manage'; "
+    as_manager = dict(tenant=TA, actor=MGF, role="cp_api")
+    as_resp = dict(tenant=TA, actor=REF, role="cp_api")
+    as_owner = dict(tenant=TA, actor=OWF, role="cp_api")
+    as_other = dict(tenant=TA, actor=OTHER, role="cp_api")
+    def payer(identifier, membership=MOW, unit=UF):
+        return (f"INSERT INTO cp.finance_payers(id,tenant_id,unit_id,membership_id,legal_name,document,email) "
+                f"VALUES('{identifier}','{TA}','{unit}','{membership}','PAGADOR FICTICIO','12345678909','pagador@example.invalid')")
+    denied = query(payer(PY1), check=False, **as_manager)
+    expect(denied.returncode != 0 and ("42501" in denied.stderr or "23514" in denied.stderr),
+           "pagador exige finance.manage (sessao sem AAL2 nao publica capacidade)")
+    expect(error(fin + payer(PY1, membership=MOT), "23514", **as_manager), "pagador precisa ser proprietario ou responsavel da unidade")
+    expect(error(fin + payer(PY1).replace("'12345678909'", "'123'"), "23514", **as_manager), "documento so com 11 ou 14 digitos")
+    query(fin + payer(PY1), **as_manager)
+    expect(value(f"select state||':'||created_by||':'||version||':'||(asaas_customer_id is null) from cp.finance_payers where id='{PY1}'")
+           == f"ACTIVE:{MGF}:0:true", "autoria, situacao e versao do pagador vem do banco")
+    expect(error(fin + payer(PY2, membership=MRE), "23505", **as_manager), "um pagador ativo por unidade")
+    expect(error(fin + f"UPDATE cp.finance_payers SET document='98765432100',version=1 WHERE id='{PY1}'", "42501", **as_manager),
+           "documento do pagador nao muda (sem grant)")
+    query(fin + f"UPDATE cp.finance_payers SET asaas_customer_id='cus_000000000001',version=1 WHERE id='{PY1}'", **as_manager)
+    expect(error(fin + f"UPDATE cp.finance_payers SET asaas_customer_id='cus_000000000002',version=2 WHERE id='{PY1}'", "23514", **as_manager),
+           "cliente do Asaas gravado uma unica vez")
+    expect(value("select count(*) from cp.finance_payers", **as_resp) == "0", "unidade nao le o cadastro do pagador (CPF)")
+    def charge(identifier, amount=15000, extra_cols="", extra_vals="", kind="CONDO_FEE"):
+        return (f"INSERT INTO cp.finance_charges(id,tenant_id,unit_id,payer_id,kind,description,amount_cents,due_date,billing_type{extra_cols}) "
+                f"VALUES('{identifier}','{TA}','{UF}','{PY1}','{kind}','Taxa ficticia',{amount},current_date+10,'BOLETO'{extra_vals})")
+    refused = query(charge(C1), check=False, **as_resp)
+    expect(refused.returncode != 0 and ("42501" in refused.stderr or "23514" in refused.stderr), "unidade nao cria cobranca")
+    expect(error(fin + charge(C1, amount=100), "23514", **as_manager), "valor minimo de R$ 5,00")
+    expect(error(fin + charge(C1, extra_cols=",state", extra_vals=",'PAID'"), "42501", **as_manager), "cobranca nasce pendente de emissao")
+    query(fin + charge(C1), **as_manager)
+    expect(value(f"select state||':'||created_by||':'||version from cp.finance_charges where id='{C1}'") == f"PENDING_ISSUE:{MGF}:0",
+           "cobranca nasce PENDING_ISSUE com autoria do banco")
+    expect(value(f"select count(*) from cp.finance_charges where id='{C1}'", **as_resp) == "0", "cobranca ainda nao emitida nao aparece a unidade")
+    expect(error(fin + f"UPDATE cp.finance_charges SET state='OPEN',version=1 WHERE id='{C1}'", "23514", **as_manager),
+           "abrir exige o pagamento do Asaas")
+    query(fin + f"UPDATE cp.finance_charges SET state='OPEN',asaas_payment_id='pay_000000000001',asaas_status='PENDING',"
+                f"invoice_url='https://sandbox.asaas.com/i/000000000001',bank_slip_url='https://sandbox.asaas.com/b/pdf/000000000001',version=1 WHERE id='{C1}'",
+          **as_manager)
+    expect(value(f"select count(*) from cp.finance_charges where id='{C1}'", **as_resp) == "1", "responsavel ve a cobranca emitida da unidade")
+    expect(value(f"select count(*) from cp.finance_charges where id='{C1}'", **as_owner) == "1", "proprietario (sem locacao) ve a cobranca")
+    expect(value(f"select count(*) from cp.finance_charges where id='{C1}'", **as_other) == "0", "morador de outra unidade nao ve")
+    expect(value(f"select count(*) from cp.finance_charges where id='{C1}'", tenant=TB, actor=AB, role="cp_api") == "0", "outro condominio nao ve")
+    expect(value(f"WITH u AS (UPDATE cp.finance_charges SET state='PAID',paid_at=current_date,version=version+1 WHERE id='{C1}' RETURNING id) "
+                 f"SELECT count(*) FROM u", **as_resp) == "0", "unidade nao altera cobranca")
+    expect(error(fin + f"UPDATE cp.finance_charges SET amount_cents=1,version=2 WHERE id='{C1}'", "42501", **as_manager), "valor nao muda (sem grant)")
+    expect(error(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',version=2 WHERE id='{C1}'", "23514", **as_manager),
+           "cancelamento exige autoria e motivo")
+    # Webhook: sem ator e sem capacidade, so a cobranca identificada.
+    hook = f"SET LOCAL app.finance_webhook_charge='{C1}'; "
+    expect(value(hook + f"select tenant_id from cp.finance_charges where asaas_payment_id='pay_000000000001'", actor=None, role="cp_api") == TA,
+           "webhook localiza o condominio pela cobranca identificada")
+    query(fin + charge(C2), **as_manager)
+    expect(value(hook + f"select count(*) from cp.finance_charges where id='{C2}'", actor=None, role="cp_api") == "0", "webhook nao ve outra cobranca")
+    expect(value(hook + f"select count(*) from cp.finance_charges where id='{C1}'", actor=AA, role="cp_api") == "0",
+           "contexto de webhook nao vale com ator")
+    expect(error(hook + f"UPDATE cp.finance_charges SET invoice_url='https://sandbox.asaas.com/i/x',version=2 WHERE id='{C1}'", "42501",
+                 tenant=TA, actor=None, role="cp_api"), "webhook nao altera dados de emissao")
+    event = (f"INSERT INTO cp.finance_webhook_events(tenant_id,event_id,event_type,charge_id,asaas_status,resulting_state) "
+             f"VALUES('{TA}','{{event}}','PAYMENT_RECEIVED','{{charge}}','RECEIVED','PAID') ON CONFLICT (event_id) DO NOTHING RETURNING id")
+    expect(error(hook + event.format(event="evt_ficticio_0001", charge=C2), "42501", tenant=TA, actor=None, role="cp_api"),
+           "evento so da cobranca identificada")
+    first = query(hook + event.format(event="evt_ficticio_0001", charge=C1) + "; " +
+                  f"UPDATE cp.finance_charges SET state='PAID',asaas_status='RECEIVED',paid_at=current_date,paid_cents=15000,version=2 WHERE id='{C1}'",
+                  tenant=TA, actor=None, role="cp_api")
+    expect(first.returncode == 0, "webhook grava o evento e sincroniza a situacao na mesma transacao")
+    expect(query(hook + event.format(event="evt_ficticio_0001", charge=C1), tenant=TA, actor=None, role="cp_api").stdout.strip() == "",
+           "evento repetido e ignorado (idempotente)")
+    expect(value(f"select state||':'||paid_cents||':'||version from cp.finance_charges where id='{C1}'") == "PAID:15000:2", "cobranca paga")
+    expect(error(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',cancelled_by='{MGF}',cancel_reason='Erro',version=3 WHERE id='{C1}'",
+                 "23514", **as_manager), "cobranca paga nao e cancelada")
+    query(hook + f"UPDATE cp.finance_charges SET state='REFUNDED',asaas_status='REFUNDED',version=3 WHERE id='{C1}'", tenant=TA, actor=None, role="cp_api")
+    expect(error(hook + f"UPDATE cp.finance_charges SET state='OPEN',version=4 WHERE id='{C1}'", "23514", tenant=TA, actor=None, role="cp_api"),
+           "estorno e final")
+    query(fin + f"UPDATE cp.finance_charges SET state='CANCELLED',cancelled_by='{MGF}',cancel_reason='Lancada por engano',version=1 WHERE id='{C2}'",
+          **as_manager)
+    expect(value(f"select (cancelled_at is not null)::text from cp.finance_charges where id='{C2}'") == "true", "horario do cancelamento vem do banco")
+    # Recorrente: uma cobranca por unidade e competencia, igual a taxa ativa.
+    query(fin + f"INSERT INTO cp.finance_recurring_fees(id,tenant_id,unit_id,description,amount_cents,due_day,billing_type) "
+                f"VALUES('{FEE}','{TA}',NULL,'Taxa condominial ficticia',20000,10,'PIX')", **as_manager)
+    rec = ",recurring_fee_id,competence"
+    recurring = lambda ident, amount=20000: charge(ident, amount=amount, extra_cols=rec, extra_vals=f",'{FEE}',date_trunc('month',current_date)::date").replace("'BOLETO'", "'PIX'")
+    expect(error(fin + recurring(C3, amount=19999), "23514", **as_manager), "cobranca recorrente igual a taxa")
+    query(fin + recurring(C3), **as_manager)
+    expect(error(fin + recurring(C4), "23505", **as_manager), "uma cobranca por taxa, unidade e competencia")
+    query(fin + f"UPDATE cp.finance_charges SET state='OPEN',asaas_payment_id='pay_000000000003',version=1 WHERE id='{C3}'", **as_manager)
+    # Locacao: proprietario de unidade alugada perde a visao do financeiro da unidade.
+    query(f"SET LOCAL app.capabilities='memberships.manage'; INSERT INTO cp.unit_rentals(tenant_id,unit_id,owner_membership_id,owner_account_id,started_by) "
+          f"VALUES('{TA}','{UF}','{MOW}','{OWF}','{MGF}')", **as_manager)
+    expect(value(f"select count(*) from cp.finance_charges where unit_id='{UF}'", **as_owner) == "0",
+           "proprietario de unidade alugada nao ve cobrancas da unidade")
+    expect(value(f"select count(*) from cp.finance_charges where id='{C3}'", **as_resp) == "1", "inquilino responsavel continua vendo")
+    # Trilha, eventos e ausencia de DELETE.
+    audit = (f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id,reason) "
+             f"VALUES('{TA}','{{actor}}','FINANCE_CHARGE_CREATED','FINANCE_CHARGE','{C3}',gen_random_uuid(),'Motivo')")
+    expect(error(audit.format(actor=REF), "42501", **as_resp), "trilha FINANCE_ so pela gestao")
+    query(fin + audit.format(actor=MGF), **as_manager)
+    expect(error(f"INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','FINANCE_CHARGE_PAID','{C2}',9,'{{}}')",
+                 "42501", **as_other), "evento financeiro so sobre cobranca visivel")
+    for table in ["finance_payers", "finance_recurring_fees", "finance_charges", "finance_webhook_events"]:
+        expect(error(fin + f"DELETE FROM cp.{table}", "42501", **as_manager), f"{table} nao e apagado")
+        expect(error(f"select count(*) from cp.{table}", "42501", tenant=TA, role="cp_worker"), f"worker nao le {table}")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id='{MGF}'; DELETE FROM cp.unit_rentals WHERE unit_id='{UF}'; "
+          f"DELETE FROM cp.finance_webhook_events WHERE tenant_id='{TA}'; DELETE FROM cp.finance_charges WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.finance_recurring_fees WHERE tenant_id='{TA}'; DELETE FROM cp.finance_payers WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MGF}','{OWF}','{REF}','{OTHER}'); DELETE FROM cp.units WHERE id='{UF}'; "
+          f"DELETE FROM platform.accounts WHERE id in ('{MGF}','{OWF}','{REF}','{OTHER}')")
+
 def rental_checks():
     """V034: proprietario x inquilino. Proprietario (OWNER) de unidade alugada perde a visao de todas as tabelas da unidade
     (mesmo que tivesse vinculo de ocupante), so ve/revoga ocupantes e so convida/revoga inquilino da propria unidade
@@ -3214,6 +3340,7 @@ def main():
     device_event_checks()
     device_health_checks()
     rental_checks()
+    finance_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

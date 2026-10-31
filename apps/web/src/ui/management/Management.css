@@ -77,3 +77,10 @@ textarea:focus-visible{outline:3px solid #009da7;outline-offset:3px}
 /* Credenciais de acesso (CP-046): situação por equipamento. */
 .credential-devices { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 2px; }
 .credential-devices li { color: var(--muted, inherit); }
+
+/* Financeiro (ADR-0008): tabelas simples de inadimplência e relatório, com rolagem horizontal em telas estreitas. */
+.data-table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+.data-table th, .data-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line, #d9e2ec); white-space: nowrap; }
+.data-table thead th { font-weight: 700; }
+.copy-field { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.copy-field code { word-break: break-all; padding: 6px 8px; border-radius: 6px; background: var(--surface-muted, #f0f4f8); }

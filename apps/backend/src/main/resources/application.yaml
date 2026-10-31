@@ -64,6 +64,11 @@ condpulse:
     lifetime-seconds: ${CP_REALTIME_LIFETIME_SECONDS:300}
     max-streams: ${CP_REALTIME_MAX_STREAMS:40}
     max-per-account: ${CP_REALTIME_MAX_PER_ACCOUNT:3}
+  finance:
+    # Financeiro condominial com Asaas (ADR-0008), somente sandbox. Ligado exige a chave e o token do webhook.
+    enabled: ${CP_FINANCE_ENABLED:false}
+    asaas-api-key: ${CP_ASAAS_API_KEY:}
+    asaas-webhook-token: ${CP_ASAAS_WEBHOOK_TOKEN:}
   files:
     enabled: ${CP_FILES_ENABLED:false}
     service-key: ${CP_STORAGE_SERVICE_KEY:}

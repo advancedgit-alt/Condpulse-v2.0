@@ -4,7 +4,8 @@ import {readFileSync} from 'node:fs';
 import {EventEmitter} from 'node:events';
 import {PassThrough} from 'node:stream';
 import {APP,ORG,VERCEL,READINESS_URL,REQUIRED,GENERATED,COPIED,FIXED_PUBLIC,validateRequest,createVercelRequester,readVercelConfig,
-  createFly,flyState,secretLines,createLogin,execute,waitReady,generateValues,fingerprint,STORAGE,storageValues} from '../infra/scripts/fly-api/fly-api.mjs';
+  createFly,flyState,secretLines,createLogin,execute,waitReady,generateValues,fingerprint,STORAGE,storageValues,
+  FINANCE,financeKey,createAsaasRequester,configureWebhook,WEBHOOK_URL,ASAAS_API} from '../infra/scripts/fly-api/fly-api.mjs';
 
 const SHA='a'.repeat(40),GEN='11000000-0000-4000-8000-000000000001';
 const base={GITHUB_SHA:SHA,GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'advancedgit-alt/Condpulse-v2.0',GITHUB_REF:'refs/heads/ccr-5e725112-3x8hyg',
@@ -216,6 +217,10 @@ test('workflow manual: gate sem segredos, Environment protegido, flyctl com chec
   assert.match(job,/CP_SUPABASE_PUBLISHABLE_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_SUPABASE_PUBLISHABLE_KEY \|\| '' \}\}/);
   assert.match(job,/CP_STORAGE_SERVICE_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_STORAGE_SERVICE_KEY \|\| '' \}\}/);
   assert.equal((workflow.match(/secrets\.CP_STORAGE_SERVICE_KEY/g)||[]).length,1,'chave do Storage só no passo do apply');
+  assert.match(job,/CP_ASAAS_API_KEY: \$\{\{ inputs\.operation == 'apply' && secrets\.CP_ASAAS_API_KEY \|\| '' \}\}/);
+  assert.equal((workflow.match(/secrets\.CP_ASAAS_API_KEY/g)||[]).length,1,'chave do Asaas só no passo do apply');
+  assert.match(job,/CP_ASAAS_WEBHOOK_EMAIL: \$\{\{ inputs\.operation == 'apply' && vars\.CP_ASAAS_WEBHOOK_EMAIL \|\| '' \}\}/);
+  assert.doesNotMatch(workflow,/secrets\.CP_ASAAS_WEBHOOK_TOKEN/,'token do webhook nunca vem do GitHub: é gerado no runner');
   assert.match(workflow,/group: condpulse-database-operations-rpnrqfrfwywglvyykgrg/);
   assert.doesNotMatch(workflow,/set -x|echo "\$\{?(FLY_API_TOKEN|DATABASE_PASSWORD|CP_VERCEL_TOKEN|CP_STORAGE_SERVICE_KEY)/);
 });
@@ -300,4 +305,74 @@ test('CLI: apply com chave do Storage malformada falha sem ecoar o valor em stdo
     CP_FLY_ACK:`${APP}:fly-api:${GEN}:${SHA}:${'c'.repeat(64)}`,CP_STORAGE_SERVICE_KEY:bad,FLY_API_TOKEN:'SYNTHETIC_FLY_TOKEN_NOT_REAL_000000',PATH:process.env.PATH},encoding:'utf8'});
   assert.notEqual(child.status,0);
   assert.equal((child.stdout+child.stderr).includes('SYNTHETIC_MUST_NOT_APPEAR'),false);
+});
+
+const ASAAS_SECRET='$aact_hmlg_SYNTHETIC0000000000000000000000NOTREAL::$aach_00000000';
+/** Asaas sandbox falso: lista e grava webhooks em memória; nunca devolve o token. */
+function asaasFake(existing=[]){
+  const hooks=existing.map(h=>({...h}));const calls=[];
+  return {hooks,calls,request:async(method,path,key,body)=>{calls.push({method,path,key,body});
+    if(method==='GET')return {object:'list',hasMore:false,data:hooks.map(({authToken,...h})=>h)};
+    if(method==='POST'){const h={id:`wh_${hooks.length+1}`,...body,hasAuthToken:true};hooks.push(h);const {authToken,...view}=h;return view;}
+    const id=path.split('/').pop();const h=hooks.find(x=>x.id===id);Object.assign(h,body,{hasAuthToken:true});const {authToken,...view}=h;return view;}};
+}
+test('chave do Asaas: só sandbox; token gerado no runner configura o webhook antes da Fly e nunca aparece',async()=>{
+  assert.equal(financeKey({}),null);assert.equal(financeKey({CP_ASAAS_API_KEY:''}),null);assert.equal(financeKey({CP_ASAAS_API_KEY:ASAAS_SECRET}),ASAAS_SECRET);
+  for(const bad of ['$aact_prod_SYNTHETIC000000000000000000000000','$aact_hmlg_curto','aact_hmlg_SYNTHETIC00000000000000000000000',`${ASAAS_SECRET}#x`,`${ASAAS_SECRET} `,'$aact_hmlg_${CP_X}0000000000000000000000'])
+    assert.throws(()=>financeKey({CP_ASAAS_API_KEY:bad}),e=>e.code==='FLY_ASAAS_KEY_INVALID'&&!e.message.includes(bad));
+  const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',CP_ASAAS_WEBHOOK_EMAIL:'financeiro@example.invalid'};
+  // Login READY, sem token na Fly: gera, configura o webhook (POST) e grava os três nomes.
+  const ready=flyFake(REQUIRED),readyLogin=loginFake('READY'),asaas=asaasFake();
+  const i1=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
+  const first=await execute({...apply,CP_FLY_ACK:i1.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(ready,readyLogin,{asaas:asaas.request}));
+  assert.deepEqual(first.changed,[...FINANCE].sort());assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
+  assert.deepEqual(asaas.calls.map(c=>c.method),['GET','POST']);assert.ok(asaas.calls.every(c=>c.key===ASAAS_SECRET));
+  const token=asaas.calls[1].body.authToken;assert.match(token,/^[A-Za-z0-9_-]{43}$/);
+  assert.equal(asaas.calls[1].body.url,WEBHOOK_URL);assert.equal(asaas.calls[1].body.enabled,true);
+  assert.ok(ready.imports[0].includes(`CP_ASAAS_WEBHOOK_TOKEN=${token}\n`),'mesmo token no Asaas e na Fly');
+  assert.match(ready.imports[0],/^CP_FINANCE_ENABLED=true$/m);assert.ok(ready.imports[0].includes(`CP_ASAAS_API_KEY=${ASAAS_SECRET}\n`));
+  assert.deepEqual(first.asaasWebhook,{webhookId:'wh_1',created:true});
+  // Token já na Fly: não regera nem chama o Asaas; repetir sem a chave depois de gravada é recusado.
+  const i2=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
+  const second=await execute({...apply,CP_FLY_ACK:i2.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(ready,readyLogin,{asaas:asaas.request}));
+  assert.equal(asaas.calls.length,2);assert.deepEqual(second.changed,['CP_ASAAS_API_KEY','CP_FINANCE_ENABLED']);
+  const i3=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
+  await assert.rejects(execute({...apply,CP_FLY_ACK:i3.applyAck},deps(ready,readyLogin,{asaas:asaas.request})),/FLY_ASAAS_KEY_REQUIRED/);
+  // Webhook já existente pela URL: atualiza (PUT), não duplica; sem e-mail configurado não chama o Asaas.
+  const other=flyFake(REQUIRED),otherLogin=loginFake('READY'),existing=asaasFake([{id:'wh_9',url:WEBHOOK_URL,enabled:false,interrupted:true,authToken:'x'.repeat(40)}]);
+  const i4=await execute(base,deps(other,otherLogin,{asaas:existing.request}));
+  await assert.rejects(execute({...apply,CP_ASAAS_WEBHOOK_EMAIL:'',CP_FLY_ACK:i4.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(other,otherLogin,{asaas:existing.request})),/FLY_ASAAS_WEBHOOK_EMAIL_REQUIRED/);
+  assert.equal(existing.calls.length+other.imports.length,0);
+  const updated=await execute({...apply,CP_FLY_ACK:i4.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(other,otherLogin,{asaas:existing.request}));
+  assert.deepEqual(existing.calls.map(c=>`${c.method} ${c.path}`),['GET /webhooks?limit=100&offset=0','PUT /webhooks/wh_9']);
+  assert.deepEqual(updated.asaasWebhook,{webhookId:'wh_9',created:false});assert.equal(existing.hooks.length,1);
+  // Falha no Asaas: nada é gravado na Fly.
+  const broken=flyFake(REQUIRED),brokenLogin=loginFake('READY');const i5=await execute(base,deps(broken,brokenLogin));
+  await assert.rejects(execute({...apply,CP_FLY_ACK:i5.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(broken,brokenLogin,{asaas:async()=>{throw Object.assign(new Error('x'),{code:'FLY_ASAAS_HTTP_DENIED'});}})));
+  assert.equal(broken.imports.length,0);
+  // Login novo com a chave: tudo junto.
+  const fresh=flyFake(),freshLogin=loginFake(),freshAsaas=asaasFake();const i6=await execute(base,deps(fresh,freshLogin,{asaas:freshAsaas.request}));
+  const created=await execute({...apply,CP_FLY_ACK:i6.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(fresh,freshLogin,{asaas:freshAsaas.request}));
+  assert.deepEqual(created.changed,[...REQUIRED,'CP_BFF_ENABLED','CP_PARCELS_ENABLED',...FINANCE].sort());
+  // Deploy aceita os nomes do financeiro como gerenciados.
+  const deploy={...base,CP_FLY_OPERATION:'deploy',CP_FLY_GENERATION:'',MAINTENANCE_CONFIRMED:'true',CP_VERCEL_TOKEN:'',CP_SUPABASE_PUBLISHABLE_KEY:''};
+  const i7=await execute(base,deps(ready,readyLogin));
+  const deployed=await execute({...deploy,CP_FLY_ACK:i7.deployAck},deps(ready,null));
+  assert.ok(FINANCE.every(k=>deployed.secretNames.includes(k)));
+  const printed=JSON.stringify([first,second,updated,created,deployed,i1,i2,i3,i4,i5,i6,i7]);
+  assert.equal(printed.includes(ASAAS_SECRET),false,'chave nunca no resultado');assert.equal(printed.includes(token),false,'token nunca no resultado');
+});
+
+test('Asaas: só webhooks do sandbox, sem redirecionamento, e resposta conferida',async()=>{
+  const calls=[];const request=createAsaasRequester(async(url,init)=>{calls.push({url,init});return {status:200,text:async()=>'{"data":[]}'};});
+  await request('GET','/webhooks?limit=100&offset=0','k');await request('POST','/webhooks','k',{a:1});await request('PUT','/webhooks/wh_1','k',{a:1});
+  for(const [method,path] of [['GET','/payments'],['DELETE','/webhooks/wh_1'],['POST','/customers'],['PUT','/webhooks/../x'],['GET','/webhooks']])
+    await assert.rejects(request(method,path,'k'),/FLY_ASAAS_DESTINATION_DENIED/);
+  assert.ok(calls.every(c=>c.url.startsWith(`${ASAAS_API}/webhooks`)&&c.init.redirect==='manual'&&c.init.headers.access_token==='k'));
+  assert.ok(ASAAS_API==='https://api-sandbox.asaas.com/v3');
+  const denied=createAsaasRequester(async()=>({status:401,text:async()=>''}));
+  await assert.rejects(denied('GET','/webhooks?limit=100&offset=0','k'),/FLY_ASAAS_HTTP_DENIED/);
+  await assert.rejects(configureWebhook(async()=>({data:[{id:'a',url:WEBHOOK_URL},{id:'b',url:WEBHOOK_URL}]}),'k','t'.repeat(43),'a@b.co'),/FLY_ASAAS_WEBHOOK_DUPLICATE/);
+  await assert.rejects(configureWebhook(async(m)=>m==='GET'?{data:[]}:{id:'wh_1',url:WEBHOOK_URL,enabled:false},'k','t'.repeat(43),'a@b.co'),/FLY_ASAAS_WEBHOOK_UNCONFIRMED/);
+  assert.equal(secretLines({CP_ASAAS_API_KEY:ASAAS_SECRET}),`CP_ASAAS_API_KEY=${ASAAS_SECRET}\n`);
 });

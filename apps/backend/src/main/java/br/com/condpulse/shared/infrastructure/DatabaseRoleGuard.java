@@ -28,7 +28,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // revogação muda; confirmação por equipamento vem do banco; conector e equipamento só pela operação da plataforma. Eventos de
   // equipamento (V027): nunca alterados nem apagados; unidade e horário de ingestão vêm do banco. Saúde (V028): nunca apagada;
   // horários de verificação, observação e mudança de estado vêm do banco. Ocorrências da portaria (V033): nunca apagadas;
-  // autoria, nomes e horários vêm do banco. Locações (V034): nunca apagadas; só o encerramento muda. Outbox (V032): a operação da plataforma só devolve
+  // autoria, nomes e horários vêm do banco. Locações (V034): nunca apagadas; só o encerramento muda. Financeiro condominial (V036):
+  // nada apagado; evento do webhook nunca muda; pagador, taxa e cobrança só mudam pelas colunas de transição. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
@@ -166,6 +167,23 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.attachments') and c.attnum>0 and not c.attisdropped
         and c.attname not in ('state','rejection','sha256')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.finance_payers'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.finance_recurring_fees'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.finance_charges'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.finance_webhook_events'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.finance_webhook_events'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.finance_payers') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('asaas_customer_id','state','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.finance_recurring_fees') and c.attnum>0 and not c.attisdropped and c.attname not in ('state','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.finance_charges') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','asaas_payment_id','asaas_status','invoice_url','bank_slip_url','paid_at','paid_cents','issue_error',
+         'issue_lease_until','cancelled_by','cancel_reason','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.finance_charges') and c.attname in ('state','asaas_payment_id','paid_at','paid_cents','created_by',
+        'created_at','cancelled_by','cancelled_at','updated_at','version')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

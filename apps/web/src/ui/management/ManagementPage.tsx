@@ -16,6 +16,7 @@ import { MembershipList, PeopleSection } from './People';
 import { PendingReservations, ReservationAgenda } from './Reservations';
 import { AmenitySection, UnitSection } from './Setup';
 import { OccurrenceSection } from '../concierge/Occurrences';
+import { FinanceSection } from './Finance';
 import { ManagementProvider, type ManagementScope } from './shared';
 import './Management.css';
 
@@ -31,6 +32,7 @@ export const managementSections = [
   { id: 'mudancas', label: 'Mudanças', icon: 'truck' },
   { id: 'acesso', label: 'Acesso', icon: 'key' },
   { id: 'ocorrencias', label: 'Ocorrências', icon: 'alert' },
+  { id: 'financeiro', label: 'Financeiro', icon: 'card' },
   { id: 'auditoria', label: 'Auditoria', icon: 'clock' },
 ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 export type ManagementSection = typeof managementSections[number]['id'];
@@ -98,6 +100,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'mudancas' ? <MoveManagementSection /> : null}
     {section === 'acesso' ? <><AccessHealthSection /><CredentialManagementSection /></> : null}
     {section === 'ocorrencias' ? <OccurrenceSection canPickUnit={false} /> : null}
+    {section === 'financeiro' ? <FinanceSection /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;
 }

@@ -121,12 +121,17 @@ jobs:
       - name: Execute only the manually selected Fly operation (secret values never printed)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          # O deploy não recebe credencial de banco, Vercel, chave publicável nem chave do Storage.
+          # O deploy não recebe credencial de banco, Vercel, chave publicável, chave do Storage nem do Asaas.
           DATABASE_PASSWORD: ${{ inputs.operation != 'deploy' && secrets.CP_DATABASE_OPERATIONS_PASSWORD || '' }}
           CP_VERCEL_TOKEN: ${{ inputs.operation != 'deploy' && secrets.CP_VERCEL_TOKEN || '' }}
           CP_SUPABASE_PUBLISHABLE_KEY: ${{ inputs.operation == 'apply' && secrets.CP_SUPABASE_PUBLISHABLE_KEY || '' }}
           # Opcional: presente liga anexos na Fly (chave + CP_FILES_ENABLED=true); só no apply, nunca no deploy.
           CP_STORAGE_SERVICE_KEY: ${{ inputs.operation == 'apply' && secrets.CP_STORAGE_SERVICE_KEY || '' }}
+          # Opcional: chave do sandbox do Asaas ($aact_hmlg_); presente liga o financeiro (chave + CP_FINANCE_ENABLED=true) e,
+          # sem token na Fly, gera CP_ASAAS_WEBHOOK_TOKEN e configura o webhook no Asaas. Só no apply, nunca no deploy.
+          CP_ASAAS_API_KEY: ${{ inputs.operation == 'apply' && secrets.CP_ASAAS_API_KEY || '' }}
+          # Variável (não segredo) do Environment: e-mail que o Asaas exige para avisos do webhook.
+          CP_ASAAS_WEBHOOK_EMAIL: ${{ inputs.operation == 'apply' && vars.CP_ASAAS_WEBHOOK_EMAIL || '' }}
           CP_FLY_OPERATION: ${{ inputs.operation }}
           CP_FLY_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           CP_FLY_GENERATION: ${{ inputs.generation }}

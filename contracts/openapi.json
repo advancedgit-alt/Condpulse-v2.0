@@ -12809,6 +12809,1287 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/finance/units": {
+      "get": {
+        "operationId": "listFinanceUnits",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Gestão (finance.manage, AAL2): unidades ativas com pagador atual (documento e e-mail mascarados), candidatos (proprietário ou responsável ativo) e indicação de locação em vigor.",
+        "responses": {
+          "200": {
+            "description": "Unidades",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FinanceUnit"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/units/{unitId}/payer": {
+      "put": {
+        "operationId": "setFinancePayer",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) define o pagador da unidade (proprietário ou responsável ativo; com a unidade alugada, a gestão escolhe). Substitui o anterior; motivo na auditoria. O cliente é criado no Asaas fora da transação; falha deixa customerSynced=false e a emissão tenta de novo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancePayerChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pagador",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancePayer"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_PAYER_REQUIRED, FINANCE_PAYER_NAME_INVALID, FINANCE_DOCUMENT_INVALID, FINANCE_EMAIL_INVALID ou FINANCE_REASON_REQUIRED"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "FINANCE_CHANGED ou FINANCE_RULE_VIOLATION"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/charges": {
+      "get": {
+        "operationId": "listFinanceCharges",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_ISSUE",
+                "OPEN",
+                "OVERDUE",
+                "PAID",
+                "CANCELLED",
+                "REFUNDED"
+              ]
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2): cobranças do condomínio, filtro por situação e unidade (até 200).",
+        "responses": {
+          "200": {
+            "description": "Cobranças",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceChargePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_STATE_INVALID"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createFinanceCharge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9._:-]{16,200}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) cria cobrança avulsa (taxa condominial, reserva, multa, outro) por boleto ou PIX para o pagador ativo da unidade e emite no Asaas (referência externa = id da cobrança). Falha do Asaas deixa PENDING_ISSUE com issueError.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinanceChargeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cobrança criada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceCharge"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_UNIT_REQUIRED, FINANCE_KIND_INVALID, FINANCE_BILLING_INVALID, FINANCE_AMOUNT_INVALID, FINANCE_DESCRIPTION_INVALID, FINANCE_DUE_DATE_INVALID, FINANCE_REASON_REQUIRED ou IDEMPOTENCY_KEY_INVALID"
+          },
+          "409": {
+            "description": "FINANCE_PAYER_MISSING, IDEMPOTENCY_KEY_REUSED ou REQUEST_IN_PROGRESS"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/charges/issue-pending": {
+      "post": {
+        "operationId": "issuePendingFinanceCharges",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) emite até 20 cobranças pendentes no Asaas.",
+        "responses": {
+          "200": {
+            "description": "Resultado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceIssueResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/charges/{chargeId}/issue": {
+      "post": {
+        "operationId": "issueFinanceCharge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "chargeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) emite (ou tenta de novo) a cobrança pendente; reaproveita o pagamento já criado com a mesma referência externa.",
+        "responses": {
+          "200": {
+            "description": "Cobrança",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceCharge"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "FINANCE_CHARGE_NOT_FOUND"
+          },
+          "409": {
+            "description": "FINANCE_CHARGE_ISSUING"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/charges/{chargeId}/cancel": {
+      "post": {
+        "operationId": "cancelFinanceCharge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "chargeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) cancela cobrança pendente ou em aberto pela versão lida, com motivo: exclui no Asaas e depois grava.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinanceCancel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cobrança cancelada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceCharge"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_REASON_REQUIRED ou FINANCE_VERSION_REQUIRED"
+          },
+          "404": {
+            "description": "FINANCE_CHARGE_NOT_FOUND"
+          },
+          "409": {
+            "description": "FINANCE_CHANGED, FINANCE_CHARGE_CLOSED, FINANCE_CHARGE_ISSUING ou FINANCE_ASAAS_REJECTED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/charges/{chargeId}/sync": {
+      "post": {
+        "operationId": "syncFinanceCharge",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "chargeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2): relê o pagamento no Asaas e aplica a situação (conciliação pontual).",
+        "responses": {
+          "200": {
+            "description": "Cobrança",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceCharge"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "404": {
+            "description": "FINANCE_CHARGE_NOT_FOUND"
+          },
+          "409": {
+            "description": "FINANCE_CHARGE_NOT_ISSUED ou FINANCE_CHANGED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/recurring-fees": {
+      "get": {
+        "operationId": "listFinanceRecurringFees",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2): taxas recorrentes.",
+        "responses": {
+          "200": {
+            "description": "Taxas",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FinanceRecurringFee"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createFinanceRecurringFee",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) cria taxa recorrente (uma unidade ou todas com pagador), com motivo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinanceRecurringCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Taxa criada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceRecurringFee"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_KIND_INVALID, FINANCE_BILLING_INVALID, FINANCE_DUE_DAY_INVALID, FINANCE_AMOUNT_INVALID, FINANCE_DESCRIPTION_INVALID ou FINANCE_REASON_REQUIRED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/recurring-fees/{feeId}/end": {
+      "post": {
+        "operationId": "endFinanceRecurringFee",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "feeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) encerra a taxa recorrente, com motivo; cobranças já geradas continuam.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinanceReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Taxa",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceRecurringFee"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_REASON_REQUIRED"
+          },
+          "404": {
+            "description": "FINANCE_FEE_NOT_FOUND"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/recurring-fees/generate": {
+      "post": {
+        "operationId": "generateFinanceCompetence",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2) gera as cobranças de uma competência (AAAA-MM, do mês atual a 12 meses) para as taxas ativas; repetir não duplica; vencimento passado é pulado; emite até 20.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinanceGenerate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceGenerateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_COMPETENCE_INVALID ou FINANCE_REASON_REQUIRED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/delinquency": {
+      "get": {
+        "operationId": "financeDelinquency",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2): inadimplência por unidade (cobranças em aberto vencidas antes de hoje, no fuso do condomínio).",
+        "responses": {
+          "200": {
+            "description": "Inadimplência",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceDelinquencyReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/finance/report": {
+      "get": {
+        "operationId": "financeReport",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$"
+            }
+          }
+        ],
+        "description": "Gestão (AAL2): resumo por mês de vencimento (emitido, pago, em aberto, vencido, cancelado), de 1 a 24 meses.",
+        "responses": {
+          "200": {
+            "description": "Relatório",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MFA_REQUIRED ou STAFF_ACCESS_DENIED"
+          },
+          "400": {
+            "description": "FINANCE_PERIOD_INVALID"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/finance/charges": {
+      "get": {
+        "operationId": "listUnitFinanceCharges",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Unidade (morador, responsável ou proprietário com vínculo vigente; nunca proprietário de unidade alugada): cobranças emitidas da unidade.",
+        "responses": {
+          "200": {
+            "description": "Cobranças",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceChargePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACTION_FORBIDDEN"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/finance/charges/{chargeId}/payment": {
+      "get": {
+        "operationId": "unitFinancePayment",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "chargeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Segunda via de cobrança em aberto: linha digitável (boleto) ou PIX copia e cola, lidos no Asaas na hora, e os links do Asaas.",
+        "responses": {
+          "200": {
+            "description": "Segunda via",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancePaymentInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "ACTION_FORBIDDEN"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED ou FINANCE_CHARGE_NOT_FOUND"
+          },
+          "409": {
+            "description": "FINANCE_CHARGE_NOT_PAYABLE"
+          },
+          "503": {
+            "description": "FINANCE_DEPENDENCY_UNAVAILABLE ou FINANCE_ASAAS_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/finance/asaas/webhook": {
+      "post": {
+        "operationId": "asaasWebhook",
+        "security": [],
+        "x-feature-flag": "CP_FINANCE_ENABLED",
+        "description": "Webhook de cobranças do Asaas. Sem sessão nem CSRF; autenticado pelo cabeçalho asaas-access-token (comparação em tempo constante com CP_ASAAS_WEBHOOK_TOKEN). A situação é relida no Asaas; evento repetido (mesmo id) é ignorado; evento, situação e outbox na mesma transação.",
+        "parameters": [
+          {
+            "name": "asaas-access-token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsaasWebhookEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PROCESSED, DUPLICATE ou IGNORED",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "PROCESSED",
+                        "DUPLICATE",
+                        "IGNORED"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "FINANCE_WEBHOOK_INVALID"
+          },
+          "401": {
+            "description": "FINANCE_WEBHOOK_UNAUTHORIZED"
+          },
+          "503": {
+            "description": "FINANCE_ASAAS_UNAVAILABLE ou FINANCE_DEPENDENCY_UNAVAILABLE (o Asaas reenvia)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -20762,6 +22043,679 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "FinancePayer": {
+        "type": "object",
+        "properties": {
+          "payerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "RESPONSIBLE"
+            ]
+          },
+          "legalName": {
+            "type": "string"
+          },
+          "document": {
+            "type": "string",
+            "description": "Mascarado"
+          },
+          "email": {
+            "type": "string",
+            "description": "Mascarado"
+          },
+          "customerSynced": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceCandidate": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "RESPONSIBLE"
+            ]
+          }
+        }
+      },
+      "FinanceUnit": {
+        "type": "object",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rented": {
+            "type": "boolean"
+          },
+          "payer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FinancePayer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinanceCandidate"
+            }
+          }
+        }
+      },
+      "FinancePayerChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "membershipId",
+          "legalName",
+          "document",
+          "email",
+          "reason"
+        ],
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "legalName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "document": {
+            "type": "string",
+            "description": "CPF ou CNPJ"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 480
+          }
+        }
+      },
+      "FinanceCharge": {
+        "type": "object",
+        "properties": {
+          "chargeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CONDO_FEE",
+              "RESERVATION",
+              "FINE",
+              "OTHER"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "amountCents": {
+            "type": "integer"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "billingType": {
+            "type": "string",
+            "enum": [
+              "BOLETO",
+              "PIX"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING_ISSUE",
+              "OPEN",
+              "OVERDUE",
+              "PAID",
+              "CANCELLED",
+              "REFUNDED"
+            ]
+          },
+          "asaasStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "competence": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "invoiceUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bankSlipUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paidAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "paidCents": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issueError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancelReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceChargePage": {
+        "type": "object",
+        "properties": {
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinanceCharge"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FinanceChargeCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unitId",
+          "kind",
+          "description",
+          "amountCents",
+          "dueDate",
+          "billingType",
+          "reason"
+        ],
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CONDO_FEE",
+              "RESERVATION",
+              "FINE",
+              "OTHER"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 100000000
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "billingType": {
+            "type": "string",
+            "enum": [
+              "BOLETO",
+              "PIX"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 480
+          }
+        }
+      },
+      "FinanceCancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 480
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "FinanceReason": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 480
+          }
+        }
+      },
+      "FinancePaymentInfo": {
+        "type": "object",
+        "properties": {
+          "chargeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "billingType": {
+            "type": "string",
+            "enum": [
+              "BOLETO",
+              "PIX"
+            ]
+          },
+          "identificationField": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pixPayload": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "invoiceUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bankSlipUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "amountCents": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceRecurringFee": {
+        "type": "object",
+        "properties": {
+          "feeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CONDO_FEE",
+              "OTHER"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "amountCents": {
+            "type": "integer"
+          },
+          "dueDay": {
+            "type": "integer"
+          },
+          "billingType": {
+            "type": "string",
+            "enum": [
+              "BOLETO",
+              "PIX"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ENDED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceRecurringCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description",
+          "amountCents",
+          "dueDay",
+          "billingType",
+          "reason"
+        ],
+        "properties": {
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CONDO_FEE",
+              "OTHER"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 100000000
+          },
+          "dueDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28
+          },
+          "billingType": {
+            "type": "string",
+            "enum": [
+              "BOLETO",
+              "PIX"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 480
+          }
+        }
+      },
+      "FinanceGenerate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "competence",
+          "reason"
+        ],
+        "properties": {
+          "competence": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 480
+          }
+        }
+      },
+      "FinanceGenerateResult": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "issued": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceIssueResult": {
+        "type": "object",
+        "properties": {
+          "issued": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceDelinquency": {
+        "type": "object",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "charges": {
+            "type": "integer"
+          },
+          "totalCents": {
+            "type": "integer"
+          },
+          "oldestDue": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "FinanceDelinquencyReport": {
+        "type": "object",
+        "properties": {
+          "referenceDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinanceDelinquency"
+            }
+          },
+          "totalCents": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceMonthSummary": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "issuedCents": {
+            "type": "integer"
+          },
+          "paidCents": {
+            "type": "integer"
+          },
+          "openCents": {
+            "type": "integer"
+          },
+          "overdueCents": {
+            "type": "integer"
+          },
+          "cancelled": {
+            "type": "integer"
+          }
+        }
+      },
+      "FinanceReport": {
+        "type": "object",
+        "properties": {
+          "months": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FinanceMonthSummary"
+            }
+          }
+        }
+      },
+      "AsaasWebhookEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "event"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "dateCreated": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
           }
         }
       }
