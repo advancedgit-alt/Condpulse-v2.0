@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { management, type InvitationCreated, type InvitationRole, type ManagedMembership, type MembershipStatus } from '../../api/management';
 import { Empty, ErrorState, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
+import { RentalsPanel } from './Rentals';
 import { ActionFeedback, ReasonForm, managementKey, membershipStatusLabels, roleLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
 
 const invitationRoles: InvitationRole[] = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE'];
@@ -159,7 +160,7 @@ export function PeopleSection() {
             <option value="">Todas</option>{Object.entries(membershipStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
         <MembershipList status={status || null} empty="Nenhum vínculo nesta situação." />
       </div>
-      <div><InvitationForm /><InvitationList /></div>
+      <div><InvitationForm /><InvitationList /><RentalsPanel /></div>
     </div>
   </section>;
 }

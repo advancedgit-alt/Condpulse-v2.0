@@ -92,8 +92,13 @@ public class MembershipManagementService {
   } catch(DataAccessException error) {
    if("42501".equals(SqlStates.of(error)))
     throw new BusinessProblem("STAFF_ACCESS_DENIED",403,"Esta ação não está disponível para o seu vínculo.");
+   // V034: proprietário de unidade alugada não recebe nem reativa vínculo de ocupante nela.
+   if("23514".equals(SqlStates.of(error))) throw rentalConflict();
    throw new BusinessProblem("MANAGEMENT_DEPENDENCY_UNAVAILABLE",503,"Não foi possível concluir a operação. Tente novamente.");
   }
+ }
+ static BusinessProblem rentalConflict() {
+  return new BusinessProblem("MEMBERSHIP_RENTAL_CONFLICT",409,"Proprietário de unidade alugada não pode ter vínculo de morador nela.");
  }
  private static BusinessProblem notFound() {
   return new BusinessProblem("MEMBERSHIP_NOT_FOUND",404,"Vínculo não encontrado neste condomínio.");

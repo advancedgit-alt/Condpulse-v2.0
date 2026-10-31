@@ -28,7 +28,7 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // revogação muda; confirmação por equipamento vem do banco; conector e equipamento só pela operação da plataforma. Eventos de
   // equipamento (V027): nunca alterados nem apagados; unidade e horário de ingestão vêm do banco. Saúde (V028): nunca apagada;
   // horários de verificação, observação e mudança de estado vêm do banco. Ocorrências da portaria (V033): nunca apagadas;
-  // autoria, nomes e horários vêm do banco. Outbox (V032): a operação da plataforma só devolve
+  // autoria, nomes e horários vêm do banco. Locações (V034): nunca apagadas; só o encerramento muda. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
@@ -55,6 +55,9 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
        where c.attrelid=to_regclass('cp.access_events') and c.attname in ('unit_id','visitor_id','occurred_at','received_at','source')),false)
      or has_table_privilege(current_user,'cp.outbox','DELETE,TRUNCATE')
      or coalesce(has_table_privilege(current_user,to_regclass('cp.concierge_occurrences'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.unit_rentals'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.unit_rentals') and c.attnum>0 and not c.attisdropped and c.attname not in ('ended_by','ended_at')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT,UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.concierge_occurrences') and c.attname in ('created_by','created_by_name','created_at','resolved_by',
         'resolved_by_name','resolved_at')),false)

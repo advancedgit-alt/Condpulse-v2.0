@@ -99,7 +99,7 @@ function membership(value: unknown): ManagedMembership {
     displayName: value.displayName, role: value.role, status: value.status, validFrom: value.validFrom,
     validUntil: (value.validUntil ?? null) as string | null, version: value.version };
 }
-function invitation(value: unknown): ManagedInvitation {
+export function invitation(value: unknown): ManagedInvitation {
   if (!record(value) || !isUUID(value.invitationId) || !nullableUuid(value.unitId ?? null) || !nullableString(value.unitLabel ?? null)
       || !isString(value.role) || !isString(value.displayName) || !oneOf(value.status, ['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'])
       || !isDate(value.expiresAt) || !isDate(value.createdAt) || !nullableDate(value.acceptedAt ?? null)) throw invalidResponse();
@@ -107,7 +107,7 @@ function invitation(value: unknown): ManagedInvitation {
     role: value.role, displayName: value.displayName, status: value.status, expiresAt: value.expiresAt, createdAt: value.createdAt,
     acceptedAt: (value.acceptedAt ?? null) as string | null };
 }
-function invitationCreated(value: unknown): InvitationCreated {
+export function invitationCreated(value: unknown): InvitationCreated {
   if (!record(value) || !isUUID(value.invitationId) || !isString(value.token) || !/^[A-Za-z0-9_-]{43}$/.test(value.token)
       || !isDate(value.expiresAt)) throw invalidResponse(true);
   return { invitationId: value.invitationId, token: value.token, expiresAt: value.expiresAt };
