@@ -53,8 +53,8 @@ test('proprietário de unidade alugada só vê inquilinos: remove e convida', as
   await asOwner(page, api);
   const state = await installRental(page, true);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/reservas`);
-  await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_A}/${UNIT_A}/inquilinos$`));
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/reservas`);
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/inquilinos$`));
   await expect(page.getByRole('heading', { name: /Inquilinos/ })).toBeVisible();
   await expect(page.getByText(/você não vê reservas, encomendas, visitas/)).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
@@ -85,7 +85,7 @@ test('proprietário sem locação vê a indicação e mantém as demais áreas',
   await asOwner(page, api);
   await installRental(page, false);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inquilinos`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inquilinos`);
   await expect(page.getByText('Unidade não alugada')).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
   await expect(navigation.getByRole('link')).toHaveText(['Início', 'Reservas', 'Financeiro', 'Inquilinos']);
@@ -109,7 +109,7 @@ test('gestão marca e encerra a locação com motivo', async ({ page }) => {
     await json(route, 201, started);
   });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pessoas`);
+  await page.goto(`/c/${TENANT_A}/gestao/pessoas`);
   await expect(page.getByText('Nenhuma unidade alugada')).toBeVisible();
   const form = page.getByRole('form', { name: 'Marcar unidade como alugada' });
   await form.getByLabel('Unidade alugada').selectOption({ label: '101 — Sintética A' });

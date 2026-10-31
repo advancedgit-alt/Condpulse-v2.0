@@ -18,7 +18,7 @@ test('gestão vê a fila de espera em aberto, com posição e prazo da oferta, e
     entry({ waitlistId: '79000000-0000-4000-8000-000000000003', state: 'LEFT', position: null, closedAt: at(-30) }),
   ] });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/reservas`);
+  await page.goto(`/c/${TENANT_A}/gestao/reservas`);
   const section = page.getByRole('region', { name: 'Fila de espera' });
   const list = section.getByRole('list', { name: 'Fila de espera' });
   await expect(list.locator(':scope > li')).toHaveCount(2);
@@ -42,7 +42,7 @@ test('fim do período aparece com horário no mesmo dia e com data quando passa 
       startsAt: '2030-01-10T22:00:00Z', endsAt: '2030-01-11T04:00:00Z' }),
   ] });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/reservas`);
+  await page.goto(`/c/${TENANT_A}/gestao/reservas`);
   const list = page.getByRole('region', { name: 'Fila de espera' }).getByRole('list', { name: 'Fila de espera' });
   await expect(list.getByText(/Área Sintética A · 10 de jan\.? de 2030,? 19:00 até 21:00$/)).toBeVisible();
   await expect(list.getByText(/Área Sintética A · 10 de jan\.? de 2030,? 19:00 até 11 de jan\.? de 2030,? 01:00$/)).toBeVisible();
@@ -52,7 +52,7 @@ test('fila vazia, falha ao atualizar e primeira consulta com erro', async ({ pag
   await installSyntheticApi(page, { manager: true });
   const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true, waitlist: [], waitlistFailures: 1 });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/reservas`);
+  await page.goto(`/c/${TENANT_A}/gestao/reservas`);
   const section = page.getByRole('region', { name: 'Fila de espera' });
   await section.getByRole('button', { name: 'Tentar novamente' }).click();
   await expect(section.getByText('Nenhuma unidade aguardando período.')).toBeVisible();

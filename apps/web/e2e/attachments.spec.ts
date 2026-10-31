@@ -90,7 +90,7 @@ async function installAttachmentsApi(page: Page, options: { requestState?: strin
 
 async function openResidentRequest(page: Page) {
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const row = page.getByRole('list', { name: 'Pedidos da unidade' }).getByRole('listitem').filter({ hasText: 'Vazamento fictício' });
   await row.getByRole('button', { name: 'Ver conversa' }).click();
   return row;
@@ -179,7 +179,7 @@ test('gestão com segundo fator vê e baixa o anexo; pedido encerrado não receb
   state.items.push({ attachmentId: 'a7000000-0000-4000-8000-000000000201', entityId: REQUEST, fileName: 'foto da unidade.png', mimeType: 'image/png',
     sizeBytes: PNG.length, state: 'AVAILABLE', rejection: null, mine: false, createdAt: now(), completedAt: now(), content: PNG });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/pedidos`);
+  await page.goto(`/c/${TENANT_A}/gestao/pedidos`);
   const row = page.getByRole('list', { name: 'Pedidos das unidades' }).getByRole('listitem').filter({ hasText: 'Vazamento fictício' });
   await row.getByRole('button', { name: 'Abrir pedido' }).click();
   const group = row.getByRole('group', { name: 'Anexos do pedido' });

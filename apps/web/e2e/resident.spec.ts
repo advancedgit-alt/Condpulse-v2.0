@@ -28,9 +28,11 @@ test('resposta atrasada de A não reaparece após trocar para B', async ({ page 
     await signIn(page);
     await chooseContext(page);
     await aWasRequested;
-    await page.getByRole('button', { name: 'Trocar unidade', exact: true }).click();
+    // Troca de condomínio pelo cabeçalho: volta ao seletor só de condomínio, sem levar dados de A.
+    await page.getByRole('button', { name: 'Trocar condomínio', exact: true }).click();
+    await expect(page).toHaveURL(/\/entrada$/);
     await chooseContext(page, 'B');
-    await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_B}/${UNIT_B}/reservas`));
+    await expect(page).toHaveURL(new RegExp(`/c/${TENANT_B}/morador/${UNIT_B}/reservas`));
     await expect(page.getByRole('button', { name: 'Reservar esta área: Área Sintética B', exact: true })).toBeVisible();
     releaseA();
     await aWasSettled;
@@ -137,7 +139,7 @@ test('logout remove contexto e navegação direta exige nova autenticação', as
   expect(state.logoutRequests).toBe(1);
   expect(state.authenticated).toBe(false);
   await expect(page.getByText('Área Sintética A', { exact: true })).toHaveCount(0);
-  await page.goto(`/morador/${TENANT_B}/${UNIT_B}/reservas`);
+  await page.goto(`/c/${TENANT_B}/morador/${UNIT_B}/reservas`);
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
   await expect(page.getByText('Área Sintética A', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => window.localStorage.length)).toBe(0);

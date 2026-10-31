@@ -98,10 +98,10 @@ test('consulta atrasada de A não reaparece depois da troca para B', async ({ pa
     onAvailabilityARequested: requested, onAvailabilityASettled: settled });
   try {
     await openBooking(page); await wasRequested;
-    await page.getByRole('button', { name: 'Trocar unidade', exact: true }).click();
+    await page.getByRole('button', { name: 'Trocar condomínio', exact: true }).click();
     await chooseContext(page, 'B');
     await page.getByRole('button', { name: 'Reservar esta área: Área Sintética B', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/morador/${TENANT_B}/${UNIT_B}/reservas`));
+    await expect(page).toHaveURL(new RegExp(`/c/${TENANT_B}/morador/${UNIT_B}/reservas`));
     await expect(page.getByText(/Nenhum intervalo bloqueado nesta consulta/)).toBeVisible();
     release(); await wasSettled;
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));

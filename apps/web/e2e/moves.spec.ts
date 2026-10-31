@@ -113,7 +113,7 @@ test('unidade lê as regras, pede mudança com aceite e chave pendente e retira 
   await installSyntheticApi(page);
   const state = await installMovesApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const section = page.getByRole('region', { name: 'Mudança e entrega de móveis' });
   await expect(section.getByText('A gestão ainda não publicou as regras de mudança.', { exact: false })).toBeVisible();
   await expect(section.getByRole('button', { name: 'Pedir mudança' })).toHaveCount(0);
@@ -172,7 +172,7 @@ test('regras alteradas durante o pedido pedem novo aceite da versão atual', asy
   await installSyntheticApi(page);
   const state = await installMovesApi(page, { rules: rules() });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const section = page.getByRole('region', { name: 'Mudança e entrega de móveis' });
   await section.getByRole('button', { name: 'Pedir mudança' }).click();
   const form = page.getByRole('form', { name: 'Pedir mudança' });
@@ -199,7 +199,7 @@ test('regras novas trazidas por atualização desfazem o aceite da versão anter
   await installSyntheticApi(page);
   const state = await installMovesApi(page, { rules: rules() });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const section = page.getByRole('region', { name: 'Mudança e entrega de móveis' });
   await section.getByRole('button', { name: 'Pedir mudança' }).click();
   const form = page.getByRole('form', { name: 'Pedir mudança' });
@@ -226,7 +226,7 @@ test('edição de regras guarda a versão aberta: publicação de outra pessoa n
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installMovesApi(page, { rules: rules() });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/mudancas`);
+  await page.goto(`/c/${TENANT_A}/gestao/mudancas`);
   await page.getByRole('button', { name: 'Editar regras' }).click();
   const rulesForm = page.getByRole('form', { name: 'Editar regras de mudança' });
   await rulesForm.getByLabel('Regras exibidas às unidades').fill('Texto editado a partir da versão 1.');
@@ -243,7 +243,7 @@ test('envio incerto continua confirmável mesmo se as regras novas recusariam o 
   await installSyntheticApi(page);
   const state = await installMovesApi(page, { rules: rules() });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const section = page.getByRole('region', { name: 'Mudança e entrega de móveis' });
   await section.getByRole('button', { name: 'Pedir mudança' }).click();
   const form = page.getByRole('form', { name: 'Pedir mudança' });
@@ -274,7 +274,7 @@ test('gestão publica as regras, aprova, recusa com motivo e cancela aprovada co
   const state = await installMovesApi(page, { moves: [synthetic(), synthetic({ moveId: OTHER, kind: 'MOVE_OUT', startsAt: at(localDate(4), 9),
     endsAt: at(localDate(4), 11), vehiclePlate: null, items: null, createdByMe: false })] });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/mudancas`);
+  await page.goto(`/c/${TENANT_A}/gestao/mudancas`);
   await expect(page.getByRole('heading', { name: 'Mudanças e entregas de móveis' })).toBeVisible();
   await expect(page.getByText('Regras de mudança ainda não publicadas')).toBeVisible();
   await page.getByRole('button', { name: 'Publicar regras' }).click();
@@ -349,7 +349,7 @@ test('portaria vê só as mudanças aprovadas do dia escolhido', async ({ page }
     synthetic({ moveId: OTHER, startsAt: at(localDate(0), 20), endsAt: at(localDate(0), 21) }),
   ] });
   await signIn(page);
-  await page.goto(`/portaria/${TENANT_A}/visitas`);
+  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
   const section = page.getByRole('region', { name: 'Mudanças aprovadas' });
   const list = section.getByRole('list', { name: 'Mudanças aprovadas do dia' });
   await expect(list.getByRole('listitem')).toHaveCount(1);

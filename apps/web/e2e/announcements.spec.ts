@@ -90,7 +90,7 @@ test('rascunho alterado por outro gestor enquanto o formulário está aberto nã
   state.items.push({ announcementId: DRAFT, title: 'Manutenção da bomba', body: 'Texto original.', audience: 'TENANT', audienceIds: [], state: 'DRAFT',
     authoredByMe: true, createdAt: minutes(-10), updatedAt: minutes(-10), publishedAt: null, archivedAt: null, version: 0, opens: 0 });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/avisos`);
+  await page.goto(`/c/${TENANT_A}/gestao/avisos`);
   const row = page.getByRole('listitem').filter({ hasText: 'Manutenção da bomba' });
   await row.getByRole('button', { name: 'Editar rascunho' }).click();
   const form = page.getByRole('form', { name: 'Editar rascunho Manutenção da bomba' });
@@ -111,7 +111,7 @@ test('gestão cria rascunho com chave pendente, publica com confirmação e vê 
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installAnnouncementsApi(page);
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/avisos`);
+  await page.goto(`/c/${TENANT_A}/gestao/avisos`);
   await expect(page.getByRole('heading', { name: 'Avisos do condomínio' })).toBeVisible();
   await scanAccessibility(page, 'gestão/avisos');
   await page.getByRole('button', { name: 'Novo aviso' }).click();
@@ -156,7 +156,7 @@ test('unidade vê só avisos publicados, sem o texto na lista; abrir mostra o te
   { announcementId: PUBLISHED, title: 'Manutenção da caixa d’água', body: 'Linha <b>um</b>\n\nLinha dois', audience: 'TENANT', audienceIds: [],
     state: 'PUBLISHED', authoredByMe: false, createdAt: minutes(-60), updatedAt: minutes(-30), publishedAt: minutes(-30), archivedAt: null, version: 1, opens: 0 });
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   const list = page.getByRole('list', { name: 'Avisos do condomínio' });
   await expect(page.getByRole('heading', { name: 'Avisos · 1 não aberto' })).toBeVisible();
   await expect(list.getByRole('listitem')).toHaveCount(1);
@@ -177,7 +177,7 @@ test('unidade vê só avisos publicados, sem o texto na lista; abrir mostra o te
 test('avisos desligados no ambiente não aparecem para a unidade nem mostram erro técnico', async ({ page }) => {
   await installSyntheticApi(page);
   await signIn(page);
-  await page.goto(`/morador/${TENANT_A}/${UNIT_A}/inicio`);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
   await expect(page.getByRole('heading', { name: 'Próximas reservas da unidade' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Avisos/ })).toHaveCount(0);
   await expect(page.getByText('SYNTHETIC_TEST_ROUTE_NOT_FOUND')).toHaveCount(0);

@@ -1,0 +1,28 @@
+/* Entrada única, seletor de condomínio, áreas por papel e itens "em breve" (docs/ESTRUTURA.md). Só tokens --cp-*. */
+.sidebar-label-condo{margin-top:24px;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.04em;text-transform:none;color:var(--cp-color-text-inverse)}
+.area-switch{flex:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 -2px}
+.area-chip{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 10px;border:1px solid var(--cp-color-border-inverse);border-radius:10px;color:var(--cp-color-text-inverse-secondary);text-decoration:none;font-size:.8rem;font-weight:var(--cp-font-weight-strong);min-width:0}
+.area-chip>svg{width:17px;height:17px;flex:none}
+.area-chip>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.area-chip:hover{background:var(--cp-color-inverse-hover);color:var(--cp-color-text-inverse)}
+.area-chip.active{color:var(--cp-color-text-inverse);background:var(--cp-color-inverse-active);border-color:var(--cp-color-text-inverse-link)}
+.area-chip.active>svg{color:var(--cp-color-text-inverse-link)}
+.nav-item-disabled,.area-chip.nav-item-disabled{cursor:not-allowed;opacity:.72;flex-wrap:wrap}
+.nav-item-disabled:hover{background:transparent;color:var(--cp-color-text-inverse-secondary)}
+.nav-soon{margin-left:auto;font-size:var(--cp-font-size-metadata);font-weight:var(--cp-font-weight-regular);letter-spacing:.04em;color:var(--cp-color-text-inverse-secondary)}
+.area-chip .nav-soon{display:none}
+.nav-group-label{display:block;margin:16px 14px 4px;font-size:var(--cp-font-size-metadata);letter-spacing:.12em;font-weight:var(--cp-font-weight-strong);color:var(--cp-color-text-inverse-secondary)}
+
+.condo-cards,.area-cards{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:16px}
+.condo-card,.area-card,.entry-central{display:flex;align-items:center;gap:16px;min-height:96px;padding:22px;background:var(--cp-color-surface-panel);border:1px solid var(--cp-color-border-decorative);border-radius:16px;color:var(--cp-color-text-primary);text-decoration:none}
+.condo-card:hover,.area-card:not(.area-card-disabled):hover,.entry-central:hover{border-color:var(--cp-color-border-accent)}
+.condo-card>svg:last-child,.area-card>svg:last-child,.entry-central>svg:last-child{margin-left:auto;flex:none;color:var(--cp-color-icon-accent)}
+.condo-card .round-icon,.area-card .round-icon,.entry-central .round-icon{flex:none}
+.condo-card-text,.area-card>span:not(.round-icon),.entry-central>span:not(.round-icon){display:grid;gap:6px;min-width:0;overflow-wrap:anywhere}
+.condo-card strong,.area-card strong,.entry-central strong{font-size:1.05rem}
+.condo-card-text>span,.area-card>span:not(.round-icon)>span:not(.status-pill),.entry-central>span:not(.round-icon)>span{font-size:.82rem;color:var(--cp-color-text-secondary)}
+.area-card-disabled{background:var(--cp-color-surface-disabled);cursor:not-allowed}
+.area-card .status-pill{justify-self:start}
+.entry-central{margin-bottom:16px;border-color:var(--cp-color-border-accent)}
+.entry-page>.notice{margin-bottom:16px}
+@media(max-width:640px){.condo-card,.area-card,.entry-central{padding:18px;gap:12px;min-height:84px}.condo-card .round-icon,.area-card .round-icon,.entry-central .round-icon{width:42px;height:42px}}

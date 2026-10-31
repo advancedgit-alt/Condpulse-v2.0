@@ -124,7 +124,7 @@ async function openInstallation(page: Page, initial: Partial<State> = {}, sectio
   await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
   const state = await installInstallApi(page, initial);
   await signIn(page);
-  await page.goto(`/implantacao/${TENANT_A}/${section}`);
+  await page.goto(`/c/${TENANT_A}/implantacao/${section}`);
   return state;
 }
 
@@ -180,7 +180,7 @@ test('seções aparecem só com o escopo; aceite mostra os aceites técnico e lo
   const sign = page.getByRole('form', { name: 'Assinar aceite técnico da revisão 1' });
   await expect(sign.getByRole('button', { name: 'Assinar aceite técnico' })).toBeDisabled();
   await scanAccessibility(page, 'implantação/aceite');
-  await page.goto(`/implantacao/${TENANT_A}/equipamentos`);
+  await page.goto(`/c/${TENANT_A}/implantacao/equipamentos`);
   await expect(page.getByRole('heading', { name: 'Etapas da implantação' })).toBeVisible();
 });
 
@@ -244,7 +244,7 @@ test('gestão cria área de acesso e assina as regras sem ver equipamento, canal
   const state = await installInstallApi(page, { acceptances: [acceptance({ technicalSignedAt: '2026-10-31T14:00:00Z',
     technicalApproverAccountId: '10000000-0000-4000-8000-0000000000ff', version: 2 })] });
   await signIn(page);
-  await page.goto(`/gestao/${TENANT_A}/mapa-acesso`);
+  await page.goto(`/c/${TENANT_A}/gestao/mapa-acesso`);
   const areas = page.getByRole('region', { name: 'Áreas de acesso' });
   await expect(areas.getByText('Hall A')).toBeVisible();
   await areas.getByRole('button', { name: 'Nova área de acesso' }).click();
