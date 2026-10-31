@@ -246,7 +246,7 @@ function DecisionForm({ homologation, options, close }: { homologation: AccessHo
       {observed.length === 0 ? <p className="field-help">Nenhuma capacidade foi observada neste dossiê; a aprovação não lista capacidades.</p>
         : observed.map((name) => <label key={name} className="weekday-option"><input type="checkbox" checked={draft.approved.includes(name)} disabled={locked}
           onChange={(event) => update({ approved: event.target.checked ? [...draft.approved, name] : draft.approved.filter((item) => item !== name) })} />{capabilityLabels[name]}</label>)}</fieldset> : null}
-    {approval ? <><label htmlFor="decision-review">Revisar até (opcional, futura)</label>
+    {approval ? <><label htmlFor="decision-review">Revisar até (opcional, futura; horário de {PLATFORM_ZONE})</label>
       <input id="decision-review" type="datetime-local" value={draft.reviewDue} disabled={locked} onChange={(event) => update({ reviewDue: event.target.value })} />
       <label htmlFor="decision-restrictions">Restrições (uma por linha, opcional)</label>
       <textarea id="decision-restrictions" rows={2} value={draft.restrictions} disabled={locked} onChange={(event) => update({ restrictions: event.target.value })} /></> : null}

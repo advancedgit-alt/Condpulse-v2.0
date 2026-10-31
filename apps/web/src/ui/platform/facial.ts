@@ -2,6 +2,8 @@ import { isUUID } from '../../api/client';
 import { capabilityNames, isApproval, limitNames, type AccessHomologation, type CapabilityName, type CapabilityObservation, type CreateHomologationBody,
   type Decision, type DecideBody, type LimitName, type OperatingMode, type Topology } from '../../api/accessCatalog';
 import { displayText } from '../../api/text';
+import { toInstant } from '../dateTime';
+import { PLATFORM_ZONE } from './shared';
 
 /** Regras dos formulários do acesso facial, iguais às do servidor (CatalogService.validate/decide); o servidor decide. */
 export type TriState = '' | 'yes' | 'no';
@@ -95,9 +97,13 @@ export function decisionBody(decisionId: string, draft: DecisionDraft, homologat
   let reviewDueAt: string | null = null;
   if (draft.reviewDue) {
     if (!approval) return 'A data de revisão só vale em aprovação.';
-    const at = Date.parse(draft.reviewDue);
-    if (!Number.isFinite(at) || at <= now) return 'A revisão precisa ser futura.';
-    reviewDueAt = new Date(at).toISOString();
+    // O campo datetime-local não tem fuso: a hora digitada é a da plataforma (America/Sao_Paulo), a mesma em que a
+    // central exibe as datas, e não a do dispositivo.
+    let instant: string;
+    try { instant = toInstant(draft.reviewDue, PLATFORM_ZONE); }
+    catch (error) { return error instanceof Error ? error.message : 'Data de revisão inválida.'; }
+    if (Date.parse(instant) <= now) return 'A revisão precisa ser futura.';
+    reviewDueAt = instant;
   }
   const restrictions = textLines(draft.restrictions, 'Restrições');
   if ('error' in restrictions) return restrictions.error;

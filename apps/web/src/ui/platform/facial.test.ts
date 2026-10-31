@@ -57,6 +57,25 @@ describe('decisão da homologação', () => {
     expect(decisionBody(ID, { ...emptyDecision(), decision: 'APPROVE_LAB', reason: 'Ensaio concluído ok', evidence: EVIDENCE, reviewDue: '2000-01-01T10:00' }, trial))
       .toMatch(/futura/);
   });
+  it('data de revisão é horário da plataforma, qualquer que seja o fuso do dispositivo', () => {
+    const original = process.env.TZ;
+    const draft = { ...emptyDecision(), decision: 'APPROVE_LAB' as const, reason: 'Ensaio de bancada concluído', evidence: EVIDENCE, reviewDue: '2031-01-10T10:00' };
+    try {
+      for (const zone of ['UTC', 'Asia/Tokyo', 'America/Sao_Paulo', 'America/Los_Angeles']) {
+        process.env.TZ = zone;
+        // 10:00 em America/Sao_Paulo (UTC-3) é 13:00 UTC, independente do fuso do navegador.
+        expect(new Date(2031, 0, 10, 10).getTimezoneOffset()).toBe(zone === 'UTC' ? 0 : zone === 'Asia/Tokyo' ? -540 : zone === 'America/Sao_Paulo' ? 180 : 480);
+        expect(decisionBody(ID, draft, trial, Date.parse('2030-01-01T00:00:00Z'))).toMatchObject({ reviewDueAt: '2031-01-10T13:00:00.000Z' });
+      }
+      // Futura conferida no instante convertido: 10:00 de São Paulo já passou às 12:30 UTC? Não (13:00 UTC); às 13:30 UTC, sim.
+      process.env.TZ = 'UTC';
+      expect(decisionBody(ID, draft, trial, Date.parse('2031-01-10T12:30:00Z'))).toMatchObject({ reviewDueAt: '2031-01-10T13:00:00.000Z' });
+      expect(decisionBody(ID, draft, trial, Date.parse('2031-01-10T13:30:00Z'))).toMatch(/futura/);
+      expect(decisionBody(ID, { ...draft, reviewDue: '2031-02-30T10:00' }, trial)).toMatch(/inválido/);
+    } finally {
+      if (original === undefined) delete process.env.TZ; else process.env.TZ = original;
+    }
+  });
   it('só https vira link', () => {
     expect(safeLink('https://www.controlid.com.br/docs')).toBe('https://www.controlid.com.br/docs');
     expect(safeLink('javascript:alert(1)')).toBeNull();
