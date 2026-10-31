@@ -26,11 +26,19 @@ public class PlatformService {
  private final PlatformTransactionExecutor transactions;
  private final PlatformStore store;
  private final boolean billingEnabled;
- /** Financeiro desligado (padrão): billing.* não aparece na sessão, para a tela não oferecer a área sem API. */
+ private final boolean facialAccessEnabled;
+ /**
+  * Financeiro desligado (padrão): billing.* não aparece na sessão, para a tela não oferecer a área sem API. O mesmo vale
+  * para technical_grants.* com o acesso facial desligado (CP_FACIAL_ACCESS_ENABLED).
+  */
  @Autowired
  public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store,
-   @Value("${condpulse.platform.billing-enabled:false}") boolean billingEnabled) {
-  this.transactions=transactions; this.store=store; this.billingEnabled=billingEnabled;
+   @Value("${condpulse.platform.billing-enabled:false}") boolean billingEnabled,
+   @Value("${condpulse.facial-access.enabled:false}") boolean facialAccessEnabled) {
+  this.transactions=transactions; this.store=store; this.billingEnabled=billingEnabled; this.facialAccessEnabled=facialAccessEnabled;
+ }
+ public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store,boolean billingEnabled) {
+  this(transactions,store,billingEnabled,false);
  }
  public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store) { this(transactions,store,true); }
 
@@ -38,6 +46,7 @@ public class PlatformService {
  public PlatformModels.PlatformSession session(UUID actor,AssuranceLevel assurance) {
   return execute(actor,assurance,context->new PlatformModels.PlatformSession(actor,context.role(),
    context.effectiveCapabilities().stream().filter(capability->billingEnabled || !capability.key().startsWith("billing."))
+    .filter(capability->facialAccessEnabled || !capability.key().startsWith("technical_grants."))
     .map(PlatformCapability::key).sorted().toList(),
    assurance!=AssuranceLevel.AAL2));
  }
