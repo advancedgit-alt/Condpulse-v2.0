@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import br.com.condpulse.accessage.application.BirthDateCipher;
 import br.com.condpulse.accessage.infrastructure.AgeStore;
@@ -189,7 +190,7 @@ class AccessGrantJdbcTest {
  }
 
  /**
-  * V046: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
+  * V045: a derivação publica por destino na mesma transação (trabalho pendente, nunca sucesso físico); mesmos fatos não
   * geram trabalho novo; bloqueio publica REVOKE_ALL com prioridade e supera a aplicação pendente.
   */
  @Test void publicationIsAJobPerDestinationAndRevocationGoesFirst() throws Exception {
@@ -211,7 +212,7 @@ class AccessGrantJdbcTest {
   assertEquals("STAFF_ACCESS_DENIED",code(()->publications.plan(db.accountA,db.tenantA,AAL2,new PublicationModels.PlanRequest(null))),"Morador não publica");
   assertEquals("MFA_REQUIRED",code(()->publications.plan(MANAGER,db.tenantA,AAL1,new PublicationModels.PlanRequest(null))));
   assertEquals("ACCESS_SUBJECT_NOT_FOUND",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of(UUID.randomUUID())))));
-  assertEquals("PUBLICATION_SUBJECTS_INVALID",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of())));
+  assertEquals("PUBLICATION_SUBJECTS_INVALID",code(()->publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of()))));
 
   // Executor confirma um destino (leitura de volta igual ao hash); o outro destino é superado pelo bloqueio.
   var a=subjectOf(db.accountA);
@@ -240,6 +241,33 @@ class AccessGrantJdbcTest {
    rows.get(1).publicationId(),rows.get(1).version(),"CONFIRMED","STATE_READ",rows.get(1).documentHash(),null,1,0)),"Trabalho superado não recebe resultado");
   assertEquals("TENANT_ACCESS_DENIED",code(()->publications.publications(MANAGER,db.tenantB,AAL2,null,null,null)),"HAC-007");
   assertTrue(Integer.parseInt(db.adminString("select count(*)::text from cp.audit_log where tenant_id=? and action='RIGHTS_PUBLICATION_PLANNED'",db.tenantA))>=1);
+  db.assertEmptyContext();
+ }
+
+ /**
+  * Recusa do banco num sujeito (documento acima de 512 entradas) fica registrada como DB_REFUSED e não desfaz a
+  * derivação nem a publicação dos demais (savepoint por item; a limpeza da varredura não roda na transação abortada).
+  */
+ @Test void refusedSubjectIsRecordedWhileOthersArePublished() throws Exception {
+  var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.5.2");
+  String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
+  UUID version=approvedPolicy(inst.area(),rule(zone,inst.area(),List.of("RESIDENT","EMPLOYEE"),"DENY","NOT_REQUIRED"));
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  var a=subjectOf(db.accountA);
+  var c=subjectOf(db.accountC);
+  Instant until=Instant.now().plus(java.time.Duration.ofDays(10));
+  for(int i=0;i<512;i++)
+   subjects.addFunctional(MANAGER,db.tenantA,AAL2,a.subjectId(),new SubjectModels.FunctionalAuthorization(UUID.randomUUID(),"EMPLOYEE","func-jdbc-"+i,until));
+  var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
+  assertEquals(514,derived.created(),"Direitos gravados apesar da recusa na publicação: "+derived.skippedByReason());
+  var published=derived.publication();
+  assertEquals(1,published.created(),published.toString());
+  assertEquals(Map.of("DB_REFUSED",1),published.failedByReason());
+  assertEquals(a.subjectId(),published.failedSample().getFirst().subjectId());
+  assertEquals(0,publications.publications(MANAGER,db.tenantA,AAL2,null,a.subjectId(),null).publications().size(),"Sujeito recusado sem trabalho");
+  assertEquals(1,publications.publications(MANAGER,db.tenantA,AAL2,null,c.subjectId(),null).publications().size(),"Os demais publicados");
+  var again=publications.plan(MANAGER,db.tenantA,AAL2,new PublicationModels.PlanRequest(List.of(a.subjectId(),c.subjectId())));
+  assertEquals(0,again.created()); assertEquals(Map.of("DB_REFUSED",1),again.failedByReason(),"Plano explícito também registra por item");
   db.assertEmptyContext();
  }
 

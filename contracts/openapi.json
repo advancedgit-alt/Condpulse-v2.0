@@ -18277,7 +18277,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V046).",
+        "description": "Renomeia ou retira a política pela versão lida (ativação é pela publicação, V045).",
         "parameters": [
           {
             "name": "tenantId",
@@ -18722,7 +18722,7 @@
           }
         ],
         "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
-        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V046).",
+        "description": "Aprovação da regra (policy.publish, AAL2): só revisão VALIDATED com validação vigente, do hash atual e da revisão de instalação atual; o banco grava aprovador e horário. Não publica (V045).",
         "parameters": [
           {
             "name": "tenantId",

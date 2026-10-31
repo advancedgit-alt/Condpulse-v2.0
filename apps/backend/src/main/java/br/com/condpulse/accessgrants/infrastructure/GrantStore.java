@@ -22,8 +22,11 @@ public class GrantStore {
 
  private <T> T scan(Supplier<T> action) {
   jdbc.queryForObject("select set_config('app.subject_context_scan','on',true)",String.class);
-  try { return action.get(); }
-  finally { jdbc.queryForObject("select set_config('app.subject_context_scan','',true)",String.class); }
+  // Só desliga no sucesso: com erro a transação está abortada (nova instrução daria 25P02 e mascararia a recusa por item
+  // da derivação); o rollback ao savepoint ou da transação devolve a configuração local.
+  T result=action.get();
+  jdbc.queryForObject("select set_config('app.subject_context_scan','',true)",String.class);
+  return result;
  }
  /** Mesmo lock por condomínio das V041-V043 (instalação, políticas, direitos e marcas). */
  public void lock(UUID tenant) {

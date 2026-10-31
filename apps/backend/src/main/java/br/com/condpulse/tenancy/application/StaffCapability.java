@@ -22,7 +22,7 @@ public enum StaffCapability {
  MANAGE_AREAS("area.manage"),
  /** Acesso facial (AC-007/AC-008, V043): cria revisões de regra, valida e simula, sem publicar. */
  EDIT_POLICIES("policy.edit"),
- /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V046). */
+ /** Acesso facial (V043): aprova a revisão validada (publicação por destino na V045). */
  PUBLISH_POLICIES("policy.publish");
 
  private final String key;

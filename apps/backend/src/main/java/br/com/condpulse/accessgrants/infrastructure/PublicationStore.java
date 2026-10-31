@@ -13,7 +13,7 @@ import br.com.condpulse.accessgrants.application.PublicationModels;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * SQL da publicação por destino (V046). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
+ * SQL da publicação por destino (V045). O banco compila documento, ação, prioridade e versão; aqui só se escolhem os
  * destinos e se grava a intenção. A varredura de destinos (vínculos) e a de convites ficam ligadas só durante a compilação.
  */
 public class PublicationStore {
@@ -22,8 +22,11 @@ public class PublicationStore {
 
  private <T> T scan(Supplier<T> action) {
   setting("app.policy_destination_scan","on"); setting("app.subject_context_scan","on");
-  try { return action.get(); }
-  finally { setting("app.policy_destination_scan",""); setting("app.subject_context_scan",""); }
+  // Só desliga no sucesso: com erro a transação está abortada (nova instrução daria 25P02 e mascararia a recusa); o
+  // rollback ao savepoint do item (ou da transação) já devolve as configurações locais ao valor anterior.
+  T result=action.get();
+  setting("app.policy_destination_scan",""); setting("app.subject_context_scan","");
+  return result;
  }
  private void setting(String name,String value) {
   jdbc.queryForObject("select set_config(?,?,true)",String.class,name,value);

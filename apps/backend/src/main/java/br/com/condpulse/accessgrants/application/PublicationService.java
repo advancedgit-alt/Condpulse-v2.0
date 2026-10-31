@@ -19,7 +19,7 @@ import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import org.springframework.dao.DataAccessException;
 
 /**
- * Publicação dos direitos por destino (AC-012/AC-013, V046). A gestão com vínculos e publicação (AAL2) compila, sob o lock
+ * Publicação dos direitos por destino (AC-012/AC-013, V045). A gestão com vínculos e publicação (AAL2) compila, sob o lock
  * por condomínio, o documento de cada sujeito em cada equipamento; o banco grava só o que mudou, com versão monotônica, e
  * supera o trabalho anterior em aberto. Revogações são publicadas pelo banco na mesma transação da marca. Nenhum
  * estado de aplicação sai daqui: ACK, aplicado sem comprovação, confirmado, parcial, falha e desconhecido vêm só do
