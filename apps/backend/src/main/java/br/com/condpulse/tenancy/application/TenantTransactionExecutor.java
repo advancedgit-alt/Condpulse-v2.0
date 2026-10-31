@@ -80,6 +80,8 @@ public class TenantTransactionExecutor {
       r.getBoolean("can_view_parcels")),
       tenantId,accountId);
    if(memberships.isEmpty()) throw denied();
+   // Módulo da rota liberado pela central para este condomínio (V044); depois do vínculo, para não revelar estado a terceiros.
+   TenantModuleGate.check(jdbc,tenantId);
    var context=new TenantContext(accountId,tenantId,timeZone,memberships,assurance);
    // Capacidades de equipe entram no contexto local somente após vínculo vigente e AAL2.
    String capabilities=context.effectiveCapabilities().stream().map(StaffCapability::key).sorted()

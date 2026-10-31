@@ -4161,6 +4161,53 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
+def tenant_module_checks():
+    """V044: modulos por condominio. Central (tenant_modules.manage) grava pela versao com o proprio ator e trilha exigida
+    no COMMIT; runtime le no contexto do condominio, nos condominios dos proprios vinculos e pelo link publico."""
+    PL = "10000000-0000-4000-8000-0000000044a1"
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{PL}','ACTIVE')")
+    plat = "SET LOCAL app.platform_capabilities='tenant_modules.manage,tenants.read'; "
+    def audit(action="TENANT_MODULE_DISABLED", module="parcels", version=1, by=PL, tenant=TA):
+        return (f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason,details) VALUES('{by}','{action}','{tenant}',"
+                f"'Ajuste ficticio','{{\"module\":\"{module}\",\"version\":\"{version}\"}}'); ")
+    insert = (f"INSERT INTO platform.tenant_modules(tenant_id,module,enabled,version,reason,updated_by) "
+              f"VALUES('{TA}','parcels',false,1,'Ajuste ficticio','{PL}')")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='platform' "
+                 "and c.relname='tenant_modules' and c.relrowsecurity and c.relforcerowsecurity") == "1", "modulos com RLS FORCE")
+    expect(value(f"select platform.tenant_module_enabled('{TA}','parcels')", tenant=TA, role="cp_api") == "t",
+           "sem linha o condominio segue liberado")
+    expect(error("SET LOCAL app.platform_capabilities='tenants.read,tenants.manage'; " + audit() + insert, "42501", actor=PL, role="cp_api"),
+           "tenants.manage sozinha nao grava evento nem modulo")
+    expect(error(plat + insert, "23514", actor=PL, role="cp_api"), "modulo sem evento da trilha nao conclui")
+    expect(error(plat + audit(version=2) + insert, "23514", actor=PL, role="cp_api"), "evento de outra versao nao serve")
+    expect(error(plat + audit(action="TENANT_MODULE_ENABLED") + insert, "23514", actor=PL, role="cp_api"), "evento de outro estado nao serve")
+    expect(error(plat + audit() + insert.replace(f"'{PL}')", f"'{AA}')"), "42501", actor=PL, role="cp_api"), "autor diferente do ator e recusado")
+    expect(error(plat + audit() + insert.replace("false,1", "false,2"), "23514", actor=PL, role="cp_api"), "primeira gravacao nasce na versao 1")
+    expect(error(plat + audit(module="facial") + insert.replace("'parcels'", "'facial'"), "23514", actor=PL, role="cp_api"),
+           "modulo fora da lista fechada e recusado")
+    query(plat + audit() + insert, actor=PL, role="cp_api")
+    expect(value(f"select platform.tenant_module_enabled('{TA}','parcels')", tenant=TA, role="cp_api") == "f",
+           "contexto do condominio le o modulo desligado")
+    expect(value(f"select platform.tenant_module_enabled('{TA}','visits')", tenant=TA, role="cp_api") == "t", "outro modulo segue liberado")
+    expect(value("select count(*) from platform.tenant_modules", actor=AA, role="cp_api") == "1", "membro ativo le o proprio condominio (/v1/me)")
+    expect(value("select count(*) from platform.tenant_modules", actor=AB, role="cp_api") == "0", "membro de outro condominio nao le")
+    expect(value("select count(*) from platform.tenant_modules", tenant=TB, actor=AB, role="cp_api") == "0", "contexto de outro condominio nao le")
+    expect(error(plat + audit(action="TENANT_MODULE_ENABLED", version=3) +
+                 f"UPDATE platform.tenant_modules SET enabled=true,version=3,updated_by='{PL}' WHERE tenant_id='{TA}'", "23514", actor=PL, role="cp_api"),
+           "mudanca so pela versao seguinte")
+    expect(query(f"UPDATE platform.tenant_modules SET enabled=true,version=2,updated_by='{PL}' WHERE tenant_id='{TA}' RETURNING 1",
+                 actor=PL, role="cp_api").stdout.strip() == "", "sem capacidade nao alcanca a linha")
+    expect(error(plat + f"DELETE FROM platform.tenant_modules WHERE tenant_id='{TA}'", "42501", actor=PL, role="cp_api"), "modulo nao e apagado")
+    query(plat + audit(action="TENANT_MODULE_ENABLED", version=2) +
+          f"UPDATE platform.tenant_modules SET enabled=true,version=2,reason='Religado ficticio',updated_by='{PL}' WHERE tenant_id='{TA}'",
+          actor=PL, role="cp_api")
+    expect(value(f"select enabled||':'||version from platform.tenant_modules where tenant_id='{TA}'") == "true:2", "religado na versao 2")
+    expect(query("SET LOCAL app.platform_capabilities='tenants.manage'; "
+                 f"INSERT INTO platform.platform_audit_log(actor_id,action,tenant_id,reason) VALUES('{PL}','TENANT_RENAMED','{TA}','Ficticio')",
+                 actor=PL, role="cp_api", check=False).returncode == 0, "tenants.manage continua gravando TENANT_*")
+    query(f"DELETE FROM platform.tenant_modules WHERE tenant_id='{TA}'; DELETE FROM platform.platform_audit_log WHERE actor_id='{PL}'; "
+          f"DELETE FROM platform.accounts WHERE id='{PL}'")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -4292,6 +4339,7 @@ def main():
     area_checks()
     binding_checks()
     policy_checks()
+    tenant_module_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

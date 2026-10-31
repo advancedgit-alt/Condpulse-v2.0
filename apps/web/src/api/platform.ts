@@ -4,7 +4,7 @@ import type { ISODateTime, UUID } from './types';
 
 /** Painel master (OPS-01): somente dados da plataforma; nunca conteúdo dos moradores. */
 /** As três últimas só aparecem com o acesso facial ligado (CP_FACIAL_ACCESS_ENABLED); sessão com elas continua válida. */
-export type PlatformCapability = 'billing.manage' | 'billing.read' | 'outbox.operate' | 'platform.audit.read' | 'tenants.manage' | 'tenants.read'
+export type PlatformCapability = 'billing.manage' | 'billing.read' | 'outbox.operate' | 'platform.audit.read' | 'tenant_modules.manage' | 'tenants.manage' | 'tenants.read'
   | 'technical_grants.manage' | 'access_catalog.manage' | 'homologation.approve';
 export interface PlatformSession { accountId: UUID; role: 'PLATFORM_ADMIN'; capabilities: PlatformCapability[]; mfaRequired: boolean }
 export interface OnboardingReceipt {
@@ -66,7 +66,7 @@ export interface OutboxTask {
 }
 export interface OutboxTaskPage { tasks: OutboxTask[]; truncated: boolean }
 
-const CAPABILITIES: readonly PlatformCapability[] = ['billing.manage', 'billing.read', 'outbox.operate', 'platform.audit.read', 'tenants.manage', 'tenants.read',
+const CAPABILITIES: readonly PlatformCapability[] = ['billing.manage', 'billing.read', 'outbox.operate', 'platform.audit.read', 'tenant_modules.manage', 'tenants.manage', 'tenants.read',
   'technical_grants.manage', 'access_catalog.manage', 'homologation.approve'];
 const nullableCount = (value: unknown): value is number | null => value === null || isInteger(value);
 function count(value: unknown): value is number { return isInteger(value) && value >= 0; }

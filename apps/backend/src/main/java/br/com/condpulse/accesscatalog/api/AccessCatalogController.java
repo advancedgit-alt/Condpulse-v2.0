@@ -1,5 +1,7 @@
 package br.com.condpulse.accesscatalog.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accesscatalog.application.CatalogModels;
 import br.com.condpulse.accesscatalog.application.CatalogService;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Catálogo e homologação (AC-019, V040): plataforma cria e decide; gestão consulta o estado. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessCatalogController {
  private final CatalogService catalog;
  public AccessCatalogController(CatalogService catalog) { this.catalog=catalog; }

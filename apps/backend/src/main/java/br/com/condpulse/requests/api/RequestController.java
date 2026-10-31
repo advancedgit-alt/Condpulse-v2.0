@@ -1,5 +1,7 @@
 package br.com.condpulse.requests.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.requests.application.RequestModels;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Pedidos da unidade (CP-033) atrás de CP_REQUESTS_ENABLED=false. Vínculo e capacidade conferidos no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.requests.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.REQUESTS)
 public class RequestController {
  private final RequestService service;
  public RequestController(RequestService service) { this.service=service; }

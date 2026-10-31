@@ -1,5 +1,7 @@
 package br.com.condpulse.visits.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.visits.application.AccessModels;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Registro manual de entrada e saída (CP-028), atrás de CP_VISITS_ENABLED=false. Autorização e regras no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.visits.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.VISITS)
 public class AccessController {
  private final AccessService service;
  public AccessController(AccessService service) { this.service=service; }

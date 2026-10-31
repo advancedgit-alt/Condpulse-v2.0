@@ -39,6 +39,8 @@ public class PermitLinkPublicStore {
     join cp.visitors v on v.tenant_id=p.tenant_id and v.id=p.visitor_id
     join platform.tenants t on t.id=l.tenant_id
     where l.token_hash=? and l.revoked_at is null
+     -- Visitas suspensas pela central no condomínio (V044): o link fica indisponível, com a mesma resposta neutra.
+     and platform.tenant_module_enabled(l.tenant_id,'visits')
     """,(r,n)->new VisitModels.PublicPermit(r.getString("tenant_name"),firstName(r.getString("full_name")),r.getString("purpose"),
       r.getTimestamp("valid_from").toInstant(),r.getTimestamp("valid_until").toInstant(),r.getString("time_zone"),
       r.getString("effective_state")),tokenHash);

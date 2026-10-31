@@ -130,6 +130,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  void clearPlatformFixtures() throws SQLException {
   clearBillingFixtures();
+  adminUpdate("delete from platform.tenant_modules where tenant_id in (?,?)",tenantA,tenantB);
   adminUpdate("delete from platform.access_homologation_decisions where decided_by in (?,?,?) or homologation_id in "
    +"(select id from platform.access_homologations where requested_by in (?,?,?))",accountA,accountB,accountC,accountA,accountB,accountC);
   adminUpdate("delete from platform.access_homologations where requested_by in (?,?,?)",accountA,accountB,accountC);
@@ -196,6 +197,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    update(connection,"delete from platform.web_sessions where account_id in (?,?,?)",accountA,accountB,accountC);
    update(connection,"delete from platform.recovery_attempts where account_id in (?,?,?)",accountA,accountB,accountC);
    deleteBilling(connection);
+   update(connection,"delete from platform.tenant_modules where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from platform.access_homologation_decisions where decided_by in (?,?,?) or homologation_id in "
     +"(select id from platform.access_homologations where requested_by in (?,?,?))",accountA,accountB,accountC,accountA,accountB,accountC);
    update(connection,"delete from platform.access_homologations where requested_by in (?,?,?)",accountA,accountB,accountC);
