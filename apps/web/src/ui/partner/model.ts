@@ -59,6 +59,17 @@ export function applyRefusal(state: RefusalState, refusal: Refusal, scope: { acc
     forget: [securityLogKey(scope.accountId, refusal.tenantId)] };
 }
 
+/**
+ * Condomínio exibido a partir da escolha guardada e da lista atual de /v1/me: se o escolhido saiu do alcance (contrato
+ * encerrado, escala vencida), cai no primeiro ainda alcançado; sem nenhum, null (estado vazio). Nunca um que saiu.
+ */
+export function reachedTenant<T extends { tenantId: string }>(tenants: readonly T[], chosen: string): T | null {
+  return tenants.find((tenant) => tenant.tenantId.toLowerCase() === chosen.toLowerCase()) ?? tenants[0] ?? null;
+}
+/** Escolha de formulário que só vale se ainda estiver na lista atual; senão volta a vazio ('Escolha'). */
+export const stillReached = (tenantIds: Iterable<string>, chosen: string) =>
+  [...tenantIds].some((tenantId) => tenantId.toLowerCase() === chosen.toLowerCase()) ? chosen : '';
+
 export const memberStatusLabels: Record<string, string> = { ACTIVE: 'Ativo', REVOKED: 'Revogado' };
 export const scheduleStatusLabels: Record<string, string> = { ACTIVE: 'Ativa', CANCELLED: 'Cancelada' };
 export const contractStatusLabels: Record<string, string> = { ACTIVE: 'Ativo', ENDED: 'Encerrado' };

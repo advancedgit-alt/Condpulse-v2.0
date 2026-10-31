@@ -9,7 +9,7 @@ import { createSecurityLogApi } from '../../api/securityLog';
 import type { PartnerContext } from '../../api/types';
 import { FailureState, PartnerConsole, PartnerScopeProvider } from './PartnerPage';
 import { applyRefusal, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, refusalOf,
-  scheduleBody, securityLogKey } from './model';
+  reachedTenant, scheduleBody, securityLogKey, stillReached } from './model';
 
 const own = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -111,6 +111,21 @@ describe('regras locais dos painéis', () => {
     // Página seguinte recusada depois de páginas carregadas: a recusa é devolvida para limpar a tela.
     expect(logAccessFailure({ pages: true, integrity: false }, denied, null)).toBe(denied);
     expect(logAccessFailure({ pages: true, integrity: true }, down, null)).toBeNull();
+  });
+  it('condomínio que sai do alcance deixa de ser o selecionado (log e escala)', () => {
+    const second = '20000000-0000-4000-8000-000000000002';
+    const both = [{ tenantId: tenant, tenantName: 'A', timeZone: 'America/Sao_Paulo' }, { tenantId: second, tenantName: 'B', timeZone: 'America/Sao_Paulo' }];
+    expect(reachedTenant(both, second)?.tenantId).toBe(second);
+    // /v1/me relido sem o condomínio escolhido: cai no que restou, nunca no que saiu.
+    expect(reachedTenant(both.slice(0, 1), second)?.tenantId).toBe(tenant);
+    expect(reachedTenant([], second)).toBeNull();
+    expect(stillReached([tenant], second)).toBe('');
+    expect(stillReached([tenant], tenant.toUpperCase())).toBe(tenant.toUpperCase());
+  });
+  it('log renderizado com a lista atual: selecionado fora do alcance não aparece', () => {
+    const tenants = [{ tenantId: tenant, tenantName: 'Condomínio Restante', timeZone: 'America/Sao_Paulo' }];
+    const html = render(context('SECURITY_LEAD', 'comando', ['security.log.read'], tenants));
+    expect(html).toContain('Filtros do log de Condomínio Restante');
   });
   it('filtro do log e exportação', () => {
     expect(logFilter({ type: ' access_entry ', severity: 'CRITICAL' })).toEqual({ type: 'ACCESS_ENTRY', severity: 'CRITICAL' });

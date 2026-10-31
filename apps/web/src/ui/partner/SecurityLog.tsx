@@ -4,7 +4,7 @@ import { securityLog, securitySeverities, type SecurityLogExport, type SecurityL
 import { Empty, Loading, Notice, errorMessage } from '../primitives';
 import { formatWhen } from '../dateTime';
 import { FailureState, usePartnerAccessGuard, usePartnerScope } from './PartnerPage';
-import { exportBody, exportFileName, integrityProblems, logAccessFailure, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
+import { exportBody, exportFileName, integrityProblems, reachedTenant, logAccessFailure, logFilter, logRequest, logRequestKey, securityLogKey, severityLabels, sourceLabels, type ExportDraft, type LogFilterDraft, type LogRequest } from './model';
 
 const OFF_TEXT = 'O Log de Segurança está desligado no servidor deste ambiente (CP_SECURITY_LOG_ENABLED). Quando for ligado, esta seção passa a funcionar sem mudança na tela.';
 const severityTone: Record<SecuritySeverity, string> = { INFO: 'status-neutral', ATTENTION: 'status-pending', CRITICAL: 'status-overdue' };
@@ -15,8 +15,10 @@ const severityTone: Record<SecuritySeverity, string> = { INFO: 'status-neutral',
  */
 export function SecurityLogSection() {
   const { context } = usePartnerScope();
-  const [tenantId, setTenantId] = useState(context.tenants[0]?.tenantId ?? '');
-  const tenant = context.tenants.find((item) => item.tenantId === tenantId);
+  const [chosen, setTenantId] = useState(context.tenants[0]?.tenantId ?? '');
+  // Seleção derivada da lista atual de /v1/me: condomínio que saiu do alcance não fica selecionado.
+  const tenant = reachedTenant(context.tenants, chosen);
+  const tenantId = tenant?.tenantId ?? '';
   return <section className="management-section" aria-labelledby="security-log-title">
     <div className="section-heading"><div><span className="section-index">LOG DE SEGURANÇA</span><h2 id="security-log-title">Log de Segurança</h2></div></div>
     <p className="field-help">Trilha imutável e encadeada por hash. Toda consulta, verificação ou exportação fica registrada no próprio log com o seu papel.</p>

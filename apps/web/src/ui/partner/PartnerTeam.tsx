@@ -7,7 +7,7 @@ import { formatWhen } from '../dateTime';
 import { partnerRoleLabels } from '../shell/paths';
 import { FailureState, usePartnerAccessGuard, usePartnerScope } from './PartnerPage';
 import { contractStatusLabels, emptyMemberDraft, emptyScheduleDraft, memberBody, memberStatusLabels, partnerKey, scheduleBody, scheduleStatusLabels,
-  scheduledRoles, type MemberDraft, type ScheduleDraft } from './model';
+  scheduledRoles, stillReached, type MemberDraft, type ScheduleDraft } from './model';
 
 /** Horários do painel do parceiro: fuso de operação do projeto; a escala usa o fuso do condomínio escolhido. */
 const PARTNER_ZONE = 'America/Sao_Paulo';
@@ -156,10 +156,12 @@ function ScheduleForm({ members, tenants }: { members: readonly PartnerMember[];
   const [problem, setProblem] = useState<string | null>(null);
   const set = (patch: Partial<ScheduleDraft>) => setDraft((current) => ({ ...current, ...patch }));
   const eligible = members.filter((member) => member.status === 'ACTIVE' && scheduledRoles.includes(member.role));
-  const zone = tenants.get(draft.tenantId.toLowerCase())?.zone;
+  // Escolhas reconciliadas com as listas atuais: condomínio fora do alcance ou papel revogado voltam a "Escolha".
+  const current = { ...draft, tenantId: stillReached(tenants.keys(), draft.tenantId), memberId: stillReached(eligible.map((member) => member.id), draft.memberId) };
+  const zone = tenants.get(current.tenantId.toLowerCase())?.zone;
   function submit(event: FormEvent) {
     event.preventDefault();
-    const body = scheduleBody(draft, zone);
+    const body = scheduleBody(current, zone);
     if (typeof body === 'string') { setProblem(body); return; }
     setProblem(null);
     void action.run(() => partners.createSchedule(context.partnerId, body), () => 'Escala criada.',
@@ -168,9 +170,9 @@ function ScheduleForm({ members, tenants }: { members: readonly PartnerMember[];
   return <form className="panel management-form stack-form" onSubmit={submit} aria-labelledby="partner-schedule-form">
     <h3 id="partner-schedule-form">Nova escala</h3>
     <p className="field-help">Só supervisor e operador remoto recebem escala, em condomínio com contrato ativo, por no máximo 31 dias. Horários no fuso do condomínio; sem início, vale a partir de agora.</p>
-    <div className="two-fields"><div><label htmlFor="schedule-member">Pessoa</label><select id="schedule-member" value={draft.memberId} onChange={(event) => set({ memberId: event.target.value })}>
+    <div className="two-fields"><div><label htmlFor="schedule-member">Pessoa</label><select id="schedule-member" value={current.memberId} onChange={(event) => set({ memberId: event.target.value })}>
       <option value="">Escolha</option>{eligible.map((member) => <option key={member.id} value={member.id}>{member.displayName} · {partnerRoleLabels[member.role]}</option>)}</select></div>
-      <div><label htmlFor="schedule-tenant">Condomínio</label><select id="schedule-tenant" value={draft.tenantId} onChange={(event) => set({ tenantId: event.target.value })}>
+      <div><label htmlFor="schedule-tenant">Condomínio</label><select id="schedule-tenant" value={current.tenantId} onChange={(event) => set({ tenantId: event.target.value })}>
         <option value="">Escolha</option>{[...tenants.entries()].map(([id, tenant]) => <option key={id} value={id}>{tenant.name}</option>)}</select></div></div>
     <div className="two-fields"><div><label htmlFor="schedule-start">Início (opcional)</label>
       <input id="schedule-start" type="datetime-local" value={draft.startsAt} onChange={(event) => set({ startsAt: event.target.value })} /></div>
