@@ -3680,6 +3680,97 @@ def homologation_checks():
           f"DELETE FROM platform.access_homologations WHERE id in ('{H1}','{H2}','{H3}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{PL}'; "
           f"DELETE FROM cp.memberships WHERE account_id='{MG}'; DELETE FROM platform.accounts WHERE id in ('{PL}','{MG}')")
 
+def area_checks():
+    """V041 (AC-004): areas e pontos por condominio. Casos HAC-009 (gestor sem acao tecnica), HAC-019 (ponto e sentido
+    explicitos), HAC-027 (gestor nao altera mapeamento fisico) e HAC-007 (isolamento)."""
+    MG, MI, CO = "10000000-0000-4000-8000-0000000041a1", "10000000-0000-4000-8000-0000000041a2", "10000000-0000-4000-8000-0000000041a3"
+    A1, A2, A3, AB = ("41100000-0000-4000-8000-000000000001", "41100000-0000-4000-8000-000000000002", "41100000-0000-4000-8000-000000000003",
+                      "41100000-0000-4000-8000-000000000004")
+    P1, G1 = "41200000-0000-4000-8000-000000000001", "41300000-0000-4000-8000-000000000001"
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{MI}','ACTIVE'),('{CO}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          ('{TA}','{MG}',NULL,'GESTAO AREA','MANAGER','ACTIVE'),('{TA}','{CO}',NULL,'PORTARIA AREA','CONCIERGE','ACTIVE');
+        INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason)
+          VALUES('{G1}','{TA}','{MI}','MASTER_IMPLANTACAO',ARRAY['installation.read','installation.manage'],now(),now()+interval '30 days','OPERATIONS','Implantacao ficticia');
+    """)
+    mgr = "SET LOCAL app.capabilities='area.manage'; "
+    tech = "SET LOCAL app.technical_scopes='installation.manage,installation.read'; "
+    as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
+    as_tech = dict(tenant=TA, actor=MI, role="cp_api")
+    def area(identifier, code, kind="COMMON_AREA", by=MG, extra_cols="", extra_vals="", tz="America/Sao_Paulo", tenant=TA):
+        return (f"INSERT INTO cp.access_areas(id,tenant_id,code,name,area_kind,timezone,created_by{extra_cols}) "
+                f"VALUES('{identifier}','{tenant}','{code}','Area {code}','{kind}','{tz}','{by}'{extra_vals})")
+    expect(error(area(A1, "EXTERIOR", "EXTERIOR"), "42501", tenant=TA, actor=AA, role="cp_api"), "morador nao cria area")
+    expect(error("SET LOCAL app.capabilities='memberships.manage'; " + area(A1, "EXTERIOR", "EXTERIOR"), "42501", **as_mgr),
+           "memberships.manage sozinho nao cria area")
+    expect(error(mgr + area(A1, "EXTERIOR", "EXTERIOR", tz="Lua/Base"), "23514", **as_mgr), "fuso IANA conferido")
+    expect(error(mgr + area(A1, "EXTERIOR", "EXTERIOR", extra_cols=",essential_route", extra_vals=",true"), "42501", **as_mgr),
+           "HAC-027: gestor nao marca rota essencial")
+    query(mgr + area(A1, "EXTERIOR", "EXTERIOR"), **as_mgr)
+    query(mgr + area(A2, "HALL", "RESIDENTIAL_ROUTE", extra_cols=",parent_area_id", extra_vals=f",'{A1}'"), **as_mgr)
+    query(mgr + area(A3, "ACADEMIA", extra_cols=",parent_area_id", extra_vals=f",'{A2}'"), **as_mgr)
+    expect(error(mgr + area(A3, "ACADEMIA2"), "23505", **as_mgr), "id unico")
+    expect(error(mgr + f"UPDATE cp.access_areas SET parent_area_id='{A3}',updated_by='{MG}',version=1 WHERE id='{A1}'", "23514", **as_mgr),
+           "hierarquia sem ciclo")
+    expect(error(mgr + f"UPDATE cp.access_areas SET essential_route=true,updated_by='{MG}',version=1 WHERE id='{A2}'", "42501", **as_mgr),
+           "HAC-009: gestor nao altera campo fisico da area")
+    query(tech + f"UPDATE cp.access_areas SET essential_route=true,physical_boundary_verified=true,updated_by='{MI}',version=1 WHERE id='{A2}'", **as_tech)
+    expect(value(f"select essential_route||':'||physical_boundary_verified||':'||updated_by from cp.access_areas where id='{A2}'") == f"true:true:{MI}",
+           "MASTER de implantacao marca rota essencial e separacao fisica")
+    query(mgr + f"UPDATE cp.access_areas SET name='Hall social',status='ACTIVE',updated_by='{MG}',version=2 WHERE id='{A2}'", **as_mgr)
+    expect(error(mgr + f"UPDATE cp.access_areas SET code='OUTRO',updated_by='{MG}',version=3 WHERE id='{A2}'", "42501", **as_mgr), "codigo da area fixo")
+    expect(error(mgr + f"UPDATE cp.access_areas SET name='x',updated_by='{MG}',version=9 WHERE id='{A2}'", "23514", **as_mgr), "versao sequencial")
+    expect(error(mgr + area(AB, "OUTRA", tenant=TB), "42501", **as_mgr), "HAC-007: area de outro condominio pela fronteira")
+    point = (f"INSERT INTO cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,created_by) "
+             f"VALUES('{P1}','{TA}','P-ACADEMIA','Porta da academia','{A2}','{A3}','DOOR','BOTH','FREE_EGRESS',")
+    expect(error(mgr + point + f"'{MG}')", "42501", **as_mgr), "HAC-009: gestor nao cria ponto fisico")
+    expect(error(tech + point.replace(f"'{A3}','DOOR'", f"'{A2}','DOOR'") + f"'{MI}')", "23514", **as_tech), "origem e destino distintos")
+    expect(error(tech + point.replace("'FREE_EGRESS',", "'FREE_EGRESS','COMMISSIONED',").replace("egress_class,created_by", "egress_class,status,created_by")
+                 + f"'{MI}')", "23514", **as_tech), "ponto nao nasce comissionado")
+    query(tech + point + f"'{MI}')", **as_tech)
+    expect(error(tech + f"UPDATE cp.access_points SET status='COMMISSIONED',updated_by='{MI}',version=1 WHERE id='{P1}'", "23514", **as_tech),
+           "comissionado so pelo aceite tecnico")
+    expect(error(mgr + f"UPDATE cp.access_points SET name='Outra',updated_by='{MG}',version=1 WHERE id='{P1}'", "42501", **as_mgr) or
+           value(f"select name from cp.access_points where id='{P1}'") == "Porta da academia", "HAC-027: gestor nao altera ponto")
+    expect(value(mgr + f"select name from cp.access_points where id='{P1}'", **as_mgr) == "Porta da academia", "gestao le o nome do local")
+    expect(value("SET LOCAL app.capabilities='concierge.operate'; select count(*) from cp.access_points", tenant=TA, actor=CO, role="cp_api") == "1",
+           "portaria le o nome do local")
+    expect(value("select count(*) from cp.access_points", tenant=TA, actor=AA, role="cp_api") == "0", "morador nao le o mapa tecnico")
+    expect(value(mgr + "select count(*) from cp.access_points", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: mapa nao atravessa condominio")
+    expect(error(tech + f"UPDATE cp.access_points SET status='RETIRED',updated_by='{MI}',version=1 WHERE id='{P1}'; "
+                 f"UPDATE cp.access_points SET status='MAPPED',updated_by='{MI}',version=2 WHERE id='{P1}'", "23514", **as_tech), "retirada final")
+    # Ponto ligado a area retirada ainda pode ser suspenso ou retirado; so nao pode ser religado a ela.
+    P2 = "41200000-0000-4000-8000-000000000002"
+    query(tech + point.replace(P1, P2).replace("'P-ACADEMIA'", "'P-SALA'") + f"'{MI}')", **as_tech)
+    query(mgr + f"UPDATE cp.access_areas SET status='RETIRED',updated_by='{MG}',version=version+1 WHERE id='{A3}'", **as_mgr)
+    query(tech + f"UPDATE cp.access_points SET status='SUSPENDED',updated_by='{MI}',version=1 WHERE id='{P2}'", **as_tech)
+    query(tech + f"UPDATE cp.access_points SET status='RETIRED',updated_by='{MI}',version=2 WHERE id='{P2}'", **as_tech)
+    expect(value(f"select status from cp.access_points where id='{P2}'") == "RETIRED", "ponto de area retirada pode ser suspenso e retirado")
+    expect(error(tech + point.replace(P1, "41200000-0000-4000-8000-000000000003").replace("'P-ACADEMIA'", "'P-NOVO'") + f"'{MI}')", "23514", **as_tech),
+           "nao se liga ponto novo a area retirada")
+    # Write skew na hierarquia: duas trocas de pai cruzadas e concorrentes; so uma conclui.
+    X1, X2 = "41100000-0000-4000-8000-000000000011", "41100000-0000-4000-8000-000000000012"
+    query(mgr + area(X1, "X1") + "; " + area(X2, "X2"), **as_mgr)
+    def swap(child, parent):
+        return query(mgr + f"UPDATE cp.access_areas SET parent_area_id='{parent}',updated_by='{MG}',version=1 WHERE id='{child}'; SELECT pg_sleep(1)",
+                     check=False, **as_mgr)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda pair: swap(*pair), [(X1, X2), (X2, X1)]))
+    expect(sum(r.returncode == 0 for r in results) == 1 and value(f"select count(*) from cp.access_areas where id in ('{X1}','{X2}') and parent_area_id is not null") == "1",
+           "trocas de pai concorrentes passam em serie e nao formam ciclo")
+    expect(error(tech + f"DELETE FROM cp.access_points WHERE id='{P1}'", "42501", **as_tech), "ponto nao e apagado")
+    expect(error(mgr + f"DELETE FROM cp.access_areas WHERE id='{A3}'", "42501", **as_mgr), "area nao e apagada")
+    expect(error("select emergency_design_ref from cp.access_points", "42501", tenant=TA, role="cp_worker"), "worker nao le referencias de projeto")
+    expect(value("select count(*) from cp.access_points", tenant=TA, role="cp_worker") == "2", "worker le o mapa do condominio")
+    expect(error(mgr + f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) VALUES('{TA}','{MG}','POINT_CREATED','ACCESS_POINT','{P1}',gen_random_uuid())",
+                 "42501", **as_mgr), "trilha POINT_* so do MASTER de implantacao")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' "
+                 "and c.relname in ('access_areas','access_points') and c.relrowsecurity and c.relforcerowsecurity") == "2", "areas e pontos com RLS FORCE")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MI}'); DELETE FROM cp.access_points WHERE tenant_id in ('{TA}','{TB}'); "
+          f"DELETE FROM cp.access_areas WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.technical_grants WHERE id='{G1}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{CO}'); DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{CO}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -3808,6 +3899,7 @@ def main():
     subject_checks()
     age_checks()
     homologation_checks()
+    area_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

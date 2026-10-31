@@ -17,7 +17,9 @@ public enum StaffCapability {
  MANAGE_REQUESTS("requests.manage"),
  OPERATE_CONCIERGE("concierge.operate"),
  /** Financeiro condominial com Asaas (ADR-0008). */
- MANAGE_FINANCE("finance.manage");
+ MANAGE_FINANCE("finance.manage"),
+ /** Acesso facial (AC-004, V041): áreas lógicas, nome, tipo, hierarquia e interdição; nunca canal, relé ou segredo. */
+ MANAGE_AREAS("area.manage");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -28,7 +30,7 @@ public enum StaffCapability {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
-    MANAGE_REQUESTS,MANAGE_FINANCE);
+    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    default -> EnumSet.noneOf(StaffCapability.class);
   };
