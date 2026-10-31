@@ -477,6 +477,10 @@ DECLARE tenant uuid:=platform.current_tenant_id(); today date:=(clock_timestamp(
  last record; written integer:=0; added integer;
 BEGIN
  IF tenant IS NULL THEN RAISE EXCEPTION 'âncora exige condomínio no contexto' USING ERRCODE='42501'; END IF;
+ -- Espera quem já tem a trava da cabeça: recorded_at é definido depois dela, então um evento gravado antes da virada do
+ -- dia e confirmado depois termina antes desta leitura (cada instrução seguinte vê o que foi confirmado). Sem isso a
+ -- âncora imutável podia deixar o fim do dia sem proteção. FOR SHARE: âncoras concorrentes não se bloqueiam.
+ PERFORM 1 FROM cp.security_log_heads h WHERE h.tenant_id=tenant FOR SHARE;
  FOR day IN SELECT generate_series(today-7,today-1,interval '1 day')::date LOOP
   SELECT s.seq,s.hash INTO last FROM cp.security_log s WHERE s.tenant_id=tenant
    AND s.recorded_at<((day+1)::timestamp AT TIME ZONE 'America/Sao_Paulo') ORDER BY s.seq DESC LIMIT 1;

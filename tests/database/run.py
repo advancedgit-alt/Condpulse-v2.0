@@ -4975,6 +4975,14 @@ def security_log_checks():
     expect(value("select platform.security_log_anchor_days()", tenant=S4, actor=None, role="cp_worker") == "3",
            "worker ancora os 3 dias fechados com eventos (fuso America/Sao_Paulo)")
     expect(value("select platform.security_log_anchor_days()", tenant=S4, actor=None, role="cp_worker") == "0", "ancora e idempotente")
+    # A ancora espera quem segura a trava da cabeca (evento gravado antes da virada e confirmado depois entra na ancora).
+    holder = subprocess.Popen(["psql", "-X", "-q", "-c", f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{S4}'; SET LOCAL app.actor_id='{MG}'; "
+                               f"{viewed(S4)}; SELECT pg_sleep(2); COMMIT;"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    time.sleep(0.5)
+    started = time.monotonic()
+    value("select platform.security_log_anchor_days()", tenant=S4, actor=None, role="cp_worker")
+    waited = time.monotonic() - started
+    expect(holder.wait(timeout=30) == 0 and waited >= 1.0, f"ancora aguarda a gravacao em andamento na cabeca ({waited:.1f}s)")
     expect(value(f"select count(*) from platform.security_log_anchors where tenant_id='{S4}' and last_seq=4") == "3",
            "ancora guarda o ultimo evento de cada dia, nunca o de hoje")
     today = "(clock_timestamp() AT TIME ZONE 'America/Sao_Paulo')::date"
