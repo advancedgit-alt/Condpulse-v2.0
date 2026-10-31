@@ -170,8 +170,8 @@ class EdgeGatewayJdbcTest {
   UUID agentId=UUID.randomUUID();
   agents.register(MASTER,db.tenantA,AAL2,new EdgeModels.RegisterAgent(agentId,inst.connector(),"Gateway",hash(TOKEN_A),30));
   var first=gateway.lease(TOKEN_A,new EdgeModels.LeaseRequest(1,60)).commands().getFirst();
-  var subject=subjects.list(MANAGER,db.tenantA,AAL2).subjects().stream().filter(s->s.subjectId().toString().equals(
-   db.adminString("select subject_id::text from cp.rights_publications where id=?",first.commandId()))).findFirst().orElseThrow();
+  String subjectId=db.adminString("select subject_id::text from cp.rights_publications where id=?",first.commandId());
+  var subject=subjects.list(MANAGER,db.tenantA,AAL2).subjects().stream().filter(s->s.subjectId().toString().equals(subjectId)).findFirst().orElseThrow();
   subjects.block(MANAGER,db.tenantA,AAL2,subject.subjectId(),new SubjectModels.Block("Ordem ficticia da gestao",subject.version()));
   var next=gateway.lease(TOKEN_A,new EdgeModels.LeaseRequest(10,60)).commands();
   assertEquals("REVOKE_ALL",next.getFirst().type(),"Retirada sai antes de qualquer ampliação"); assertEquals(0,next.getFirst().priority());
