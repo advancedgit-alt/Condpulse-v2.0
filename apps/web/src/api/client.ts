@@ -631,7 +631,7 @@ function membership(value: unknown): Membership {
   if (!record(value) || !isUUID(value.membershipId) || !isUUID(value.tenantId)
       || !isString(value.tenantName) || !isString(value.timeZone)
       || !(value.unitId === null || isUUID(value.unitId))
-      || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MANAGER', 'SUPPORT']))
+      || !oneOf(value.role, ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER', 'SUPPORT']))
     throw invalidResponse();
   return { membershipId: value.membershipId, tenantId: value.tenantId, tenantName: value.tenantName,
     timeZone: value.timeZone, unitId: value.unitId, role: value.role };

@@ -81,6 +81,30 @@ public class RequestController {
      @PathVariable UUID requestId,@RequestBody RequestModels.Update request) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.update(account(jwt),tenantId,assurance(jwt),requestId,request));
  }
+ // Zeladoria (V046): pedidos atribuídos ao próprio vínculo MAINTENANCE.
+ @GetMapping("/v1/tenants/{tenantId}/maintenance/requests")
+ public ResponseEntity<RequestModels.MaintenancePage> maintenance(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.maintenance(account(jwt),tenantId,assurance(jwt)));
+ }
+ @GetMapping("/v1/tenants/{tenantId}/maintenance/requests/{requestId}")
+ public ResponseEntity<RequestModels.MaintenanceRequest> maintenanceRequest(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID requestId) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+   .body(service.maintenanceRequest(account(jwt),tenantId,assurance(jwt),requestId));
+ }
+ @PostMapping("/v1/tenants/{tenantId}/maintenance/requests/{requestId}/state")
+ public ResponseEntity<RequestModels.MaintenanceRequest> maintenanceUpdate(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID requestId,@RequestBody RequestModels.MaintenanceUpdate request) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+   .body(service.maintenanceUpdate(account(jwt),tenantId,assurance(jwt),requestId,request));
+ }
+ @PostMapping("/v1/tenants/{tenantId}/maintenance/requests/{requestId}/messages")
+ public ResponseEntity<RequestModels.Message> maintenanceMessage(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID requestId,@RequestHeader("Idempotency-Key") String key,@RequestBody RequestModels.StaffMessage request) {
+  var result=service.maintenanceMessage(account(jwt),tenantId,assurance(jwt),requestId,key,request);
+  return ResponseEntity.status(result.status()).cacheControl(CacheControl.noStore())
+   .header("Idempotency-Replayed",Boolean.toString(result.replayed())).body(result.message());
+ }
  private static UUID account(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
  private static AssuranceLevel assurance(Jwt jwt) { return AssuranceLevel.fromClaim(jwt.getClaims().get("aal")); }
 }

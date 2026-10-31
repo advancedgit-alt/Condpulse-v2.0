@@ -13,7 +13,7 @@ import { storedInvitation } from './invitationStorage';
 import { ReservationGuests } from './ReservationGuests';
 import { JoinWaitlist, WaitlistSection } from './Waitlist';
 
-const roleNames: Record<string, string> = { RESIDENT: 'Morador', RESPONSIBLE: 'Responsável', DEPENDENT: 'Dependente', OWNER: 'Proprietário', CONCIERGE: 'Portaria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
+const roleNames: Record<string, string> = { RESIDENT: 'Morador', RESPONSIBLE: 'Responsável', DEPENDENT: 'Dependente', OWNER: 'Proprietário', CONCIERGE: 'Portaria', MAINTENANCE: 'Zeladoria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
 
 function uniqueTenants(memberships: Membership[]): Membership[] {
   return [...new Map(memberships.map(membership => [membership.tenantId, membership])).values()];

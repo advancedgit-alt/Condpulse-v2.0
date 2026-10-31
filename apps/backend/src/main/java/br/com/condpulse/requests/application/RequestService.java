@@ -212,6 +212,87 @@ public class RequestService {
   });
  }
 
+ // Zeladoria (V046): só pedidos atribuídos ao próprio vínculo MAINTENANCE, com maintenance.operate e AAL2.
+ public RequestModels.MaintenancePage maintenance(UUID actor,UUID tenant,AssuranceLevel assurance) {
+  return maintenanceStaff(actor,tenant,assurance,Map.of(),(context,membership)->store.maintenance(tenant,membership));
+ }
+ public RequestModels.MaintenanceRequest maintenanceRequest(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId) {
+  if(requestId==null) throw notFound();
+  return maintenanceStaff(actor,tenant,assurance,Map.of(),(context,membership)->{
+   var found=store.maintenanceRequest(tenant,membership,requestId);
+   if(found==null) throw notFound();
+   return found;
+  });
+ }
+ /**
+  * Andamento do pedido atribuído pela versão lida: em execução, aguardando a unidade ou concluído com resolução. Não muda
+  * responsável nem prazo, não encerra e não reabre (o gatilho do banco repete a regra). A resolução entra na conversa
+  * como na gestão.
+  */
+ public RequestModels.MaintenanceRequest maintenanceUpdate(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,
+     RequestModels.MaintenanceUpdate request) {
+  if(requestId==null) throw notFound();
+  if(request==null || request.expectedVersion()==null || request.expectedVersion()<0)
+   throw invalid("SERVICE_REQUEST_VERSION_REQUIRED","Atualize o pedido antes de salvar.");
+  String state=request.state();
+  if(state==null || !RequestModels.MAINTENANCE_STATES.contains(state))
+   throw invalid("SERVICE_REQUEST_STATE_INVALID","Escolha em execução, aguardando a unidade ou concluído.");
+  String resolution=request.resolution()==null || DisplayText.collapse(request.resolution()).isEmpty()?null
+   :multiline(request.resolution(),1000,"SERVICE_REQUEST_RESOLUTION_INVALID","Use até 1.000 caracteres na resolução, sem caracteres invisíveis.");
+  boolean resolving="RESOLVED".equals(state);
+  if(resolving && resolution==null) throw invalid("SERVICE_REQUEST_RESOLUTION_REQUIRED","Informe a resolução para concluir o pedido.");
+  return maintenanceStaff(actor,tenant,assurance,Map.of("23514",RequestService::changed),(context,membership)->{
+   var head=store.head(tenant,requestId);
+   if(head==null || !membership.equals(head.assigneeMembershipId())) throw notFound();
+   if("CLOSED".equals(head.state())) throw closed();
+   if(head.version()!=request.expectedVersion()) throw changed();
+   if(state.equals(head.state())) throw invalid("SERVICE_REQUEST_UNCHANGED","Nada mudou no pedido.");
+   if(!MAINTENANCE_FROM.contains(head.state()) || !TRANSITIONS.get(head.state()).contains(state))
+    throw new BusinessProblem("SERVICE_REQUEST_TRANSITION_INVALID",409,"Este andamento não pode ir para o escolhido. Atualize o pedido.");
+   if(!store.maintenanceUpdate(tenant,requestId,membership,head.version(),state,resolving?resolution:null)) throw changed();
+   long version=head.version()+1;
+   audit.record(tenant,actor,"REQUEST_STATE_CHANGED","SERVICE_REQUEST",requestId,null);
+   if(resolving) store.insertMessage(UUID.randomUUID(),tenant,requestId,actor,"STAFF","RESIDENT","Resolução: "+resolution,true);
+   store.event(tenant,"REQUEST_UPDATED",requestId,version,version,head.unitId(),null);
+   var updated=store.maintenanceRequest(tenant,membership,requestId);
+   if(updated==null) throw new IllegalStateException("Pedido gravado não foi encontrado na mesma transação.");
+   return updated;
+  });
+ }
+ /** Mensagem da zeladoria no pedido atribuído: visível para a unidade ou comentário interno, com chave de operação. */
+ public RequestModels.MessageResult maintenanceMessage(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,String key,
+     RequestModels.StaffMessage request) {
+  if(requestId==null) throw notFound();
+  requireKey(key);
+  String body=body(request==null?null:request.body());
+  String visibility=request==null?null:request.visibility();
+  if(!"RESIDENT".equals(visibility) && !"INTERNAL".equals(visibility))
+   throw invalid("SERVICE_REQUEST_VISIBILITY_INVALID","Escolha se a mensagem é visível para a unidade ou comentário interno.");
+  String route="/v1/tenants/"+tenant+"/maintenance/requests/"+requestId+"/messages";
+  return maintenanceStaff(actor,tenant,assurance,Map.of("23514",RequestService::closed),(context,membership)->{
+   var previous=store.begin(tenant,actor,route,key,hash("SERVICE_REQUEST_MAINTENANCE_MESSAGE",visibility,body));
+   if(!previous.fresh()) return replayedMessage(tenant,previous,true);
+   var head=store.head(tenant,requestId);
+   if(head==null || !membership.equals(head.assigneeMembershipId())) throw notFound();
+   if("CLOSED".equals(head.state())) throw closed();
+   UUID id=UUID.randomUUID();
+   var message=store.insertMessage(id,tenant,requestId,actor,"STAFF",visibility,body,true);
+   if("RESIDENT".equals(visibility)) messageAdded(tenant,requestId,head.version(),head.unitId(),id);
+   store.finish(tenant,actor,route,key,id,201);
+   return new RequestModels.MessageResult(requireMessage(message),false,201);
+  });
+ }
+ private static final Set<String> MAINTENANCE_FROM=Set.of("TRIAGED","IN_PROGRESS","WAITING_RESIDENT");
+ private <T> T maintenanceStaff(UUID actor,UUID tenant,AssuranceLevel assurance,Map<String,Supplier<BusinessProblem>> conflicts,
+     java.util.function.BiFunction<TenantContext,UUID,T> action) {
+  return execute(actor,tenant,assurance,conflicts,context->{
+   context.requireCapability(StaffCapability.OPERATE_MAINTENANCE);
+   UUID membership=context.memberships().stream().filter(m->"MAINTENANCE".equals(m.role())).map(TenantContext.Membership::membershipId)
+    .findFirst().orElseThrow(()->new BusinessProblem("STAFF_ACCESS_DENIED",403,"Esta ação não está disponível para o seu vínculo."));
+   return action.apply(context,membership);
+  });
+ }
+
  /**
   * Cada mensagem visível tem o próprio evento, identificado pelo número da mensagem no pedido. Mensagem não muda a
   * versão do pedido: com a versão na identidade, a segunda mensagem seguida repetia a anterior no outbox e falhava (503).
