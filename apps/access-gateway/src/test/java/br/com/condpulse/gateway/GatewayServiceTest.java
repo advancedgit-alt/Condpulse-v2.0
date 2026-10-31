@@ -433,4 +433,39 @@ class GatewayServiceTest {
   var ctx=context();
   assertThrows(IllegalStateException.class,()->ctx.events(many),"sem espaço durável a falha chega ao adaptador");
  }
+
+ // ----- sexta rodada (#129) -----
+
+ @Test void pessoaAusenteSemCascataNaoProvaRevogacaoCompleta() {
+  adapter.readStates.add(new AppliedState(OperationState.CONFIRMED,null,false,java.util.Set.of(),
+   Map.of(CredentialKind.CARD,1,CredentialKind.PIN,0,CredentialKind.QR,0),false));
+  service.submit(command("rv","d1","s1",CommandType.REVOKE_ALL,1,Map.of()));
+  service.processQueues(1);
+  assertNotEquals(OperationState.CONFIRMED,queue.get("rv").orElseThrow().lastState(),"cartão restante: revogação não confirmada");
+  adapter.coversCredentials=true;
+  adapter.coversRights=true;
+  adapter.readStates.add(new AppliedState(OperationState.CONFIRMED,null,false,null,null,null));
+  service.submit(command("rv2","d1","s2",CommandType.REVOKE_ALL,1,Map.of()));
+  service.processQueues(1);
+  assertEquals(OperationState.CONFIRMED,queue.get("rv2").orElseThrow().lastState(),"com cascata declarada, a ausência prova");
+ }
+
+ @Test void prazoNosDireitosSemProvaDePrazoAplicadoFicaNaoVerificado() {
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,Map.of("rights",List.of(Map.of("channelId","c1","scheduleRef","sempre")),
+   "validFrom","2030-01-01T00:00:00Z","validUntil","2031-01-01T00:00:00Z")));
+  service.processQueues(10);
+  assertEquals(OperationState.APPLIED_UNVERIFIED,queue.get("r").orElseThrow().lastState(),"canal/horário iguais não provam o prazo");
+ }
+
+ @Test void lacunaDeEventosApareceNaSaude() {
+  var registry=new CapabilityRegistry(config.profiles());
+  var gappy=new ScriptedAdapter(TestSupport.context(config.devices().getFirst(),clock),ScriptedAdapter.all()) {
+   @Override public EventPage fetchEvents(String cursor,int limit) { return new EventPage(OperationState.CONFIRMED,"BUFFER_OVERFLOW:3",List.of(),cursor,0); }
+  };
+  service=new GatewayService(config,registry,Map.of("d1",gappy),queue,new OpenDispatcher(dir.resolve("o8"),clock,config,registry,id->Optional.of(gappy)),
+   outbox,decisions,decisionOutbox,central,clock);
+  service.pollEvents();
+  @SuppressWarnings("unchecked") var device=(Map<String,Object>)((List<Object>)service.healthSummary().get("devices")).getFirst();
+  assertTrue(String.valueOf(device.get("lastEventGap")).startsWith("BUFFER_OVERFLOW:3@"));
+ }
 }

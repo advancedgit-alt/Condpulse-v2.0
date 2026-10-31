@@ -58,6 +58,8 @@ public class ScriptedAdapter extends BaseAdapter {
   return new Manifest(device().brand(),"scripted",device().connectionMode(),ops,documented);
  }
  @Override public boolean removePersonCoversCredentials() { return coversCredentials; }
+ public boolean coversRights;
+ @Override public boolean removePersonCoversRights() { return coversRights; }
 
  @Override public OperationResult upsertPerson(PersonSpec p) {
   var r=next(Operation.UPSERT_PERSON,OperationResult.of(OperationState.APPLIED_UNVERIFIED,null));

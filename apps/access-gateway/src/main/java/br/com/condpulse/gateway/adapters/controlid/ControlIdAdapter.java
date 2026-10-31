@@ -180,7 +180,8 @@ public final class ControlIdAdapter extends BaseAdapter {
  @Override public OperationResult removeFace(String subjectRef) {
   try {
    Long id=userId(subjectRef);
-   if(id==null) return OperationResult.of(OperationState.CONFIRMED,"PERSON_ABSENT");
+   // Pessoa ausente não prova ausência de registros vinculados (a fonte não declara cascata): não confirma.
+   if(id==null) return OperationResult.of(OperationState.APPLIED_UNVERIFIED,"PERSON_ABSENT");
    // Somente user_id: nunca "all" ou "dangling" (remoção global acidental).
    transport.call("user_destroy_image",Map.of("user_id",id),false,null);
    return OperationResult.of(OperationState.APPLIED_UNVERIFIED,null);
@@ -232,7 +233,8 @@ public final class ControlIdAdapter extends BaseAdapter {
  @Override public OperationResult removeCredential(String subjectRef,CredentialKind kind) {
   try {
    Long id=userId(subjectRef);
-   if(id==null) return OperationResult.of(OperationState.CONFIRMED,"PERSON_ABSENT");
+   // Pessoa ausente não prova ausência de registros vinculados (a fonte não declara cascata): não confirma.
+   if(id==null) return OperationResult.of(OperationState.APPLIED_UNVERIFIED,"PERSON_ABSENT");
    String object=object(kind);
    transport.call("destroy_objects",Map.of("object",object,"where",Map.of(object,Map.of("user_id",id))),false,null);
    return OperationResult.of(OperationState.APPLIED_UNVERIFIED,null);
@@ -287,7 +289,8 @@ public final class ControlIdAdapter extends BaseAdapter {
  @Override public OperationResult revokeRights(String subjectRef) {
   try {
    Long id=userId(subjectRef);
-   if(id==null) return OperationResult.of(OperationState.CONFIRMED,"PERSON_ABSENT");
+   // Pessoa ausente não prova ausência de registros vinculados (a fonte não declara cascata): não confirma.
+   if(id==null) return OperationResult.of(OperationState.APPLIED_UNVERIFIED,"PERSON_ABSENT");
    transport.call("destroy_objects",Map.of("object","user_access_rules","where",Map.of("user_access_rules",Map.of("user_id",id))),false,null);
    transport.call("destroy_objects",Map.of("object","user_groups","where",Map.of("user_groups",Map.of("user_id",id))),false,null);
    return OperationResult.of(OperationState.APPLIED_UNVERIFIED,null);
@@ -298,7 +301,8 @@ public final class ControlIdAdapter extends BaseAdapter {
  @Override public AppliedState readState(String subjectRef) {
   try {
    var users=load("users",Map.of("users",Map.of("registration",subjectRef)));
-   if(users.isEmpty()) return new AppliedState(OperationState.CONFIRMED,null,false,Set.of(),Map.of(CredentialKind.CARD,0,CredentialKind.PIN,0,CredentialKind.QR,0),false);
+   // Sem o id do usuário não há como ler regras, credenciais e face vinculadas: ficam desconhecidas (null).
+   if(users.isEmpty()) return new AppliedState(OperationState.CONFIRMED,null,false,null,null,null);
    if(users.size()>1) return AppliedState.unavailable(OperationState.UNKNOWN,"DUPLICATE_REGISTRATION");
    Long id=Json.longValue(users.getFirst(),"id");
    String name=Json.string(users.getFirst(),"name");
