@@ -1,10 +1,12 @@
 package br.com.condpulse.partners.api;
 
+import br.com.condpulse.partners.application.ContextSwitchService;
 import br.com.condpulse.partners.application.PartnerService;
 import br.com.condpulse.partners.application.PartnerTransactionExecutor;
 import br.com.condpulse.partners.infrastructure.PartnerStore;
 import br.com.condpulse.platform.application.PlatformTransactionExecutor;
 import br.com.condpulse.platform.infrastructure.PlatformStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,5 +28,10 @@ public class PartnerConfiguration {
  @Bean PartnerService partnerService(PlatformTransactionExecutor platform,PartnerTransactionExecutor partners,PartnerStore store,
    PlatformStore audit) {
   return new PartnerService(platform,partners,store,audit);
+ }
+ /** Troca de contexto (R4.4): grava no Log de Segurança só com CP_SECURITY_LOG_ENABLED=true. */
+ @Bean ContextSwitchService contextSwitchService(PartnerTransactionExecutor partners,PartnerStore store,
+   @Value("${condpulse.security-log.enabled:false}") boolean securityLog) {
+  return new ContextSwitchService(partners,store,securityLog);
  }
 }

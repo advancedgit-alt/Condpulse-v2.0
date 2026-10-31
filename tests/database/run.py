@@ -5296,6 +5296,87 @@ def partner_checks():
           "DELETE FROM cp.memberships WHERE account_id='%s'; DELETE FROM platform.accounts WHERE id in (%s)"
           % (P1, P2, P1, P2, P1, P2, P1, P2, G1, MG, ",".join(f"'{a}'" for a in ids.values())))
 
+def context_switch_checks():
+    """V052 (R4.4): CONTEXT_SWITCHED so pela API, com ator, para papel de seguranca de parceiro que alcanca o condominio
+    (platform.partner_reach); details fechado (origem, destino e lado, so identificadores); varios condominios na mesma
+    transacao com o condominio do contexto trocado a cada evento; repeticao do mesmo id desfeita sem avancar a cabeca."""
+    X1, X2, X3 = (f"00000000-0000-4000-8000-0000000052a{n}" for n in range(1, 4))
+    LD, OP, TC = (f"10000000-0000-4000-8000-0000000052b{n}" for n in range(1, 4))
+    PX = "49000000-0000-4000-8000-0000000052c1"
+    ML, MO, MT = (f"49000000-0000-4000-8000-0000000052d{n}" for n in range(1, 4))
+    query(f"""INSERT INTO platform.accounts(id,status) VALUES('{LD}','ACTIVE'),('{OP}','ACTIVE'),('{TC}','ACTIVE');
+        INSERT INTO platform.tenants(id,name,active) VALUES('{X1}','FICTICIO TROCA 1',true),('{X2}','FICTICIO TROCA 2',true),
+          ('{X3}','FICTICIO TROCA 3',true);
+        SET session_replication_role=replica;
+        INSERT INTO platform.partners(id,name,created_by,updated_by) VALUES('{PX}','PARCEIRO TROCA FICTICIO','{LD}','{LD}');
+        INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by) VALUES
+          ('{ML}','{PX}','{LD}','SECURITY_LEAD','LIDER TROCA','{LD}'),('{MO}','{PX}','{OP}','REMOTE_OPERATOR','OPERADOR TROCA','{LD}'),
+          ('{MT}','{PX}','{TC}','TECHNICIAN','TECNICO TROCA','{LD}');
+        INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) VALUES
+          (gen_random_uuid(),'{PX}','{X1}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio','{LD}'),
+          (gen_random_uuid(),'{PX}','{X2}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio','{LD}');""")
+
+    def ctx(role, tenant=None, partner=PX):
+        extra = f',"tenantId":"{tenant}"' if tenant else ""
+        return f'{{"kind":"PARTNER","partnerId":"{partner}","role":"{role}"{extra}}}'
+
+    def switched(tenant, role="SECURITY_LEAD", side="TO", origin='{"kind":"ENTRY"}', ident="gen_random_uuid()", subject=PX,
+                 details=None, severity="INFO", source="REMOTE_CENTRAL"):
+        body = details or f'{{"from":{origin},"to":{ctx(role)},"side":"{side}"}}'
+        return (f"INSERT INTO cp.security_log(id,tenant_id,event_type,severity,source,subject_type,subject_id,details) "
+                f"VALUES({ident},'{tenant}','CONTEXT_SWITCHED','{severity}','{source}','PARTNER','{subject}','{body}')")
+    count = lambda tenant, actor=LD: value(f"select count(*) from cp.security_log where tenant_id='{tenant}' and event_type='CONTEXT_SWITCHED' and actor_account_id='{actor}'")
+    expect(value("select 'CONTEXT_SWITCHED'=ANY(cp.security_log_event_types())") == "t", "CONTEXT_SWITCHED ja esta no catalogo da V050")
+    query(switched(X1), tenant=X1, actor=LD, role="cp_api")
+    expect(value(f"select actor_role||'|'||partner_id||'|'||(details->>'side') from cp.security_log where tenant_id='{X1}' and event_type='CONTEXT_SWITCHED'")
+           == f"SECURITY_LEAD|{PX}|TO", "lider com contrato grava a troca; papel e parceiro vem do banco")
+    expect(error(switched(X3), "42501", tenant=X3, actor=LD, role="cp_api"), "condominio sem contrato recusa a troca (partner_reach)")
+    # Varios condominios na mesma transacao: o condominio do contexto muda a cada evento (politica de gravacao da V050).
+    query(f"{switched(X1)}; SET LOCAL app.tenant_id='{X2}'; {switched(X2)}", tenant=X1, actor=LD, role="cp_api")
+    expect(count(X1) == "2" and count(X2) == "1", "uma transacao grava a troca em cada condominio alcancado")
+    expect(error(f"{switched(X1)}; SET LOCAL app.tenant_id='{X3}'; {switched(X3)}", "42501", tenant=X1, actor=LD, role="cp_api")
+           and count(X1) == "2", "um condominio fora do alcance desfaz a troca inteira")
+    expect(error(f"{switched(X1)}; {switched(X2)}", "42501", tenant=X1, actor=LD, role="cp_api"),
+           "evento de outro condominio sem trocar o contexto e recusado (V050)")
+    # Idempotencia: o mesmo id bate na chave primaria e nada avanca.
+    fixed = "'5a520000-0000-4000-8000-000000000001'"
+    query(switched(X1, ident=fixed), tenant=X1, actor=LD, role="cp_api")
+    head = value(f"select last_seq||':'||last_hash from cp.security_log_heads where tenant_id='{X1}'")
+    expect(error(switched(X1, ident=fixed), "23505", tenant=X1, actor=LD, role="cp_api")
+           and value(f"select last_seq||':'||last_hash from cp.security_log_heads where tenant_id='{X1}'") == head,
+           "repeticao da mesma troca desfeita sem avancar a cabeca da cadeia")
+    expect(value(f"select intact from cp.security_log_verify('{X1}')") == "t", "cadeia integra depois da repeticao recusada")
+    # Papeis: tecnico nao e papel de seguranca; operador so com escala vigente; papel que a conta nao tem e recusado.
+    expect(error(switched(X1, role="TECHNICIAN"), "42501", tenant=X1, actor=TC, role="cp_api"), "tecnico nao grava troca de contexto")
+    expect(error(switched(X1, role="REMOTE_OPERATOR"), "42501", tenant=X1, actor=OP, role="cp_api"), "operador sem escala nao grava")
+    query(f"""SET session_replication_role=replica; INSERT INTO cp.operator_schedules(id,tenant_id,partner_id,member_id,account_id,starts_at,ends_at,reason,created_by)
+        VALUES(gen_random_uuid(),'{X1}','{PX}','{MO}','{OP}',now()-interval '1 hour',now()+interval '4 hours','Turno ficticio','{LD}')""")
+    query(switched(X1, role="REMOTE_OPERATOR"), tenant=X1, actor=OP, role="cp_api")
+    expect(count(X1, OP) == "1", "operador com escala vigente grava a troca")
+    expect(error(switched(X2, role="REMOTE_OPERATOR"), "42501", tenant=X2, actor=OP, role="cp_api"), "operador fora da escala do condominio")
+    expect(error(switched(X1, role="SECURITY_LEAD"), "42501", tenant=X1, actor=OP, role="cp_api"), "papel declarado que a conta nao tem")
+    # Lado da origem: saida do lider para o painel tecnico grava no condominio que a origem alcanca.
+    query(switched(X1, role="TECHNICIAN", side="FROM", origin=ctx("SECURITY_LEAD")), tenant=X1, actor=LD, role="cp_api")
+    expect(error(switched(X1, side="BOTH", origin=ctx("SECURITY_LEAD", partner="49000000-0000-4000-8000-0000000052c9")), "42501",
+                 tenant=X1, actor=LD, role="cp_api"), "lado BOTH exige que origem e destino alcancem o condominio")
+    # Forma fechada de details e dos campos.
+    for label, statement in (
+            ("chave extra em details", switched(X1, details=f'{{"from":{{"kind":"ENTRY"}},"to":{ctx("SECURITY_LEAD")},"side":"TO","nome":"x"}}')),
+            ("nome no contexto", switched(X1, details=f'{{"from":{{"kind":"ENTRY","name":"Fulano"}},"to":{ctx("SECURITY_LEAD")},"side":"TO"}}')),
+            ("lado ausente", switched(X1, details=f'{{"from":{{"kind":"ENTRY"}},"to":{ctx("SECURITY_LEAD")}}}')),
+            ("tipo de contexto desconhecido", switched(X1, origin='{"kind":"OUTRO"}')),
+            ("condominio sem id no contexto TENANT", switched(X1, origin='{"kind":"TENANT"}')),
+            ("sujeito diferente do parceiro", switched(X1, subject=LD)),
+            ("severidade diferente de INFO", switched(X1, severity="CRITICAL")),
+            ("origem do evento fora da central/gestao", switched(X1, source="DEVICE"))):
+        expect(error(statement, "23514", tenant=X1, actor=LD, role="cp_api"), f"V052 recusa troca com {label}")
+    expect(error(switched(X1), "42501", tenant=X1, actor=None, role="cp_worker"), "worker nunca grava troca de contexto")
+    expect(error(switched(X1), "42501", tenant=X1, actor=None, role="cp_api"), "troca sem ator recusada")
+    expect(value(f"select count(*) from cp.security_log where event_type='CONTEXT_SWITCHED' and tenant_id='{X3}'") == "0",
+           "nenhuma troca gravada no condominio fora do contrato")
+    expect(all(value(f"select intact from cp.security_log_verify('{t}')") == "t" for t in (X1, X2, X3)),
+           "cadeias integras depois das trocas e recusas")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -5434,6 +5515,7 @@ def main():
     tenant_module_checks()
     security_log_checks()
     partner_checks()
+    context_switch_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

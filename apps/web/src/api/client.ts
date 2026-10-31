@@ -583,6 +583,9 @@ const messages: Record<string, string> = {
   SECURITY_LOG_EXPORT_TOO_LARGE: 'Exporte no máximo 5.000 eventos por vez.',
   SECURITY_LOG_CHAIN_BROKEN: 'A cadeia do log está quebrada neste intervalo. Verifique a integridade.',
   SECURITY_LOG_DEPENDENCY_UNAVAILABLE: 'Não foi possível consultar o log de segurança agora. Tente novamente.',
+  // Troca de contexto (R4.4, V052).
+  CONTEXT_SWITCH_INVALID: 'Não foi possível identificar o acesso escolhido. Volte para meus acessos e escolha de novo.',
+  CONTEXT_SWITCH_UNAVAILABLE: 'Não foi possível registrar a entrada neste painel. Tente novamente.',
 };
 
 export class ApiError extends Error {

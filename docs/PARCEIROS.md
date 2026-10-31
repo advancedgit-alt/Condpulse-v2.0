@@ -47,14 +47,27 @@ evento `PARTNER_*` da trilha da plataforma, do mesmo ator e versão, conferido n
   alcançado (`security.log.read`; exportação só com `security.log.export`). Comando (exceto o log), turno, console e
   técnico aparecem "em breve", sem dado. Flags desligadas no servidor (404) e 503 têm mensagem própria.
 
+## Troca de contexto (R4.4, V052)
+
+- `POST /v1/partners/{id}/context-switches`: a web chama ao entrar no painel de um papel de parceiro, antes da primeira
+  consulta. Para papéis de segurança (`PARTNER_ADMIN`, `SECURITY_LEAD`, `SECURITY_SUPERVISOR`, `REMOTE_OPERATOR`; não
+  `TECHNICIAN`), grava `CONTEXT_SWITCHED` no Log de Segurança de cada condomínio alcançado agora pelo destino e, quando a
+  origem é outro papel de segurança, de cada condomínio que a origem ainda alcança, na mesma transação, com AAL2. O
+  banco (V052) confere o alcance de novo em cada evento. Regras, idempotência e respostas com flags desligadas em
+  [LOG_SEGURANCA.md](LOG_SEGURANCA.md#troca-de-contexto-context_switched-r44-v052).
+- Web: trocar de contexto (condomínio, central ou painel) encerra a visão anterior — a tela sai e os dados privados dela
+  saem do cache antes do novo contexto montar; o painel não consulta nada até o registro terminar.
+
 ## Pendências
 
 - Parceiro piloto (responsável): nenhum parceiro real cadastrado; só dados sintéticos nos testes.
 - Convite de equipe por e-mail: hoje o papel é concedido a uma conta existente pelo identificador.
 - Capacidades de condomínio para operador remoto (portaria, entrada/saída manual) ficam para E2; nesta fatia a equipe
   do parceiro não ganha nenhuma capacidade de equipe do condomínio.
-- Log de Segurança (CPX-006 a CPX-011) e o evento de troca de contexto são de outra fatia; aqui os eventos vão para a
-  trilha da plataforma.
-- Web: painéis de comando, turno, console e técnico dependem do backend de E2/E11; `CONTEXT_SWITCHED` (R4.4) ainda não é
-  gravado na troca de contexto; homologação visual com dados reais depende das flags ligadas.
+- Os eventos de parceiro (equipe, contrato, escala) vão para a trilha da plataforma; o Log de Segurança por condomínio
+  está em [LOG_SEGURANCA.md](LOG_SEGURANCA.md).
+- Web: painéis de comando, turno, console e técnico dependem do backend de E2/E11; homologação visual com dados reais
+  depende das flags ligadas.
+- Troca de contexto: a saída de um painel de segurança direto para um condomínio por vínculo ou para a central ainda não
+  grava o lado da origem.
 - Outros tipos de contrato (integradora) aguardam decisão; só `SECURITY_OPERATOR` existe.
