@@ -32,6 +32,8 @@ aplicado em banco, Fly ou Vercel; a aplicação fica com o executor protegido.
 | P4 | Nascidos em 29/02 | completam anos em 01/03 em ano não bissexto; critério é **parâmetro do condomínio** | Fatia V039 |
 | P5 | Cadastro facial de menores | desligado por padrão, parâmetro do condomínio | Fatia V049 |
 | P6 | Cartão, QR e PIN | mesmas regras de área que a face | Fatias V043/V044 |
+| P8 | Proprietário (`OWNER`) como contexto de acesso | `RESIDENT` quando a unidade não está alugada; `OWNER_NONRESIDENT` com locação em vigor (V034). A troca de situação invalida o contexto materializado até a próxima materialização | `cp.membership_context_kind` (V038) |
+| P9 | Quem materializa sujeitos | Gestão para contas com vínculo físico (morador, responsável, dependente, proprietário, portaria); portaria para visitantes de convites vigentes (a gestão não lê convites). `MANAGER` e `SUPPORT` não geram contexto físico | `POST .../management/access-subjects/materialize` e `.../concierge/access-subjects/materialize` |
 | P7 | Gestor (MANAGER) | sem herança de escopo técnico; capacidades de regra (`area.manage`, `policy.edit`, `policy.publish`, `person.review`) entram nas fatias que as usam (V041/V043) | `StaffCapability` |
 
 ## Perguntas ainda abertas

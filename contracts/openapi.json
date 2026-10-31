@@ -14469,6 +14469,559 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects": {
+      "get": {
+        "operationId": "managementListAccessSubjects",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Sujeitos de acesso do condomínio (memberships.manage, AAL2), com contextos, vigência conferida pelo banco e contextos elegíveis na ordem determinística (sem união permissiva). Sem documento, biometria ou e-mail; até 200 por página.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessSubjectPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/materialize": {
+      "post": {
+        "operationId": "managementMaterializeAccessSubjects",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Cria, de forma idempotente, o sujeito de cada conta com vínculo de acesso físico (morador, responsável, dependente, proprietário e portaria) e um contexto por vínculo; contexto com origem alterada é substituído. Gestão e suporte não geram contexto físico.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessSubjectsMaterialized"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/concierge/access-subjects/materialize": {
+      "post": {
+        "operationId": "conciergeMaterializeAccessSubjects",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Portaria (concierge.operate, AAL2): sujeito de cada visitante com convite vigente e contexto VISITOR (ou SERVICE_PROVIDER, quando o convite vem de regra de prestador) com a vigência do convite. Idempotente.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessSubjectsMaterialized"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/{subjectId}/block": {
+      "post": {
+        "operationId": "managementBlockAccessSubject",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Bloqueio transversal do sujeito pela versão lida, com motivo: nenhum contexto vale e a época de restrição sobe.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessSubjectBlock"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alteração aplicada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_SUBJECT_VERSION_REQUIRED ou ACCESS_SUBJECT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_SUBJECT_STALE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/{subjectId}/unblock": {
+      "post": {
+        "operationId": "managementUnblockAccessSubject",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Desbloqueio pela versão lida; a época de restrição sobe de novo e só contextos ainda válidos na origem voltam a valer.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessSubjectUnblock"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alteração aplicada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_SUBJECT_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_SUBJECT_STALE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/access-subjects/{subjectId}/functional-authorizations": {
+      "post": {
+        "operationId": "managementAddFunctionalAuthorization",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Autorização funcional (EMPLOYEE, SERVICE_PROVIDER ou EMERGENCY_RESPONDER) aprovada pela própria gestão, com referência opaca e fim em até 366 dias. contextId do cliente: o mesmo pedido inteiro é repetição; qualquer diferença é conflito.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FunctionalAuthorization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alteração aplicada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_SUBJECT_CONTEXT_ID_REQUIRED, ACCESS_SUBJECT_CONTEXT_KIND_INVALID, ACCESS_SUBJECT_REFERENCE_INVALID ou ACCESS_SUBJECT_VALIDITY_INVALID"
+          },
+          "409": {
+            "description": "ACCESS_SUBJECT_CONTEXT_ID_CONFLICT"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/management/subject-contexts/{contextId}/revoke": {
+      "post": {
+        "operationId": "managementRevokeSubjectContext",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_FACIAL_ACCESS_ENABLED",
+        "description": "Encerra só este contexto, pela versão lida e com motivo; não bloqueia o sujeito nem afeta outros contextos.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "contextId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectContextRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Alteração aplicada",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido), ACCESS_SUBJECT_FORBIDDEN"
+          },
+          "404": {
+            "description": "TENANT_ACCESS_DENIED ou ACCESS_SUBJECT_NOT_FOUND"
+          },
+          "503": {
+            "description": "ACCESS_SUBJECT_UNAVAILABLE"
+          },
+          "400": {
+            "description": "ACCESS_SUBJECT_VERSION_REQUIRED ou ACCESS_SUBJECT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "ACCESS_SUBJECT_STALE"
+          },
+          "422": {
+            "description": "ACCESS_SUBJECT_INVALID (origem de outra pessoa, papel sem contexto físico ou vigência inválida)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -23332,6 +23885,311 @@
                 "audit.export"
               ]
             }
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SubjectContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contextId",
+          "contextKind",
+          "sourceKind",
+          "membershipId",
+          "permitId",
+          "unitId",
+          "guardianSubjectId",
+          "validFrom",
+          "validUntil",
+          "status",
+          "current",
+          "version"
+        ],
+        "properties": {
+          "contextId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contextKind": {
+            "type": "string",
+            "enum": [
+              "RESIDENT",
+              "DEPENDENT",
+              "OWNER_NONRESIDENT",
+              "VISITOR",
+              "SERVICE_PROVIDER",
+              "EMPLOYEE",
+              "EMERGENCY_RESPONDER"
+            ]
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "MEMBERSHIP",
+              "VISIT_PERMIT",
+              "FUNCTIONAL_AUTHORIZATION"
+            ]
+          },
+          "membershipId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "permitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "guardianSubjectId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED",
+              "EXPIRED",
+              "SUPERSEDED"
+            ]
+          },
+          "current": {
+            "type": "boolean",
+            "description": "Conferido pelo banco agora: ativo, na vigência, sujeito ativo e origem igual à observada."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessSubject": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjectId",
+          "originKind",
+          "accountId",
+          "visitorId",
+          "status",
+          "restrictionEpoch",
+          "externalRef",
+          "contexts",
+          "eligibleContextIds",
+          "version"
+        ],
+        "properties": {
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originKind": {
+            "type": "string",
+            "enum": [
+              "ACCOUNT",
+              "VISITOR"
+            ]
+          },
+          "accountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "visitorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "BLOCKED",
+              "ERASURE_PENDING",
+              "ARCHIVED"
+            ]
+          },
+          "restrictionEpoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "externalRef": {
+            "type": "string",
+            "pattern": "^cps_[0-9a-f]{32}$",
+            "description": "Identificador opaco enviado ao fabricante; nunca CPF, unidade ou id da conta."
+          },
+          "contexts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectContext"
+            }
+          },
+          "eligibleContextIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Contextos vigentes na ordem fixa de avaliação; vazio com o sujeito bloqueado."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessSubjectPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjects",
+          "truncated"
+        ],
+        "properties": {
+          "subjects": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/AccessSubject"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AccessSubjectsMaterialized": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjectsCreated",
+          "contextsCreated",
+          "contextsSuperseded"
+        ],
+        "properties": {
+          "subjectsCreated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contextsCreated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contextsSuperseded": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessSubjectBlock": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccessSubjectUnblock": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "SubjectContextRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "expectedVersion"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "FunctionalAuthorization": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contextId",
+          "contextKind",
+          "reference",
+          "validUntil"
+        ],
+        "properties": {
+          "contextId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contextKind": {
+            "type": "string",
+            "enum": [
+              "EMPLOYEE",
+              "SERVICE_PROVIDER",
+              "EMERGENCY_RESPONDER"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,120}$"
           },
           "validUntil": {
             "type": "string",
