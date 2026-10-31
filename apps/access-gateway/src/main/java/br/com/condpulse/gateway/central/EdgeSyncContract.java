@@ -37,65 +37,79 @@ public final class EdgeSyncContract {
  private static final String HASH="[0-9a-f]{64}";
  private EdgeSyncContract() {}
 
- /** Documento recusado antes de entrar na fila: o gateway relata FAILED com este motivo (sem tocar no equipamento). */
- public static final class Refused extends Exception {
-  private final String commandId,deviceId,documentHash,reasonCode;
-  Refused(String commandId,String deviceId,String documentHash,String reasonCode) {
-   super(reasonCode,null,false,false);
-   this.commandId=commandId; this.deviceId=deviceId; this.documentHash=documentHash; this.reasonCode=reasonCode;
-  }
-  public String commandId() { return commandId; }
-  public String deviceId() { return deviceId; }
-  public String documentHash() { return documentHash; }
-  public String reasonCode() { return reasonCode; }
+ /** Documento que não pode ser traduzido: motivo interno, nunca sai do contrato (vira comando bloqueante). */
+ static final class Refused extends Exception {
+  private final String reasonCode;
+  Refused(String reasonCode) { super(reasonCode,null,false,false); this.reasonCode=reasonCode; }
+  String reasonCode() { return reasonCode; }
  }
+ /** Payload de comando bloqueante: motivo pelo qual o documento recebido não foi aplicado. */
+ public static final String BLOCKED_REASON="blockedReason";
 
- /** Converte um item de {@code EdgeLeasePage.commands}. Item sem identificação mínima lança IllegalArgumentException. */
- public static SyncCommand toCommand(Map<String,Object> raw) throws Refused {
+ /**
+  * Converte um item de {@code EdgeLeasePage.commands}. A identidade do trabalho (comando, equipamento, sujeito, tipo,
+  * versão e emissão) é lida ANTES do documento: item sem ela lança IllegalArgumentException (nada a proteger). Documento
+  * que não confere com o hash ou não é traduzível nunca é descartado em silêncio (Codex P1 no #153): vira comando
+  * restritivo da mesma versão — REVOKE_ALL quando o trabalho era REVOKE_ALL, senão REVOKE_RIGHTS do sujeito no
+  * equipamento —, com prioridade 0 e {@link #BLOCKED_REASON}. Na fila ele supera e bloqueia toda versão menor do escopo
+  * (inclusive na releitura do diário), executa a retirada segura e é relatado FAILED com o motivo, nunca CONFIRMED.
+  */
+ public static SyncCommand toCommand(Map<String,Object> raw) {
   String commandId=Json.string(raw,"commandId"),deviceId=Json.string(raw,"deviceId"),hash=Json.string(raw,"documentHash");
-  if(commandId==null || deviceId==null || hash==null || !hash.matches(HASH)) throw new IllegalArgumentException("Comando sem identificação.");
-  String text=Json.string(raw,"document");
-  if(text==null || !sha256Hex(text).equals(hash)) throw new Refused(commandId,deviceId,hash,"DOCUMENT_INTEGRITY_FAILED");
+  String subjectRef=Json.string(raw,"subjectRef"),typeName=Json.string(raw,"type"),key=Json.string(raw,"idempotencyKey");
+  Long version=Json.longValue(raw,"desiredVersion");
+  Instant issued;
+  CommandType type;
+  try { issued=Instant.parse(Objects.requireNonNull(Json.string(raw,"issuedAt"))); type=CommandType.valueOf(Objects.requireNonNull(typeName)); }
+  catch(RuntimeException e) { throw new IllegalArgumentException("Comando sem identificação."); }
+  if(commandId==null || deviceId==null || subjectRef==null || hash==null || !hash.matches(HASH) || version==null || version<1
+    || (type!=CommandType.APPLY_RIGHTS && type!=CommandType.REVOKE_RIGHTS && type!=CommandType.REVOKE_ALL))
+   throw new IllegalArgumentException("Comando sem identificação.");
+  String idempotencyKey=key==null?commandId:key;
   try {
-   var type=CommandType.valueOf(Objects.requireNonNull(Json.string(raw,"type")));
-   if(type!=CommandType.APPLY_RIGHTS && type!=CommandType.REVOKE_RIGHTS && type!=CommandType.REVOKE_ALL)
-    throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE");
-   var document=Json.object(text);
-   String subjectRef=Json.string(raw,"subjectRef");
+   String text=Json.string(raw,"document");
+   if(text==null || !sha256Hex(text).equals(hash)) throw new Refused("DOCUMENT_INTEGRITY_FAILED");
+   Map<String,Object> document;
+   try { document=Json.object(text); } catch(RuntimeException e) { throw new Refused("DOCUMENT_NOT_REPRESENTABLE"); }
    if(!"1.0".equals(Json.string(document,"schemaVersion")) || !type.name().equals(Json.string(document,"action"))
-     || subjectRef==null || !subjectRef.equals(Json.string(document,"subjectRef")))
-    throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE");
-   Long version=Json.longValue(raw,"desiredVersion");
-   String key=Json.string(raw,"idempotencyKey");
-   Instant issued=Instant.parse(Objects.requireNonNull(Json.string(raw,"issuedAt")));
+     || !subjectRef.equals(Json.string(document,"subjectRef")))
+    throw new Refused("DOCUMENT_NOT_REPRESENTABLE");
    var payload=new LinkedHashMap<String,Object>();
    payload.put("documentHash",hash);
    // Prioridade da plataforma (0 = retirada ou redução): a fila local a usa para ordenar e superar (Codex P1 no #153).
    Long priority=Json.longValue(raw,"priority");
-   if(priority==null || (priority!=0 && priority!=1)) throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE");
+   if(priority==null || (priority!=0 && priority!=1)) throw new Refused("DOCUMENT_NOT_REPRESENTABLE");
    payload.put("priority",priority);
-   if(type==CommandType.APPLY_RIGHTS) rights(document,payload,commandId,deviceId,hash);
-   return new SyncCommand(commandId,key==null?commandId:key,deviceId,subjectRef,type,version==null?0:version,payload,issued);
-  } catch(Refused r) { throw r; }
-  catch(RuntimeException invalid) { throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE"); }
+   if(type==CommandType.APPLY_RIGHTS) {
+    try { rights(document,payload); } catch(Refused r) { throw r; } catch(RuntimeException e) { throw new Refused("DOCUMENT_NOT_REPRESENTABLE"); }
+   }
+   return new SyncCommand(commandId,idempotencyKey,deviceId,subjectRef,type,version,payload,issued);
+  } catch(Refused refused) {
+   var payload=new LinkedHashMap<String,Object>();
+   payload.put("documentHash",hash);
+   payload.put("priority",0L);
+   payload.put(BLOCKED_REASON,refused.reasonCode());
+   return new SyncCommand(commandId,idempotencyKey,deviceId,subjectRef,type==CommandType.REVOKE_ALL?CommandType.REVOKE_ALL:CommandType.REVOKE_RIGHTS,
+    version,payload,issued);
+  }
  }
 
- private static void rights(Map<String,Object> document,Map<String,Object> payload,String commandId,String deviceId,String hash) throws Refused {
+ private static void rights(Map<String,Object> document,Map<String,Object> payload) throws Refused {
   var entries=Json.list(document.get("entries"));
-  if(entries==null || entries.isEmpty()) throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE");
+  if(entries==null || entries.isEmpty()) throw new Refused("DOCUMENT_NOT_REPRESENTABLE");
   var channels=new TreeSet<String>();
   Instant from=null,until=null;
   for(Object o:entries) {
    var e=Json.map(o);
    String channel=Json.string(e,"channelId");
    Instant start=Instant.parse(Json.string(e,"validFrom")),end=Instant.parse(Json.string(e,"validUntil"));
-   if(channel==null || channel.isBlank()) throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE");
+   if(channel==null || channel.isBlank()) throw new Refused("DOCUMENT_NOT_REPRESENTABLE");
    channels.add(channel);
    from=from==null || start.isAfter(from)?start:from;
    until=until==null || end.isBefore(until)?end:until;
   }
   // Interseção vazia: nada a conceder sem ampliar alguma vigência.
-  if(!from.isBefore(until)) throw new Refused(commandId,deviceId,hash,"DOCUMENT_VALIDITY_EMPTY");
+  if(!from.isBefore(until)) throw new Refused("DOCUMENT_VALIDITY_EMPTY");
   var rights=new ArrayList<Object>();
   for(String channel:channels) { var r=new LinkedHashMap<String,Object>(); r.put("channelId",channel); r.put("scheduleRef",FULL_TIME_SCHEDULE); rights.add(r); }
   payload.put("rights",rights);

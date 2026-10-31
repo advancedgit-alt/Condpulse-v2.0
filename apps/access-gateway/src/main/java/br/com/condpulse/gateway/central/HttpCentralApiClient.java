@@ -119,8 +119,8 @@ public final class HttpCentralApiClient implements CentralApiClient {
  }
 
  /**
-  * Entrega (V048). Documento que não confere com o hash ou não é representável não entra na fila: o gateway relata
-  * FAILED com o motivo na hora (sem tocar no equipamento).
+  * Entrega (V048). Documento que não confere com o hash ou não é representável entra na fila como retirada bloqueante da
+  * mesma versão (nunca deixa versão menor rodar) e é relatado FAILED com o motivo.
   */
  @Override public List<SyncCommand> pullSyncCommands(int max) throws CentralUnavailable {
   var body=new LinkedHashMap<String,Object>();
@@ -129,16 +129,9 @@ public final class HttpCentralApiClient implements CentralApiClient {
   if(response.status()!=200) throw new CentralUnavailable("CENTRAL_HTTP_"+response.status());
   var commands=new ArrayList<SyncCommand>();
   for(Object o:Json.list(response.body().get("commands"))) {
+   // Documento não traduzível vira comando restritivo bloqueante (EdgeSyncContract.toCommand); só item sem identidade é ignorado.
    try { commands.add(EdgeSyncContract.toCommand(Json.map(o))); }
-   catch(EdgeSyncContract.Refused refused) {
-    LOG.log(System.Logger.Level.WARNING,"Comando recusado antes da fila: {0}",refused.reasonCode());
-    try {
-     reportSyncResult(new SyncResult(refused.commandId(),refused.deviceId(),br.com.condpulse.gateway.spi.Spi.OperationState.FAILED,
-      refused.reasonCode(),java.time.Instant.now(),refused.documentHash()));
-    } catch(CentralUnavailable later) { LOG.log(System.Logger.Level.INFO,"Recusa será relatada na próxima entrega."); }
-   } catch(RuntimeException malformed) {
-    LOG.log(System.Logger.Level.WARNING,"Comando da plataforma malformado ignorado.");
-   }
+   catch(RuntimeException malformed) { LOG.log(System.Logger.Level.WARNING,"Comando da plataforma sem identificação ignorado."); }
   }
   return commands;
  }

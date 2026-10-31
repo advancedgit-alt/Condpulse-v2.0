@@ -98,6 +98,24 @@ class GatewayServiceTest {
   assertEquals(3,central.results.size(),"um só resultado terminal");
  }
 
+ /** Documento não traduzível: a retirada segura roda no equipamento e o trabalho é relatado FAILED com o motivo. */
+ @Test void documentoNaoTraduzivelExecutaRetiradaSeguraEReportaFalha() throws Exception {
+  String doc="{\"action\": \"APPLY_RIGHTS\", \"entries\": [], \"subjectRef\": \"s1\", \"schemaVersion\": \"1.0\"}";
+  String hash=br.com.condpulse.gateway.central.EdgeSyncContract.sha256Hex(doc);
+  var raw=new java.util.LinkedHashMap<String,Object>();
+  raw.put("commandId","00000000-0000-4000-8000-0000000000d1"); raw.put("idempotencyKey","00000000-0000-4000-8000-0000000000d1");
+  raw.put("deviceId","d1"); raw.put("subjectRef","s1"); raw.put("type","APPLY_RIGHTS"); raw.put("desiredVersion",5L); raw.put("priority",0L);
+  raw.put("documentHash",hash); raw.put("document",doc); raw.put("issuedAt","2026-10-31T12:00:00Z");
+  central.nextSync.add(br.com.condpulse.gateway.central.EdgeSyncContract.toCommand(raw));
+  service.pullFromCentral();
+  service.processQueues(10);
+  assertTrue(adapter.calls.contains("REVOKE_RIGHTS"),"retirada segura enviada ao equipamento");
+  var result=central.results.getLast();
+  assertEquals(OperationState.FAILED,result.state());
+  assertTrue(result.reasonCode().startsWith("DOCUMENT_NOT_REPRESENTABLE"),result.reasonCode());
+  assertNull(br.com.condpulse.gateway.central.EdgeSyncContract.reportBody(result).get("observedHash"),"nunca confirma documento não aplicado");
+ }
+
  @Test void equipamentoForaDoArMantemPendenciaVisivel() {
   adapter.script(Operation.REVOKE_RIGHTS,OperationResult.of(OperationState.FAILED,"DEVICE_UNREACHABLE"));
   service.submit(command("rv","d1","s1",CommandType.REVOKE_RIGHTS,1,Map.of()));

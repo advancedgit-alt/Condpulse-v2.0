@@ -408,8 +408,12 @@ public final class GatewayService {
   var e=queue.get(commandId).orElse(null);
   if(e==null || e.reported()) return true;
   OperationState state=e.lastState()==null?OperationState.FAILED:e.lastState();
+  String reason=e.lastReason();
+  // Documento recebido e não aplicável: a retirada segura rodou (ou tentou), mas o trabalho nunca é confirmado.
+  String blocked=Json.string(e.command().payload(),br.com.condpulse.gateway.central.EdgeSyncContract.BLOCKED_REASON);
+  if(blocked!=null) { state=OperationState.FAILED; reason=blocked+"_"+(e.lastState()==null?"NOT_EXECUTED":e.lastState().name()); }
   try {
-   central.reportSyncResult(new CentralApiClient.SyncResult(commandId,e.command().deviceId(),state,e.lastReason(),clock.instant(),
+   central.reportSyncResult(new CentralApiClient.SyncResult(commandId,e.command().deviceId(),state,reason,clock.instant(),
     Json.string(e.command().payload(),"documentHash")));
    queue.markReported(commandId);
    return true;
