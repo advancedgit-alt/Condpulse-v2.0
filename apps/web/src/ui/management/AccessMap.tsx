@@ -9,6 +9,7 @@ import { ApiError, isUUID } from '../../api/client';
 import { management } from '../../api/management';
 import { displayText } from '../../api/text';
 import { formatWhen } from '../dateTime';
+import { queryFailure } from '../queryFailure';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { ActionFeedback, managementKey, useAccessGuard, useAction, useManagement } from './shared';
 
@@ -24,10 +25,11 @@ function Unavailable() {
 export function AccessMapSection() {
   const scope = useManagement();
   const areas = useQuery({ queryKey: managementKey(scope, 'access-areas'), queryFn: ({ signal }) => accessInstall.managementAreas(scope.tenantId, signal) });
-  if (useAccessGuard(areas.error)) return null;
-  if (unavailable(areas.error)) return <Unavailable />;
+  const failed = queryFailure([areas]);
+  if (useAccessGuard(failed)) return null;
+  if (unavailable(failed)) return <Unavailable />;
   return <>
-    <AreaList areas={areas.data} pending={areas.isPending} error={areas.isError && !areas.data ? areas.error : null} refetch={() => void areas.refetch()} />
+    <AreaList areas={areas.data} pending={areas.isPending} error={failed} refetch={() => void areas.refetch()} />
     <PointList areas={areas.data ?? []} />
     <AcceptanceList />
   </>;
@@ -67,7 +69,8 @@ export function areaFields(draft: AreaDraft, areaId: string | null): Omit<Update
   const name = displayText(draft.name, 160);
   if (!name) return 'Informe o nome da área com até 160 caracteres.';
   if (!draft.areaKind) return 'Escolha o tipo da área.';
-  if ((draft.areaKind === 'AMENITY') !== isUUID(draft.amenityId)) return 'Área reservável exige escolher a área de reserva; outros tipos não têm área de reserva.';
+  // Só o tipo atual conta: área de reserva escolhida antes de trocar o tipo não é enviada.
+  if (draft.areaKind === 'AMENITY' && !isUUID(draft.amenityId)) return 'Área reservável exige escolher a área de reserva.';
   if (areaId !== null && draft.parentAreaId === areaId) return 'A área não pode estar dentro de si mesma.';
   const zone = draft.timeZone.trim();
   return { name, areaKind: draft.areaKind, blockId: draft.blockId || null, parentAreaId: draft.parentAreaId || null,
@@ -107,7 +110,7 @@ function AreaForm({ area, areas, close }: { area: AccessArea | null; areas: read
       <small className="field-help">Ex.: HALL-A. Não muda depois de criado.</small></div>
       <div><label htmlFor={`${prefix}-name`}>Nome</label><input id={`${prefix}-name`} required maxLength={160} value={draft.name} disabled={pending} onChange={(event) => set('name', event.target.value)} /></div></div>
     <div className="two-fields"><div><label htmlFor={`${prefix}-kind`}>Tipo</label>
-      <select id={`${prefix}-kind`} required value={draft.areaKind} disabled={pending} onChange={(event) => set('areaKind', event.target.value as AreaKind)}>
+      <select id={`${prefix}-kind`} required value={draft.areaKind} disabled={pending} onChange={(event) => { const kind = event.target.value as AreaKind; setDraft((current) => ({ ...current, areaKind: kind, amenityId: kind === 'AMENITY' ? current.amenityId : '' })); }}>
         <option value="" disabled>Escolha…</option>{areaKinds.map((kind) => <option key={kind} value={kind}>{areaKindLabels[kind]}</option>)}</select></div>
       <div><label htmlFor={`${prefix}-subtype`}>Subtipo (opcional)</label>
         <select id={`${prefix}-subtype`} value={draft.physicalSubtype} disabled={pending} onChange={(event) => set('physicalSubtype', event.target.value as AreaSubtype | '')}>
@@ -138,13 +141,14 @@ function AreaForm({ area, areas, close }: { area: AccessArea | null; areas: read
 function PointList({ areas }: { areas: readonly AccessArea[] }) {
   const scope = useManagement();
   const points = useQuery({ queryKey: managementKey(scope, 'access-points'), queryFn: ({ signal }) => accessInstall.managementPoints(scope.tenantId, signal) });
-  if (useAccessGuard(points.error)) return null;
+  const failed = queryFailure([points]);
+  if (useAccessGuard(failed)) return null;
   const name = (id: string) => areas.find((item) => item.areaId === id)?.name ?? 'área não listada';
   return <section className="management-section" aria-labelledby="access-points-title">
     <div className="section-heading"><div><span className="section-index">02 / PONTOS</span><h2 id="access-points-title">Pontos de acesso</h2></div>
       <button className="button button-secondary button-compact" type="button" onClick={() => void points.refetch()}>Atualizar</button></div>
     <p className="field-help">Portas, catracas e portões cadastrados pela implantação. Equipamentos e ligações não aparecem para a gestão.</p>
-    {points.isPending ? <div className="panel"><Loading label="Consultando pontos…" /></div> : points.isError && !points.data ? <ErrorState error={points.error} retry={() => void points.refetch()} />
+    {points.isPending ? <div className="panel"><Loading label="Consultando pontos…" /></div> : failed || !points.data ? <ErrorState error={failed} retry={() => void points.refetch()} />
       : points.data!.length === 0 ? <div className="panel"><Empty icon="door" title="Nenhum ponto cadastrado">A implantação ainda não cadastrou pontos neste condomínio.</Empty></div>
         : <ol className="management-list" aria-label="Pontos de acesso">{points.data!.map((point) => <li key={point.pointId} className="management-row"><div>
           <strong>{point.name}</strong><span className={`status-pill ${point.status === 'COMMISSIONED' ? 'status-ready' : 'status-neutral'}`}>{pointStatusLabels[point.status]}</span>
@@ -157,7 +161,8 @@ function AcceptanceList() {
   const acceptances = useQuery({ queryKey: managementKey(scope, 'installation-acceptances'), queryFn: ({ signal }) => accessInstall.managementAcceptances(scope.tenantId, signal) });
   const [signing, setSigning] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
-  if (useAccessGuard(acceptances.error)) return null;
+  const failed = queryFailure([acceptances]);
+  if (useAccessGuard(failed)) return null;
   const list = [...(acceptances.data ?? [])].sort((a, b) => b.installationRevision - a.installationRevision);
   return <section className="management-section" aria-labelledby="access-acceptance-title">
     <div className="section-heading"><div><span className="section-index">03 / ACEITE</span><h2 id="access-acceptance-title">Aceite da instalação</h2></div>
@@ -165,7 +170,7 @@ function AcceptanceList() {
     <p className="field-help">A implantação assina o aceite técnico; a gestão assina as regras (aceite local), em ação separada. As duas assinaturas ficam registradas com autor e horário.</p>
     {outcome ? <Notice tone="success">{outcome}</Notice> : null}
     {acceptances.isPending ? <div className="panel"><Loading label="Consultando aceites…" /></div>
-      : acceptances.isError && !acceptances.data ? <ErrorState error={acceptances.error} retry={() => void acceptances.refetch()} />
+      : failed ? <ErrorState error={failed} retry={() => void acceptances.refetch()} />
         : list.length === 0 ? <div className="panel"><Empty icon="shield" title="Nenhum aceite aberto">A implantação ainda não abriu o aceite da instalação.</Empty></div>
           : <ol className="management-list" aria-label="Aceites da instalação">{list.map((item) => <li key={item.acceptanceId} className="management-row">
             <div><strong>Revisão {item.installationRevision}</strong><span className={`status-pill ${item.status === 'APPROVED' ? 'status-ready' : 'status-neutral'}`}>{acceptanceStatusLabels[item.status]}</span>

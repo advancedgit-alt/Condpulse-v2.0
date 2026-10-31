@@ -118,3 +118,21 @@ describe('telas da implantação', () => {
       revocationCheckpointRef: '', reviewDue: '' })).toMatch(/Planta/);
   });
 });
+
+describe('falha de consulta com cache', () => {
+  it('autorização vale mesmo com dados; falha recuperável só sem dados', async () => {
+    const { queryFailure } = await import('../ui/queryFailure');
+    const denied = new ApiError(404, 'TENANT_ACCESS_DENIED', 'x');
+    const scope = new ApiError(403, 'TECHNICAL_SCOPE_REQUIRED', 'x');
+    const down = new ApiError(503, 'INSTALLATION_UNAVAILABLE', 'x');
+    expect(queryFailure([{ isError: true, error: down, data: [] }])).toBeNull();
+    expect(queryFailure([{ isError: true, error: down, data: undefined }])).toBe(down);
+    expect(queryFailure([{ isError: true, error: down, data: undefined }, { isError: true, error: denied, data: [] }])).toBe(denied);
+    expect(queryFailure([{ isError: true, error: scope, data: [] }])).toBe(scope);
+  });
+
+  it('área: só a referência do tipo atual conta', () => {
+    expect(areaFields({ code: 'A', name: 'Hall', areaKind: 'COMMON_AREA', physicalSubtype: '', blockId: '', parentAreaId: '', amenityId: '40000000-0000-4000-8000-000000000001',
+      timeZone: '', status: 'ACTIVE' }, null)).toMatchObject({ amenityId: null });
+  });
+});

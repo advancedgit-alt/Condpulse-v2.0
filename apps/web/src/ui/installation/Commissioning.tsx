@@ -10,6 +10,7 @@ import { displayText } from '../../api/text';
 import { formatWhen, toInstant } from '../dateTime';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
 import { areaName } from './Inventory';
+import { queryFailure } from '../queryFailure';
 import { ActionFeedback, INSTALL_ZONE, PhysicalContext, blank, can, installationKey, newId, short, useAccessGuard, useAction, useInstallation } from './shared';
 
 function useInstallData() {
@@ -24,7 +25,7 @@ function useInstallData() {
   const acceptances = query('acceptances', accessInstall.acceptances);
   const all = [areas, points, devices, channels, bindings, acceptances];
   return { areas, points, devices, channels, bindings, acceptances, all,
-    failed: all.find((item) => item.isError && !item.data)?.error, pending: all.some((item) => item.isPending),
+    failed: queryFailure(all), pending: all.some((item) => item.isPending),
     refresh: () => all.forEach((item) => void item.refetch()) };
 }
 export function placeOf(point: AccessPoint | undefined, areas: readonly AccessArea[]): string {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError, isUUID } from '../../api/client';
@@ -7,6 +7,7 @@ import { useAuth } from '../Auth';
 import { MfaPanel, mfaStatusKey } from '../Mfa';
 import { Empty, ErrorState, Icon, Loading, Notice, SectionTabs, type IconName } from '../primitives';
 import { formatWhen } from '../dateTime';
+import { queryFailure } from '../queryFailure';
 import { AreaPhysicalSection, ChannelSection, DeviceSection, PointSection } from './Inventory';
 import { AcceptanceSection, BindingSection } from './Commissioning';
 import { INSTALL_ZONE, InstallationContext, OutcomeContext, can, installationKey, useAccessGuard, useInstallation } from './shared';
@@ -67,6 +68,9 @@ function InstallationGate({ accountId, tenantId, section }: { accountId: string;
   const refreshSession = useCallback(() => { void queries.invalidateQueries({ queryKey: technicalSessionKey(accountId, tenantId) }); }, [queries, accountId, tenantId]);
   const value = useMemo(() => session.data ? { accountId, tenantId, session: session.data, requireMfa, denied: deny, refreshSession } : null,
     [accountId, tenantId, session.data, requireMfa, deny, refreshSession]);
+  // Concessão encerrada depois de a tela abrir: o cache técnico é descartado, não só escondido.
+  const revoked = session.data !== undefined && session.error instanceof ApiError && session.error.code === 'TENANT_ACCESS_DENIED';
+  useEffect(() => { if (revoked) deny(session.error); }, [revoked, deny, session.error]);
   if (denied) return <div className="panel"><Notice tone="error">A concessão técnica deste condomínio não está mais vigente para esta conta. Os dados exibidos foram removidos.</Notice>
     <Link className="button button-secondary" to="/contextos">Voltar para meus acessos</Link></div>;
   if (status.isPending) return <div className="panel"><Loading label="Conferindo o segundo fator…" /></div>;
@@ -79,11 +83,12 @@ function InstallationGate({ accountId, tenantId, section }: { accountId: string;
     }} />;
   }
   if (session.isPending) return <div className="panel"><Loading label="Conferindo a concessão técnica…" /></div>;
-  if (session.isError && !session.data) {
-    const code = session.error instanceof ApiError ? session.error.code : '';
+  const sessionFailure = queryFailure([session]);
+  if (sessionFailure) {
+    const code = sessionFailure instanceof ApiError ? sessionFailure.code : '';
     if (code === 'TENANT_ACCESS_DENIED') return <div className="panel"><Empty icon="shield" title="Sem concessão técnica">Esta conta não tem concessão técnica vigente neste condomínio. A concessão é emitida pela administração da plataforma, com prazo e escopos definidos.</Empty></div>;
     if (code === 'API_NOT_AVAILABLE') return <div className="panel"><Empty icon="door" title="Implantação indisponível">O acesso facial e a implantação física ainda não estão ativos neste ambiente.</Empty></div>;
-    return <ErrorState error={session.error} retry={() => void session.refetch()} />;
+    return <ErrorState error={sessionFailure} retry={() => void session.refetch()} />;
   }
   if (!value) return null;
   return <InstallationContext.Provider value={value}><InstallationConsole section={section} /></InstallationContext.Provider>;
@@ -125,11 +130,11 @@ function Guide() {
   const bindings = useQuery({ queryKey: installationKey(scope, 'bindings'), queryFn: ({ signal }) => accessInstall.bindings(scope.tenantId, signal) });
   const acceptances = useQuery({ queryKey: installationKey(scope, 'acceptances'), queryFn: ({ signal }) => accessInstall.acceptances(scope.tenantId, signal) });
   const all = [areas, points, devices, channels, bindings, acceptances];
-  const failed = all.find((query) => query.isError && !query.data);
-  if (useAccessGuard(failed?.error)) return null;
+  const failed = queryFailure(all);
+  if (useAccessGuard(failed)) return null;
   const visible = new Set<string>(visibleInstallationSections(scope.session).map((item) => item.id));
   if (all.some((query) => query.isPending)) return <div className="panel"><Loading label="Consultando a instalação…" /></div>;
-  if (failed) return <ErrorState error={failed.error} retry={() => all.forEach((query) => void query.refetch())} />;
+  if (failed) return <ErrorState error={failed} retry={() => all.forEach((query) => void query.refetch())} />;
   const a = areas.data!, p = points.data!, d = devices.data!.filter((item) => item.status === 'ACTIVE'), c = channels.data!;
   const b = bindings.data!, latest = [...acceptances.data!].sort((x, y) => y.installationRevision - x.installationRevision)[0];
   const live = a.filter((item) => item.status !== 'RETIRED');

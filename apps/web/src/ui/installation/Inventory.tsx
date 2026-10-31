@@ -11,6 +11,7 @@ import {
 import { isUUID } from '../../api/client';
 import { displayText } from '../../api/text';
 import { Empty, ErrorState, Loading, Notice } from '../primitives';
+import { queryFailure } from '../queryFailure';
 import { ActionFeedback, blank, can, installationKey, newId, short, useAccessGuard, useAction, useInstallation } from './shared';
 
 function useList<T>(part: string, load: (tenantId: string, signal?: AbortSignal) => Promise<T>) {
@@ -40,12 +41,13 @@ export function AreaPhysicalSection() {
   const scope = useInstallation();
   const areas = useList('areas', accessInstall.technicalAreas);
   const [editing, setEditing] = useState<string | null>(null);
-  if (useAccessGuard(areas.error)) return null;
+  const failed = queryFailure([areas]);
+  if (useAccessGuard(failed)) return null;
   return <section className="management-section" aria-labelledby="install-areas-title">
     <Heading index="01 / ÁREAS" title="Áreas e separação física" id="install-areas-title">
       <button className="button button-secondary button-compact" type="button" disabled={areas.isFetching} onClick={() => void areas.refetch()}>Atualizar</button></Heading>
     <p className="field-help">Nome, tipo e interdição das áreas são da gestão do condomínio. Aqui só se registra o que foi conferido no local.</p>
-    {areas.isPending ? <div className="panel"><Loading label="Consultando áreas…" /></div> : areas.isError ? <ErrorState error={areas.error} retry={() => void areas.refetch()} />
+    {areas.isPending ? <div className="panel"><Loading label="Consultando áreas…" /></div> : failed || !areas.data ? <ErrorState error={failed} retry={() => void areas.refetch()} />
       : areas.data.length === 0 ? <div className="panel"><Empty icon="grid" title="Nenhuma área cadastrada">A gestão do condomínio ainda não cadastrou as áreas de acesso.</Empty></div>
         : <ol className="management-list" aria-label="Áreas de acesso">{areas.data.map((area) => <li key={area.areaId} className="management-row">
           <div><strong>{area.name}</strong><span className="status-pill status-neutral">{areaStatusLabels[area.status]}</span>
@@ -104,7 +106,7 @@ export function PointSection() {
   const areas = useList('areas', accessInstall.technicalAreas);
   const points = useList('points', accessInstall.points);
   const [editing, setEditing] = useState<string | null>(null);
-  const failed = areas.error ?? points.error;
+  const failed = queryFailure([areas, points]);
   if (useAccessGuard(failed)) return null;
   const refresh = () => { void areas.refetch(); void points.refetch(); };
   return <section className="management-section" aria-labelledby="install-points-title">
@@ -200,14 +202,15 @@ export function deviceFields(draft: DeviceDraft): Omit<UpdateDeviceBody, 'status
 export function DeviceSection() {
   const devices = useList('devices', accessInstall.devices);
   const [editing, setEditing] = useState<string | null>(null);
-  if (useAccessGuard(devices.error)) return null;
+  const failed = queryFailure([devices]);
+  if (useAccessGuard(failed)) return null;
   return <section className="management-section" aria-labelledby="install-devices-title">
     <Heading index="03 / EQUIPAMENTOS" title="Inventário e rede" id="install-devices-title">
       <button className="button button-compact" type="button" disabled={editing !== null} onClick={() => setEditing('new')}>Novo equipamento</button>
       <button className="button button-secondary button-compact" type="button" disabled={devices.isFetching} onClick={() => void devices.refetch()}>Atualizar</button></Heading>
     <p className="field-help">Registre o identificador do aparelho no fabricante e a forma de conexão. Credenciais do equipamento ficam no cofre do conector e nunca aparecem aqui. Equipamento trocado é cadastro novo.</p>
     {editing === 'new' ? <DeviceForm device={null} known={devices.data ?? []} close={() => setEditing(null)} /> : null}
-    {devices.isPending ? <div className="panel"><Loading label="Consultando equipamentos…" /></div> : devices.isError ? <ErrorState error={devices.error} retry={() => void devices.refetch()} />
+    {devices.isPending ? <div className="panel"><Loading label="Consultando equipamentos…" /></div> : failed || !devices.data ? <ErrorState error={failed} retry={() => void devices.refetch()} />
       : devices.data.length === 0 ? <div className="panel"><Empty icon="box" title="Nenhum equipamento cadastrado">Cadastre terminais, controladoras e leitores instalados.</Empty></div>
         : <ol className="management-list" aria-label="Equipamentos">{devices.data.map((device) => editing === device.deviceId
           ? <li key={device.deviceId}><DeviceForm device={device} known={devices.data} close={() => setEditing(null)} /></li>
@@ -276,7 +279,7 @@ export function ChannelSection() {
   const devices = useList('devices', accessInstall.devices);
   const channels = useList('channels', accessInstall.channels);
   const [editing, setEditing] = useState<string | null>(null);
-  const failed = devices.error ?? channels.error;
+  const failed = queryFailure([devices, channels]);
   if (useAccessGuard(failed)) return null;
   const refresh = () => { void devices.refetch(); void channels.refetch(); };
   const active = devices.data?.filter((item) => item.status === 'ACTIVE') ?? [];

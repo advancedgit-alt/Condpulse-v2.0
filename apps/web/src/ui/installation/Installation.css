@@ -6,4 +6,3 @@
 .install-facts dt{font-size:.78rem;color:var(--cp-color-text-secondary)}
 .install-facts dd{margin:0;font-weight:var(--cp-font-weight-strong);font-size:.88rem;overflow-wrap:anywhere}
 .install-signatures{padding:12px 14px;border:1px solid var(--cp-color-border-decorative);border-radius:12px}
-.install-placeholder{opacity:.85}

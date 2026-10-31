@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { scanAccessibility } from './a11y';
-import { TENANT_A, installSyntheticApi, signIn } from './fixtures';
+import { AMENITY_A, TENANT_A, installSyntheticApi, signIn } from './fixtures';
 import { installManagementApi } from './management-fixtures';
 
 // Implantação física do acesso (AC-024): jornada do MASTER de implantação e assinatura das regras pela gestão.
@@ -179,6 +179,16 @@ test('seções aparecem só com o escopo; aceite mostra os aceites técnico e lo
   await expect(page.getByRole('heading', { name: 'Etapas da implantação' })).toBeVisible();
 });
 
+test('concessão revogada com dados em cache: a tela descarta os dados técnicos', async ({ page }) => {
+  const state = await openInstallation(page, {}, 'equipamentos');
+  const section = page.getByRole('region', { name: 'Inventário e rede' });
+  await expect(section.getByText('Controladora portaria')).toBeVisible();
+  state.session = 'denied';
+  await section.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(page.getByText('A concessão técnica deste condomínio não está mais vigente para esta conta. Os dados exibidos foram removidos.')).toBeVisible();
+  await expect(page.getByText('Controladora portaria')).toHaveCount(0);
+});
+
 test('sem concessão técnica ou com a função desligada a implantação não mostra dados', async ({ page }) => {
   const state = await openInstallation(page, { session: 'denied' });
   await expect(page.getByText('Sem concessão técnica')).toBeVisible();
@@ -201,7 +211,11 @@ test('gestão cria área de acesso e assina as regras sem ver equipamento, canal
   const form = page.getByRole('form', { name: 'Nova área de acesso' });
   await form.getByLabel('Código', { exact: true }).fill('garagem-1');
   await form.getByLabel('Nome', { exact: true }).fill('Garagem');
+  // Trocar de área reservável para outro tipo descarta a área de reserva escolhida (o seletor some).
+  await form.getByLabel('Tipo', { exact: true }).selectOption('AMENITY');
+  await form.getByLabel('Área de reserva', { exact: true }).selectOption(AMENITY_A);
   await form.getByLabel('Tipo', { exact: true }).selectOption('COMMON_AREA');
+  await expect(form.getByLabel('Área de reserva', { exact: true })).toHaveCount(0);
   await form.getByLabel('Subtipo (opcional)', { exact: true }).selectOption('GARAGE');
   await form.getByRole('button', { name: 'Criar área' }).click();
   await expect(areas.getByText('Área de acesso criada.')).toBeVisible();
