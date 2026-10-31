@@ -4379,6 +4379,17 @@ def maintenance_checks():
                  f"VALUES('{TA}','{R2}','{ZL}','STAFF','Fora','RESIDENT')", "42501", tenant=TA, actor=ZL, role="cp_api"),
            "zelador nao escreve em pedido nao atribuido")
     expect(value(zl + "select count(*) from cp.request_messages", tenant=TA, actor=ZL, role="cp_api") == "1", "zelador le a conversa do atribuido")
+    expect(value(zl + f"select count(*) from cp.request_messages where request_id='{R1}'", tenant=TA, actor=Z2, role="cp_api") == "0",
+           "outro zelador nao le nem pagina a conversa do pedido alheio")
+    # A trava da zeladoria vale so para maintenance.operate sem requests.manage: gestao e manutencao do dono seguem a V017.
+    query(mgr + f"UPDATE cp.service_requests SET state='TRIAGED',assignee_membership_id='{MZ2}',due_on=current_date,version=version+1 "
+          f"WHERE id='{R2}'", tenant=TA, actor=MG, role="cp_api")
+    query(mgr + f"UPDATE cp.service_requests SET state='CLOSED',version=version+1 WHERE id='{R2}'", tenant=TA, actor=MG, role="cp_api")
+    expect(value(f"select state||':'||version from cp.service_requests where id='{R2}'") == "CLOSED:2",
+           "gestao segue atribuindo, dando prazo e encerrando pedido com a trava da zeladoria")
+    query(f"UPDATE cp.service_requests SET state='CLOSED',closed_at=clock_timestamp(),version=version+1 WHERE id='{R1}'")
+    expect(value(f"select state from cp.service_requests where id='{R1}'") == "CLOSED",
+           "dono do schema sem capacidade publicada encerra pedido (trava da zeladoria nao se aplica)")
     query(f"DELETE FROM cp.request_messages WHERE request_id in ('{R1}','{R2}'); DELETE FROM cp.service_requests WHERE id in ('{R1}','{R2}'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{ZL}','{Z2}','{RS}'); "
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{ZL}','{Z2}','{RS}')")

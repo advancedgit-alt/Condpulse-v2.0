@@ -96,7 +96,8 @@ BEGIN
   OR (OLD.state='RESOLVED' AND NEW.state IN ('IN_PROGRESS','CLOSED'))) THEN
   RAISE EXCEPTION 'Transição de pedido não permitida.' USING ERRCODE='23514';
  END IF;
- IF NOT platform.has_capability('requests.manage') THEN
+ -- Só quem atua pela zeladoria (maintenance.operate sem requests.manage); gestão, worker e manutenção do dono seguem a V017.
+ IF platform.has_capability('maintenance.operate') AND NOT platform.has_capability('requests.manage') THEN
   IF NEW.assignee_membership_id IS DISTINCT FROM OLD.assignee_membership_id OR NEW.due_on IS DISTINCT FROM OLD.due_on
      OR NEW.state=OLD.state OR OLD.state NOT IN ('TRIAGED','IN_PROGRESS','WAITING_RESIDENT')
      OR NEW.state NOT IN ('IN_PROGRESS','WAITING_RESIDENT','RESOLVED') THEN

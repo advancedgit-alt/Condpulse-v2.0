@@ -226,6 +226,7 @@ vínculo é legível), encomendas, visitas, acesso ou portaria.
 | --- | --- | --- |
 | `GET .../maintenance/requests` | `maintenance.operate` | Pedidos não encerrados atribuídos ao próprio vínculo; sem nome de quem abriu |
 | `GET .../maintenance/requests/{id}` | `maintenance.operate` | Detalhe e conversa (inclui comentário interno); outro pedido é 404 |
+| `GET .../maintenance/requests/{id}/messages?before=` | `maintenance.operate` | Até 200 mensagens anteriores do pedido atribuído (mesmos limites da gestão); outro pedido ou referência alheia é 404 |
 | `POST .../maintenance/requests/{id}/state` | `maintenance.operate` | Versão lida; triagem/execução/aguardando → execução, aguardando a unidade ou concluído com resolução |
 | `POST .../maintenance/requests/{id}/messages` | `maintenance.operate` | `Idempotency-Key`; visível para a unidade ou interno |
 

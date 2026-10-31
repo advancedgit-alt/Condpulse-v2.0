@@ -171,7 +171,7 @@ Os nomes das migrations são propostos; o número é o próximo livre no momento
 | 7 | AC-007, AC-008 | `V043__access_policies.sql` | `cp.access_policies`, `cp.access_policy_versions`, `cp.access_decisions`; motor determinístico, validar e simular (sem acionar porta) | Não |
 | 8 | AC-009 | `V044__access_grants.sql` | `cp.access_grants`, `cp.revocation_markers`; direitos derivados de convites, reservas, prestador recorrente e vínculos | Não |
 | 9 | AC-012, AC-013 | `V045__access_policy_deployments.sql` | `cp.policy_deployments`, `cp.entitlement_syncs`; compilador e publicação via outbox | Não (simulador); G3 para confirmar |
-| 10 | AC-016 | `V045__device_events_evidence.sql` | `cp.device_events` + ponto, `binding_revision`, decisão, nível de evidência, época nativa e instância; novos tipos | Não |
+| 10 | AC-016 | `V046__device_events_evidence.sql` | `cp.device_events` + ponto, `binding_revision`, decisão, nível de evidência, época nativa e instância; novos tipos | Não |
 | 11 | AC-018 (dados) | `V047__access_edge_agents.sql` | `cp.edge_agents` (identidade de máquina, certificado por referência, versão, estado) | Não para o modelo; G3 para operar |
 | 12 | AC-020 (dados) | `V048__access_command_receipts.sql` | `cp.access_command_receipts` (abertura sem repetição) | Não para o modelo; G3 para ligar |
 | 13 | AC-014, AC-015 | `V049__access_face_enrollment.sql` | `kind FACE`, registros de finalidade/aviso/base legal (o repositório não tem `legal_records`), pedidos de exclusão por destino | Não para o fluxo; G3 para enviar face |
@@ -202,7 +202,7 @@ na rede do condomínio falando com a API, em vez do worker chamar o parceiro) de
 | Perfil da combinação (marca, SKU, hardware, região, firmware, adaptador, modo, topologia) | (a) V040 | (b) gateway confere ao reconectar | V040 |
 | Topologia física: canais nativos, leitores, sensores, `binding_revision` | (b) descoberta | (a) V042 | V042 |
 | Documento de direitos compilado por destino (geração, `restriction_epoch`, `binding_revision`, vigência) e ordem revogação-antes-de-ampliação | (a) V045 | (b) aplica e confirma | V044/V045 |
-| Envelope de evento `/v1/edge/events` (schemaVersion, chave de dedupe tenant + instância + época + ID nativo, nível de evidência) | (b) | (a) V045 | V045 |
+| Envelope de evento `/v1/edge/events` (schemaVersion, chave de dedupe tenant + instância + época + ID nativo, nível de evidência) | (b) | (a) V046 | V046 |
 | Telemetria de decisão `/v1/edge/decisions` (EDGE_ONLINE; ACK não abre porta) | (b) | (a) V043 | V043 |
 | Comando de abertura e recibo (commandId, nonce, expiresAt, revisões; estados do recibo) | (a) V048 | (b) despachante | V048 |
 | Identidade do gateway (bootstrap, certificado, rotação, revogação) | (a) V047 | (b) | V047 |

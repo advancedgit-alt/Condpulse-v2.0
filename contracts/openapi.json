@@ -19469,6 +19469,81 @@
       }
     },
     "/v1/tenants/{tenantId}/maintenance/requests/{requestId}/messages": {
+      "get": {
+        "operationId": "listMaintenanceRequestOlderMessages",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_REQUESTS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": true,
+            "description": "Identificador da mensagem mais antiga já exibida.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Até 200 mensagens anteriores (inclusive comentários internos) do pedido atribuído ao próprio vínculo de zeladoria, com maintenance.operate e AAL2.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED (sem vínculo de zeladoria) ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "SERVICE_REQUEST_NOT_FOUND: pedido não atribuído ao próprio vínculo ou mensagem de referência inexistente ou de outro pedido"
+          },
+          "503": {
+            "description": "SERVICE_REQUEST_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      },
       "post": {
         "operationId": "maintenanceRequestMessage",
         "security": [

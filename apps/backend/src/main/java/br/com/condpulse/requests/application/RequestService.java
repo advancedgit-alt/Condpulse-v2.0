@@ -225,6 +225,21 @@ public class RequestService {
   });
  }
  /**
+  * Mensagens anteriores do pedido atribuído ao próprio vínculo de zeladoria (inclui comentários internos, como o detalhe),
+  * com os mesmos limites da gestão. Pedido não atribuído, referência de outro pedido ou inexistente: não encontrado. A
+  * política do banco repete a regra pela atribuição (V045).
+  */
+ public RequestModels.MessagePage maintenanceOlderMessages(UUID actor,UUID tenant,AssuranceLevel assurance,UUID requestId,UUID before) {
+  if(requestId==null || before==null) throw notFound();
+  return maintenanceStaff(actor,tenant,assurance,Map.of(),(context,membership)->{
+   var head=store.head(tenant,requestId);
+   if(head==null || !membership.equals(head.assigneeMembershipId())) throw notFound();
+   var page=store.olderMessages(tenant,requestId,before,true);
+   if(page==null) throw notFound();
+   return page;
+  });
+ }
+ /**
   * Andamento do pedido atribuído pela versão lida: em execução, aguardando a unidade ou concluído com resolução. Não muda
   * responsável nem prazo, não encerra e não reabre (o gatilho do banco repete a regra). A resolução entra na conversa
   * como na gestão.

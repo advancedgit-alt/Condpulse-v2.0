@@ -1,7 +1,9 @@
 package br.com.condpulse.database;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.requests.application.RequestModels;
 import br.com.condpulse.requests.application.RequestService;
@@ -127,6 +129,82 @@ class MaintenanceJdbcTest {
   var seen=requests.unitRequest(responsible,db.tenantA,assigned.requestId());
   assertTrue(seen.messages().stream().anyMatch(m->m.body().equals("Resolução: Lâmpada trocada.")),"Unidade vê a resolução");
   assertEquals("RESOLVED",seen.state());
+  db.assertEmptyContext();
+ }
+
+ /** Conversa longa no pedido atribuído: a zeladoria pagina as anteriores como a gestão; pedido não atribuído fica fora. */
+ @Test void maintenancePagesOlderMessagesOnlyOnTheRequestAssignedToItsOwnMembership() throws Exception {
+  UUID zelador=hireMaintenance();
+  UUID zeladorMembership=membershipOf(zelador);
+  var assigned=open("Vazamento recorrente no hall");
+  var other=open("Interfone da portaria");
+  requests.update(manager,db.tenantA,AAL2,assigned.requestId(),new RequestModels.Update("TRIAGED",zeladorMembership,null,null,0L));
+  requests.update(manager,db.tenantA,AAL2,other.requestId(),new RequestModels.Update("TRIAGED",null,null,null,0L));
+  // 249 mensagens no atribuído (a 50ª é comentário interno) e 3 no outro pedido.
+  db.adminUpdateWithoutTriggers("""
+   insert into cp.request_messages(tenant_id,request_id,author_id,author_role,author_name,body,visibility,created_at)
+   select ?,?,case when n%2=0 or n=50 then ? else ? end,case when n%2=0 or n=50 then 'STAFF' else 'UNIT' end,'Autor',
+    'Mensagem '||n,case when n=50 then 'INTERNAL' else 'RESIDENT' end,timestamptz '2030-01-01 00:00:00+00'+make_interval(secs=>n)
+   from generate_series(1,249) n
+   """,db.tenantA,assigned.requestId(),manager,responsible);
+  db.adminUpdateWithoutTriggers("""
+   insert into cp.request_messages(tenant_id,request_id,author_id,author_role,author_name,body,visibility,created_at)
+   select ?,?,?,'UNIT','Autor','Outro '||n,'RESIDENT',timestamptz '2030-01-01 00:00:00+00'+make_interval(secs=>n)
+   from generate_series(1,3) n
+   """,db.tenantA,other.requestId(),responsible);
+  var detail=requests.maintenanceRequest(zelador,db.tenantA,AAL2,assigned.requestId());
+  assertEquals(200,detail.messages().size()); assertTrue(detail.messagesTruncated());
+  var seen=new ArrayList<>(detail.messages());
+  var page=requests.maintenanceOlderMessages(zelador,db.tenantA,AAL2,assigned.requestId(),seen.getFirst().messageId());
+  assertEquals(49,page.messages().size()); assertFalse(page.truncated());
+  seen.addAll(0,page.messages());
+  assertEquals(db.adminString("""
+   select string_agg(body,'|' order by created_at,id) from cp.request_messages where tenant_id=? and request_id=?
+   """,db.tenantA,assigned.requestId()),seen.stream().map(RequestModels.Message::body).collect(Collectors.joining("|")),
+   "Conversa completa, sem lacuna nem repetição, com o comentário interno");
+  assertTrue(seen.stream().anyMatch(m->"INTERNAL".equals(m.visibility())));
+
+  UUID otherMessage=UUID.fromString(db.adminString(
+   "select id from cp.request_messages where request_id=? order by created_at desc limit 1",other.requestId()));
+  UUID first=seen.getLast().messageId();
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.maintenanceOlderMessages(zelador,db.tenantA,AAL2,other.requestId(),otherMessage)),
+   "Pedido não atribuído não pagina, mesmo com IDs conhecidos");
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.maintenanceOlderMessages(zelador,db.tenantA,AAL2,assigned.requestId(),otherMessage)),
+   "Referência de outro pedido");
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.maintenanceOlderMessages(zelador,db.tenantA,AAL2,assigned.requestId(),UUID.randomUUID())));
+  assertEquals("MFA_REQUIRED",code(()->requests.maintenanceOlderMessages(zelador,db.tenantA,AAL1,assigned.requestId(),first)));
+  assertEquals("STAFF_ACCESS_DENIED",code(()->requests.maintenanceOlderMessages(responsible,db.tenantA,AAL2,assigned.requestId(),first)),
+   "Morador não usa a rota da zeladoria");
+  assertEquals("STAFF_ACCESS_DENIED",code(()->requests.maintenanceOlderMessages(manager,db.tenantA,AAL2,assigned.requestId(),first)),
+   "Gestão usa a própria rota");
+  // Banco repete a regra: com a capacidade publicada, o zelador lê só a conversa do atribuído, mesmo com SQL direto.
+  assertEquals(Integer.valueOf(0),transactions.<Integer>execute(zelador,db.tenantA,AAL2,context->db.jdbc.queryForObject(
+   "select count(*) from cp.request_messages where request_id=?",Integer.class,other.requestId())));
+  assertEquals(Integer.valueOf(249),transactions.<Integer>execute(zelador,db.tenantA,AAL2,context->db.jdbc.queryForObject(
+   "select count(*) from cp.request_messages where request_id=?",Integer.class,assigned.requestId())));
+  // Retirada a atribuição pela gestão, a paginação deixa de responder.
+  requests.update(manager,db.tenantA,AAL2,assigned.requestId(),new RequestModels.Update("TRIAGED",null,null,null,1L));
+  assertEquals("SERVICE_REQUEST_NOT_FOUND",code(()->requests.maintenanceOlderMessages(zelador,db.tenantA,AAL2,assigned.requestId(),first)));
+  db.assertEmptyContext();
+ }
+
+ /**
+  * A trava do gatilho vale só para quem atua pela zeladoria: a gestão continua atribuindo, dando prazo e encerrando, e a
+  * manutenção do dono do schema (sem capacidade publicada) continua encerrando pedido, como antes da V045.
+  */
+ @Test void maintenanceGuardDoesNotReachManagementNorSchemaOwnerFlows() throws Exception {
+  UUID zelador=hireMaintenance();
+  UUID zeladorMembership=membershipOf(zelador);
+  var managed=open("Bomba da cisterna");
+  var updated=requests.update(manager,db.tenantA,AAL2,managed.requestId(),
+   new RequestModels.Update("TRIAGED",zeladorMembership,java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo")).plusDays(3),null,0L));
+  assertEquals(zeladorMembership,updated.assigneeMembershipId());
+  updated=requests.update(manager,db.tenantA,AAL2,managed.requestId(),new RequestModels.Update("CLOSED",null,null,null,1L));
+  assertEquals("CLOSED",updated.state());
+  var owner=open("Portão social");
+  db.adminUpdate("update cp.service_requests set state='CLOSED',closed_at=clock_timestamp(),version=version+1 where tenant_id=? and id=?",
+   db.tenantA,owner.requestId());
+  assertEquals("CLOSED",db.adminString("select state from cp.service_requests where id=?",owner.requestId()));
   db.assertEmptyContext();
  }
 

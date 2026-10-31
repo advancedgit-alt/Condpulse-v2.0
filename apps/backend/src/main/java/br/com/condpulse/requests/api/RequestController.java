@@ -92,6 +92,12 @@ public class RequestController {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore())
    .body(service.maintenanceRequest(account(jwt),tenantId,assurance(jwt),requestId));
  }
+ @GetMapping("/v1/tenants/{tenantId}/maintenance/requests/{requestId}/messages")
+ public ResponseEntity<RequestModels.MessagePage> maintenanceOlderMessages(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
+     @PathVariable UUID requestId,@RequestParam(name="before") UUID before) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+   .body(service.maintenanceOlderMessages(account(jwt),tenantId,assurance(jwt),requestId,before));
+ }
  @PostMapping("/v1/tenants/{tenantId}/maintenance/requests/{requestId}/state")
  public ResponseEntity<RequestModels.MaintenanceRequest> maintenanceUpdate(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenantId,
      @PathVariable UUID requestId,@RequestBody RequestModels.MaintenanceUpdate request) {
