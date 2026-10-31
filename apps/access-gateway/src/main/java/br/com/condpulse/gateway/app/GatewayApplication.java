@@ -23,6 +23,8 @@ public class GatewayApplication {
  public static void main(String[] args) {
   // Nenhuma repetição implícita de conexão pelo cliente HTTP do JDK (manual 16.2).
   System.setProperty("jdk.httpclient.disableRetryConnect","true");
+  // Prazos do servidor de entrada (requisição incompleta é encerrada); antes de qualquer servidor HTTP do JDK.
+  br.com.condpulse.gateway.inbound.InboundServer.configureJdkServerDeadlines();
   var app=new SpringApplication(GatewayApplication.class);
   app.setWebApplicationType(org.springframework.boot.WebApplicationType.NONE);
   app.run(args);

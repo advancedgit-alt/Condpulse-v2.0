@@ -13,4 +13,4 @@ USER 10001:10001
 # Começa desligado: só sobe com CP_GATEWAY_ENABLED=true, configuração, segredos montados e /data persistente.
 ENV CP_GATEWAY_DATA_DIR=/data
 VOLUME ["/data"]
-ENTRYPOINT ["java","-XX:MaxRAMPercentage=75","-Djdk.httpclient.disableRetryConnect=true","-jar","/app/app.jar"]
+ENTRYPOINT ["java","-XX:MaxRAMPercentage=75","-Djdk.httpclient.disableRetryConnect=true","-Dsun.net.httpserver.maxReqTime=5","-Dsun.net.httpserver.maxRspTime=10","-jar","/app/app.jar"]
