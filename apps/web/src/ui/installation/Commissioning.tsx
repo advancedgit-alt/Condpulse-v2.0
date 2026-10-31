@@ -136,6 +136,9 @@ function BindingForm({ points, areas, devices, channels, close }: {
     <div><label htmlFor={`binding-${key}`}>{title}</label>
       <select id={`binding-${key}`} required={required} value={draft[key]} disabled={pending} onChange={(event) => {
         set(key, event.target.value);
+        // Sem leitor não há sentido: o seletor desabilitado não pode guardar um valor que bloqueie o envio.
+        if (!event.target.value && key === 'entryReaderDeviceId') set('entrySense', '');
+        if (!event.target.value && key === 'exitReaderDeviceId') set('exitSense', '');
         const chosen = devices.find((item) => item.deviceId === event.target.value);
         if (key === 'controllerDeviceId' && chosen?.homologationId && !draft.homologationId) set('homologationId', chosen.homologationId);
       }}>

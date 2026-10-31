@@ -145,6 +145,11 @@ test('roteiro mostra as etapas e o vínculo exige local e contexto conferidos', 
   await form.getByLabel('Relé de abertura', { exact: true }).selectOption(RELAY);
   await form.getByLabel('Leitor de entrada', { exact: true }).selectOption(READER);
   await form.getByLabel('Sentido do leitor de entrada', { exact: true }).selectOption('FROM_TO');
+  // Remover um leitor limpa o sentido dele; escolher de novo exige novo sentido.
+  await form.getByLabel('Leitor de saída', { exact: true }).selectOption(READER);
+  await form.getByLabel('Sentido do leitor de saída', { exact: true }).selectOption('TO_FROM');
+  await form.getByLabel('Leitor de saída', { exact: true }).selectOption('');
+  await expect(form.getByLabel('Sentido do leitor de saída', { exact: true })).toHaveValue('');
   await form.getByLabel('Sensor de porta', { exact: true }).selectOption(DOOR);
   await form.getByLabel(/Referência da ligação/).fill('obra/ligacao-portaria');
   const context = form.getByRole('group', { name: 'Local e contexto da ação' });
