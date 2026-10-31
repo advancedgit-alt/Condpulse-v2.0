@@ -1,5 +1,6 @@
 package br.com.condpulse.tenancy.api;
 
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import java.util.List;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.management.enabled",havingValue="true")
+@TenantModuleExempt("Blocos e unidades: cadastro base do condomínio.")
 public class UnitManagementController {
  private final UnitManagementService service;
  public UnitManagementController(UnitManagementService service) { this.service=service; }

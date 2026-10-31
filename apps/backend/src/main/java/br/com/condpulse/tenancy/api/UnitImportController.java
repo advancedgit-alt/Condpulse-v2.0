@@ -1,5 +1,6 @@
 package br.com.condpulse.tenancy.api;
 
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import java.util.UUID;
 import br.com.condpulse.tenancy.application.UnitImportModels;
 import br.com.condpulse.tenancy.application.UnitImportService;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Importação de unidades em staging (CP-016), atrás de CP_MANAGEMENT_ENABLED; units.manage com AAL2 no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.management.enabled",havingValue="true")
+@TenantModuleExempt("Importação de blocos e unidades: cadastro base do condomínio.")
 public class UnitImportController {
  private final UnitImportService service;
  public UnitImportController(UnitImportService service) { this.service=service; }

@@ -1,5 +1,7 @@
 package br.com.condpulse.finance.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Financeiro condominial com Asaas (ADR-0008), atrás de CP_FINANCE_ENABLED. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.finance.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FINANCE)
 public class FinanceController {
  private final FinanceService finance;
  private final FinanceWebhookService webhook;

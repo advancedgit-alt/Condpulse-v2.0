@@ -4,7 +4,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.platform.application.PlatformTransactionExecutor;
+import br.com.condpulse.platform.application.TenantModuleModels;
+import br.com.condpulse.platform.application.TenantModuleService;
+import br.com.condpulse.platform.infrastructure.PlatformStore;
+import br.com.condpulse.platform.infrastructure.TenantModuleStore;
 import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.tenancy.application.TenantModule;
+import br.com.condpulse.tenancy.application.TenantModuleFlags;
 import br.com.condpulse.shared.infrastructure.AuditRecorder;
 import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
 import br.com.condpulse.visits.application.PermitLinkPublicService;
@@ -90,6 +98,25 @@ class PermitLinkJdbcTest {
   assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->visits.shareLink(db.accountB,db.tenantA,permit.permitId())).code());
   assertEquals("VISIT_PERMIT_NOT_FOUND",assertThrows(BusinessProblem.class,()->visits.revokeLink(db.accountC,db.tenantA,permit.permitId())).code());
   assertEquals("0",db.adminString("select count(*) from cp.permit_links where permit_id=?",permit.permitId()));
+  db.assertEmptyContext();
+ }
+
+ @Test void visitsSuspendedByTheCentralCloseTheLinkWithTheSameAnswer() throws Exception {
+  var permit=invite("Pessoa Fictícia Modulo");
+  var link=visits.shareLink(db.accountA,db.tenantA,permit.permitId());
+  assertEquals("ACTIVE",publicView.view(link.token()).state());
+  var modules=new TenantModuleService(new PlatformTransactionExecutor(db.jdbc,db.manager),new PlatformStore(db.jdbc),
+   new TenantModuleStore(db.jdbc),new TenantModuleFlags(java.util.EnumSet.allOf(TenantModule.class)));
+  db.grantPlatformAdmin(db.accountB);
+  try {
+   modules.change(db.accountB,AssuranceLevel.AAL2,db.tenantA,
+    new TenantModuleModels.ChangeTenantModule("visits",false,0L,"Visitas suspensas no ensaio"));
+   assertEquals("PERMIT_LINK_UNAVAILABLE",assertThrows(BusinessProblem.class,()->publicView.view(link.token())).code(),
+    "Módulo de visitas desligado fecha o link público com a resposta neutra");
+   modules.change(db.accountB,AssuranceLevel.AAL2,db.tenantA,
+    new TenantModuleModels.ChangeTenantModule("visits",true,1L,"Visitas religadas no ensaio"));
+   assertEquals("ACTIVE",publicView.view(link.token()).state());
+  } finally { db.clearPlatformFixtures(); }
   db.assertEmptyContext();
  }
 

@@ -113,6 +113,37 @@ devolve só contagens e o nome/situação/início dos gestores, mas o banco não
 fechadas (contadores mantidos por gatilho ou função `SECURITY DEFINER` com dono sem acesso de escrita) ficam para
 decisão própria.
 
+## Módulos por condomínio (V045)
+
+A central libera ou suspende módulos de cada condomínio, dentro das flags globais (a flag desligada continua sem rota).
+
+| Operação | Rota | Capacidade |
+| --- | --- | --- |
+| Estado dos módulos: decisão da central (padrão liberado, versão 0), flag global e efeito real | `GET /v1/platform/tenants/{id}/modules` | `tenants.read` |
+| Liberar ou suspender um módulo pela versão lida, com motivo (3 a 500) | `PUT /v1/platform/tenants/{id}/modules` | `tenant_modules.manage` e `tenants.read` |
+
+- **Módulos**: `reservations`, `parcels`, `visits`, `announcements`, `requests`, `finance`, `access_credentials`,
+  `facial_access` — os mesmos grupos das flags `CP_*_ENABLED`. Unidades da portaria valem com encomendas **ou** visitas;
+  decisões de reserva e áreas comuns da gestão seguem o módulo de reservas; anexos seguem o módulo de pedidos.
+- **Toda rota de condomínio** (`/v1/tenants/**`) declara o módulo (`@RequiresTenantModule`) ou a isenção explícita com
+  motivo (`@TenantModuleExempt`: unidades, blocos, vínculos, importação, locação, auditoria, caixa interna e canal em
+  tempo real); um teste de arquitetura recusa rota sem nenhuma das duas.
+- **Padrão**: sem linha em `platform.tenant_modules` o condomínio segue liberado; nada muda até a central alterar.
+- **Efeito**: as rotas do módulo respondem `403 MODULE_DISABLED` no condomínio suspenso a partir da próxima requisição. A
+  conferência acontece no executor do condomínio (e no técnico do acesso facial), na mesma transação e **depois** do
+  vínculo: quem não tem acesso ao condomínio continua recebendo 404 sem saber do módulo. O link público de visita fica
+  indisponível com a mesma resposta neutra. `/v1/me` devolve `tenantModules` (módulos liberados por condomínio) para o
+  menu. Nada é apagado; o webhook do Asaas continua liquidando cobranças.
+- **Banco**: RLS forçado; gravação só com `tenant_modules.manage` e o próprio ator (`updated_by`), nascimento na versão
+  1 e cada mudança na versão seguinte (gatilho), sem DELETE; gatilho de restrição diferido exige no COMMIT o evento
+  `TENANT_MODULE_ENABLED/DISABLED` do mesmo ator, módulo e versão. `tenants.manage` deixou de gravar eventos
+  `TENANT_MODULE_*`. Leitura: plataforma, contexto do próprio condomínio, condomínios dos vínculos ativos da conta e
+  link de visita apresentado.
+- **Mudanças**: pedido igual ao estado atual devolve `applied=false` sem gravar; versão divergente com mudança real é
+  `409 TENANT_MODULE_CHANGED`. Mudanças do mesmo condomínio ficam em fila pela trava da linha do condomínio.
+- **Limites**: worker/outbox e sincronização do acesso facial ainda não consultam o módulo (tarefas já enfileiradas
+  seguem). Tela na central: fatia 6 do desenho.
+
 ## Tela web (`/central`, antes `/master`)
 
 A central administradora fica em `/central` (`/master/...` redireciona, preservando parâmetros; `/master/fila` virou

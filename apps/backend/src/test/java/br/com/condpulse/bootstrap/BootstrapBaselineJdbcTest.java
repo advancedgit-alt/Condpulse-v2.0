@@ -27,7 +27,32 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named = "CP_JDBC_TEST_OK", matches = "DISPOSABLE")
 class BootstrapBaselineJdbcTest {
     /** Migrations revisadas apos o baseline oficial 002; atualizar junto de cada nova migration. */
-    private static final List<Integer> POST_BASELINE_VERSIONS = List.of(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43);
+    /**
+     * Migrations revisadas depois do baseline oficial (V002): lidas dos arquivos empacotados em db/migration, sem número
+     * fixo no teste. Precisam começar em V003 e seguir sem lacuna (mesma regra dos guardas de migração).
+     */
+    private static final List<Integer> POST_BASELINE_VERSIONS = postBaselineVersions();
+    private static List<Integer> postBaselineVersions() {
+        try {
+            var resources = new org.springframework.core.io.support.PathMatchingResourcePatternResolver()
+                .getResources("classpath*:db/migration/V*__*.sql");
+            var versions = new java.util.ArrayList<Integer>();
+            for (var resource : resources) {
+                var name = java.util.Objects.requireNonNull(resource.getFilename());
+                var matcher = java.util.regex.Pattern.compile("V0*([0-9]+)__[a-z0-9_]+\\.sql").matcher(name);
+                if (!matcher.matches()) throw new IllegalStateException("Nome de migration fora do padrão: " + name);
+                int version = Integer.parseInt(matcher.group(1));
+                if (version > 2) versions.add(version);
+            }
+            versions.sort(null);
+            if (versions.isEmpty() || versions.getFirst() != 3) throw new IllegalStateException("Migrations após o baseline ausentes.");
+            for (int i = 1; i < versions.size(); i++)
+                if (versions.get(i) != versions.get(i - 1) + 1) throw new IllegalStateException("Lacuna na numeração: " + versions);
+            return List.copyOf(versions);
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Migrations empacotadas não puderam ser lidas.", error);
+        }
+    }
     private static final String URL = "jdbc:postgresql://localhost:5432/condpulse_bootstrap_ci";
     private static final String USER = "postgres";
     private static final String PASSWORD = "condpulse_ci_only";

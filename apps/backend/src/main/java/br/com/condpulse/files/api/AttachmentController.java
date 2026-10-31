@@ -1,5 +1,7 @@
 package br.com.condpulse.files.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.files.application.AttachmentModels;
 import br.com.condpulse.files.application.AttachmentService;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Anexos privados de pedido (CP-017), atrás de CP_FILES_ENABLED=false. Visibilidade decidida no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.files.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.REQUESTS)
 public class AttachmentController {
  private final AttachmentService service;
  public AttachmentController(AttachmentService service) { this.service=service; }

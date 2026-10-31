@@ -1,5 +1,6 @@
 package br.com.condpulse.realtime.api;
 
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.realtime.enabled",havingValue="true")
+@TenantModuleExempt("Canal de atualização da unidade: transversal, sem conteúdo de módulo.")
 public class RealtimeController {
  private final RealtimeService service;
  private final RealtimeHub hub;

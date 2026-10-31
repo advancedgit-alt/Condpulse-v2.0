@@ -1,5 +1,6 @@
 package br.com.condpulse.audit.api;
 
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import java.util.UUID;
 import br.com.condpulse.audit.application.AuditQuery;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.management.enabled",havingValue="true")
+@TenantModuleExempt("Auditoria do condomínio: transversal a todos os módulos.")
 public class AuditController {
  private final AuditQuery query;
  public AuditController(AuditQuery query) { this.query=query; }

@@ -1,5 +1,7 @@
 package br.com.condpulse.visits.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.visits.application.VisitModels;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Visitas e chegadas (CP-025/CP-026), atrás de CP_VISITS_ENABLED=false. Vínculo, capacidade e prazo no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.visits.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.VISITS)
 public class VisitController {
  private final VisitService service;
  public VisitController(VisitService service) { this.service=service; }

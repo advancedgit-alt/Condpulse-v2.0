@@ -1,5 +1,7 @@
 package br.com.condpulse.moves.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.time.Instant;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Mudança e entrega de móveis (CP-042), atrás de CP_REQUESTS_ENABLED. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.requests.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.REQUESTS)
 public class MoveController {
  private final MoveService service;
  public MoveController(MoveService service) { this.service=service; }

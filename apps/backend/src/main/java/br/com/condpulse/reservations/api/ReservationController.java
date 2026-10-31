@@ -1,5 +1,7 @@
 package br.com.condpulse.reservations.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.reservations.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.RESERVATIONS)
 public class ReservationController {
  private final ReservationService service;
  public ReservationController(ReservationService service) { this.service=service; }

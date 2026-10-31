@@ -47,6 +47,9 @@ public class CredentialSyncStore {
    where c.tenant_id=? and c.connector_id=?
     -- Vínculo vencido: nenhuma ativação nova (o equipamento já recebeu o mesmo limite de validade).
     and not (c.desired_state='ACTIVE' and c.valid_until is not null and c.valid_until<=clock_timestamp())
+    -- Sujeito restrito (V044): nenhuma ativação, mesmo que a revogação em cascata ainda não tenha alcançado a credencial.
+    and not (c.desired_state='ACTIVE' and exists(select 1 from cp.access_subjects su where su.tenant_id=c.tenant_id and su.id=c.subject_id
+     and su.status<>'ACTIVE'))
     and not (s.observed_version is not distinct from c.desired_version and s.observed_action is not distinct from cp.credential_action(c.desired_state))
     and (s.credential_id is null or s.attempted_version<>c.desired_version or s.attempted_action<>cp.credential_action(c.desired_state)
      or (s.outcome<>'REJECTED' and s.next_attempt_at<=clock_timestamp()))

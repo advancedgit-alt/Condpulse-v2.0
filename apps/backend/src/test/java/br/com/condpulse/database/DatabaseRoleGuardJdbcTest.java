@@ -119,6 +119,9 @@ class DatabaseRoleGuardJdbcTest {
   assertRefusedWith("GRANT DELETE ON cp.installation_acceptances TO cp_api","REVOKE DELETE ON cp.installation_acceptances FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(document) ON cp.access_policy_versions TO cp_api","REVOKE UPDATE(document) ON cp.access_policy_versions FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(status) ON cp.access_policy_validations TO cp_api","REVOKE UPDATE(status) ON cp.access_policy_validations FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(valid_until) ON cp.access_grants TO cp_api","REVOKE UPDATE(valid_until) ON cp.access_grants FROM cp_api",false);
+  assertRefusedWith("GRANT UPDATE(reason_code) ON cp.revocation_markers TO cp_api","REVOKE UPDATE(reason_code) ON cp.revocation_markers FROM cp_api",false);
+  assertRefusedWith("GRANT DELETE ON cp.revocation_markers TO cp_api","REVOKE DELETE ON cp.revocation_markers FROM cp_api",false);
   assertRefusedWith("GRANT UPDATE(direction) ON cp.device_events TO cp_worker","REVOKE UPDATE(direction) ON cp.device_events FROM cp_worker",true);
   assertRefusedWith("GRANT INSERT(unit_id) ON cp.device_events TO cp_worker","REVOKE INSERT(unit_id) ON cp.device_events FROM cp_worker",true);
   assertRefusedWith("GRANT DELETE ON cp.device_events TO cp_api","REVOKE DELETE ON cp.device_events FROM cp_api",false);

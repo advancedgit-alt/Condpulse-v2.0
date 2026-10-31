@@ -42,7 +42,20 @@ public final class PolicyModels {
 
  /** Somente cenário sintético; nunca reutilizado para abertura real. */
  public record SyntheticSubject(String context,String ageEvidence,Boolean permitActive,Boolean reservationActive,Boolean physicalCompanionVerified) {}
- public record SimulateRequest(String mode,UUID policyVersionId,UUID pointId,SyntheticSubject subject,Instant at) {}
+ /**
+  * mode SYNTHETIC (cenário inventado) ou AUTHORIZED_EXISTING_SUBJECT (sujeito e contexto reais do condomínio, V044: fatos
+  * atuais do cadastro, evidência de idade, direito derivado e revogações; o instante vale para horário e janela do direito).
+  */
+ public record SimulateRequest(String mode,UUID policyVersionId,UUID pointId,SyntheticSubject subject,Instant at,UUID subjectId,UUID contextId) {
+  public SimulateRequest(String mode,UUID policyVersionId,UUID pointId,SyntheticSubject subject,Instant at) { this(mode,policyVersionId,pointId,subject,at,null,null); }
+ }
+ /**
+  * Fatos reais de um sujeito para a simulação (V044), lidos na transação da gestão: nunca inventados pelo cliente.
+  * ageEvidence segue a mesma projeção da conferência de idade; grantCurrent: há direito vigente no instante para o
+  * contexto, a área e a revisão simulada; revoked: marca de revogação alcança o sujeito, o contexto ou o direito.
+  */
+ public record SubjectFacts(boolean found,boolean subjectActive,boolean contextCurrent,String contextKind,String sourceKind,String ageEvidence,
+   boolean permitActive,boolean reservationActive,boolean grantCurrent,boolean revoked) {}
  public record SimulationResult(String result,List<String> reasonCodes,String safeExplanation,UUID policyVersionId,Integer bindingRevision,
    List<String> missingCapabilities,boolean simulated,boolean hardwareCommandCreated) {}
 

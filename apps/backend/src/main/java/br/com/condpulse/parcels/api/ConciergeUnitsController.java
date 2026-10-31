@@ -1,5 +1,7 @@
 package br.com.condpulse.parcels.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.List;
 import java.util.UUID;
 import br.com.condpulse.identity.application.AssuranceLevel;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 // Comparação textual (como @ConditionalOnProperty com havingValue="true"): valor vazio ou não booleano não derruba a
 // inicialização e mantém a rota fora.
 @ConditionalOnExpression("'${condpulse.parcels.enabled:false}'.equalsIgnoreCase('true') or '${condpulse.visits.enabled:false}'.equalsIgnoreCase('true')")
+@RequiresTenantModule({TenantModule.PARCELS,TenantModule.VISITS})
 public class ConciergeUnitsController {
  private final ParcelService service;
  public ConciergeUnitsController(ParcelService service) { this.service=service; }

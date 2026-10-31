@@ -1,5 +1,7 @@
 package br.com.condpulse.accesspolicy.api;
 
+import br.com.condpulse.tenancy.application.RequiresTenantModule;
+import br.com.condpulse.tenancy.application.TenantModule;
 import java.util.UUID;
 import br.com.condpulse.accesspolicy.application.PolicyModels;
 import br.com.condpulse.accesspolicy.application.PolicyService;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Políticas de ingresso da gestão (policy.edit/policy.publish, AAL2) — AC-007/AC-008, V043. Validar e simular nunca acionam porta. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.facial-access.enabled",havingValue="true")
+@RequiresTenantModule(TenantModule.FACIAL_ACCESS)
 public class AccessPolicyController {
  private final PolicyService policies;
  public AccessPolicyController(PolicyService policies) { this.policies=policies; }
