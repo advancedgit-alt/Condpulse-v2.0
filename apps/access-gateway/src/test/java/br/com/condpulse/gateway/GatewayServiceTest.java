@@ -36,6 +36,7 @@ class GatewayServiceTest {
  private LocalCommandQueue queue;
  private EventOutbox outbox;
  private LocalDecisionEngine decisions;
+ private br.com.condpulse.gateway.central.DecisionOutbox decisionOutbox;
  private GatewayService service;
 
  @BeforeEach void setup() { build(ScriptedAdapter.all(),true,DecisionMode.DEVICE_LOCAL_ACL); }
@@ -53,7 +54,8 @@ class GatewayServiceTest {
   decisions=new LocalDecisionEngine(dir,clock,config);
   var registry=new CapabilityRegistry(config.profiles());
   var opens=new OpenDispatcher(dir,clock,config,registry,id->Optional.of(adapter));
-  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,opens,outbox,decisions,central,clock);
+  decisionOutbox=new br.com.condpulse.gateway.central.DecisionOutbox(dir,clock,100);
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,opens,outbox,decisions,decisionOutbox,central,clock);
  }
 
  @Test void aplicacaoAceitaEConfirmadaPelaLeituraDeVolta() {
@@ -98,7 +100,7 @@ class GatewayServiceTest {
   service.processQueues(10);
   var e=queue.get("r").orElseThrow();
   assertEquals(Status.NEEDS_READBACK,e.status());
-  assertEquals("READBACK_NOT_AVAILABLE",e.lastReason());
+  assertEquals("READBACK_CANNOT_PROVE",e.lastReason());
   assertEquals(1,adapter.calls.stream().filter("APPLY_RIGHTS"::equals).count());
  }
 
@@ -146,7 +148,7 @@ class GatewayServiceTest {
   };
   var registry=new CapabilityRegistry(config.profiles());
   service=new GatewayService(config,registry,Map.of("d1",mismatched),queue,new OpenDispatcher(dir,clock,config,registry,id->Optional.of(mismatched)),
-   outbox,decisions,central,clock);
+   outbox,decisions,decisionOutbox,central,clock);
   service.checkHealth();
   assertTrue(service.status("d1").orElseThrow().quarantined());
   service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,1,RIGHTS));
@@ -187,6 +189,8 @@ class GatewayServiceTest {
   assertTrue(ctx.decide("77","1").allow());
   clock.advance(Duration.ofSeconds(config.limits().maxPolicyAgeSeconds()+1));
   assertEquals(List.of("STALE_POLICY"),ctx.decide("77","1").reasonCodes());
+  assertTrue(central.decisions.isEmpty(),"telemetria fora do caminho síncrono da decisão");
+  assertTrue(service.forwardDecisions()>0);
   assertFalse(central.decisions.isEmpty());
   assertTrue(central.decisions.stream().filter(d->d.result()!=br.com.condpulse.gateway.central.CentralApiClient.DecisionResult.ALLOW)
    .noneMatch(br.com.condpulse.gateway.central.CentralApiClient.EdgeDecision::automaticActuationAllowed));
@@ -211,5 +215,93 @@ class GatewayServiceTest {
   adapter.inboundCapture=ctx->captured[0]=ctx;
   service.handleInbound("d1",new InboundEndpoint.Request("GET","/x",Map.of(),null,new byte[0],"127.0.0.1"));
   return captured[0];
+ }
+
+ // ----- achados de revisão (#129) -----
+
+ @Test void leituraIndisponivelEmNeedsReadbackMantemPendenciaSemReenviar() {
+  adapter.script(Operation.APPLY_RIGHTS,OperationResult.of(OperationState.UNKNOWN,"RESPONSE_NOT_RECEIVED"));
+  adapter.readStateThrows=true;
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
+  service.processQueues(10);
+  service.processQueues(10);
+  var e=queue.get("r").orElseThrow();
+  assertEquals(Status.NEEDS_READBACK,e.status());
+  assertEquals("READBACK_UNAVAILABLE",e.lastReason());
+  assertEquals(1,adapter.calls.stream().filter("APPLY_RIGHTS"::equals).count(),"leitura que falhou não autoriza reenvio");
+  adapter.readStateThrows=false;
+  adapter.rights.clear(); // leitura bem-sucedida mostra ausência: aí sim reenvia
+  service.processQueues(10);
+  assertEquals(2,adapter.calls.stream().filter("APPLY_RIGHTS"::equals).count());
+  assertEquals(OperationState.CONFIRMED,queue.get("r").orElseThrow().lastState());
+ }
+
+ @Test void credencialSoConfirmaComValorAplicadoNuncaPorContagem() {
+  central.materials.put("m1","123456".getBytes());
+  service.submit(command("c1","d1","s1",CommandType.SET_CREDENTIAL,1,Map.of("kind","PIN","materialRef","m1")));
+  service.processQueues(10);
+  assertEquals(OperationState.APPLIED_UNVERIFIED,queue.get("c1").orElseThrow().lastState(),"adaptador que só conta não confirma");
+  adapter.credentialMatch=Optional.of(true);
+  service.submit(command("c2","d1","s1",CommandType.SET_CREDENTIAL,2,Map.of("kind","PIN","materialRef","m1")));
+  service.processQueues(10);
+  assertEquals(OperationState.CONFIRMED,queue.get("c2").orElseThrow().lastState());
+ }
+
+ @Test void facePresenteNaoConfirmaSubstituicao() {
+  central.materials.put("f1",TestSupport.syntheticJpeg());
+  adapter.readStates.add(new AppliedState(OperationState.CONFIRMED,null,true,java.util.Set.of(),null,true));
+  service.submit(command("f","d1","s1",CommandType.ENROLL_FACE,1,Map.of("materialRef","f1")));
+  service.processQueues(10);
+  assertEquals(OperationState.APPLIED_UNVERIFIED,queue.get("f").orElseThrow().lastState());
+ }
+
+ @Test void resultadoTerminalNaoPublicadoFicaPendenteESoORelatorioEReenviado() {
+  central.available=false;
+  service.submit(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador")));
+  service.processQueues(10);
+  assertEquals(Status.DONE,queue.get("p").orElseThrow().status());
+  assertEquals(1,queue.unreported().size());
+  queue.close();
+  queue=new LocalCommandQueue(dir,clock,100,200);
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir,clock,config,registry,id->Optional.of(adapter)),
+   outbox,decisions,decisionOutbox,central,clock);
+  assertEquals(1,queue.unreported().size(),"pendência de publicação sobrevive a reinício");
+  long calls=adapter.calls.size();
+  central.available=true;
+  assertEquals(1,service.publishPendingResults());
+  assertEquals(calls,adapter.calls.size(),"nenhuma operação física repetida");
+  assertEquals(List.of("p"),central.results.stream().map(r->r.commandId()).toList());
+  assertTrue(queue.unreported().isEmpty());
+ }
+
+ @Test void telemetriaDeDecisaoSobreviveAReinicioAteOAceite() {
+  build(ScriptedAdapter.all(),true,DecisionMode.EDGE_ONLINE);
+  service.submit(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador","nativeUserRef","77")));
+  decisions.markSynced(clock.instant());
+  decisions.observeClockSkew(Duration.ZERO);
+  context().decide("77","1");
+  central.available=false;
+  assertEquals(0,service.forwardDecisions());
+  decisionOutbox.close();
+  decisionOutbox=new br.com.condpulse.gateway.central.DecisionOutbox(dir,clock,100);
+  assertEquals(1,decisionOutbox.pendingCount());
+  central.available=true;
+  assertEquals(1,decisionOutbox.flush(central));
+  assertEquals(0,decisionOutbox.pendingCount());
+ }
+
+ @Test void diarioTruncaCaudaIncompletaAntesDeAcrescentar() throws Exception {
+  var file=dir.resolve("teste.jsonl");
+  java.nio.file.Files.writeString(file,"{\"a\":1}\n{\"b\":");
+  try(var j=new br.com.condpulse.gateway.journal.Journal(file)) { j.append(Map.of("c",3L)); }
+  var seen=new java.util.ArrayList<Map<String,Object>>();
+  try(var j=new br.com.condpulse.gateway.journal.Journal(file)) { j.replay(seen::add); }
+  assertEquals(List.of(Map.of("a",1L),Map.of("c",3L)),seen);
+  java.nio.file.Files.writeString(file,"{\"a\":1}\n{\"b\":2\n",java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+  try(var j=new br.com.condpulse.gateway.journal.Journal(file)) { j.append(Map.of("d",4L)); }
+  seen.clear();
+  try(var j=new br.com.condpulse.gateway.journal.Journal(file)) { j.replay(seen::add); }
+  assertEquals(List.of(Map.of("a",1L),Map.of("d",4L)),seen,"última linha inválida também é cortada");
  }
 }

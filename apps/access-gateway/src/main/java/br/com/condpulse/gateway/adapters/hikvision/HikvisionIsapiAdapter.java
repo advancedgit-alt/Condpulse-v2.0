@@ -170,7 +170,11 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
 
  // ----- direitos -----
 
- /** doorNo do canal (nativeChannel numérico) e planTemplateNo da faixa (nativeSchedules). */
+ /**
+  * Chaves: {@code door:<doorNo>:plan:<planTemplateNo>} e, quando houver validade, {@code valid:<início>/<fim>} em
+  * segundos epoch. Validade só é representável com início e fim (Valid.beginTime/endTime, HK12 §14/§15); só um dos
+  * dois não é representável e a operação é recusada.
+  */
  @Override public Optional<Set<String>> rightKeys(RightsSpec rights) {
   var keys=new HashSet<String>();
   for(Right r:rights.rights()) {
@@ -179,23 +183,36 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
    if(channel.isEmpty() || !channel.get().nativeChannel().matches("\\d{1,3}") || plan==null || !plan.matches("\\d{1,4}")) return Optional.empty();
    keys.add("door:"+channel.get().nativeChannel()+":plan:"+plan);
   }
+  if((rights.validFrom()==null)!=(rights.validUntil()==null)) return Optional.empty();
+  if(rights.validFrom()!=null) keys.add(validKey(rights.validFrom(),rights.validUntil()));
   return Optional.of(keys);
  }
 
+ static String validKey(Instant begin,Instant end) {
+  return "valid:"+begin.truncatedTo(ChronoUnit.SECONDS).getEpochSecond()+"/"+end.truncatedTo(ChronoUnit.SECONDS).getEpochSecond();
+ }
+
+ /**
+  * Direitos e validade no mesmo UserInfo/Modify (§15): no modo DEVICE_LOCAL_ACL é o equipamento que expira o
+  * direito. Validade parcial (só início ou só fim) é recusada (VALIDITY_NOT_REPRESENTABLE).
+  */
  @Override public OperationResult applyRights(RightsSpec rights) {
   if(!local()) return OperationResult.notSupported(Operation.APPLY_RIGHTS);
+  if((rights.validFrom()==null)!=(rights.validUntil()==null)) return OperationResult.of(OperationState.FAILED,"VALIDITY_NOT_REPRESENTABLE");
   var keys=rightKeys(rights);
-  if(keys.isEmpty() || keys.get().isEmpty()) return OperationResult.of(OperationState.FAILED,"RIGHT_NOT_REPRESENTABLE");
+  if(keys.isEmpty() || keys.get().stream().noneMatch(k->k.startsWith("door:"))) return OperationResult.of(OperationState.FAILED,"RIGHT_NOT_REPRESENTABLE");
   try {
    var existing=search(rights.subjectRef());
    if(existing.isEmpty()) return OperationResult.of(OperationState.FAILED,"PERSON_NOT_ON_DEVICE");
    var plans=new TreeMap<Integer,TreeSet<Integer>>();
    for(String k:keys.get()) {
+    if(!k.startsWith("door:")) continue;
     String[] p=k.split(":");
     plans.computeIfAbsent(Integer.parseInt(p[1]),x->new TreeSet<>()).add(Integer.parseInt(p[3]));
    }
    var info=new LinkedHashMap<String,Object>();
    info.put("employeeNo",rights.subjectRef());
+   if(rights.validFrom()!=null) info.put("Valid",valid(rights.validFrom(),rights.validUntil()));
    info.put("doorRight",String.join(",",plans.keySet().stream().map(String::valueOf).toList()));
    var rightPlan=new ArrayList<Object>();
    for(var e:plans.entrySet()) {
@@ -209,24 +226,59 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   } catch(DeviceCallException e) { return failure(e); }
  }
 
+ private Map<String,Object> valid(Instant begin,Instant end) {
+  var valid=new LinkedHashMap<String,Object>();
+  valid.put("enable",true);
+  valid.put("beginTime",LOCAL.format(begin.truncatedTo(ChronoUnit.SECONDS).atZone(context.zone())));
+  valid.put("endTime",LOCAL.format(end.truncatedTo(ChronoUnit.SECONDS).atZone(context.zone())));
+  valid.put("timeType","local");
+  return valid;
+ }
+
+ /**
+  * Lê doorRight, RightPlan e Valid. RightPlan ausente não prova ausência de acesso: a fonte de verdade é doorRight.
+  * Sem doorRight, doorRight vazio, porta sem plano lido ou validade ilegível, rightKeys é null (desconhecido) — um
+  * conjunto vazio nunca é inferido; a revogação só se confirma pela pessoa ausente (busca NO MATCH).
+  */
  @Override public AppliedState readState(String subjectRef) {
   if(!local()) return super.readState(subjectRef);
   try {
    var found=search(subjectRef);
    if(found.isEmpty()) return new AppliedState(OperationState.CONFIRMED,null,false,Set.of(),null,null);
-   var user=found.get();
-   var keys=new HashSet<String>();
-   var plans=Json.list(user.get("RightPlan"));
-   if(plans!=null) for(Object o:plans) {
-    var p=Json.map(o);
-    String door=String.valueOf(Json.longValue(p,"doorNo"));
-    String templates=Json.string(p,"planTemplateNo");
-    if(templates!=null) for(String t:templates.split(",")) if(!t.isBlank()) keys.add("door:"+door+":plan:"+t.trim());
-   }
-   return new AppliedState(OperationState.CONFIRMED,null,true,keys,null,null);
+   return new AppliedState(OperationState.CONFIRMED,null,true,observedKeys(found.get()),null,null);
   } catch(DeviceCallException e) {
    return AppliedState.unavailable(e.failure()==DeviceHttpClient.Failure.NOT_SENT?OperationState.FAILED:OperationState.UNKNOWN,e.getMessage());
   } catch(Json.JsonException e) { return AppliedState.unavailable(OperationState.FAILED,"INVALID_RESPONSE"); }
+ }
+
+ static Set<String> observedKeys(Map<String,Object> user) {
+  String doorRight=Json.string(user,"doorRight");
+  if(doorRight==null || doorRight.isBlank()) return null;
+  var plansByDoor=new java.util.HashMap<String,List<String>>();
+  var plans=Json.list(user.get("RightPlan"));
+  if(plans!=null) for(Object o:plans) {
+   var p=Json.map(o);
+   Long door=Json.longValue(p,"doorNo");
+   String templates=Json.string(p,"planTemplateNo");
+   if(door==null || templates==null) return null;
+   var list=new ArrayList<String>();
+   for(String t:templates.split(",")) if(!t.isBlank()) list.add(t.trim());
+   plansByDoor.put(String.valueOf(door),list);
+  }
+  var keys=new HashSet<String>();
+  for(String door:doorRight.split(",")) {
+   String d=door.trim();
+   if(!d.matches("\\d{1,3}")) return null;
+   var list=plansByDoor.get(d);
+   if(list==null || list.isEmpty()) return null; // porta com direito e plano não lido: desconhecido
+   for(String t:list) keys.add("door:"+d+":plan:"+t);
+  }
+  var valid=Json.map(user.get("Valid"));
+  if(valid!=null && Boolean.TRUE.equals(Json.bool(valid,"enable"))) {
+   try { keys.add(validKey(parseLocal(Json.string(valid,"beginTime")),parseLocal(Json.string(valid,"endTime")))); }
+   catch(RuntimeException e) { return null; }
+  }
+  return keys;
  }
 
  @Override public HealthReport health() {
