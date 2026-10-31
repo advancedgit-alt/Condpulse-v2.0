@@ -49,7 +49,7 @@ roda nos dois modos.
 - **NUVEM** — o aparelho se conecta de fora para a plataforma pelo modo nativo da marca. O núcleo roda como serviço
   central e só aceita conexão autenticada por aparelho e condomínio: cada aparelho tem token próprio no cofre
   (`inboundTokenRef`, 32–128 caracteres) que compõe o caminho configurado nele (`/d/<token>/...`). Token errado ou
-  ausente responde 404, sem distinção. Recomenda-se TLS no servidor de entrada (`inbound.tlsKeystorePath`).
+  ausente responde 404, sem distinção. O mesmo token em dois aparelhos é recusado na partida, antes de abrir a porta. Recomenda-se TLS no servidor de entrada (`inbound.tlsKeystorePath`).
   **Não publicar na Fly nem em outro provedor sem OK do responsável (app novo tem custo).**
 
 | Marca | LOCAL | NUVEM | Fonte do modo nuvem |

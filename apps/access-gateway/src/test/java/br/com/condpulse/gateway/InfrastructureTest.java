@@ -107,6 +107,27 @@ class InfrastructureTest {
   }
  }
 
+ @Test void servidorDeEntradaRecusaTokenCompartilhadoEntreEquipamentos() throws Exception {
+  var d1=TestSupport.device("d1",Brand.INTELBRAS,ConnectionMode.NUVEM,DecisionMode.EDGE_ONLINE,null,List.of(TestSupport.channel("c1","1",null)),Map.of(),Map.of(),false);
+  var d2=TestSupport.device("d2",Brand.INTELBRAS,ConnectionMode.NUVEM,DecisionMode.EDGE_ONLINE,null,List.of(TestSupport.channel("c2","1",null)),Map.of(),Map.of(),false);
+  var config=TestSupport.config(List.of(d1,d2),true,br.com.condpulse.gateway.config.GatewayConfig.CondoOpenPolicy.closed());
+  String shared="tokensinteticocompartilhado_0123456789ab";
+  var seen=new java.util.ArrayList<String>();
+  var error=assertThrows(IllegalStateException.class,()->new InboundServer(config,TestSupport.secrets(Map.of("token-d1",shared,"token-d2",shared)),
+   (id,req)->{ seen.add(id); return InboundEndpoint.Response.json("{}"); }),"mesmo token resolvido para dois equipamentos tornaria a origem ambígua");
+  assertTrue(error.getMessage().contains("Token de entrada repetido"),error.getMessage());
+  assertTrue(seen.isEmpty());
+  String t1="tokensinteticod1_0123456789abcdef0123", t2="tokensinteticod2_0123456789abcdef0123";
+  try(var server=new InboundServer(config,TestSupport.secrets(Map.of("token-d1",t1,"token-d2",t2)),(id,req)->{ seen.add(id); return InboundEndpoint.Response.json("{}"); })) {
+   server.start();
+   var client=HttpClient.newHttpClient();
+   String base="http://127.0.0.1:"+server.port();
+   assertEquals(200,client.send(HttpRequest.newBuilder(URI.create(base+"/d/"+t2+"/keepalive")).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+   assertEquals(200,client.send(HttpRequest.newBuilder(URI.create(base+"/d/"+t1+"/keepalive")).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+   assertEquals(List.of("d2","d1"),seen,"tokens distintos resolvem cada um o seu equipamento");
+  }
+ }
+
  @Test void clienteDoEquipamentoSoUsaCaminhosDaListaENaoRepete() throws Exception {
   try(var fake=new FakeDeviceServer()) {
    fake.on("POST","/ok.cgi",Reply.text("OK")).on("POST","/lento.cgi",Reply.text("OK").delayed(1500));
