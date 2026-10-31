@@ -137,7 +137,8 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
     if("failed".equals(status)) return OperationResult.of(OperationState.FAILED,"HIKVISION_DELETE_FAILED");
     pause();
    }
-   return OperationResult.of(OperationState.ACK,"DELETE_IN_PROGRESS");
+   // Ainda em processamento após as consultas: resultado incerto; a fila guarda NEEDS_READBACK e acompanha.
+   return OperationResult.of(OperationState.UNKNOWN,"DELETE_IN_PROGRESS");
   } catch(DeviceCallException e) { return failure(e); }
  }
 
@@ -251,7 +252,7 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   } catch(Json.JsonException e) { return AppliedState.unavailable(OperationState.FAILED,"INVALID_RESPONSE"); }
  }
 
- static Set<String> observedKeys(Map<String,Object> user) {
+ Set<String> observedKeys(Map<String,Object> user) {
   String doorRight=Json.string(user,"doorRight");
   if(doorRight==null || doorRight.isBlank()) return null;
   var plansByDoor=new java.util.HashMap<String,List<String>>();
@@ -275,7 +276,8 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   }
   var valid=Json.map(user.get("Valid"));
   if(valid!=null && Boolean.TRUE.equals(Json.bool(valid,"enable"))) {
-   try { keys.add(validKey(parseLocal(Json.string(valid,"beginTime")),parseLocal(Json.string(valid,"endTime")))); }
+   String type=Json.string(valid,"timeType");
+   try { keys.add(validKey(parseValid(Json.string(valid,"beginTime"),type),parseValid(Json.string(valid,"endTime"),type))); }
    catch(RuntimeException e) { return null; }
   }
   return keys;
@@ -330,5 +332,14 @@ public final class HikvisionIsapiAdapter extends BaseAdapter {
   try { Thread.sleep(200); } catch(InterruptedException e) { Thread.currentThread().interrupt(); }
  }
 
- static Instant parseLocal(String text) { return java.time.OffsetDateTime.parse(text,LOCAL).toInstant(); }
+ /**
+  * Horário do Valid (HK12 §14/§15): com offset é absoluto; sem offset e timeType "local" (ou ausente), é horário
+  * local do equipamento, interpretado no fuso do condomínio. Outro timeType sem offset não é interpretado.
+  */
+ Instant parseValid(String text,String timeType) {
+  if(text==null) throw new IllegalArgumentException("Horário ausente.");
+  if(text.matches(".*(Z|[+-]\\d{2}:\\d{2})$")) return java.time.OffsetDateTime.parse(text).toInstant();
+  if(timeType!=null && !"local".equals(timeType)) throw new IllegalArgumentException("timeType sem offset não interpretável.");
+  return java.time.LocalDateTime.parse(text).atZone(context.zone()).toInstant();
+ }
 }
