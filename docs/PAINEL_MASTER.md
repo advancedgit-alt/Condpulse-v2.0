@@ -149,8 +149,13 @@ A central libera ou suspende módulos de cada condomínio, dentro das flags glob
 
 A central administradora fica em `/central` (`/master/...` redireciona, preservando parâmetros; `/master/fila` virou
 `/central/operacao`). Depois do login, conta só de plataforma vai direto à central; conta com plataforma e condomínio vê
-o atalho da central no seletor `/entrada`. Seções futuras (contas e acessos, chaves e integrações, acesso facial)
-aparecem desabilitadas, sem rota, até o backend existir. A tela consulta
+o atalho da central no seletor `/entrada`. Seções futuras (contas e acessos, chaves e integrações) aparecem
+desabilitadas, sem rota, até o backend existir. **Acesso facial** (`/central/facial`, com `access_catalog.manage`; sem a
+capacidade ou com a flag desligada continua "em breve"): catálogo de modelos por fabricante e perfil documental
+(fontes oficiais; só `https` vira link), homologações por modelo, dossiê candidato (combinação exata, 12 capacidades
+documentada/observada, 10 limites, evidências por identificador) e decisão do MASTER (`homologation.approve`) pela
+versão lida, nas transições do banco, com evidência obrigatória na aprovação e só capacidades observadas. Gateways
+ficam "em breve" (sem API na central). Nenhuma senha, token ou segredo de equipamento é pedido ou exibido. A tela consulta
 `/v1/platform/session`; conta sem papel vê "Área restrita" sem nenhum dado da plataforma; flag desligada mostra
 "Painel indisponível"; sem AAL2 a tela cadastra/verifica o autenticador antes de qualquer outra rota. Seções:
 Condomínios (lista com estado, fuso, versão, origem, recibo do onboarding, uso agregado e assinatura; "Novo
