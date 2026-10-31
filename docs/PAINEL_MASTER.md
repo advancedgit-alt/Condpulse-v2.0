@@ -124,7 +124,10 @@ A central libera ou suspende módulos de cada condomínio, dentro das flags glob
 
 - **Módulos**: `reservations`, `parcels`, `visits`, `announcements`, `requests`, `finance`, `access_credentials`,
   `facial_access` — os mesmos grupos das flags `CP_*_ENABLED`. Unidades da portaria valem com encomendas **ou** visitas;
-  decisões de reserva da gestão seguem o módulo de reservas.
+  decisões de reserva e áreas comuns da gestão seguem o módulo de reservas; anexos seguem o módulo de pedidos.
+- **Toda rota de condomínio** (`/v1/tenants/**`) declara o módulo (`@RequiresTenantModule`) ou a isenção explícita com
+  motivo (`@TenantModuleExempt`: unidades, blocos, vínculos, importação, locação, auditoria, caixa interna e canal em
+  tempo real); um teste de arquitetura recusa rota sem nenhuma das duas.
 - **Padrão**: sem linha em `platform.tenant_modules` o condomínio segue liberado; nada muda até a central alterar.
 - **Efeito**: as rotas do módulo respondem `403 MODULE_DISABLED` no condomínio suspenso a partir da próxima requisição. A
   conferência acontece no executor do condomínio (e no técnico do acesso facial), na mesma transação e **depois** do

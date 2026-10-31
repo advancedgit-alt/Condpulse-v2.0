@@ -3,6 +3,7 @@ package br.com.condpulse.tenancy.api;
 import java.util.EnumSet;
 import br.com.condpulse.tenancy.application.RequiresTenantModule;
 import br.com.condpulse.tenancy.application.TenantModule;
+import br.com.condpulse.tenancy.application.TenantModuleExempt;
 import br.com.condpulse.tenancy.application.TenantModuleFlags;
 import br.com.condpulse.tenancy.application.TenantModuleGate;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,6 +47,8 @@ public class TenantModuleWebConfiguration implements WebMvcConfigurer {
  static EnumSet<TenantModule> requiredFor(Object handler,TenantModuleFlags flags) {
   if(!(handler instanceof HandlerMethod method)) return null;
   RequiresTenantModule annotation=method.getMethodAnnotation(RequiresTenantModule.class);
+  // Isenção no método vence o módulo declarado na classe.
+  if(annotation==null && method.hasMethodAnnotation(TenantModuleExempt.class)) return null;
   if(annotation==null) annotation=method.getBeanType().getAnnotation(RequiresTenantModule.class);
   if(annotation==null) return null;
   var declared=EnumSet.noneOf(TenantModule.class);

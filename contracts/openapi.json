@@ -1786,7 +1786,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           },
           "404": {
             "description": "Recurso não disponível ao ator"
@@ -1867,7 +1867,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           },
           "404": {
             "description": "Recurso não disponível ao ator"
@@ -1959,7 +1959,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           },
           "404": {
             "description": "Recurso não disponível ao ator"
@@ -2992,7 +2992,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido)"
+            "description": "Acesso negado, STAFF_ACCESS_DENIED ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           },
           "404": {
             "description": "Recurso não disponível ao ator"
@@ -8425,6 +8425,9 @@
           },
           "503": {
             "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           }
         }
       }
@@ -8494,7 +8497,7 @@
             "description": "Autenticação necessária"
           },
           "403": {
-            "description": "ATTACHMENT_NOT_OWNER"
+            "description": "ATTACHMENT_NOT_OWNER; MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           },
           "404": {
             "description": "ATTACHMENT_NOT_FOUND ou TENANT_ACCESS_DENIED"
@@ -8580,6 +8583,9 @@
           },
           "503": {
             "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           }
         }
       }
@@ -8644,6 +8650,9 @@
           },
           "503": {
             "description": "ATTACHMENT_STORAGE_UNAVAILABLE ou ATTACHMENT_DEPENDENCY_UNAVAILABLE (tente novamente)"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
           }
         }
       }
