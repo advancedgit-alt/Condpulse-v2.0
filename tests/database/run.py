@@ -4379,8 +4379,9 @@ def publication_checks():
     query(mm + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{SRS}','{TA}','ACCOUNT','{RS}'); "
           f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,created_by) "
           f"VALUES('{CRS}','{TA}','{SRS}','RESIDENT','MEMBERSHIP','{MRS}','{MG}')", **as_mgr)
-    CF5, G0 = "45300000-0000-4000-8000-000000000005", "45700000-0000-4000-8000-000000000000"
-    for i, cf in enumerate((CF2, CF3, CF4, CF5)):
+    CF5, CF6, G0, G5 = ("45300000-0000-4000-8000-000000000005", "45300000-0000-4000-8000-000000000006",
+                        "45700000-0000-4000-8000-000000000000", "45700000-0000-4000-8000-000000000005")
+    for i, cf in enumerate((CF2, CF3, CF4, CF5, CF6)):
         query(mm + f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,functional_authorization_ref,approved_by_account_id,"
               f"valid_until,created_by) VALUES('{cf}','{TA}','{SRS}','EMPLOYEE','FUNCTIONAL_AUTHORIZATION','autorizacao-publicacao-{i}','{MG}',"
               f"now()+interval '10 days','{MG}')", **as_mgr)
@@ -4401,9 +4402,9 @@ def publication_checks():
     expect(value(f"select cp.policy_full_time('{policy_doc('06:00','22:00')}'::jsonb)::text||cp.policy_full_time('{policy_doc('00:00','24:00')}'::jsonb)::text")
            == "falsetrue", "so regra de tempo integral e representavel")
     query(both + grant(G0, functional=CF5, version=V0), **as_mgr)
-    refused = query(both + plan(), check=False, **as_mgr)
-    expect(refused.returncode != 0 and "23514" in refused.stderr and "SCHEDULE_NOT_REPRESENTABLE" in refused.stderr,
-           "regra com janela semanal nao vira APPLY_RIGHTS continuo")
+    expect(value(both + f"select jsonb_array_length(cp.rights_entries('{TA}','{SRS}','{DV}'))", **as_mgr) == "0",
+           "direito de regra com janela semanal fica fora do documento (nunca acesso continuo)")
+    expect(error(both + plan(), "23514", **as_mgr), "regra com janela semanal nao vira APPLY_RIGHTS")
     expect(value(f"select count(*) from cp.rights_publications where subject_id='{SRS}'") == "0", "nada publicado para a regra com horario")
     query(both + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G0}','MANUAL_REVOCATION')",
           **as_mgr)
@@ -4464,12 +4465,19 @@ def publication_checks():
     query(both + plan(), **as_mgr)
     J4 = value(latest.format("id"))
     expect(value(f"select priority from cp.rights_publications where id='{J4}'") == "1", "ampliacao pura sobre o confirmado e prioridade 1")
-    # Bloqueio: REVOKE_ALL supera a ampliacao pendente (um so trabalho em aberto por destino).
+    # Direitos de tempo integral substituidos por direito de regra com horario (Codex P1): o documento compilado retira o
+    # publicado (REVOKE_RIGHTS, prioridade 0) e o novo direito nao entra.
+    query(both + grant(G5, functional=CF6, version=V0) + "; " + " ".join(
+          f"UPDATE cp.access_grants SET status='SUPERSEDED',status_reason_code='POLICY_REDERIVED',version=version+1 WHERE id='{g}';" for g in (G2, G3, G4)), **as_mgr)
+    query(both + plan(), **as_mgr)
+    expect(value(latest.format("action||':'||priority||':'||jsonb_array_length(document->'entries')")) == "REVOKE_RIGHTS:0:0",
+           "regra com horario retira o acesso continuo ja publicado")
+    # Bloqueio: REVOKE_ALL supera a retirada pendente (um so trabalho em aberto por destino).
     query(mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
     expect(value(latest.format("action||':'||priority||':'||array_to_string(array(select jsonb_array_elements_text(document->'coveredMethods')),',')"))
            == "REVOKE_ALL:0:FACE,CARD,PIN,QR,INTERMEDIARY_GRANT", "bloqueio publica REVOKE_ALL de todos os metodos")
     expect(value(f"select count(*) filter (where state='SUPERSEDED')||':'||count(*) filter (where state not in ('CONFIRMED','SUPERSEDED')) "
-                 f"from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}'") == "2:1", "um so trabalho em aberto por destino")
+                 f"from cp.rights_publications where subject_id='{SRS}' and device_id='{DV}'") == "3:1", "um so trabalho em aberto por destino")
     expect(value(f"select count(*) from cp.rights_publications where subject_id='{SRS}' and device_id='{DX}' and action='REVOKE_ALL'") == "1",
            "bloqueio alcanca todos os destinos publicados")
     expect(error(f"UPDATE cp.rights_publications SET state='CONFIRMED',confirmation_level='STATE_READ',observed_hash=document_hash,version=version+1 WHERE id='{J4}'",

@@ -282,14 +282,29 @@ class AccessGrantJdbcTest {
  @Test void restrictedScheduleIsNeverPublishedAsContinuousAccess() throws Exception {
   var inst=fixture.commissioned(MANAGER,MASTER,APPROVED,"4.5.3");
   String zone=db.adminString("select time_zone from platform.tenants where id=?",db.tenantA);
-  UUID version=approvedPolicy(inst.area(),rule(zone,inst.area(),List.of("RESIDENT"),"DENY","NOT_REQUIRED","06:00","22:00"));
+  UUID fullTime=approvedPolicy(inst.area(),rule(zone,inst.area()));
+  UUID policyId=policyOf(fullTime);
   subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
-  var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyOf(version),new GrantModels.DeriveRequest(version));
-  assertEquals(2,derived.created(),derived.toString());
-  assertEquals(0,derived.publication().created());
+  var first=grants.derive(MANAGER,db.tenantA,AAL2,policyId,new GrantModels.DeriveRequest(fullTime));
+  assertEquals(2,first.publication().created(),"Tempo integral publica");
+  // Nova revisão com janela semanal: os direitos antigos são substituídos e o documento publicado é retirado; os novos
+  // ficam fora do documento (nunca acesso contínuo) e a exclusão é relatada por destino.
+  UUID restricted=UUID.randomUUID();
+  policies.createVersion(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.CreateVersion(restricted,
+   rule(zone,inst.area(),List.of("RESIDENT"),"DENY","NOT_REQUIRED","06:00","22:00"),"Regra com horario ficticia"));
+  var validation=policies.validate(MANAGER,db.tenantA,AAL2,policyId,new PolicyModels.ValidateRequest(restricted));
+  assertEquals("VALIDATED",validation.status(),validation.issues().toString());
+  long v=policies.versions(MANAGER,db.tenantA,AAL2,policyId).versions().stream().filter(x->restricted.equals(x.versionId())).findFirst().orElseThrow().version();
+  policies.approve(MANAGER,db.tenantA,AAL2,policyId,restricted,new PolicyModels.VersionAction(v));
+  var derived=grants.derive(MANAGER,db.tenantA,AAL2,policyId,new GrantModels.DeriveRequest(restricted));
+  assertEquals(2,derived.created(),derived.toString()); assertEquals(2,derived.superseded());
   assertEquals(Map.of("SCHEDULE_NOT_REPRESENTABLE",2),derived.publication().failedByReason());
   assertEquals(inst.device(),derived.publication().failedSample().getFirst().deviceId());
-  assertEquals(0,publications.publications(MANAGER,db.tenantA,AAL2,null,null,null).summary().total(),"Nenhum APPLY_RIGHTS contínuo");
+  assertEquals(2,derived.publication().created(),"Retirada do documento antigo publicada");
+  for(var p:publications.publications(MANAGER,db.tenantA,AAL2,derived.publication().operationId(),null,null).publications()) {
+   assertEquals("REVOKE_RIGHTS",p.action()); assertEquals(0,p.priority()); assertEquals(0,p.entries());
+  }
+  assertFalse(publications.publications(MANAGER,db.tenantA,AAL2,first.publication().operationId(),null,null).summary().allConfirmed());
   db.assertEmptyContext();
  }
 

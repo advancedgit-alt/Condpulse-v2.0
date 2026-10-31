@@ -89,9 +89,9 @@ REVOKE ALL ON FUNCTION cp.rights_targets(uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cp.rights_targets(uuid,uuid) TO cp_api;
 
 -- Horário: o documento ainda não representa janelas semanais nem fuso (o contrato do gateway vem na fatia seguinte).
--- Só regra de tempo integral (uma janela de 7 dias, 00:00-24:00, sem virada) é publicável; qualquer outra é recusada
--- (SCHEDULE_NOT_REPRESENTABLE) ao aplicar, nunca publicada como acesso contínuo; retirar continua sempre possível.
--- Mesmo critério de PolicyEngine.fullTime.
+-- Só direito de regra de tempo integral (uma janela de 7 dias, 00:00-24:00, sem virada) entra no documento; o de regra
+-- com horário fica fora (falha fechada: nunca vira acesso contínuo) e o documento compilado retira o que estava
+-- publicado. O planejador relata a exclusão (SCHEDULE_NOT_REPRESENTABLE). Mesmo critério de PolicyEngine.fullTime.
 CREATE FUNCTION cp.policy_full_time(doc jsonb) RETURNS boolean
 LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog
 AS $$ SELECT coalesce(jsonb_typeof(doc->'weeklyWindows')='array' AND EXISTS(SELECT 1 FROM jsonb_array_elements(doc->'weeklyWindows') w
@@ -112,6 +112,8 @@ AS $$ SELECT coalesce(jsonb_agg(jsonb_build_object('grantId',x.grant_id,'areaId'
    ORDER BY x.grant_id,x.point_id,x.direction,x.device_role),'[]'::jsonb)
   FROM cp.rights_targets(target_tenant,target_subject) x
   JOIN cp.access_devices d ON d.tenant_id=target_tenant AND d.id=x.device_id AND d.status='ACTIVE'
+  JOIN cp.access_grants g ON g.tenant_id=target_tenant AND g.id=x.grant_id
+  JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id AND cp.policy_full_time(v.document)
   WHERE x.device_id=target_device AND x.valid_until>clock_timestamp()
    AND cp.access_grant_current(target_tenant,x.grant_id,greatest(clock_timestamp(),x.valid_from)) $$;
 REVOKE ALL ON FUNCTION cp.rights_entries(uuid,uuid,uuid) FROM PUBLIC;
@@ -204,11 +206,6 @@ BEGIN
   END IF;
   doc:=cp.rights_compiled(NEW.tenant_id,NEW.subject_id,NEW.device_id);
   IF doc IS NULL THEN RAISE EXCEPTION 'sujeito inexistente' USING ERRCODE='23503'; END IF;
-  IF doc->>'action'='APPLY_RIGHTS' AND EXISTS(SELECT 1 FROM jsonb_array_elements(doc->'entries') e JOIN cp.access_grants g ON g.tenant_id=NEW.tenant_id
-    AND g.id=(e->>'grantId')::uuid LEFT JOIN cp.access_policy_versions v ON v.tenant_id=g.tenant_id AND v.id=g.policy_version_id
-    WHERE NOT coalesce(cp.policy_full_time(v.document),false)) THEN
-   RAISE EXCEPTION 'SCHEDULE_NOT_REPRESENTABLE: regra com horário que o documento não representa' USING ERRCODE='23514';
-  END IF;
   IF jsonb_array_length(doc->'entries')>512 THEN RAISE EXCEPTION 'documento acima de 512 entradas' USING ERRCODE='23514'; END IF;
   IF last.id IS NULL AND doc->>'action'<>'APPLY_RIGHTS' THEN
    RAISE EXCEPTION 'nada a retirar de destino que nunca recebeu' USING ERRCODE='23514';

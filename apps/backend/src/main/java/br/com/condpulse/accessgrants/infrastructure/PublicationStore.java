@@ -80,6 +80,20 @@ public class PublicationStore {
    order by d.device
    """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,subject,tenant,subject));
  }
+ /**
+  * Destinos onde um direito vigente do sujeito ficou fora do documento porque a regra tem horário que o documento ainda
+  * não representa (falha fechada: o compilado não dá acesso contínuo e retira o que estava publicado).
+  */
+ public List<UUID> scheduleExcluded(UUID tenant,UUID subject) {
+  return scan(()->jdbc.query("""
+   select distinct x.device_id from cp.rights_targets(?,?) x
+    join cp.access_grants g on g.tenant_id=? and g.id=x.grant_id
+    left join cp.access_policy_versions v on v.tenant_id=g.tenant_id and v.id=g.policy_version_id
+   where not coalesce(cp.policy_full_time(v.document),false) and x.valid_until>clock_timestamp()
+    and cp.access_grant_current(?,x.grant_id,greatest(clock_timestamp(),x.valid_from))
+   order by 1
+   """,(r,n)->r.getObject(1,UUID.class),tenant,subject,tenant,tenant));
+ }
  /** Grava o trabalho de um destino; o banco compila de novo e recusa o que não pode publicar. */
  public void planDevice(UUID tenant,UUID operation,UUID subject,UUID device,UUID actor) {
   scan(()->jdbc.update("insert into cp.rights_publications(tenant_id,operation_id,subject_id,device_id,origin,requested_by) values(?,?,?,?,'PLAN',?)",

@@ -70,6 +70,9 @@ public class PublicationService {
   int created=0;
   var failures=new ArrayList<PublicationModels.Failure>();
   for(UUID subject:subjects) {
+   // Direito de regra com horário fica fora do documento (nunca acesso contínuo): registrado por destino.
+   for(UUID device:store.scheduleExcluded(tenant,subject))
+    failures.add(new PublicationModels.Failure(subject,device,"SCHEDULE_NOT_REPRESENTABLE"));
    List<UUID> devices=store.changedDevices(tenant,subject);
    // Cada destino num savepoint: a recusa do banco fica registrada por sujeito × destino sem desfazer os demais.
    for(UUID device:devices) {
@@ -86,13 +89,7 @@ public class PublicationService {
   return new PublicationModels.Plan(operation,subjects.size(),created,Map.copyOf(byReason),failures.stream().limit(SAMPLE).toList());
  }
 
- /** Motivo da recusa: horário que o documento não representa é distinguido (falha fechada, nunca acesso contínuo). */
- static String reason(DataAccessException error,String state) {
-  if("23505".equals(state)) return "DB_CONFLICT";
-  Throwable cause=error.getMostSpecificCause();
-  String message=cause==null?null:cause.getMessage();
-  return message!=null && message.contains("SCHEDULE_NOT_REPRESENTABLE")?"SCHEDULE_NOT_REPRESENTABLE":"DB_REFUSED";
- }
+ static String reason(DataAccessException error,String state) { return "23505".equals(state)?"DB_CONFLICT":"DB_REFUSED"; }
 
  /** Item num savepoint da transação corrente (usado pela derivação para registrar recusas por direito). */
  public <T> T item(Supplier<T> action) { return store.item(action); }
