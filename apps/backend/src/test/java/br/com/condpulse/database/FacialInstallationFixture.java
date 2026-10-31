@@ -120,6 +120,11 @@ final class FacialInstallationFixture {
    +"on k.tenant_id=c.tenant_id and k.id=c.connector_id where k.label like '%ficticio JDBC')");
   db.adminUpdate("delete from cp.access_credentials where connector_id in (select id from cp.access_connectors where tenant_id in (?,?) and label like '%ficticio JDBC')",
    db.tenantA,db.tenantB);
+  // Sujeitos, contextos e evidências de idade saem a cada teste (depois de direitos, marcas, publicações e credenciais):
+  // um bloqueio feito por um teste não vaza para o seguinte, em qualquer ordem do JUnit.
+  db.adminUpdate("delete from cp.age_evidence where tenant_id in (?,?)",db.tenantA,db.tenantB);
+  db.adminUpdate("delete from cp.subject_contexts where tenant_id in (?,?)",db.tenantA,db.tenantB);
+  db.adminUpdate("delete from cp.access_subjects where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_devices where connector_id in (select id from cp.access_connectors where tenant_id in (?,?) and label like '%ficticio JDBC')",
    db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_connectors where tenant_id in (?,?) and label like '%ficticio JDBC'",db.tenantA,db.tenantB);
