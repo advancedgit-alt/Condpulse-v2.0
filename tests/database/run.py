@@ -3941,9 +3941,25 @@ def binding_checks():
     query(tech + f"UPDATE cp.access_points SET flow_direction='FROM_TO',updated_by='{MI}',version=version+1 WHERE id='{P1}'", **as_tech)
     expect(value(f"select p.status||':'||b.status||':'||(b.valid_until is not null)::text from cp.access_points p join cp.point_bindings b on b.point_id=p.id where b.id='{B3}'")
            == "MAPPED:SUSPENDED:true", "HAC-027: mudanca fisica suspende o vinculo e exige novo comissionamento")
-    expect(value(sup + "select count(*) from cp.point_bindings", **as_sup) == "4", "suporte le os vinculos")
+    # Submissao concorrente com a assinatura tecnica: o mesmo lock da instalacao serializa; vinculo nao entra depois da assinatura.
+    I4, B4 = "42600000-0000-4000-8000-000000000004", "42500000-0000-4000-8000-000000000004"
+    query(tech + acceptance(I4) + "; " + binding(B4, actuator=CR2), **as_tech)
+    def sign_and_hold():
+        return query(tech + f"UPDATE cp.installation_acceptances SET technical_grant_id='{G1}',technical_approver_account_id='{MI}',"
+                     f"technical_signed_at=now(),version=1 WHERE id='{I4}'; SELECT pg_sleep(1.5)", check=False, **as_tech)
+    def late_submit():
+        time.sleep(0.4)
+        return query(tech + f"UPDATE cp.point_bindings SET installation_acceptance_id='{I4}',status='PENDING_COMMISSION',version=1 WHERE id='{B4}'",
+                     check=False, **as_tech)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        signed, submitted = pool.submit(sign_and_hold), pool.submit(late_submit)
+        signed, submitted = signed.result(), submitted.result()
+    expect(signed.returncode == 0 and submitted.returncode != 0 and "23514" in submitted.stderr
+           and value(f"select status from cp.point_bindings where id='{B4}'") == "DRAFT",
+           "submissao concorrente espera a assinatura e e recusada depois dela")
+    expect(value(sup + "select count(*) from cp.point_bindings", **as_sup) == "5", "suporte le os vinculos")
     expect(value(mgr + "select count(*) from cp.point_bindings", **as_mgr) == "0", "HAC-009: gestor nao le vinculo fisico")
-    expect(value(mgr + "select count(*) from cp.installation_acceptances", **as_mgr) == "3", "gestao le o aceite que assina")
+    expect(value(mgr + "select count(*) from cp.installation_acceptances", **as_mgr) == "4", "gestao le o aceite que assina")
     expect(value(tech + "select count(*) from cp.point_bindings", tenant=TB, actor=MI, role="cp_api") == "0", "HAC-007: vinculo nao atravessa condominio")
     expect(error("select wiring_evidence_ref from cp.point_bindings", "42501", tenant=TA, role="cp_worker"), "worker nao le evidencia de instalacao")
     expect(value("select count(*) from cp.point_bindings where status='SUSPENDED'", tenant=TA, role="cp_worker") == "1", "worker le a topologia")

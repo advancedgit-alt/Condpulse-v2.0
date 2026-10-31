@@ -269,6 +269,8 @@ CREATE FUNCTION cp.point_bindings_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 DECLARE acceptance_status text;
 BEGIN
+ -- Mesmo lock da instalação que a assinatura e a aprovação do aceite: submissão e retirada não cruzam a assinatura.
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
  IF TG_OP='INSERT' THEN
   IF NEW.status<>'DRAFT' OR NEW.version<>0 OR NEW.installation_acceptance_id IS NOT NULL OR NEW.valid_from IS NOT NULL OR NEW.valid_until IS NOT NULL THEN
    RAISE EXCEPTION 'vínculo nasce rascunho' USING ERRCODE='23514';
@@ -347,6 +349,9 @@ BEGIN
   NEW.created_at:=clock_timestamp(); NEW.updated_at:=NEW.created_at;
   RETURN NEW;
  END IF;
+ -- Assinaturas, transições e aprovação serializadas com submissão e retirada de vínculos (mesmo lock da instalação);
+ -- as consultas seguintes já enxergam o que a outra transação confirmou.
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
  IF (NEW.id,NEW.tenant_id,NEW.installation_revision,NEW.created_by,NEW.created_at) IS DISTINCT FROM (OLD.id,OLD.tenant_id,OLD.installation_revision,OLD.created_by,OLD.created_at)
    OR NEW.version<>OLD.version+1 OR OLD.status IN ('REJECTED','SUPERSEDED') THEN
   RAISE EXCEPTION 'aceite: revisão fixa e estado final preservado' USING ERRCODE='23514';
