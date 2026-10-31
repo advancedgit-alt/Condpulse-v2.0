@@ -28,7 +28,11 @@ public enum StaffCapability {
   * Zeladoria (MAINTENANCE, V046): lê e registra o andamento somente dos pedidos atribuídos ao próprio vínculo; nenhum
   * financeiro, cadastro, vínculo, encomenda, visita ou acesso.
   */
- OPERATE_MAINTENANCE("maintenance.operate");
+ OPERATE_MAINTENANCE("maintenance.operate"),
+ /** PRD complementar §4.4 (V049): co-aprovação de restrição geral; o banco confere o vínculo MANAGER vigente. */
+ APPROVE_BLOCKLIST("security.blocklist.approve"),
+ /** PRD complementar §4.4 (V049): Log de Segurança do próprio condomínio; o banco confere o vínculo MANAGER vigente. */
+ READ_TENANT_SECURITY_LOG("security.log.read.tenant");
 
  private final String key;
  StaffCapability(String key) { this.key=key; }
@@ -39,7 +43,7 @@ public enum StaffCapability {
   if(role==null) return EnumSet.noneOf(StaffCapability.class);
   return switch(role) {
    case "MANAGER" -> EnumSet.of(MANAGE_UNITS,MANAGE_MEMBERSHIPS,MANAGE_AMENITIES,DECIDE_RESERVATIONS,READ_AUDIT,PUBLISH_ANNOUNCEMENTS,
-    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES);
+    MANAGE_REQUESTS,MANAGE_FINANCE,MANAGE_AREAS,EDIT_POLICIES,PUBLISH_POLICIES,APPROVE_BLOCKLIST,READ_TENANT_SECURITY_LOG);
    case "CONCIERGE" -> EnumSet.of(OPERATE_CONCIERGE);
    case "MAINTENANCE" -> EnumSet.of(OPERATE_MAINTENANCE);
    default -> EnumSet.noneOf(StaffCapability.class);
