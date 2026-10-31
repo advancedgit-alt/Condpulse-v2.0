@@ -25,6 +25,10 @@ public class ScriptedAdapter extends BaseAdapter {
  public boolean personPresent;
  public Set<String> rights=new HashSet<>();
  public boolean coversCredentials;
+ /** Resposta de credentialPresent (vazio = só sabe contar). */
+ public Optional<Boolean> credentialMatch=Optional.empty();
+ /** Faz readState lançar exceção (leitura indisponível). */
+ public boolean readStateThrows;
  public final Map<CapabilityName,Boolean> documented=new EnumMap<>(CapabilityName.class);
  /** Captura o contexto de entrada entregue pelo núcleo (testes de decisão local). */
  public java.util.function.Consumer<br.com.condpulse.gateway.spi.InboundEndpoint.Context> inboundCapture=ctx->{};
@@ -71,8 +75,10 @@ public class ScriptedAdapter extends BaseAdapter {
   for(Right x:r.rights()) out.add(x.channelId()+"@"+x.scheduleRef());
   return Optional.of(out);
  }
+ @Override public Optional<Boolean> credentialPresent(CredentialSpec c) { calls.add("CREDENTIAL_PRESENT"); return credentialMatch; }
  @Override public AppliedState readState(String s) {
   calls.add("READ_STATE");
+  if(readStateThrows) throw new IllegalStateException("leitura indisponível");
   if(!readStates.isEmpty()) return readStates.poll();
   return new AppliedState(OperationState.CONFIRMED,null,personPresent,Set.copyOf(rights),Map.of(CredentialKind.CARD,0,CredentialKind.PIN,0,CredentialKind.QR,0),false);
  }

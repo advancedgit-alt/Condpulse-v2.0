@@ -58,8 +58,11 @@ public final class LocalCommandQueue implements AutoCloseable {
    };
   }
  }
+ /** reported: o resultado terminal já foi publicado na plataforma (publicação pendente sobrevive a reinício). */
  public record Entry(SyncCommand command,long sequence,Status status,OperationState lastState,String lastReason,int attempts,
-     Instant enqueuedAt,Instant lastAttemptAt) {}
+     Instant enqueuedAt,Instant lastAttemptAt,boolean reported) {
+  public boolean terminal() { return status==Status.DONE || status==Status.FAILED || status==Status.SUPERSEDED || status==Status.REJECTED_STALE; }
+ }
  public record EnqueueResult(EnqueueOutcome outcome,Entry entry,List<String> superseded) {}
 
  private final Journal journal;
@@ -124,6 +127,21 @@ public final class LocalCommandQueue implements AutoCloseable {
   apply(record);
  }
 
+ /** Resultado terminal publicado na plataforma. */
+ public synchronized void markReported(String commandId) {
+  var record=new LinkedHashMap<String,Object>();
+  record.put("t","reported");
+  record.put("id",commandId);
+  record.put("at",clock.instant().toString());
+  journal.append(record);
+  apply(record);
+ }
+
+ /** Resultados terminais ainda não publicados, na ordem de chegada. */
+ public synchronized List<Entry> unreported() {
+  return byId.values().stream().filter(e->e.terminal() && !e.reported()).toList();
+ }
+
  public synchronized Optional<Entry> get(String commandId) { return Optional.ofNullable(byId.get(commandId)); }
 
  /** Pendências visíveis do equipamento (inclusive quando ele está fora do ar). */
@@ -158,7 +176,7 @@ public final class LocalCommandQueue implements AutoCloseable {
    } else {
     revokedVersion.merge(key(command,command.scope()),command.desiredVersion(),Math::max);
    }
-   byId.put(command.commandId(),new Entry(command,seq,status,null,reason,0,at,null));
+   byId.put(command.commandId(),new Entry(command,seq,status,null,reason,0,at,null,false));
    byKey.put(command.idempotencyKey(),command.commandId());
   } else if("mark".equals(t)) {
    var e=byId.get(Json.string(record,"id"));
@@ -167,7 +185,11 @@ public final class LocalCommandQueue implements AutoCloseable {
    String state=Json.string(record,"state");
    int attempts=e.attempts()+(status==Status.IN_FLIGHT?1:0);
    byId.put(e.command().commandId(),new Entry(e.command(),e.sequence(),status,state==null?e.lastState():OperationState.valueOf(state),
-    Json.string(record,"reason"),attempts,e.enqueuedAt(),status==Status.IN_FLIGHT?at:e.lastAttemptAt()));
+    Json.string(record,"reason"),attempts,e.enqueuedAt(),status==Status.IN_FLIGHT?at:e.lastAttemptAt(),false));
+  } else if("reported".equals(t)) {
+   var e=byId.get(Json.string(record,"id"));
+   if(e==null) return;
+   byId.put(e.command().commandId(),new Entry(e.command(),e.sequence(),e.status(),e.lastState(),e.lastReason(),e.attempts(),e.enqueuedAt(),e.lastAttemptAt(),true));
   }
  }
 

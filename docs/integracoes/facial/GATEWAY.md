@@ -23,6 +23,11 @@ matriz da seção 6 descreve o conjunto completo; cada adaptador só existe no c
 | Eventos com força de evidência explícita (`DEVICE_REPORTED`…), fila durável até o ACK da plataforma | Inferir direção, ponto ou horário que o equipamento não informou |
 | Decisão local antes do relé (EDGE_ONLINE) com política fresca e relógio confiável | Consultar a nuvem no caminho do relé |
 | Recusa gravar cartão, face ou direito quando a retirada não é documentada | Gravar algo que não sabe retirar |
+| Confirma cartão/PIN/QR comparando o valor aplicado (material buscado de novo, nunca guardado) | Confirmar substituição de credencial ou face só por contagem ou presença (fica APPLIED_UNVERIFIED) |
+| Mantém NEEDS_READBACK quando a leitura falha; reenvia só após leitura bem-sucedida mostrar ausência | Tratar leitura indisponível como prova |
+| Telemetria de decisão em fila de memória, gravada e enviada no ciclo de fundo | Segurar a resposta ao equipamento esperando a plataforma |
+| Resultado terminal não publicado fica pendente no diário e só o relatório é reenviado | Repetir operação física para republicar resultado |
+| Diário trunca cauda incompleta (queda no meio da escrita) antes de acrescentar | Colar registro novo em linha parcial |
 
 Segredos (senha de fabricante, token de entrada de cada equipamento, senha dos keystores) vêm só do diretório de
 segredos montado (`CP_GATEWAY_SECRETS_DIR`, ex.: `/run/secrets`) ou de cofre que o monte ali. A configuração guarda só
