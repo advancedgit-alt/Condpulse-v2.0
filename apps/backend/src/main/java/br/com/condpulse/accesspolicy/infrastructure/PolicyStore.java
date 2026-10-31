@@ -63,9 +63,27 @@ public class PolicyStore {
   return jdbc.update("update cp.access_policy_versions set validation_id=?,state=?,version=version+1 where tenant_id=? and id=? and version=?",
    validation,state,tenant,version,expected)==1;
  }
+ /** O banco confere a impressão dos fatos na aprovação: a varredura fica ligada só nesta instrução. */
  public boolean approve(UUID tenant,UUID version,long expected) {
-  return jdbc.update("update cp.access_policy_versions set state='APPROVED',version=version+1 where tenant_id=? and id=? and version=? and state='VALIDATED'",
-   tenant,version,expected)==1;
+  jdbc.queryForObject("select set_config('app.policy_destination_scan','on',true)",String.class);
+  try {
+   return jdbc.update("update cp.access_policy_versions set state='APPROVED',version=version+1 where tenant_id=? and id=? and version=? and state='VALIDATED'",
+    tenant,version,expected)==1;
+  } finally { jdbc.queryForObject("select set_config('app.policy_destination_scan','',true)",String.class); }
+ }
+ /** A impressão dos fatos atuais é a gravada na validação da revisão. */
+ public boolean factsUnchanged(UUID tenant,UUID validation,UUID area) {
+  jdbc.queryForObject("select set_config('app.policy_destination_scan','on',true)",String.class);
+  try {
+   Boolean same=jdbc.queryForObject("select facts_hash=cp.policy_facts_hash(?,?) from cp.access_policy_validations where tenant_id=? and id=?",
+    Boolean.class,tenant,area,tenant,validation);
+   return Boolean.TRUE.equals(same);
+  } catch(org.springframework.dao.EmptyResultDataAccessException missing) { return false; }
+  finally { jdbc.queryForObject("select set_config('app.policy_destination_scan','',true)",String.class); }
+ }
+ /** Mesmo lock da instalação usado por vínculos, aceites, canais, equipamentos e pontos: os fatos lidos não mudam até o commit. */
+ public void lockInstallation(UUID tenant) {
+  jdbc.query("select pg_advisory_xact_lock(hashtextextended('cp.installation:'||?::text,0))",(r,n)->null,tenant);
  }
  public boolean reject(UUID tenant,UUID version,String reason,long expected) {
   return jdbc.update("""
@@ -84,11 +102,14 @@ public class PolicyStore {
  }
  public void insertValidation(UUID tenant,UUID id,PolicyModels.PolicyVersion v,int installationRevision,String status,
    List<PolicyModels.ValidationIssue> issues,List<UUID> points,List<String> capabilities,UUID actor) {
+  jdbc.queryForObject("select set_config('app.policy_destination_scan','on',true)",String.class);
+  try {
   jdbc.update("""
    insert into cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,
     affected_point_ids,required_capabilities,validated_by) values(?,?,?,?,?,?,?,?::jsonb,?::uuid[],?::text[],?)
    """,id,tenant,v.policyId(),v.versionId(),v.canonicalHash(),installationRevision,status,JSON.writeValueAsString(issues),
    points.stream().map(UUID::toString).toArray(String[]::new),capabilities.toArray(String[]::new),actor);
+  } finally { jdbc.queryForObject("select set_config('app.policy_destination_scan','',true)",String.class); }
  }
  public int installationRevision(UUID tenant) {
   Integer value=jdbc.queryForObject("select cp.installation_current_revision(?)",Integer.class,tenant);

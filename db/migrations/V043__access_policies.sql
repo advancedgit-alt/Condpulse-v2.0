@@ -123,6 +123,8 @@ CREATE TABLE cp.access_policy_validations (
  status text NOT NULL CHECK(status IN ('VALIDATED','BLOCKED')),
  issues jsonb NOT NULL CHECK(jsonb_typeof(issues)='array' AND jsonb_array_length(issues)<=300 AND length(issues::text)<=262144),
  affected_point_ids uuid[] NOT NULL CHECK(cardinality(affected_point_ids)<=1000),
+ -- Impressão dos fatos consultados (área, passagens de ingresso, vínculos ativos e combinações), calculada pelo banco.
+ facts_hash text NOT NULL DEFAULT '',
  required_capabilities text[] NOT NULL CHECK(required_capabilities <@ ARRAY['faceEnrollment','faceDeletion','perDoorRights','localValidity',
   'onlineDecisionBeforeRelay','offlineRestriction','doorContactEvents','passageEvents','scopedRemoteOpen','eventBackfill','secureTransport','safeRecovery']),
  validated_by uuid NOT NULL REFERENCES platform.accounts(id),
@@ -139,6 +141,31 @@ CREATE INDEX access_policy_validations_version ON cp.access_policy_validations(t
 ALTER TABLE cp.access_policy_versions ADD CONSTRAINT access_policy_versions_validation
  FOREIGN KEY(tenant_id,validation_id,id) REFERENCES cp.access_policy_validations(tenant_id,id,policy_version_id);
 
+-- Impressão dos fatos que a validação consulta. Só com a varredura ligada (falha fechada): sem ela os vínculos não são
+-- visíveis e a impressão não representaria o que foi validado.
+CREATE FUNCTION cp.policy_facts_hash(target_tenant uuid,target_area uuid) RETURNS text
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE facts jsonb;
+BEGIN
+ IF NOT cp.policy_destination_scan() THEN RAISE EXCEPTION 'impressão dos fatos exige a varredura de destinos' USING ERRCODE='42501'; END IF;
+ SELECT jsonb_build_object(
+   'area',(SELECT jsonb_build_object('status',a.status,'kind',a.area_kind,'amenity',a.amenity_id,'timezone',a.timezone,'essential',a.essential_route)
+     FROM cp.access_areas a WHERE a.tenant_id=target_tenant AND a.id=target_area),
+   'points',coalesce((SELECT jsonb_agg(jsonb_build_object('id',p.id,'status',p.status,'flow',p.flow_direction,'from',p.from_area_id,'to',p.to_area_id,
+      'binding',b.id,'revision',b.binding_revision,'fingerprint',b.commissioned_fingerprint,'homologation',h.id,'homologationStatus',h.status,
+      'homologationVersion',h.version,'reviewDue',h.review_due_at,'capabilities',h.approved_capabilities) ORDER BY p.id)
+     FROM cp.access_points p
+     LEFT JOIN cp.point_bindings b ON b.tenant_id=p.tenant_id AND b.point_id=p.id AND b.status='ACTIVE'
+     LEFT JOIN platform.access_homologations h ON h.id=b.homologation_id
+     WHERE p.tenant_id=target_tenant AND p.status<>'RETIRED'
+      AND ((p.to_area_id=target_area AND p.flow_direction IN ('FROM_TO','BOTH','UNKNOWN'))
+       OR (p.from_area_id=target_area AND p.flow_direction IN ('TO_FROM','BOTH','UNKNOWN')))),'[]'::jsonb))
+  INTO facts;
+ RETURN encode(sha256(convert_to(facts::text,'UTF8')),'hex');
+END $$;
+REVOKE ALL ON FUNCTION cp.policy_facts_hash(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cp.policy_facts_hash(uuid,uuid) TO cp_api;
+
 CREATE FUNCTION cp.access_policy_validations_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
@@ -147,9 +174,12 @@ BEGIN
    AND v.canonical_hash=NEW.canonical_hash AND v.state IN ('DRAFT','VALIDATED')) THEN
   RAISE EXCEPTION 'validação só de revisão em preparação e pelo hash atual' USING ERRCODE='23514';
  END IF;
+ -- Mesmo lock da instalação (vínculos, aceites, canais, equipamentos e pontos): os fatos não mudam até o commit.
+ PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
  IF NEW.installation_revision<>cp.installation_current_revision(NEW.tenant_id) THEN
   RAISE EXCEPTION 'revisão de instalação mudou durante a validação' USING ERRCODE='23514';
  END IF;
+ NEW.facts_hash:=cp.policy_facts_hash(NEW.tenant_id,(SELECT p.area_id FROM cp.access_policies p WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.policy_id));
  NEW.validated_at:=clock_timestamp(); NEW.expires_at:=NEW.validated_at+interval '24 hours';
  RETURN NEW;
 END $$;
@@ -206,10 +236,13 @@ BEGIN
    IF OLD.state<>'VALIDATED' OR NOT platform.has_capability('policy.publish') THEN
     RAISE EXCEPTION 'aprovação só de revisão validada, pela publicação de políticas' USING ERRCODE='42501';
    END IF;
-   SELECT status,expires_at,installation_revision,canonical_hash INTO v FROM cp.access_policy_validations
+   PERFORM pg_advisory_xact_lock(hashtextextended('cp.installation:'||NEW.tenant_id::text,0));
+   SELECT status,expires_at,installation_revision,canonical_hash,facts_hash INTO v FROM cp.access_policy_validations
     WHERE tenant_id=NEW.tenant_id AND id=NEW.validation_id;
+   -- Os fatos atuais (passagens, vínculos, combinações e área) precisam ser os mesmos da validação.
    IF v.status IS DISTINCT FROM 'VALIDATED' OR v.expires_at<=now() OR v.canonical_hash<>NEW.canonical_hash
-     OR v.installation_revision<>cp.installation_current_revision(NEW.tenant_id) THEN
+     OR v.installation_revision<>cp.installation_current_revision(NEW.tenant_id)
+     OR v.facts_hash<>cp.policy_facts_hash(NEW.tenant_id,(SELECT p.area_id FROM cp.access_policies p WHERE p.tenant_id=NEW.tenant_id AND p.id=NEW.policy_id)) THEN
     RAISE EXCEPTION 'validação vencida ou de outra instalação: valide de novo' USING ERRCODE='23514';
    END IF;
    NEW.approved_by:=platform.current_actor_id(); NEW.approved_at:=clock_timestamp();

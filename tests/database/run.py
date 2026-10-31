@@ -3771,6 +3771,92 @@ def area_checks():
           f"DELETE FROM cp.access_areas WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.technical_grants WHERE id='{G1}'; "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{CO}'); DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{CO}')")
 
+FACIAL_CAPS = ["doorContactEvents","eventBackfill","faceDeletion","faceEnrollment","localValidity","offlineRestriction",
+               "onlineDecisionBeforeRelay","passageEvents","perDoorRights","safeRecovery","scopedRemoteOpen","secureTransport"]
+
+def facial_homologation(platform_actor, identifier, approved, firmware, pilot=True):
+    """Homologacao pelo fluxo real da plataforma (dossie, trilha e decisoes): candidata documentada ou aprovada para piloto
+    com as capacidades observadas/aprovadas indicadas."""
+    profile = value("select id from platform.access_model_profiles order by catalog_code limit 1")
+    obs = "'{" + ",".join(f'"{c}":{{"documented":true,"observed":{"true" if c in approved else "null"}}}' for c in FACIAL_CAPS) + "}'::jsonb"
+    plat = "SET LOCAL app.platform_capabilities='access_catalog.manage,homologation.approve'; "
+    def audited(action):
+        return (f"INSERT INTO platform.platform_audit_log(actor_id,action,reason,details) VALUES('{platform_actor}','{action}','Ensaio ficticio',"
+                f"'{{\"homologationId\":\"{identifier}\"}}'); ")
+    query(plat + audited("HOMOLOGATION_CREATED") + "INSERT INTO platform.access_homologations(id,model_profile_id,firmware_exact,adapter_name,"
+          f"adapter_version,decision_mode,topology,contract_schema_version,capabilities,limits,evidence_refs,reason,requested_by) VALUES('{identifier}',"
+          f"'{profile}','{firmware}','control-id-rest','0.1.0','EDGE_ONLINE','LOCAL_GATEWAY','v1',{obs},'{{}}'::jsonb,"
+          f"ARRAY['41000000-0000-4000-8000-000000000001']::uuid[],'Dossie de ensaio ficticio','{platform_actor}')", actor=platform_actor, role="cp_api")
+    if not pilot:
+        return
+    caps = "ARRAY[" + ",".join(f"'{c}'" for c in approved) + "]::text[]"
+    for decision in ("START_TRIAL", "APPROVE_LAB", "APPROVE_PILOT"):
+        extra = ("ARRAY['41000000-0000-4000-8000-000000000002']::uuid[]," + caps) if decision != "START_TRIAL" else "'{}'::uuid[],'{}'::text[]"
+        query(plat + audited("HOMOLOGATION_" + decision) + "INSERT INTO platform.access_homologation_decisions(homologation_id,decision,reason,"
+              f"evidence_refs,approved_capabilities,decided_by) VALUES('{identifier}','{decision}','Decisao de ensaio ficticia',{extra},'{platform_actor}'); "
+              f"UPDATE platform.access_homologations SET status=platform.homologation_next(status,'{decision}'),version=version+1 WHERE id='{identifier}'",
+              actor=platform_actor, role="cp_api")
+
+def facial_installation(n, approved, tenant=None):
+    """Monta pelos fluxos reais (gatilhos, trilhas e RLS ligados, sem replica) uma passagem comissionada no condominio A:
+    combinacao homologada para piloto pela plataforma, areas pela gestao, ponto, equipamento, canal, vinculo e aceite
+    pelo MASTER de implantacao, assinatura das regras pela gestao. n distingue os identificadores (1 digito hex)."""
+    tenant = tenant or TA
+    u = lambda kind, i=1: f"4{n}{kind}00000-0000-4000-8000-{i:012x}"
+    ids = dict(PL=f"10000000-0000-4000-8000-00000000{n}0f1", MG=f"10000000-0000-4000-8000-00000000{n}0f2", MI=f"10000000-0000-4000-8000-00000000{n}0f3",
+               G=u("a"), HO=u("b"), HALL=u("c", 1), AREA=u("c", 2), PT=u("d"), KA=u("e"), DV=u("f"), CH=u("f", 2), BD=u("9"), IA=u("8"))
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{ids['PL']}','ACTIVE'),('{ids['MG']}','ACTIVE'),('{ids['MI']}','ACTIVE');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{tenant}','{ids['MG']}',NULL,'GESTAO FICTICIA','MANAGER','ACTIVE');
+        INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) VALUES('{ids['G']}','{tenant}',
+          '{ids['MI']}','MASTER_IMPLANTACAO',ARRAY['installation.read','installation.manage','installation.bind_channel','installation.commission'],
+          now(),now()+interval '30 days','OPERATIONS','Implantacao ficticia');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{ids['KA']}','{tenant}','SIMULATED','Conector ficticio');
+    """)
+    ids["MID"] = value(f"select id from cp.memberships where account_id='{ids['MG']}'")
+    facial_homologation(ids["PL"], ids["HO"], approved, f"9.{n}.0")
+    mgr = dict(tenant=tenant, actor=ids["MG"], role="cp_api")
+    tec = dict(tenant=tenant, actor=ids["MI"], role="cp_api")
+    area = "SET LOCAL app.capabilities='area.manage'; "
+    tech = "SET LOCAL app.technical_scopes='installation.read,installation.manage,installation.bind_channel,installation.commission'; "
+    query(area + f"INSERT INTO cp.access_areas(id,tenant_id,code,name,area_kind,timezone,status,created_by) VALUES"
+          f"('{ids['HALL']}','{tenant}','HALL{n}','Hall ficticio','RESIDENTIAL_ROUTE','America/Sao_Paulo','ACTIVE','{ids['MG']}'),"
+          f"('{ids['AREA']}','{tenant}','AREA{n}','Area ficticia','COMMON_AREA','America/Sao_Paulo','ACTIVE','{ids['MG']}')", **mgr)
+    query(tech + f"INSERT INTO cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,created_by) "
+          f"VALUES('{ids['PT']}','{tenant}','P{n}','Porta ficticia','{ids['HALL']}','{ids['AREA']}','DOOR','FROM_TO','FREE_EGRESS','MAPPED','{ids['MI']}'); "
+          f"INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label,device_role,homologation_id,registered_by) VALUES('{ids['DV']}',"
+          f"'{tenant}','{ids['KA']}','ctrl-{n}','Controlador ficticio','CONTROLLER','{ids['HO']}','{ids['MI']}'); "
+          f"INSERT INTO cp.device_channels(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,status,created_by) VALUES('{ids['CH']}',"
+          f"'{tenant}','{ids['DV']}','relay','1','ACCESS_ACTUATOR','VERIFIED','{ids['MI']}'); "
+          f"INSERT INTO cp.point_bindings(id,tenant_id,point_id,actuator_channel_id,controller_device_id,homologation_id,direction_map,wiring_evidence_ref,created_by) "
+          f"VALUES('{ids['BD']}','{tenant}','{ids['PT']}','{ids['CH']}','{ids['DV']}','{ids['HO']}','{{}}','ligacao/ficticia','{ids['MI']}'); "
+          f"INSERT INTO cp.installation_acceptances(id,tenant_id,plant_ref,plant_hash,topology_manifest_ref,topology_hash,capability_envelope_hash,test_suite_version,"
+          f"test_report_ref,critical_tests_pending,critical_tests_failed,emergency_test_ref,rollback_plan_ref,created_by) VALUES('{ids['IA']}','{tenant}',"
+          f"'planta/ficticia','{'a'*64}','topologia/ficticia','{'b'*64}','{'c'*64}','hac-1.1','relatorio/ficticio',0,0,'emergencia/ficticia','rollback/ficticio','{ids['MI']}'); "
+          f"UPDATE cp.point_bindings SET installation_acceptance_id='{ids['IA']}',status='PENDING_COMMISSION',version=1 WHERE id='{ids['BD']}'; "
+          f"UPDATE cp.installation_acceptances SET status='TESTING',technical_grant_id='{ids['G']}',technical_approver_account_id='{ids['MI']}',"
+          f"technical_signed_at=now(),version=1 WHERE id='{ids['IA']}'", **tec)
+    query(area + f"UPDATE cp.installation_acceptances SET rules_approver_membership_id='{ids['MID']}',rules_approver_account_id='{ids['MG']}',"
+          f"rules_signed_at=now(),version=2 WHERE id='{ids['IA']}'", **mgr)
+    query(tech + f"UPDATE cp.installation_acceptances SET status='APPROVED',version=3 WHERE id='{ids['IA']}'", **tec)
+    expect(value(f"select status from cp.access_points where id='{ids['PT']}'") == "COMMISSIONED", "instalacao ficticia comissionada pelos fluxos reais")
+    return ids
+
+def facial_cleanup(ids, tenant=None):
+    """Remove a instalacao ficticia sem desligar gatilhos (ordem das referencias)."""
+    tenant = tenant or TA
+    actors = "','".join([ids["PL"], ids["MG"], ids["MI"]])
+    query(f"DELETE FROM cp.audit_log WHERE actor_id in ('{actors}'); "
+          f"WITH v AS (DELETE FROM cp.access_policy_validations WHERE tenant_id='{tenant}') DELETE FROM cp.access_policy_versions WHERE tenant_id='{tenant}'; "
+          f"DELETE FROM cp.access_policies WHERE tenant_id='{tenant}'; DELETE FROM cp.point_bindings WHERE tenant_id='{tenant}'; "
+          f"DELETE FROM cp.installation_acceptances WHERE tenant_id='{tenant}'; DELETE FROM cp.device_channels WHERE tenant_id='{tenant}'; "
+          f"DELETE FROM cp.access_devices WHERE connector_id='{ids['KA']}'; DELETE FROM cp.access_connectors WHERE id='{ids['KA']}'; "
+          f"DELETE FROM cp.access_points WHERE tenant_id='{tenant}' AND (from_area_id='{ids['HALL']}' OR to_area_id='{ids['AREA']}'); "
+          f"DELETE FROM cp.access_areas WHERE id in ('{ids['HALL']}','{ids['AREA']}'); "
+          f"DELETE FROM platform.access_homologation_decisions WHERE homologation_id='{ids['HO']}'; DELETE FROM platform.access_homologations WHERE id='{ids['HO']}'; "
+          f"DELETE FROM platform.platform_audit_log WHERE actor_id in ('{actors}'); DELETE FROM cp.technical_grants WHERE account_id in ('{actors}'); "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{actors}'); DELETE FROM platform.accounts WHERE id in ('{actors}')")
+
 def binding_checks():
     """V042 (AC-004, parte 2): equipamento provisionado, canais, vinculo versionado e aceite de instalacao. Casos HAC-009
     (gestor sem canal/rele), HAC-010 (MASTER limitado ao escopo), HAC-021 (controlador com varios canais), HAC-022 (saida de
@@ -3812,14 +3898,10 @@ def binding_checks():
           ('{A1}','{TA}','EXT42','Exterior','EXTERIOR','America/Sao_Paulo','{MG}'),('{A2}','{TA}','HALL42','Hall','RESIDENTIAL_ROUTE','America/Sao_Paulo','{MG}');
         INSERT INTO cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,created_by)
           VALUES('{P1}','{TA}','P42','Portao social','{A1}','{A2}','DOOR','BOTH','FREE_EGRESS','MAPPED','{MI}');
-        SET session_replication_role=replica;
-        INSERT INTO platform.access_homologations(id,model_profile_id,firmware_exact,adapter_name,adapter_version,decision_mode,topology,
-          contract_schema_version,capabilities,limits,reason,requested_by,status,approved_at,approved_by) VALUES
-          ('{HOK}','{profile}','4.2.0','control-id-rest','0.1.0','EDGE_ONLINE','LOCAL_GATEWAY','v1',{caps},'{{}}','Combinacao piloto ficticia','{MS}',
-           'APROVADO_PILOTO',now(),'{MS}'),
-          ('{HNO}','{profile}','4.2.1','control-id-rest','0.1.0','EDGE_ONLINE','LOCAL_GATEWAY','v1',{caps},'{{}}','Combinacao so documentada','{MS}',
-           'CANDIDATO_DOCUMENTADO',NULL,NULL);
     """)
+    # Combinações pelo fluxo real da plataforma: uma aprovada para piloto, outra só documentada.
+    facial_homologation(MS, HOK, FACIAL_CAPS, "4.2.0")
+    facial_homologation(MS, HNO, FACIAL_CAPS, "4.2.1", pilot=False)
     mgr = "SET LOCAL app.capabilities='area.manage'; "
     tech = "SET LOCAL app.technical_scopes='installation.read,installation.manage,installation.bind_channel,installation.commission'; "
     sup = "SET LOCAL app.technical_scopes='installation.read'; "
@@ -3973,136 +4055,108 @@ def binding_checks():
     cleanup()
 
 def policy_checks():
-    """V043 (AC-007/AC-008): politica por area, revisoes imutaveis, validacao presa a instalacao e aprovacao pela gestao.
-    Casos HAC-009 (gestor sem canal/rele), HAC-043 (politica incompativel com capacidade nao valida), HAC-007 (isolamento)
-    e HAC-097 (publicacao controlada: aprovacao exige validacao vigente)."""
-    MG, MA, MI = "10000000-0000-4000-8000-0000000043a1", "10000000-0000-4000-8000-0000000043a2", "10000000-0000-4000-8000-0000000043a3"
-    AR, PT, KA, DV, CH, BD, IA, IB, HO = ("43100000-0000-4000-8000-000000000001", "43200000-0000-4000-8000-000000000001",
-        "43300000-0000-4000-8000-000000000001", "43400000-0000-4000-8000-000000000001", "43500000-0000-4000-8000-000000000001",
-        "43600000-0000-4000-8000-000000000001", "43700000-0000-4000-8000-000000000001", "43700000-0000-4000-8000-000000000002",
-        "43800000-0000-4000-8000-000000000001")
-    PO, V1, V2, L1, L2, L3 = ("43900000-0000-4000-8000-000000000001", "43a00000-0000-4000-8000-000000000001", "43a00000-0000-4000-8000-000000000002",
-        "43b00000-0000-4000-8000-000000000001", "43b00000-0000-4000-8000-000000000002", "43b00000-0000-4000-8000-000000000003")
-    profile = value("select id from platform.access_model_profiles order by catalog_code limit 1")
-    names = ["doorContactEvents","eventBackfill","faceDeletion","faceEnrollment","localValidity","offlineRestriction",
-             "onlineDecisionBeforeRelay","passageEvents","perDoorRights","safeRecovery","scopedRemoteOpen","secureTransport"]
-    caps = "'{" + ",".join(f'"{n}":{{"documented":true,"observed":null,"approved":null}}' for n in names) + "}'::jsonb"
-    def cleanup():
-        query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MA}','{MI}'); "
-              f"WITH v AS (DELETE FROM cp.access_policy_validations WHERE tenant_id in ('{TA}','{TB}')) DELETE FROM cp.access_policy_versions WHERE tenant_id in ('{TA}','{TB}'); "
-              f"DELETE FROM cp.access_policies WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.point_bindings WHERE id='{BD}'; "
-              f"DELETE FROM cp.installation_acceptances WHERE id in ('{IA}','{IB}'); DELETE FROM cp.device_channels WHERE id='{CH}'; "
-              f"DELETE FROM cp.access_devices WHERE id='{DV}'; DELETE FROM cp.access_connectors WHERE id='{KA}'; DELETE FROM cp.access_points WHERE id='{PT}'; "
-              f"DELETE FROM cp.access_areas WHERE id in ('{AR}','43100000-0000-4000-8000-000000000002'); DELETE FROM platform.access_homologations WHERE id='{HO}'; "
-              f"DELETE FROM cp.technical_grants WHERE account_id='{MI}'; DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MA}'); "
-              f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MA}','{MI}')")
-    cleanup()
-    query(f"""
-        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{MA}','ACTIVE'),('{MI}','ACTIVE');
-        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) VALUES('{TA}','{MG}',NULL,'GESTAO POLITICA','MANAGER','ACTIVE');
-        SET session_replication_role=replica;
-        INSERT INTO cp.access_areas(id,tenant_id,code,name,area_kind,timezone,status,created_by,updated_by)
-          VALUES('{AR}','{TA}','ACAD43','Academia','COMMON_AREA','America/Sao_Paulo','ACTIVE','{MG}','{MG}'),
-                ('43100000-0000-4000-8000-000000000002','{TA}','HALL43','Hall','RESIDENTIAL_ROUTE','America/Sao_Paulo','ACTIVE','{MG}','{MG}');
-        INSERT INTO cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,created_by,updated_by)
-          VALUES('{PT}','{TA}','P43','Porta da academia','43100000-0000-4000-8000-000000000002','{AR}','DOOR','FROM_TO','FREE_EGRESS','COMMISSIONED','{MI}','{MI}');
-        INSERT INTO platform.access_homologations(id,model_profile_id,firmware_exact,adapter_name,adapter_version,decision_mode,topology,contract_schema_version,
-          capabilities,limits,reason,requested_by,status,approved_at,approved_by,approved_capabilities) VALUES('{HO}','{profile}','4.3.0','control-id-rest','0.1.0',
-          'EDGE_ONLINE','LOCAL_GATEWAY','v1',{caps},'{{}}','Combinacao piloto ficticia 43','{MI}','APROVADO_PILOTO',now(),'{MI}',
-          ARRAY['faceEnrollment','faceDeletion','perDoorRights','secureTransport','offlineRestriction']);
-        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{KA}','{TA}','SIMULATED','Conector 43');
-        INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label) VALUES('{DV}','{TA}','{KA}','ctrl-43','Controlador 43');
-        INSERT INTO cp.device_channels(id,tenant_id,device_id,native_namespace,external_channel,channel_kind,status,created_by)
-          VALUES('{CH}','{TA}','{DV}','relay','1','ACCESS_ACTUATOR','VERIFIED','{MI}');
-        INSERT INTO cp.installation_acceptances(id,tenant_id,installation_revision,status,plant_ref,plant_hash,topology_manifest_ref,topology_hash,
-          capability_envelope_hash,test_suite_version,test_report_ref,critical_tests_pending,critical_tests_failed,emergency_test_ref,rollback_plan_ref,created_by,effective_at,technical_grant_id,technical_approver_account_id,technical_signed_at,rules_approver_membership_id,rules_approver_account_id,rules_signed_at)
-          VALUES('{IA}','{TA}',1,'APPROVED','planta/43','{'a'*64}','top/43','{'b'*64}','{'c'*64}','hac','rel/43',0,0,'emg/43','rb/43','{MI}',now(),gen_random_uuid(),'{MI}',now(),gen_random_uuid(),'{MG}',now());
-        INSERT INTO cp.point_bindings(id,tenant_id,point_id,actuator_channel_id,controller_device_id,homologation_id,binding_revision,installation_acceptance_id,
-          direction_map,status,valid_from,wiring_evidence_ref,configuration_hash,commissioned_fingerprint,created_by)
-          VALUES('{BD}','{TA}','{PT}','{CH}','{DV}','{HO}',1,'{IA}','{{}}','ACTIVE',now(),'lig/43','{'d'*64}','{'e'*64}','{MI}');
-        INSERT INTO cp.technical_grants(id,tenant_id,account_id,role_code,scopes,valid_from,valid_until,granted_via,reason) VALUES
-          (gen_random_uuid(),'{TA}','{MI}','MASTER_IMPLANTACAO',ARRAY['installation.read','installation.manage'],now(),now()+interval '30 days','OPERATIONS','Implantacao 43');
-    """)
-    edit = "SET LOCAL app.capabilities='policy.edit'; "
-    both = "SET LOCAL app.capabilities='policy.edit,policy.publish'; "
+    """V043 (AC-007/AC-008): politica por area, revisoes imutaveis, validacao presa aos fatos e a instalacao, aprovacao pela
+    gestao. Instalacao montada pelos fluxos reais. Casos HAC-009 (gestor sem canal/rele), HAC-043 (incompatibilidade com
+    capacidade nao valida), HAC-007 (isolamento) e HAC-097 (aprovacao exige validacao vigente e fatos inalterados)."""
+    ids = facial_installation(5, ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"])
+    MG, MI, AR, PT = ids["MG"], ids["MI"], ids["AREA"], ids["PT"]
+    PO, V1, V2, L1, L2, L3, L4 = ("43900000-0000-4000-8000-000000000001", "43a00000-0000-4000-8000-000000000001", "43a00000-0000-4000-8000-000000000002",
+        "43b00000-0000-4000-8000-000000000001", "43b00000-0000-4000-8000-000000000002", "43b00000-0000-4000-8000-000000000003",
+        "43b00000-0000-4000-8000-000000000004")
+    PX = "43c00000-0000-4000-8000-000000000001"
+    edit = "SET LOCAL app.capabilities='policy.edit'; SET LOCAL app.policy_destination_scan='on'; "
+    both = "SET LOCAL app.capabilities='policy.edit,policy.publish'; SET LOCAL app.policy_destination_scan='on'; "
     area_only = "SET LOCAL app.capabilities='area.manage'; "
+    tech = "SET LOCAL app.technical_scopes='installation.read,installation.manage'; "
     as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
-    doc = ('{"schemaVersion":"1.0","name":"Academia","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT"],'
+    as_tech = dict(tenant=TA, actor=MI, role="cp_api")
+    doc = ('{"schemaVersion":"1.0","name":"Area","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT"],'
            '"visitorPolicy":"DENY","minimumAgeYears":18}' % AR)
-    policy = f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Academia','{MG}')"
+    policy = f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Area','{MG}')"
     expect(error(area_only + policy, "42501", **as_mgr), "HAC-009: area.manage sozinho nao cria politica")
     query(edit + policy, **as_mgr)
     expect(error(edit + policy.replace(PO, "43900000-0000-4000-8000-000000000002"), "23505", **as_mgr), "uma politica por area")
     def version(identifier, document=doc):
         return (f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
-                f"VALUES('{identifier}','{TA}','{PO}','1.0','{document}'::jsonb,'Regra ficticia da academia','{MG}')")
-    expect(error(edit + version(V1, doc.replace(AR, "43100000-0000-4000-8000-000000000002")), "23514", **as_mgr), "documento da area da politica")
+                f"VALUES('{identifier}','{TA}','{PO}','1.0','{document}'::jsonb,'Regra ficticia da area','{MG}')")
+    expect(error(edit + version(V1, doc.replace(AR, ids["HALL"])), "23514", **as_mgr), "documento da area da politica")
     expect(error(version(V1).replace("authored_by)", "authored_by,state)").replace(f"'{MG}')", f"'{MG}','APPROVED')"), "42501", **as_mgr),
            "revisao nao nasce aprovada")
     query(edit + version(V1), **as_mgr)
     expect(value(f"select revision_number||':'||length(canonical_hash)||':'||state from cp.access_policy_versions where id='{V1}'") == "1:64:DRAFT",
            "revisao e hash pelo banco")
     expect(error(edit + f"UPDATE cp.access_policy_versions SET document='{{}}'::jsonb,version=1 WHERE id='{V1}'", "42501", **as_mgr), "documento imutavel")
-    h1 = value(f"select canonical_hash from cp.access_policy_versions where id='{V1}'")
-    def validation(identifier, ver=V1, rev=1, status="VALIDATED", issues="[]", hsh=None):
+    rev = value(f"select cp.installation_current_revision('{TA}')")
+    def validation(identifier, ver=V1, revision=None, status="VALIDATED", issues="[]", hsh=None):
+        h = hsh or value(f"select canonical_hash from cp.access_policy_versions where id='{ver}'")
         return (f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
-                f"affected_point_ids,required_capabilities,validated_by) VALUES('{identifier}','{TA}','{PO}','{ver}','{hsh or h1}',{rev},'{status}',"
+                f"affected_point_ids,required_capabilities,validated_by) VALUES('{identifier}','{TA}','{PO}','{ver}','{h}',{revision or rev},'{status}',"
                 f"'{issues}'::jsonb,ARRAY['{PT}']::uuid[],ARRAY['perDoorRights'],'{MG}')")
-    expect(error(edit + validation(L1, rev=7), "23514", **as_mgr), "validacao presa a revisao de instalacao vigente")
+    expect(error("SET LOCAL app.capabilities='policy.edit'; " + validation(L1),
+                 "42501", **as_mgr), "impressao dos fatos exige a varredura de destinos")
+    expect(error(edit + validation(L1, revision=int(rev) + 7), "23514", **as_mgr), "validacao presa a revisao de instalacao vigente")
     expect(error(edit + validation(L1, hsh="f" * 64), "23514", **as_mgr), "validacao presa ao hash da revisao")
     expect(error(edit + validation(L1, issues='[{"code":"CAPABILITY_MISSING","severity":"BLOCKER"}]'), "23514", **as_mgr),
            "HAC-043: impeditivo nao gera validacao aprovada")
     query(edit + validation(L1), **as_mgr)
-    expect(value(f"select (expires_at-validated_at)::text from cp.access_policy_validations where id='{L1}'") == "1 day", "validade de 24 h pelo banco")
+    expect(value(f"select (expires_at-validated_at)::text||':'||length(facts_hash) from cp.access_policy_validations where id='{L1}'") == "1 day:64",
+           "validade de 24 h e impressao dos fatos pelo banco")
     expect(error(edit + f"UPDATE cp.access_policy_versions SET validation_id='{L1}',state='APPROVED',version=1 WHERE id='{V1}'", "23514", **as_mgr),
            "estado segue a validacao")
     query(edit + f"UPDATE cp.access_policy_versions SET validation_id='{L1}',state='VALIDATED',version=1 WHERE id='{V1}'", **as_mgr)
     expect(error(edit + f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'", "42501", **as_mgr),
            "aprovacao so com policy.publish")
+    # Fatos mudam depois da validacao: passagem nova de ingresso (nao comissionada) invalida a aprovacao; ao retira-la, os fatos voltam.
+    query(tech + f"INSERT INTO cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,created_by) "
+          f"VALUES('{PX}','{TA}','PX5','Porta nova','{ids['HALL']}','{AR}','DOOR','FROM_TO','FREE_EGRESS','MAPPED','{MI}')", **as_tech)
+    expect(error(both + f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'", "23514", **as_mgr),
+           "passagem nova nao comissionada invalida a validacao")
+    query(tech + f"UPDATE cp.access_points SET status='RETIRED',updated_by='{MI}',version=1 WHERE id='{PX}'", **as_tech)
+    expect(error("SET LOCAL app.capabilities='policy.edit,policy.publish'; " + f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'",
+                 "42501", **as_mgr), "aprovacao confere os fatos com a varredura ligada")
     query(both + f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'", **as_mgr)
     expect(value(f"select approved_by||':'||(approved_at is not null)::text from cp.access_policy_versions where id='{V1}'") == f"{MG}:true",
            "aprovador e horario pelo banco")
     expect(error(edit + validation(L2), "23514", **as_mgr), "revisao aprovada nao recebe nova validacao")
-    # Revisao 2 validada antes de nova instalacao aprovada: a aprovacao exige validar de novo.
+    # Passagem validada que volta a MAPPED (mudanca fisica): a aprovacao exige validar de novo.
     query(edit + version(V2), **as_mgr)
-    h2 = value(f"select canonical_hash from cp.access_policy_versions where id='{V2}'")
-    query(edit + validation(L3, ver=V2, hsh=h2) + f"; UPDATE cp.access_policy_versions SET validation_id='{L3}',state='VALIDATED',version=1 WHERE id='{V2}'", **as_mgr)
-    query(f"SET session_replication_role=replica; INSERT INTO cp.installation_acceptances(id,tenant_id,installation_revision,status,plant_ref,plant_hash,"
-          f"topology_manifest_ref,topology_hash,capability_envelope_hash,test_suite_version,test_report_ref,critical_tests_pending,critical_tests_failed,"
-          f"emergency_test_ref,rollback_plan_ref,created_by,effective_at,technical_grant_id,technical_approver_account_id,technical_signed_at,rules_approver_membership_id,rules_approver_account_id,rules_signed_at) VALUES('{IB}','{TA}',2,'APPROVED','planta/43','{'a'*64}','top/43','{'b'*64}',"
-          f"'{'c'*64}','hac','rel/43',0,0,'emg/43','rb/43','{MI}',now(),gen_random_uuid(),'{MI}',now(),gen_random_uuid(),'{MG}',now())")
+    query(edit + validation(L3, ver=V2) + f"; UPDATE cp.access_policy_versions SET validation_id='{L3}',state='VALIDATED',version=1 WHERE id='{V2}'", **as_mgr)
+    query(tech + f"UPDATE cp.access_points SET flow_direction='BOTH',updated_by='{MI}',version=version+1 WHERE id='{PT}'", **as_tech)
+    expect(value(f"select status from cp.access_points where id='{PT}'") == "MAPPED", "mudanca fisica devolve a passagem a MAPPED")
     expect(error(both + f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V2}'", "23514", **as_mgr),
-           "nova instalacao aprovada invalida a validacao")
+           "passagem que volta a MAPPED invalida a validacao")
     expect(error(edit + f"UPDATE cp.access_policy_versions SET state='REJECTED',version=2 WHERE id='{V2}'", "23514", **as_mgr), "rejeicao exige motivo")
     query(edit + f"UPDATE cp.access_policy_versions SET state='REJECTED',rejected_reason='Instalacao mudou',version=2 WHERE id='{V2}'", **as_mgr)
-    # Destinos: gestao le vinculo ativo so com a varredura ligada e com policy.edit.
-    expect(value(edit + "select count(*) from cp.point_bindings", **as_mgr) == "0", "HAC-009: gestao nao le vinculo fisico fora da varredura")
-    expect(value(edit + "SET LOCAL app.policy_destination_scan='on'; select count(*) from cp.point_bindings", **as_mgr) == "1",
-           "varredura de destinos le o vinculo ativo")
+    # Destinos: gestao le vinculo so com a varredura ligada e com policy.edit.
+    expect(value("SET LOCAL app.capabilities='policy.edit'; select count(*) from cp.point_bindings", **as_mgr) == "0",
+           "HAC-009: gestao nao le vinculo fisico fora da varredura")
+    expect(value(edit + "select count(*) from cp.point_bindings", **as_mgr) == "1", "varredura de destinos le os vinculos")
     expect(value(area_only + "SET LOCAL app.policy_destination_scan='on'; select count(*) from cp.point_bindings", **as_mgr) == "0",
            "varredura exige capacidade de politica")
     expect(value(edit + "select count(*) from cp.access_policies", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: politica nao atravessa condominio")
-    expect(value("SET LOCAL app.technical_scopes='installation.read'; select count(*) from cp.access_policy_versions", tenant=TA, actor=MI, role="cp_api") == "0",
+    expect(value("SET LOCAL app.technical_scopes='installation.read'; select count(*) from cp.access_policy_versions", **as_tech) == "0",
            "MASTER de implantacao nao le regras da gestao")
     expect(error("select change_reason from cp.access_policy_versions", "42501", tenant=TA, role="cp_worker"), "worker nao le motivo")
     expect(value("select count(*) from cp.access_policy_versions where state='APPROVED'", tenant=TA, role="cp_worker") == "1", "worker le o documento aprovado")
     expect(error(edit + f"DELETE FROM cp.access_policy_versions WHERE id='{V2}'", "42501", **as_mgr), "revisao nao e apagada")
     expect(error(edit + f"UPDATE cp.access_policies SET status='ACTIVE',updated_by='{MG}',version=1 WHERE id='{PO}'", "23514", **as_mgr),
            "politica so ativa pela publicacao")
-    expect(error("SET LOCAL app.technical_scopes='installation.manage'; " + f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
-                 f"VALUES('{TA}','{MI}','POLICY_CREATED','ACCESS_POLICY','{PO}',gen_random_uuid())", "42501", tenant=TA, actor=MI, role="cp_api"),
+    expect(error(tech + f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+                 f"VALUES('{TA}','{MI}','POLICY_CREATED','ACCESS_POLICY','{PO}',gen_random_uuid())", "42501", **as_tech),
            "trilha POLICY_* so da gestao")
     expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname in "
                  "('access_policies','access_policy_versions','access_policy_validations') and c.relrowsecurity and c.relforcerowsecurity") == "3",
            "politicas com RLS FORCE")
-    cleanup()
+    facial_cleanup(ids)
 
 def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
-    query(f"SET session_replication_role=replica; DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MI}','{MS}'); "
+    query(f"DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM cp.point_bindings WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.installation_acceptances WHERE tenant_id in ('{TA}','{TB}'); "
           f"DELETE FROM cp.device_channels WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_devices WHERE connector_id in ('{KA}','{KB}'); "
           f"DELETE FROM cp.access_connectors WHERE id in ('{KA}','{KB}'); DELETE FROM cp.access_points WHERE id='{P1}'; "
-          f"DELETE FROM cp.access_areas WHERE id in ('{A1}','{A2}'); DELETE FROM platform.access_homologations WHERE id in ('{HOK}','{HNO}'); "
+          f"DELETE FROM cp.access_areas WHERE id in ('{A1}','{A2}'); "
+          f"DELETE FROM platform.access_homologation_decisions WHERE homologation_id in ('{HOK}','{HNO}'); "
+          f"DELETE FROM platform.access_homologations WHERE id in ('{HOK}','{HNO}'); DELETE FROM platform.platform_audit_log WHERE actor_id='{MS}'; "
           f"DELETE FROM cp.technical_grants WHERE id in ('{G1}','{G2}','42700000-0000-4000-8000-000000000003'); "
           f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")

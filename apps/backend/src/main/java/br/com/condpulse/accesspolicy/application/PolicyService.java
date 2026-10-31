@@ -107,6 +107,8 @@ public class PolicyService {
    var v=store.version(tenant,policyId,request.policyVersionId());
    if(v==null) throw notFound("POLICY_VERSION_NOT_FOUND");
    if(!Set.of("DRAFT","VALIDATED").contains(v.state())) throw new BusinessProblem("POLICY_VERSION_NOT_EDITABLE",409,"Só revisão em preparação é validada.");
+   // Lock da instalação antes de ler os fatos: a impressão gravada pelo banco é a dos fatos validados.
+   store.lockInstallation(tenant);
    var area=store.area(tenant,policy.areaId());
    if(area==null) throw notFound("POLICY_NOT_FOUND");
    int revision=store.installationRevision(tenant);
@@ -152,7 +154,18 @@ public class PolicyService {
   long expected=version(request==null?null:request.expectedVersion());
   return mapped(()->tenants.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.PUBLISH_POLICIES);
-   if(store.version(tenant,policyId,versionId)==null) throw notFound("POLICY_VERSION_NOT_FOUND");
+   var policy=store.policy(tenant,policyId);
+   var v=store.version(tenant,policyId,versionId);
+   if(policy==null || v==null) throw notFound("POLICY_VERSION_NOT_FOUND");
+   // Sob o lock da instalação, os mesmos impeditivos da validação com os fatos e o horário atuais; o banco confere também
+   // a impressão dos fatos gravada na validação.
+   store.lockInstallation(tenant);
+   var area=store.area(tenant,policy.areaId());
+   if(area==null) throw notFound("POLICY_NOT_FOUND");
+   int targets=store.countDestinations(tenant,policy.areaId());
+   var current=PolicyEngine.validate(v.document(),area,store.destinations(tenant,policy.areaId(),null,PolicyEngine.MAX_TARGETS),targets,Instant.now());
+   if(PolicyEngine.blocked(current) || v.validationId()==null || !store.factsUnchanged(tenant,v.validationId(),policy.areaId()))
+    throw new BusinessProblem("POLICY_VALIDATION_STALE",409,"A instalação ou a área mudou desde a validação. Valide de novo.");
    if(!store.approve(tenant,versionId,expected)) throw stale();
    audit.record(tenant,actor,"POLICY_VERSION_APPROVED","ACCESS_POLICY_VERSION",versionId,null);
    return store.version(tenant,policyId,versionId);
