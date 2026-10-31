@@ -61,8 +61,6 @@ public final class GatewayService {
  private final Clock clock;
  private final Map<String,DeviceStatus> status=new ConcurrentHashMap<>();
  private final java.util.concurrent.atomic.AtomicLong rejectedRevocations=new java.util.concurrent.atomic.AtomicLong();
- /** Eventos recebidos dos equipamentos que não puderam ser gravados na hora; regravados no ciclo de coleta. */
- private final java.util.concurrent.ConcurrentLinkedQueue<Object[]> inboundBacklog=new java.util.concurrent.ConcurrentLinkedQueue<>();
 
  public GatewayService(GatewayConfig config,CapabilityRegistry registry,Map<String,AccessProviderAdapter> adapters,LocalCommandQueue queue,
      OpenDispatcher opens,EventOutbox outbox,LocalDecisionEngine decisions,DecisionOutbox decisionOutbox,CentralApiClient central,Clock clock) {
@@ -144,9 +142,10 @@ public final class GatewayService {
   var command=entry.command();
   var adapter=adapters.get(device.deviceId());
   if(adapter==null) { queue.mark(command.commandId(),Status.PENDING,null,"ADAPTER_UNAVAILABLE"); return false; }
-  var st=status.get(device.deviceId());
-  if(st!=null && st.quarantined() && !command.type().revocation()) {
-   queue.mark(command.commandId(),Status.PENDING,null,"DEVICE_IDENTITY_MISMATCH"); return false;
+  if(!command.type().revocation()) {
+   // Gravação só depois de a sonda conferir a identidade desde a (re)conexão; revogação nunca espera.
+   String identity=actuationBlock(device.deviceId());
+   if(identity!=null) { queue.mark(command.commandId(),Status.PENDING,null,identity); return false; }
   }
   if(entry.status()==Status.NEEDS_READBACK) {
    switch(verify(adapter,command)) {
@@ -221,7 +220,14 @@ public final class GatewayService {
   if(registry.profile(device).isEmpty()) return "PROFILE_NOT_REGISTERED";
   boolean removePerson=manifest.supports(Operation.REMOVE_PERSON) && adapter.removePersonCoversCredentials();
   switch(type) {
-   case UPSERT_PERSON -> { if(!manifest.supports(Operation.UPSERT_PERSON)) return "NAO_SUPORTADO_SEM_DOCUMENTACAO:UPSERT_PERSON"; }
+   case UPSERT_PERSON -> {
+    if(!manifest.supports(Operation.UPSERT_PERSON)) return "NAO_SUPORTADO_SEM_DOCUMENTACAO:UPSERT_PERSON";
+    // Qualquer limite temporal (início ou fim) só é aceito onde a validade local é suportada.
+    var p=person(command);
+    if((p.validFrom()!=null || p.validUntil()!=null) && device.decisionMode()==DecisionMode.DEVICE_LOCAL_ACL
+       && !registry.allows(device,manifest,CapabilityName.localValidity).allowed())
+     return "LOCAL_VALIDITY_NOT_SUPPORTED";
+   }
    case ENROLL_FACE -> {
     if(!manifest.supports(Operation.ENROLL_FACE)) return "NAO_SUPORTADO_SEM_DOCUMENTACAO:ENROLL_FACE";
     if(!manifest.supports(Operation.REMOVE_FACE) && !removePerson) return "REVOGACAO_SEM_DOCUMENTACAO:REMOVE_FACE";
@@ -239,7 +245,8 @@ public final class GatewayService {
     var cap=registry.allows(device,manifest,CapabilityName.perDoorRights);
     if(!cap.allowed()) return cap.reasonCode();
     var spec=rights(command);
-    if(spec.validUntil()!=null && device.decisionMode()==DecisionMode.DEVICE_LOCAL_ACL && !registry.allows(device,manifest,CapabilityName.localValidity).allowed())
+    if((spec.validFrom()!=null || spec.validUntil()!=null) && device.decisionMode()==DecisionMode.DEVICE_LOCAL_ACL
+       && !registry.allows(device,manifest,CapabilityName.localValidity).allowed())
      return "LOCAL_VALIDITY_NOT_SUPPORTED";
     for(Right r:spec.rights()) if(device.channel(r.channelId()).isEmpty() || !device.nativeSchedules().containsKey(r.scheduleRef())) return "RIGHT_NOT_REPRESENTABLE";
    }
@@ -390,13 +397,7 @@ public final class GatewayService {
  // ----- eventos -----
 
  /** Busca uma página de eventos de cada equipamento que suporta backfill; o cursor só avança após gravação local. */
- @SuppressWarnings("unchecked")
  public void pollEvents() {
-  Object[] pending;
-  while((pending=inboundBacklog.peek())!=null) {
-   try { outbox.add((String)pending[0],(List<EdgeEvent>)pending[1],null); inboundBacklog.poll(); }
-   catch(RuntimeException e) { break; }
-  }
   for(Device d:config.devices()) {
    var adapter=adapters.get(d.deviceId());
    if(!d.enabled() || adapter==null || !adapter.manifest().supports(Operation.FETCH_EVENTS)) continue;
@@ -558,11 +559,13 @@ public final class GatewayService {
     try { telemetry(device,decision,(System.nanoTime()-started)/1_000_000); } catch(RuntimeException ignored) {}
     return decision;
    }
-   /** Nunca lança nem bloqueia a resposta: falha de gravação deixa os eventos na reserva de memória. */
+   /**
+    * Grava na fila durável (com reserva própria para eventos recebidos) antes de o adaptador responder. Falha de
+    * gravação é propagada: o adaptador não confirma o recebimento e responde negativa segura.
+    */
    @Override public void events(List<EdgeEvent> events) {
     if(events.isEmpty()) return;
-    try { outbox.add(deviceId,events,null); }
-    catch(RuntimeException e) { inboundBacklog.add(new Object[]{deviceId,List.copyOf(events)}); }
+    outbox.addInbound(deviceId,events);
    }
    @Override public void heartbeat() {
     // Só registra o batimento: alcance e identidade continuam sendo da sonda de saúde.
