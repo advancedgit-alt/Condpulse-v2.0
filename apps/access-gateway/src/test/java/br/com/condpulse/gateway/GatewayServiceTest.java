@@ -56,6 +56,7 @@ class GatewayServiceTest {
   var opens=new OpenDispatcher(dir,clock,config,registry,id->Optional.of(adapter));
   decisionOutbox=new br.com.condpulse.gateway.central.DecisionOutbox(dir,clock,100);
   service=new GatewayService(config,registry,Map.of("d1",adapter),queue,opens,outbox,decisions,decisionOutbox,central,clock);
+  service.checkHealth(); // sonda de identidade antes de gravar, como no ciclo real
  }
 
  @Test void aplicacaoAceitaEConfirmadaPelaLeituraDeVolta() {
@@ -272,6 +273,7 @@ class GatewayServiceTest {
   var registry=new CapabilityRegistry(config.profiles());
   service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir,clock,config,registry,id->Optional.of(adapter)),
    outbox,decisions,decisionOutbox,central,clock);
+  service.checkHealth();
   assertEquals(1,queue.unreported().size(),"pendência de publicação sobrevive a reinício");
   long calls=adapter.calls.size();
   central.available=true;
@@ -341,6 +343,7 @@ class GatewayServiceTest {
   var registry=new CapabilityRegistry(config.profiles());
   service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o3"),clock,config,registry,id->Optional.of(adapter)),
    outbox,decisions,decisionOutbox,central,clock);
+  service.checkHealth();
   service.submit(command("p","d1","s1",CommandType.UPSERT_PERSON,1,Map.of("displayName","Morador","nativeUserRef","77")));
   service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
   service.submit(command("x","d1","s2",CommandType.REVOKE_ALL,1,Map.of()));
@@ -385,5 +388,49 @@ class GatewayServiceTest {
   assertEquals(Status.DONE,queue.get("c").orElseThrow().status(),"o comando seguinte foi processado");
   assertEquals(1,queue.pending("d1").size(),"a retida continua visível");
   assertEquals(OperationState.UNKNOWN,central.results.stream().filter(x->x.commandId().equals("r")).findFirst().orElseThrow().state());
+ }
+
+ // ----- quinta rodada (#129) -----
+
+ @Test void gravacaoEsperaAConferenciaDeIdentidadeRevogacaoNao() {
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o6"),clock,config,registry,id->Optional.of(adapter)),
+   outbox,decisions,decisionOutbox,central,clock);
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
+  service.submit(command("rv","d1","s2",CommandType.REVOKE_ALL,1,Map.of()));
+  service.processQueues(10);
+  assertEquals("DEVICE_IDENTITY_NOT_VERIFIED",queue.get("r").orElseThrow().lastReason());
+  assertTrue(adapter.calls.stream().noneMatch("APPLY_RIGHTS"::equals));
+  assertEquals(Status.DONE,queue.get("rv").orElseThrow().status(),"revogação não espera a identidade");
+  service.checkHealth();
+  service.processQueues(10);
+  assertEquals(Status.DONE,queue.get("r").orElseThrow().status());
+ }
+
+ @Test void qualquerLimiteTemporalExigeValidadeLocalNoModoAcl() {
+  adapter.documented.put(CapabilityName.localValidity,null);
+  service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,Map.of("rights",List.of(Map.of("channelId","c1","scheduleRef","sempre")),
+   "validFrom","2030-01-01T00:00:00Z")));
+  service.submit(command("p","d1","s2",CommandType.UPSERT_PERSON,1,Map.of("displayName","Visitante","validUntil","2031-01-01T00:00:00Z")));
+  service.processQueues(10);
+  assertEquals("LOCAL_VALIDITY_NOT_SUPPORTED",queue.get("r").orElseThrow().lastReason(),"só início também é limite");
+  assertEquals("LOCAL_VALIDITY_NOT_SUPPORTED",queue.get("p").orElseThrow().lastReason());
+ }
+
+ @Test void eventoRecebidoSemGravacaoDuravelFazOAdaptadorNaoConfirmar() {
+  outbox.close();
+  outbox=new EventOutbox(dir.resolve("cheia2"),clock,0);
+  var registry=new CapabilityRegistry(config.profiles());
+  service=new GatewayService(config,registry,Map.of("d1",adapter),queue,new OpenDispatcher(dir.resolve("o7"),clock,config,registry,id->Optional.of(adapter)),
+   outbox,decisions,decisionOutbox,central,clock);
+  var ev=new EdgeEvent(null,"d1","prov-d1","epoca-1","in-1","conector-teste",null,EventKind.ACCESS_ALLOWED,null,Direction.UNKNOWN,TimeQuality.UNKNOWN,
+   new Evidence(EvidenceLevel.DEVICE_REPORTED,EvidenceSource.DEVICE_EVENT,"X",null,null),null,"1");
+  context().events(List.of(ev)); // cabe na reserva própria de eventos recebidos: gravado de forma durável
+  assertEquals(1,outbox.pendingCount());
+  var many=new java.util.ArrayList<EdgeEvent>();
+  for(int i=0;i<EventOutbox.INBOUND_RESERVE;i++) many.add(new EdgeEvent(null,"d1","prov-d1","epoca-1","x"+i,"conector-teste",null,EventKind.ACCESS_ALLOWED,
+   null,Direction.UNKNOWN,TimeQuality.UNKNOWN,new Evidence(EvidenceLevel.DEVICE_REPORTED,EvidenceSource.DEVICE_EVENT,"X",null,null),null,"1"));
+  var ctx=context();
+  assertThrows(IllegalStateException.class,()->ctx.events(many),"sem espaço durável a falha chega ao adaptador");
  }
 }

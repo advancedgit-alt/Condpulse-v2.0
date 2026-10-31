@@ -49,6 +49,9 @@ class InvariantsTest {
      GatewayService service,TestSupport.StubCentral central) {}
 
  private static Fixture fixture(java.nio.file.Path dir,TestSupport.TestClock clock,DecisionMode mode,ScriptedAdapter given) {
+  return fixture(dir,clock,mode,given,true);
+ }
+ private static Fixture fixture(java.nio.file.Path dir,TestSupport.TestClock clock,DecisionMode mode,ScriptedAdapter given,boolean probe) {
   var device=TestSupport.device("d1",Brand.CONTROL_ID,ConnectionMode.LOCAL,mode,URI.create("http://192.0.2.10"),
    List.of(TestSupport.channel("c1","1","door:door=1")),Map.of("sempre","1"),Map.of(),true);
   var config=TestSupport.config(List.of(device),true,new CondoOpenPolicy(EnumSet.of(OpenOrigin.PORTARIA_LOCAL),false));
@@ -61,6 +64,7 @@ class InvariantsTest {
   var registry=new CapabilityRegistry(config.profiles());
   var opens=new OpenDispatcher(dir,clock,config,registry,id->Optional.of(adapter));
   var service=new GatewayService(config,registry,Map.of("d1",adapter),queue,opens,outbox,decisions,decisionOutbox,central,clock);
+  if(probe) service.checkHealth();
   return new Fixture(config,dir,clock,adapter,queue,outbox,decisions,decisionOutbox,opens,service,central);
  }
  private static void close(Fixture f) { f.queue().close(); f.outbox().close(); f.decisions().close(); f.decisionOutbox().close(); f.opens().close(); }
@@ -124,7 +128,7 @@ class InvariantsTest {
  @Test void invariante3_atuacaoConfereTudoAntesDoEnvio() {
   var dir=TestSupport.tempDir();
   var clock=new TestSupport.TestClock();
-  var f=fixture(dir,clock,DecisionMode.DEVICE_LOCAL_ACL,null);
+  var f=fixture(dir,clock,DecisionMode.DEVICE_LOCAL_ACL,null,false);
   try {
    var now=clock.instant();
    var expired=new OpenDispatcher.OpenCommand("e","ne","d1","c1","ponto-c1",1,1,now.minusSeconds(6),now.minusSeconds(1),OpenOrigin.PORTARIA_LOCAL,"a",null);
