@@ -30,7 +30,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // horários de verificação, observação e mudança de estado vêm do banco. Ocorrências da portaria (V033): nunca apagadas;
   // autoria, nomes e horários vêm do banco. Locações (V034): nunca apagadas; só o encerramento muda. Financeiro condominial (V036):
   // nada apagado; evento do webhook nunca muda; pagador, taxa e cobrança só mudam pelas colunas de transição. Concessões
-  // técnicas (V037): nunca apagadas; só a revogação muda; estado inicial, identidade do banco e horários vêm do banco. Outbox (V032): a operação da plataforma só devolve
+  // técnicas (V037): nunca apagadas; só a revogação muda; estado inicial, identidade do banco e horários vêm do banco.
+  // Sujeitos e contextos (V038): nunca apagados; só estado, época e encerramento mudam; tipo e vigência vêm da origem. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
@@ -193,6 +194,17 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.technical_grants') and c.attname in ('status','granted_by_db_user','approved_at','revoked_at',
         'revoked_by_account_id','revoke_reason','created_at','updated_at','version')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_subjects'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.subject_contexts'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_subjects') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('status','restriction_epoch','blocked_reason','blocked_by','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.subject_contexts') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('status','status_reason','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_subjects') and c.attname in ('status','restriction_epoch','external_ref','blocked_at',
+        'identity_verified_at','created_at','updated_at','version')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

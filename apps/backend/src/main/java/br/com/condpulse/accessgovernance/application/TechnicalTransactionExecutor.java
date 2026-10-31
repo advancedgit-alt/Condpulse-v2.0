@@ -37,7 +37,7 @@ public class TechnicalTransactionExecutor {
   Objects.requireNonNull(assurance); Objects.requireNonNull(action);
   return tx.execute(status->{
    for(String setting:new String[]{"app.session_hash","app.capabilities","app.invitation_hash","app.tenant_id",
-     "app.platform_capabilities","app.permit_link_hash","app.occupancy_scan","app.finance_webhook_charge","app.technical_scopes",
+     "app.platform_capabilities","app.permit_link_hash","app.occupancy_scan","app.finance_webhook_charge","app.technical_scopes","app.subject_context_scan",
      "app.recovery_hash","app.recovery_purge","app.manager_invitation_hash"})
     jdbc.queryForObject("select set_config(?,'',true)",String.class,setting);
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());

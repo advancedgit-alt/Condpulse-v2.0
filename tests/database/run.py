@@ -3359,6 +3359,168 @@ def technical_grant_checks():
           f"DELETE FROM cp.technical_grants WHERE id in ('{G1}','{G2}','{G3}'); DELETE FROM cp.memberships WHERE account_id='{MG}'; "
           f"DELETE FROM platform.accounts WHERE id in ('{PL}','{MI}','{MG}')")
 
+def subject_checks():
+    """V038 (AC-005): sujeito por condominio e contextos explicitos. Casos HAC-029 (mesma pessoa em dois condominios) e
+    HAC-030 (multiplos vinculos sem uniao permissiva), alem de bloqueio transversal x revogacao de um contexto."""
+    MG, CO, RS, DP, X = ("10000000-0000-4000-8000-0000000038a1", "10000000-0000-4000-8000-0000000038a2", "10000000-0000-4000-8000-0000000038a3",
+                         "10000000-0000-4000-8000-0000000038a4", "10000000-0000-4000-8000-0000000038a5")
+    MRS, MDP, MXA, MXB, MMG = ("51000000-0000-4000-8000-0000000038a1", "51000000-0000-4000-8000-0000000038a2", "51000000-0000-4000-8000-0000000038a3",
+                               "51000000-0000-4000-8000-0000000038a4", "51000000-0000-4000-8000-0000000038a5")
+    SRS, SDP, SXA, SXB, SV = ("38000000-0000-4000-8000-000000000001", "38000000-0000-4000-8000-000000000002", "38000000-0000-4000-8000-000000000003",
+                              "38000000-0000-4000-8000-000000000004", "38000000-0000-4000-8000-000000000005")
+    CRS, CDP, CFA, CV = ("38100000-0000-4000-8000-000000000001", "38100000-0000-4000-8000-000000000002", "38100000-0000-4000-8000-000000000003",
+                         "38100000-0000-4000-8000-000000000004")
+    PV, VV, KN, CR = ("38200000-0000-4000-8000-000000000001", "38200000-0000-4000-8000-000000000002", "38200000-0000-4000-8000-000000000003",
+                      "38200000-0000-4000-8000-000000000004")
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{MG}','ACTIVE'),('{CO}','ACTIVE'),('{RS}','ACTIVE'),('{DP}','ACTIVE'),('{X}','ACTIVE');
+        INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) VALUES
+          ('{MMG}','{TA}','{MG}',NULL,'GESTAO SUJEITO','MANAGER','ACTIVE'),(gen_random_uuid(),'{TA}','{CO}',NULL,'PORTARIA SUJEITO','CONCIERGE','ACTIVE'),
+          ('{MRS}','{TA}','{RS}','{UA}','MORADOR SUJEITO','RESIDENT','ACTIVE'),('{MDP}','{TA}','{DP}','{UA}','DEPENDENTE SUJEITO','DEPENDENT','ACTIVE'),
+          ('{MXA}','{TA}','{X}','{UA}','PESSOA X EM A','RESIDENT','ACTIVE'),('{MXB}','{TB}','{X}','{UB}','PESSOA X EM B','RESIDENT','ACTIVE');
+        INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{VV}','{TA}','VISITANTE SUJEITO','{RS}');
+        INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until)
+          VALUES('{PV}','{TA}','{VV}','{UA}','{RS}',now(),now()+interval '1 day');
+    """)
+    mgr = "SET LOCAL app.capabilities='memberships.manage'; "
+    con = "SET LOCAL app.capabilities='concierge.operate'; "
+    as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
+    as_con = dict(tenant=TA, actor=CO, role="cp_api")
+    def subject(identifier, account, tenant=TA):
+        return f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{identifier}','{tenant}','ACCOUNT','{account}')"
+    def context(identifier, subj, membership, kind="RESIDENT", actor=MG, tenant=TA):
+        return (f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,created_by) "
+                f"VALUES('{identifier}','{tenant}','{subj}','{kind}','MEMBERSHIP','{membership}','{actor}')")
+    def current(ctx):
+        return value(mgr + f"select cp.subject_context_current('{TA}','{ctx}')", **as_mgr)
+    expect(error(subject(SRS, RS), "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao cria sujeito")
+    query(mgr + subject(SRS, RS), **as_mgr)
+    expect(value(f"select status||':'||restriction_epoch||':'||version||':'||(external_ref ~ '^cps_') from cp.access_subjects where id='{SRS}'")
+           == "ACTIVE:0:0:true", "sujeito nasce ativo na epoca 0 com referencia opaca")
+    expect(error(mgr + subject(SDP, RS), "23505", **as_mgr), "uma conta tem um sujeito por condominio")
+    query(mgr + subject(SDP, DP), **as_mgr)
+    # Tipo vem do vinculo, nao do cliente.
+    query(mgr + context(CRS, SRS, MRS, kind="EMPLOYEE"), **as_mgr)
+    expect(value(f"select context_kind||':'||unit_id||':'||source_version from cp.subject_contexts where id='{CRS}'") == f"RESIDENT:{UA}:0",
+           "HAC-030: tipo, unidade e versao do contexto vem do vinculo")
+    expect(error(mgr + context(CDP, SRS, MDP), "23514", **as_mgr), "vinculo de outra pessoa nao vira contexto do sujeito")
+    expect(error(mgr + subject("38000000-0000-4000-8000-0000000000aa", MG) + "; " + context(CDP, "38000000-0000-4000-8000-0000000000aa", MMG), "23514", **as_mgr),
+           "HAC-011: vinculo de gestao nao gera contexto de acesso fisico")
+    expect(error(mgr + context(CDP, SRS, MRS), "23505", **as_mgr), "mesma origem nao duplica contexto ativo")
+    query(mgr + context(CDP, SDP, MDP), **as_mgr)
+    expect(value(f"select context_kind from cp.subject_contexts where id='{CDP}'") == "DEPENDENT", "dependente vira contexto DEPENDENT")
+    # Mesma pessoa em dois condominios: dois sujeitos, nada atravessa.
+    query(mgr + subject(SXA, X), **as_mgr)
+    query(subject(SXB, X, tenant=TB))
+    expect(value(f"select count(distinct external_ref) from cp.access_subjects where id in ('{SXA}','{SXB}')") == "2",
+           "HAC-029: mesma conta em dois condominios gera dois sujeitos distintos")
+    expect(error(mgr + context(CFA, SXA, MXB), "23514", **as_mgr), "HAC-029: vinculo de outro condominio nao completa associacao")
+    expect(value(f"select count(*) from cp.access_subjects where id='{SXB}'", **as_mgr).strip() in ("0",""),
+           "HAC-029: gestao de A nao ve sujeito de B")
+    expect(value("select count(*) from cp.access_subjects", tenant=TA, actor=RS, role="cp_api") == "1", "morador ve so o proprio sujeito")
+    # Autorizacao funcional: aprovador e fim obrigatorios; revogar um contexto nao bloqueia o sujeito.
+    func = (f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,functional_authorization_ref,"
+            f"approved_by_account_id,valid_until,created_by) VALUES('{CFA}','{TA}','{SRS}','SERVICE_PROVIDER','FUNCTIONAL_AUTHORIZATION',"
+            f"'os:manutencao-0001','{MG}',now()+interval '7 days','{MG}')")
+    expect(error(mgr + func.replace("now()+interval '7 days'", "now()+interval '400 days'"), "23514", **as_mgr), "autorizacao funcional tem prazo maximo")
+    expect(error(mgr + func.replace(f"'{MG}',now()", f"'{RS}',now()"), "42501", **as_mgr), "aprovador da autorizacao e o proprio gestor")
+    query(mgr + func, **as_mgr)
+    expect(current(CRS) == "t" and current(CFA) == "t", "contextos residencial e funcional vigentes")
+    query(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Fim do servico',version=1 WHERE id='{CFA}'", **as_mgr)
+    expect(current(CFA) == "f" and current(CRS) == "t", "HAC-030: revogar um contexto nao afeta a residencia do mesmo sujeito")
+    expect(error(mgr + f"UPDATE cp.subject_contexts SET status='ACTIVE',status_reason=NULL,version=2 WHERE id='{CFA}'", "23514", **as_mgr),
+           "contexto encerrado nao volta")
+    expect(error(mgr + f"UPDATE cp.subject_contexts SET valid_until=now()+interval '9 days',version=1 WHERE id='{CRS}'", "42501", **as_mgr),
+           "vigencia do contexto nao e editada")
+    # Bloqueio transversal: eleva a epoca e derruba todos os contextos; desbloqueio eleva de novo.
+    expect(error(mgr + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',version=1 WHERE id='{SRS}'",
+                 "23514", **as_mgr), "bloqueio sem elevar a epoca e recusado")
+    query(mgr + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
+    expect(current(CRS) == "f", "bloqueio do sujeito vale para todos os contextos")
+    expect(error(mgr + f"UPDATE cp.access_subjects SET status='ACTIVE',blocked_reason=NULL,blocked_by=NULL,restriction_epoch=0,version=2 WHERE id='{SRS}'",
+                 "23514", **as_mgr), "epoca nunca desce")
+    query(mgr + f"UPDATE cp.access_subjects SET status='ACTIVE',blocked_reason=NULL,blocked_by=NULL,restriction_epoch=2,version=2 WHERE id='{SRS}'", **as_mgr)
+    expect(current(CRS) == "t", "desbloqueio devolve o contexto ainda valido na origem")
+    expect(error(f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='x',blocked_by='{RS}',restriction_epoch=3,version=3 WHERE id='{SRS}'",
+                 "42501", tenant=TA, actor=RS, role="cp_api") or value(f"select status from cp.access_subjects where id='{SRS}'") == "ACTIVE",
+           "morador nao bloqueia sujeito")
+    # Origem mudou: projecao desatualizada deixa de valer sem job.
+    query(f"UPDATE cp.memberships SET status='REVOKED',version=version+1 WHERE id='{MDP}'")
+    expect(current(CDP) == "f", "vinculo revogado derruba o contexto materializado")
+    # Visitante: so a portaria materializa; contexto do convite e independente da residencia.
+    expect(error(mgr + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,visitor_id) VALUES('{SV}','{TA}','VISITOR','{VV}')", "42501", **as_mgr),
+           "gestao nao cria sujeito visitante")
+    query(con + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,visitor_id) VALUES('{SV}','{TA}','VISITOR','{VV}')", **as_con)
+    query(con + f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,permit_id,valid_until,created_by) "
+          f"VALUES('{CV}','{TA}','{SV}','RESIDENT','VISIT_PERMIT','{PV}',now()+interval '30 days','{CO}')", **as_con)
+    expect(value(f"select context_kind||':'||(valid_until<now()+interval '2 days') from cp.subject_contexts where id='{CV}'") == "VISITOR:true",
+           "HAC-036: convite vira contexto VISITOR com a vigencia do convite")
+    expect(value(mgr + f"select cp.subject_context_current('{TA}','{CV}')", **as_mgr) == "f",
+           "sem a conferencia ligada a gestao nao le o convite")
+    expect(value(mgr + f"SET LOCAL app.subject_context_scan='on'; select cp.subject_context_current('{TA}','{CV}')", **as_mgr) == "t",
+           "com a conferencia da listagem a gestao ve a vigencia do visitante (so o booleano)")
+    expect(value(f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.visit_permits where id='{PV}'", tenant=TA, actor=RS, role="cp_api") == "1"
+           and value(f"SET LOCAL app.subject_context_scan='on'; select count(*) from cp.visit_permits", tenant=TA, actor=DP, role="cp_api") == "0",
+           "a conferencia nao abre convites para quem nao e da gestao ou portaria")
+    query(f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{RS}',revoked_at=now(),revoke_reason='Cancelado',version=version+1 WHERE id='{PV}'")
+    expect(value(con + f"select cp.subject_context_current('{TA}','{CV}')", **as_con) == "f" and current(CRS) == "t",
+           "HAC-039: convite revogado derruba o contexto de visita e nao a residencia")
+    # Revogacao de contexto vale ate reautorizacao explicita da gestao; convite revogado nunca volta.
+    CXA, CXR = "38100000-0000-4000-8000-000000000005", "38100000-0000-4000-8000-000000000006"
+    query(mgr + context(CXA, SXA, MXA), **as_mgr)
+    query(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Ordem da gestao',version=1 WHERE id='{CXA}'", **as_mgr)
+    expect(error(mgr + context(CXR, SXA, MXA), "23514", **as_mgr), "origem com contexto revogado nao e recriada sem reautorizacao")
+    reauth = (f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,reauthorizes_context_id,created_by) "
+              f"VALUES('{CXR}','{TA}','{SXA}','RESIDENT','MEMBERSHIP','{MXA}','{CXA}',")
+    expect(error(con + reauth + f"'{CO}')", "42501", **as_con), "portaria nao reautoriza")
+    query(mgr + reauth + f"'{MG}')", **as_mgr)
+    expect(current(CXR) == "t", "reautorizacao explicita da gestao devolve o contexto")
+    CXS = "38100000-0000-4000-8000-000000000007"
+    query(f"UPDATE cp.memberships SET version=version+1 WHERE id='{MXA}'")
+    query(mgr + f"UPDATE cp.subject_contexts SET status='SUPERSEDED',status_reason='Origem alterada',version=1 WHERE id='{CXR}'; " + context(CXS, SXA, MXA), **as_mgr)
+    expect(current(CXS) == "t", "cadeia reautorizada segue: sucessor por mudanca na origem sem nova reautorizacao")
+    expect(error(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Outra ordem',version=1 WHERE id='{CXS}'; "
+                 + reauth.replace(CXR, "38100000-0000-4000-8000-000000000008") + f"'{MG}')", "23514", **as_mgr),
+           "reautorizacao precisa citar a revogacao pendente mais recente")
+    query(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Ordem da gestao',version=1 WHERE id='{CV}'", **as_mgr)
+    expect(error(con + f"INSERT INTO cp.subject_contexts(tenant_id,subject_id,context_kind,source_kind,permit_id,created_by) "
+                 f"VALUES('{TA}','{SV}','VISITOR','VISIT_PERMIT','{PV}','{CO}')", "23514", **as_con),
+           "portaria nao desfaz contexto de visitante revogado pela gestao")
+    query(mgr + "INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+          f"VALUES('{TA}','{MG}','SUBJECT_MATERIALIZED','ACCESS_SUBJECT','{TA}',gen_random_uuid())", **as_mgr)
+    expect(value(f"select count(*) from cp.audit_log where actor_id='{MG}' and action='SUBJECT_MATERIALIZED'") == "1", "trilha SUBJECT_* da gestao")
+    expect(error(f"INSERT INTO cp.audit_log(tenant_id,actor_id,action,resource_type,resource_id,trace_id) "
+                 f"VALUES('{TA}','{RS}','SUBJECT_BLOCKED','ACCESS_SUBJECT','{SRS}',gen_random_uuid())", "42501", tenant=TA, actor=RS, role="cp_api"),
+           "morador nao grava trilha de sujeito")
+    # Credencial (CP-046): sujeito preenchido pelo banco; nao troca de sujeito.
+    query(f"INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{KN}','{TA}','SIMULATED','SUJEITO')")
+    query(mgr + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+          f"VALUES('{CR}','{TA}','{KN}','{MRS}','{UA}','CARD','Cartao do morador','{MG}')", **as_mgr)
+    expect(value(f"select subject_id from cp.access_credentials where id='{CR}'") == SRS, "credencial nova recebe o sujeito da conta")
+    expect(error(mgr + f"UPDATE cp.access_credentials SET subject_id='{SDP}' WHERE id='{CR}'", "42501", **as_mgr), "aplicacao nao troca o sujeito da credencial")
+    expect(error(f"UPDATE cp.access_credentials SET subject_id='{SDP}' WHERE id='{CR}'", "23514"), "nem o dono do schema troca o sujeito ligado")
+    query(f"UPDATE cp.memberships SET status='ACTIVE',version=version+1 WHERE id='{MDP}'")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.subject_contexts WHERE subject_id='{SDP}'; DELETE FROM cp.access_subjects WHERE id='{SDP}'")
+    query(mgr + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+          f"VALUES('38200000-0000-4000-8000-000000000005','{TA}','{KN}','{MDP}','{UA}','QR','QR do dependente','{MG}')", **as_mgr)
+    expect(value(f"select s.account_id from cp.access_credentials c join cp.access_subjects s on s.tenant_id=c.tenant_id and s.id=c.subject_id "
+                 f"where c.id='38200000-0000-4000-8000-000000000005'") == DP, "credencial sem sujeito previo cria o sujeito da conta")
+    expect(error(mgr + f"DELETE FROM cp.access_subjects WHERE id='{SRS}'", "42501", **as_mgr), "sujeito nao e apagado")
+    expect(error(mgr + f"DELETE FROM cp.subject_contexts WHERE id='{CRS}'", "42501", **as_mgr), "contexto nao e apagado")
+    expect(error("select account_id from cp.access_subjects", "42501", tenant=TA, role="cp_worker"), "worker nao le a conta do sujeito")
+    expect(value("select count(*) from cp.access_subjects", tenant=TA, role="cp_worker") == value(f"select count(*) from cp.access_subjects where tenant_id='{TA}'")
+           and value(f"select count(*) from cp.access_subjects where id in ('{SXA}','{SXB}')", tenant=TB, role="cp_worker") == "1",
+           "worker le so o proprio condominio")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' "
+                 "and c.relname in ('access_subjects','subject_contexts') and c.relrowsecurity and c.relforcerowsecurity") == "2",
+           "sujeitos e contextos com RLS FORCE")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.access_credentials WHERE connector_id='{KN}'; DELETE FROM cp.access_connectors WHERE id='{KN}'; "
+          f"DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{CO}'); "
+          f"DELETE FROM cp.subject_contexts WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.access_subjects WHERE tenant_id in ('{TA}','{TB}'); "
+          f"DELETE FROM cp.visit_permits WHERE id='{PV}'; DELETE FROM cp.visitors WHERE id='{VV}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{MG}','{CO}','{RS}','{DP}','{X}'); "
+          f"DELETE FROM platform.accounts WHERE id in ('{MG}','{CO}','{RS}','{DP}','{X}')")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -3484,6 +3646,7 @@ def main():
     rental_checks()
     finance_checks()
     technical_grant_checks()
+    subject_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

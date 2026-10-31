@@ -48,6 +48,7 @@ public class TenantTransactionExecutor {
    jdbc.queryForObject("select set_config('app.occupancy_scan','',true)",String.class);
    jdbc.queryForObject("select set_config('app.finance_webhook_charge','',true)",String.class);
    jdbc.queryForObject("select set_config('app.technical_scopes','',true)",String.class);
+   jdbc.queryForObject("select set_config('app.subject_context_scan','',true)",String.class);
    jdbc.queryForObject("select set_config('app.actor_id',?,true)",String.class,accountId.toString());
    Integer active=jdbc.queryForObject(
     "select count(*) from platform.accounts where id=? and status='ACTIVE'",Integer.class,accountId);
