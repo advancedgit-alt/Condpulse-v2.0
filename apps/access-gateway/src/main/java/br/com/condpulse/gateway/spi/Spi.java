@@ -135,12 +135,17 @@ public final class Spi {
 
  /**
   * Estado observado no equipamento para uma pessoa. null em qualquer campo significa "não foi possível observar".
-  * rightKeys são as chaves nativas de direito lidas de volta (comparáveis a {@link AccessProviderAdapter#rightKeys}).
+  * rightKeys são as chaves nativas de direito lidas de volta (comparáveis a {@link AccessProviderAdapter#rightKeys});
+  * personAttributes, os campos da pessoa lidos de volta (comparáveis a {@link AccessProviderAdapter#personAttributes}).
   */
  public record AppliedState(OperationState state,String reasonCode,Boolean personPresent,Set<String> rightKeys,
-     Map<CredentialKind,Integer> credentialCounts,Boolean facePresent) {
-  public AppliedState { rightKeys=rightKeys==null?null:Set.copyOf(rightKeys); credentialCounts=credentialCounts==null?null:Map.copyOf(credentialCounts); }
-  public static AppliedState unavailable(OperationState state,String reason) { return new AppliedState(state,reason,null,null,null,null); }
+     Map<CredentialKind,Integer> credentialCounts,Boolean facePresent,Map<String,String> personAttributes) {
+  public AppliedState { rightKeys=rightKeys==null?null:Set.copyOf(rightKeys); credentialCounts=credentialCounts==null?null:Map.copyOf(credentialCounts);
+   personAttributes=personAttributes==null?null:Map.copyOf(personAttributes); }
+  public AppliedState(OperationState state,String reasonCode,Boolean personPresent,Set<String> rightKeys,Map<CredentialKind,Integer> credentialCounts,Boolean facePresent) {
+   this(state,reasonCode,personPresent,rightKeys,credentialCounts,facePresent,null);
+  }
+  public static AppliedState unavailable(OperationState state,String reason) { return new AppliedState(state,reason,null,null,null,null,null); }
  }
 
  /** Abertura já validada pelo despachante; o adaptador só traduz o canal comissionado para a ação nativa. */

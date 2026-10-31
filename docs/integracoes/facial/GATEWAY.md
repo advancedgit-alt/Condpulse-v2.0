@@ -29,6 +29,12 @@ matriz da seção 6 descreve o conjunto completo; cada adaptador só existe no c
 | Resultado terminal não publicado fica pendente no diário e só o relatório é reenviado | Repetir operação física para republicar resultado |
 | Diário trunca cauda incompleta (queda no meio da escrita) antes de acrescentar | Colar registro novo em linha parcial |
 
+Invariantes verificados por teste (`InvariantsTest`): (1) nada é consumido ou confirmado antes de persistido; (2) queda
+entre dois passos do diário não ressuscita estado antigo — a recuperação deriva fila e cópia de decisão dos registros,
+e aplicação com versão anterior à maior aceita é recusada; (3) toda atuação confere prazo, quarentena e perfil logo
+antes do envio; (4) leitura incerta nunca confirma (inclusive pessoa: campos aplicados precisam bater); (5) falha numa
+etapa do ciclo não bloqueia as outras; (6) todo I/O bloqueante tem prazo (cabeçalhos e corpo) ou watchdog.
+
 Segredos (senha de fabricante, token de entrada de cada equipamento, senha dos keystores) vêm só do diretório de
 segredos montado (`CP_GATEWAY_SECRETS_DIR`, ex.: `/run/secrets`) ou de cofre que o monte ali. A configuração guarda só
 referências (`*Ref`). Nenhum log contém URL de equipamento (o Control iD leva a sessão na query), corpo, foto,
