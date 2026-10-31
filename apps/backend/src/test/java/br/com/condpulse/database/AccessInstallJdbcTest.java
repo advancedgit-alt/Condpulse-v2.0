@@ -25,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class AccessInstallJdbcTest {
  private static final AssuranceLevel AAL1=AssuranceLevel.AAL1,AAL2=AssuranceLevel.AAL2;
  private static final UUID MANAGER=UUID.randomUUID(),MASTER=UUID.randomUUID();
- private static final UUID CONNECTOR=UUID.randomUUID(),PILOT=UUID.randomUUID(),FROM=UUID.randomUUID(),TO=UUID.randomUUID(),POINT=UUID.randomUUID();
+ private static UUID PILOT;
+ private static final UUID CONNECTOR=UUID.randomUUID(),FROM=UUID.randomUUID(),TO=UUID.randomUUID(),POINT=UUID.randomUUID();
  private static final String A64="a".repeat(64),B64="b".repeat(64),C64="c".repeat(64);
  private static JdbcDisposableDatabase db;
  private static InstallService install;
@@ -49,13 +50,9 @@ class AccessInstallJdbcTest {
    +"(?,?,'HALL','Hall','RESIDENTIAL_ROUTE','America/Sao_Paulo',?)",FROM,db.tenantA,MANAGER,TO,db.tenantA,MANAGER);
   db.adminUpdate("insert into cp.access_points(id,tenant_id,code,name,from_area_id,to_area_id,point_kind,flow_direction,egress_class,status,created_by) "
    +"values(?,?,'P-SOCIAL','Portao social',?,?,'DOOR','BOTH','FREE_EGRESS','MAPPED',?)",POINT,db.tenantA,FROM,TO,MASTER);
-  String profile=db.adminString("select id::text from platform.access_model_profiles order by catalog_code limit 1");
-  String caps="{"+String.join(",",java.util.stream.Stream.of("doorContactEvents","eventBackfill","faceDeletion","faceEnrollment","localValidity",
-   "offlineRestriction","onlineDecisionBeforeRelay","passageEvents","perDoorRights","safeRecovery","scopedRemoteOpen","secureTransport")
-   .map(n->"\""+n+"\":{\"documented\":true,\"observed\":null,\"approved\":null}").toList())+"}";
-  db.adminUpdateWithoutTriggers("insert into platform.access_homologations(id,model_profile_id,firmware_exact,adapter_name,adapter_version,decision_mode,"
-   +"topology,contract_schema_version,capabilities,limits,reason,requested_by,status,approved_at,approved_by) values(?,?::uuid,'4.2.0','control-id-rest',"
-   +"'0.1.0','EDGE_ONLINE','LOCAL_GATEWAY','v1',?::jsonb,'{}','Combinacao piloto ficticia JDBC',?,'APROVADO_PILOTO',now(),?)",PILOT,profile,caps,MASTER,MASTER);
+  // Combinação aprovada para piloto pelo fluxo real da plataforma (dossiê, ensaio, bancada e piloto), sem desligar gatilhos.
+  db.clearPlatformFixtures();
+  PILOT=new FacialInstallationFixture(db).homologation("4.2.0",FacialInstallationFixture.ALL_CAPABILITIES,true);
  }
  @AfterEach void clear() throws Exception {
   db.adminUpdate("delete from cp.audit_log where tenant_id in (?,?) and (action like 'DEVICE\\_%' or action like 'CHANNEL\\_%' or action like 'BINDING\\_%' "
@@ -67,7 +64,7 @@ class AccessInstallJdbcTest {
   db.adminUpdate("delete from cp.access_connectors where id=?",CONNECTOR);
   db.adminUpdate("delete from cp.access_points where tenant_id in (?,?)",db.tenantA,db.tenantB);
   db.adminUpdate("delete from cp.access_areas where tenant_id in (?,?)",db.tenantA,db.tenantB);
-  db.adminUpdate("delete from platform.access_homologations where id=?",PILOT);
+  db.clearPlatformFixtures();
   db.adminUpdate("delete from cp.technical_grants where tenant_id in (?,?)",db.tenantA,db.tenantB);
  }
  @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }

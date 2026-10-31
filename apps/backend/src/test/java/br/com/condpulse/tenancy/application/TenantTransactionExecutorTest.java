@@ -75,7 +75,7 @@ class TenantTransactionExecutorTest {
   order.verify(jdbc).queryForObject("select set_config('app.capabilities','',true)",String.class);
   order.verify(jdbc).query(contains("from cp.memberships"),any(RowMapper.class),eq(tenant),eq(account));
   order.verify(jdbc).queryForObject("select set_config('app.capabilities',?,true)",String.class,
-   "amenities.manage,announcements.publish,area.manage,audit.read,finance.manage,memberships.manage,requests.manage,reservations.decide,units.manage");
+   "amenities.manage,announcements.publish,area.manage,audit.read,finance.manage,memberships.manage,policy.edit,policy.publish,requests.manage,reservations.decide,units.manage");
   assertEquals(List.of("begin","commit"),events);
  }
  @Test void aal1ManagerNeverPublishesCapabilitiesToTheDatabaseContext() {

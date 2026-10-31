@@ -246,6 +246,24 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT,UPDATE')) from pg_attribute c
        where c.attrelid=to_regclass('cp.installation_acceptances') and c.attname in ('installation_revision','effective_at','created_at','updated_at')),false)
      or coalesce(has_column_privilege(current_user,to_regclass('cp.installation_acceptances'),'created_by','UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_policies'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_policy_versions'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_policy_validations'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.access_policy_validations'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_policies') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('name','status','updated_by','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_policy_versions') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','validation_id','rejected_reason','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_policy_versions') and c.attname in ('state','revision_number','canonical_hash','validation_id',
+        'approved_by','approved_at','published_at','valid_from','valid_until','envelope_hash','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_policy_validations') and c.attname in ('validated_at','expires_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_policies') and c.attname in ('status','current_published_version_id','envelope_acceptance_id',
+        'envelope_hash','version')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))
