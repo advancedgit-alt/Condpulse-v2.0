@@ -146,13 +146,22 @@ public record GatewayConfig(String gatewayId,String connectorId,String condoLabe
    }
    if(decisionMode==DecisionMode.EDGE_ONLINE && inboundTokenRef==null) throw new IllegalArgumentException("EDGE_ONLINE exige inboundTokenRef: "+deviceId);
    var ids=new java.util.HashSet<String>();
-   for(Channel c:channels) if(!ids.add(c.channelId())) throw new IllegalArgumentException("Canal repetido: "+c.channelId());
+   var natives=new java.util.HashSet<String>();
+   for(Channel c:channels) {
+    if(!ids.add(c.channelId())) throw new IllegalArgumentException("Canal repetido: "+c.channelId());
+    // Um canal nativo identifica um único ponto no equipamento; duplicado tornaria a decisão local ambígua.
+    if(!natives.add(c.nativeChannel())) throw new IllegalArgumentException("Canal nativo repetido no equipamento "+deviceId+": "+c.nativeChannel());
+   }
    for(var e:nativeSchedules.entrySet()) if(!e.getValue().matches("[A-Za-z0-9_,.-]{1,32}")) throw new IllegalArgumentException("Faixa nativa fora do formato: "+e.getKey());
    for(var e:params.entrySet()) if(!e.getKey().matches("[a-zA-Z0-9_.]{1,64}") || e.getValue()==null || e.getValue().length()>128)
     throw new IllegalArgumentException("Parâmetro fora do formato: "+e.getKey());
   }
   public Optional<Channel> channel(String channelId) { return channels.stream().filter(c->c.channelId().equals(channelId)).findFirst(); }
-  public Optional<Channel> channelByNative(String nativeChannel) { return channels.stream().filter(c->c.nativeChannel().equals(nativeChannel)).findFirst(); }
+  /** Canal pelo valor nativo; mais de um (não deveria passar na validação) é ambíguo e devolve vazio. */
+  public Optional<Channel> channelByNative(String nativeChannel) {
+   var found=channels.stream().filter(c->c.nativeChannel().equals(nativeChannel)).limit(2).toList();
+   return found.size()==1?Optional.of(found.getFirst()):Optional.empty();
+  }
   public String param(String key) { return params.get(key); }
  }
 
