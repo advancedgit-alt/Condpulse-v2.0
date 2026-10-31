@@ -24,6 +24,7 @@ import br.com.condpulse.gateway.spi.Spi.OperationState;
  * MASTER comissiona na configuração do equipamento ({@code nativeSchedules}); canal ou faixa não comissionados são
  * recusados pelo núcleo (RIGHT_NOT_REPRESENTABLE), nunca adivinhados;</li>
  * <li>vigências diferentes no mesmo documento viram a interseção (nunca amplia);</li>
+ * <li>prioridade e versão desejada da plataforma seguem no comando: prioridade 0 é restrição na fila local;</li>
  * <li>CONFIRMED só sai depois da leitura de volta bater com o comando derivado do documento: o relatório leva o hash
  * desse documento como observedHash. ACK é só o comando gravado na fila local durável.</li>
  * </ul>
@@ -69,6 +70,10 @@ public final class EdgeSyncContract {
    Instant issued=Instant.parse(Objects.requireNonNull(Json.string(raw,"issuedAt")));
    var payload=new LinkedHashMap<String,Object>();
    payload.put("documentHash",hash);
+   // Prioridade da plataforma (0 = retirada ou redução): a fila local a usa para ordenar e superar (Codex P1 no #153).
+   Long priority=Json.longValue(raw,"priority");
+   if(priority==null || (priority!=0 && priority!=1)) throw new Refused(commandId,deviceId,hash,"DOCUMENT_NOT_REPRESENTABLE");
+   payload.put("priority",priority);
    if(type==CommandType.APPLY_RIGHTS) rights(document,payload,commandId,deviceId,hash);
    return new SyncCommand(commandId,key==null?commandId:key,deviceId,subjectRef,type,version==null?0:version,payload,issued);
   } catch(Refused r) { throw r; }

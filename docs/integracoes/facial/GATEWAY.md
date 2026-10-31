@@ -17,7 +17,7 @@ matriz da seção 6 descreve o conjunto completo; cada adaptador só existe no c
 | Faz | Não faz |
 |---|---|
 | Fala com os equipamentos por operações tipadas, caminhos fixos por adaptador e canais comissionados | Executar URL, método ou comando arbitrário (o cliente HTTP recusa caminho fora da lista) |
-| Fila local idempotente com diário em disco (fsync); revogação sai antes e supera aplicação antiga | Escrever no banco central (só fala com a API central) |
+| Fila local idempotente com diário em disco (fsync); restrição (revogação ou prioridade 0 da plataforma, inclusive retirada parcial como APPLY_RIGHTS reduzido) sai antes; depois menor versão; aplicação nova supera a antiga do mesmo escopo antes de qualquer execução | Escrever no banco central (só fala com a API central) |
 | Confirma por leitura de volta; distingue ACK, APPLIED_UNVERIFIED, CONFIRMED, PARTIAL, FAILED, UNKNOWN | Repetir às cegas: resultado ambíguo vira NEEDS_READBACK |
 | Abertura pontual com validade ≤ 10 s, nonce, destino e revisões conferidos, recibo durável | Reenviar abertura depois de timeout, reinício ou reconexão |
 | Eventos com força de evidência explícita (`DEVICE_REPORTED`…), fila durável até o ACK da plataforma | Inferir direção, ponto ou horário que o equipamento não informou |

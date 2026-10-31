@@ -18,8 +18,12 @@ import br.com.condpulse.gateway.spi.Spi.OperationState;
  * Fila local idempotente de sincronização por equipamento (manual 12 e 17.2). Regras:
  * <ul>
  * <li>mesma chave de idempotência devolve a entrada existente, sem duplicar;</li>
- * <li>revogação sai antes de qualquer outra mensagem e supera as aplicações pendentes de versão menor ou igual do
- * mesmo escopo; aplicação com versão menor ou igual a uma revogação já recebida é recusada (STALE);</li>
+ * <li>restrição (revogação ou comando da plataforma com prioridade 0, como a retirada parcial que chega como
+ * APPLY_RIGHTS reduzido) sai antes de qualquer outra mensagem; depois, menor versão desejada e ordem de chegada;</li>
+ * <li>revogação supera as aplicações pendentes de versão menor ou igual do mesmo escopo; aplicação nova supera as
+ * aplicações pendentes de versão menor do mesmo escopo (o documento novo é o estado inteiro do destino), antes de
+ * qualquer execução física; aplicação com versão menor ou igual a uma revogação ou aplicação já recebida é recusada
+ * (STALE): versão menor nunca roda depois de uma maior;</li>
  * <li>acima do limite suave só entra revogação; no limite rígido nem revogação entra e o chamador recebe
  * {@link EnqueueOutcome#REJECTED_FULL} — nada é descartado em silêncio;</li>
  * <li>reinício com comando em execução vira NEEDS_READBACK: consulta antes de qualquer reenvio, nunca repetição às
@@ -94,7 +98,7 @@ public final class LocalCommandQueue implements AutoCloseable {
   if(existing!=null) return new EnqueueResult(EnqueueOutcome.DUPLICATE,byId.get(existing),List.of());
   if(byId.containsKey(command.commandId())) return new EnqueueResult(EnqueueOutcome.DUPLICATE,byId.get(command.commandId()),List.of());
   long active=byId.values().stream().filter(LocalCommandQueue::active).count();
-  if(active>=hardLimit || (!command.type().revocation() && active>=softLimit))
+  if(active>=hardLimit || (!restrictive(command) && active>=softLimit))
    return new EnqueueResult(EnqueueOutcome.REJECTED_FULL,null,List.of());
   var record=new LinkedHashMap<String,Object>();
   record.put("t","enq");
@@ -109,11 +113,19 @@ public final class LocalCommandQueue implements AutoCloseable {
   return new EnqueueResult(entry.status()==Status.REJECTED_STALE?EnqueueOutcome.REJECTED_STALE:EnqueueOutcome.ACCEPTED,entry,superseded);
  }
 
- /** Próximo comando do equipamento: revogações primeiro, depois ordem de chegada. */
+ /** Próximo comando do equipamento: restrições primeiro, depois menor versão desejada e ordem de chegada. */
  public synchronized Optional<Entry> next(String deviceId) {
   return byId.values().stream()
    .filter(e->e.command().deviceId().equals(deviceId) && (e.status()==Status.PENDING || e.status()==Status.NEEDS_READBACK))
-   .min(Comparator.comparing((Entry e)->!e.command().type().revocation()).thenComparingLong(Entry::sequence));
+   .min(Comparator.comparing((Entry e)->!restrictive(e.command())).thenComparingLong(e->e.command().desiredVersion()).thenComparingLong(Entry::sequence));
+ }
+
+ /**
+  * Restrição: revogação ou comando com prioridade 0 da plataforma (V047/V048: retirada ou redução, mesmo quando chega
+  * como APPLY_RIGHTS com o que sobrou). Nunca espera atrás de ampliação.
+  */
+ public static boolean restrictive(SyncCommand c) {
+  return c.type().revocation() || (c.payload().get("priority") instanceof Number n && n.longValue()==0);
  }
 
  public synchronized void mark(String commandId,Status status,OperationState state,String reason) {
@@ -192,13 +204,17 @@ public final class LocalCommandQueue implements AutoCloseable {
    byId.put(command.commandId(),new Entry(command,seq,status,null,reason,0,at,null,false));
    byKey.put(command.idempotencyKey(),command.commandId());
    lastSuperseded.clear();
-   if(command.type().revocation() && status!=Status.REJECTED_STALE) {
+   if(status!=Status.REJECTED_STALE) {
+    boolean revocation=command.type().revocation();
     for(var other:List.copyOf(byId.values())) {
      var oc=other.command();
-     if(!active(other) || oc.type().revocation() || !oc.deviceId().equals(command.deviceId()) || !oc.subjectRef().equals(command.subjectRef())) continue;
-     if(oc.desiredVersion()>command.desiredVersion() || !covers(command,oc)) continue;
-     byId.put(oc.commandId(),new Entry(oc,other.sequence(),Status.SUPERSEDED,other.lastState(),"SUPERSEDED_BY_REVOCATION",other.attempts(),
-      other.enqueuedAt(),other.lastAttemptAt(),false));
+     if(other==byId.get(command.commandId()) || !active(other) || oc.type().revocation() || !oc.deviceId().equals(command.deviceId())
+       || !oc.subjectRef().equals(command.subjectRef())) continue;
+     // Revogação: cobre o escopo e versão menor ou igual. Aplicação: mesmo escopo e versão estritamente menor.
+     if(revocation?(oc.desiredVersion()>command.desiredVersion() || !covers(command,oc))
+       :(oc.desiredVersion()>=command.desiredVersion() || !oc.scope().equals(command.scope()))) continue;
+     byId.put(oc.commandId(),new Entry(oc,other.sequence(),Status.SUPERSEDED,other.lastState(),
+      revocation?"SUPERSEDED_BY_REVOCATION":"SUPERSEDED_BY_NEWER_VERSION",other.attempts(),other.enqueuedAt(),other.lastAttemptAt(),false));
      lastSuperseded.add(oc.commandId());
     }
    }

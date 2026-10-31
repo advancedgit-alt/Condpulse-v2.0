@@ -412,7 +412,8 @@ class GatewayServiceTest {
   build(EnumSet.complementOf(EnumSet.of(Operation.READ_STATE)),true,DecisionMode.DEVICE_LOCAL_ACL);
   adapter.script(Operation.APPLY_RIGHTS,OperationResult.of(OperationState.UNKNOWN,"RESPONSE_NOT_RECEIVED"));
   service.submit(command("r","d1","s1",CommandType.APPLY_RIGHTS,2,RIGHTS));
-  service.submit(command("c","d1","s2",CommandType.APPLY_RIGHTS,1,RIGHTS));
+  // Versões da plataforma são monotônicas: o comando que chega depois tem versão maior (a fila ordena por versão).
+  service.submit(command("c","d1","s2",CommandType.APPLY_RIGHTS,3,RIGHTS));
   service.processQueues(10);
   assertEquals(Status.HELD,queue.get("r").orElseThrow().status());
   assertEquals(Status.DONE,queue.get("c").orElseThrow().status(),"o comando seguinte foi processado");

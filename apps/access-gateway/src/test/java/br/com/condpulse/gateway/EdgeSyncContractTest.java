@@ -55,7 +55,44 @@ class EdgeSyncContractTest {
  @Test void retiradaNaoTrazDireitos() throws Exception {
   String doc="{\"action\": \"REVOKE_ALL\", \"entries\": [], \"subjectRef\": \"cps_1\", \"schemaVersion\": \"1.0\"}";
   var c=EdgeSyncContract.toCommand(raw("REVOKE_ALL",doc,EdgeSyncContract.sha256Hex(doc)));
-  assertEquals(CommandType.REVOKE_ALL,c.type()); assertEquals(1,c.payload().size()); assertTrue(c.type().revocation());
+  assertEquals(CommandType.REVOKE_ALL,c.type()); assertEquals(java.util.Set.of("documentHash","priority"),c.payload().keySet()); assertTrue(c.type().revocation());
+ }
+
+ /**
+  * Codex P1 (#153), probe reproduzido: concessão v1 pendente e retirada parcial v2 (APPLY_RIGHTS reduzido, prioridade 0)
+  * pela conversão e pela fila reais. A retirada sai primeiro e a v1 é superada antes de qualquer execução física; v1
+  * reenviada depois é recusada.
+  */
+ @Test void retiradaParcialComPrioridadeZeroVemAntesESuperaAConcessaoAntiga() throws Exception {
+  String grant=apply(entry("c1","2026-10-31T10:00:00.000000Z","2026-11-30T10:00:00.000000Z")+", "+entry("c2","2026-10-31T10:00:00.000000Z","2026-11-30T10:00:00.000000Z"));
+  String reduced=apply(entry("c1","2026-10-31T10:00:00.000000Z","2026-11-30T10:00:00.000000Z"));
+  var v1raw=raw("APPLY_RIGHTS",grant,EdgeSyncContract.sha256Hex(grant));
+  v1raw.put("commandId","00000000-0000-4000-8000-0000000000f1"); v1raw.put("idempotencyKey","00000000-0000-4000-8000-0000000000f1"); v1raw.put("desiredVersion",1L);
+  var v2raw=raw("APPLY_RIGHTS",reduced,EdgeSyncContract.sha256Hex(reduced));
+  v2raw.put("commandId","00000000-0000-4000-8000-0000000000f2"); v2raw.put("idempotencyKey","00000000-0000-4000-8000-0000000000f2");
+  v2raw.put("desiredVersion",2L); v2raw.put("priority",0L);
+  var v1=EdgeSyncContract.toCommand(v1raw); var v2=EdgeSyncContract.toCommand(v2raw);
+  assertEquals(0L,v2.payload().get("priority")); assertEquals(2,v2.desiredVersion());
+  assertTrue(br.com.condpulse.gateway.queue.LocalCommandQueue.restrictive(v2)); assertFalse(br.com.condpulse.gateway.queue.LocalCommandQueue.restrictive(v1));
+  var dir=br.com.condpulse.gateway.support.TestSupport.tempDir();
+  var clock=new br.com.condpulse.gateway.support.TestSupport.TestClock();
+  try(var queue=new br.com.condpulse.gateway.queue.LocalCommandQueue(dir,clock,100,200)) {
+   queue.enqueue(v1);
+   var result=queue.enqueue(v2);
+   assertEquals(List.of(v1.commandId()),result.superseded(),"a concessão antiga é superada antes de rodar");
+   assertEquals(v2.commandId(),queue.next("d1").orElseThrow().command().commandId(),"a retirada parcial sai primeiro");
+   assertEquals(br.com.condpulse.gateway.queue.LocalCommandQueue.Status.SUPERSEDED,queue.get(v1.commandId()).orElseThrow().status());
+   var late=v1raw; late.put("commandId","00000000-0000-4000-8000-0000000000f3"); late.put("idempotencyKey","00000000-0000-4000-8000-0000000000f3");
+   assertEquals(br.com.condpulse.gateway.queue.LocalCommandQueue.EnqueueOutcome.REJECTED_STALE,queue.enqueue(EdgeSyncContract.toCommand(late)).outcome(),
+    "versão menor nunca roda depois de uma maior");
+  }
+  // Releitura do diário: mesma decisão (superada continua superada, a retirada continua primeiro).
+  try(var reopened=new br.com.condpulse.gateway.queue.LocalCommandQueue(dir,clock,100,200)) {
+   assertEquals(br.com.condpulse.gateway.queue.LocalCommandQueue.Status.SUPERSEDED,reopened.get(v1.commandId()).orElseThrow().status());
+   assertEquals(v2.commandId(),reopened.next("d1").orElseThrow().command().commandId());
+  }
+  var bad=raw("APPLY_RIGHTS",grant,EdgeSyncContract.sha256Hex(grant)); bad.remove("priority");
+  assertEquals("DOCUMENT_NOT_REPRESENTABLE",refused(bad),"sem prioridade da plataforma não entra");
  }
 
  @Test void relatorioNoFormatoDaApi() {
