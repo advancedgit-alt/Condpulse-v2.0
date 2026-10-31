@@ -106,6 +106,37 @@ class AccessSubjectJdbcTest {
   db.assertEmptyContext();
  }
 
+ private static java.util.Map<UUID,Long> snapshot() {
+  var result=new java.util.TreeMap<UUID,Long>();
+  for(var subject:subjects.list(MANAGER,db.tenantA,AAL2).subjects()) for(var c:subject.contexts()) result.put(c.contextId(),c.version());
+  return result;
+ }
+
+ @Test void repeatedMaterializationKeepsIdsAndVersionsWhileOnlyEligibilityChanges() throws Exception {
+  subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
+  var before=snapshot();
+  var resident=of(db.accountA);
+  subjects.block(MANAGER,db.tenantA,AAL2,resident.subjectId(),new SubjectModels.Block("Ordem do sindico",resident.version()));
+  for(int i=0;i<3;i++)
+   assertEquals(new SubjectModels.Materialized(0,0,0,0),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2),"Bloqueio não é mudança de origem");
+  assertEquals(before,snapshot(),"Mesmos ids e versões depois de repetir com o sujeito bloqueado");
+  assertTrue(of(db.accountA).eligibleContextIds().isEmpty());
+  subjects.unblock(MANAGER,db.tenantA,AAL2,resident.subjectId(),new SubjectModels.Unblock(of(db.accountA).version()));
+  assertEquals(before,snapshot());
+  assertEquals(1,of(db.accountA).eligibleContextIds().size());
+  // Visitante com início futuro: inelegível agora, mas estável.
+  UUID visitor=UUID.randomUUID(),permit=UUID.randomUUID();
+  db.adminUpdate("insert into cp.visitors(id,tenant_id,full_name,created_by) values(?,?,'VISITANTE FUTURO JDBC',?)",visitor,db.tenantA,db.accountA);
+  db.adminUpdate("insert into cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until) "
+   +"values(?,?,?,?,?,now()+interval '2 hours',now()+interval '1 day')",permit,db.tenantA,visitor,db.unitA,db.accountA);
+  assertEquals(new SubjectModels.Materialized(1,1,0,0),subjects.materializePermits(CONCIERGE,db.tenantA,AAL2));
+  var withVisitor=snapshot();
+  for(int i=0;i<3;i++)
+   assertEquals(new SubjectModels.Materialized(0,0,0,0),subjects.materializePermits(CONCIERGE,db.tenantA,AAL2),"Início futuro não é mudança de origem");
+  assertEquals(withVisitor,snapshot());
+  db.assertEmptyContext();
+ }
+
  @Test void revokedContextStaysRevokedUntilExplicitReauthorization() throws Exception {
   subjects.materializeMemberships(MANAGER,db.tenantA,AAL2);
   var residence=of(db.accountA).contexts().getFirst();
@@ -117,6 +148,22 @@ class AccessSubjectJdbcTest {
   subjects.reauthorize(MANAGER,db.tenantA,AAL2,residence.contextId(),new SubjectModels.Reauthorize("Decisao da assembleia"));
   subjects.reauthorize(MANAGER,db.tenantA,AAL2,residence.contextId(),new SubjectModels.Reauthorize("Decisao da assembleia"));
   assertEquals(1,of(db.accountA).eligibleContextIds().size(),"Reautorização explícita devolve um contexto, sem duplicar");
+  var reauthorized=snapshot();
+  for(int i=0;i<3;i++) assertEquals(new SubjectModels.Materialized(0,0,0,0),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2),
+   "Revogação já reautorizada não bloqueia nem duplica");
+  assertEquals(reauthorized,snapshot());
+  // Mudança na origem depois da reautorização: o sucessor é substituído sem pedir nova reautorização.
+  db.adminUpdate("update cp.memberships set version=version+1 where tenant_id=? and account_id=?",db.tenantA,db.accountA);
+  assertEquals(new SubjectModels.Materialized(0,1,1,0),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2));
+  assertEquals(1,of(db.accountA).eligibleContextIds().size());
+  // Nova revogação volta a ficar pendente até nova reautorização.
+  var current=of(db.accountA).contexts().stream().filter(c->"ACTIVE".equals(c.status())).findFirst().orElseThrow();
+  subjects.closeContext(MANAGER,db.tenantA,AAL2,current.contextId(),new SubjectModels.CloseContext("Nova ordem",current.version()));
+  assertEquals(new SubjectModels.Materialized(0,0,0,1),subjects.materializeMemberships(MANAGER,db.tenantA,AAL2));
+  subjects.reauthorize(MANAGER,db.tenantA,AAL2,residence.contextId(),new SubjectModels.Reauthorize("Revogacao antiga"));
+  assertTrue(of(db.accountA).eligibleContextIds().isEmpty(),"Repetir a reautorização antiga não desfaz a revogação nova");
+  subjects.reauthorize(MANAGER,db.tenantA,AAL2,current.contextId(),new SubjectModels.Reauthorize("Nova decisao"));
+  assertEquals(1,of(db.accountA).eligibleContextIds().size());
   assertEquals("ACCESS_SUBJECT_NOT_REAUTHORIZABLE",code(()->subjects.reauthorize(MANAGER,db.tenantA,AAL2,UUID.randomUUID(),
    new SubjectModels.Reauthorize("Volta"))));
   db.assertEmptyContext();

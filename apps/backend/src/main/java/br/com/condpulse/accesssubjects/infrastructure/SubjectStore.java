@@ -95,40 +95,57 @@ public class SubjectStore {
   return new Object[]{jdbc.queryForObject("select id from cp.access_subjects where tenant_id=? and "+column+"=?",UUID.class,tenant,person),false};
  }
  /**
-  * Contexto ativo da origem: mantém se ainda corresponde à origem; marca SUPERSEDED e recria se a origem mudou.
-  * Devolve 0 (mantido), 1 (criado), 2 (substituído e recriado) ou -2 (origem com contexto revogado: não recria).
+  * Ciclo de vida por sujeito e origem, olhando a linha mais recente:
+  * <ul>
+  * <li>nenhuma, SUPERSEDED ou EXPIRED: cria (1);</li>
+  * <li>REVOKED: revogação pendente, não recria (-2) até a reautorização explícita;</li>
+  * <li>ACTIVE com os mesmos dados da origem (versão, tipo, unidade e vigência): mantém (0), mesmo que agora esteja
+  * inelegível por bloqueio do sujeito, início futuro ou origem vencida — vigência não é mudança;</li>
+  * <li>ACTIVE com dados diferentes da origem ainda ativa: SUPERSEDED e cria o sucessor (2), preservando a cadeia
+  * reautorizada.</li>
+  * </ul>
   */
  public int ensureContext(UUID tenant,UUID subject,String sourceKind,UUID source,UUID actor) {
   String column="MEMBERSHIP".equals(sourceKind)?"membership_id":"permit_id";
-  // Revogação explícita vale até reautorização: a materialização não recria a origem.
-  Integer revoked=jdbc.queryForObject("select count(*) from cp.subject_contexts where tenant_id=? and subject_id=? and "+column+"=? and status='REVOKED'",
-   Integer.class,tenant,subject,source);
-  if(revoked!=null && revoked>0) return -2;
-  var existing=jdbc.query("select id,version,cp.subject_context_current(tenant_id,id) as current from cp.subject_contexts "
-   +"where tenant_id=? and subject_id=? and "+column+"=? and status='ACTIVE' for update",
-   (r,n)->new Object[]{r.getObject("id",UUID.class),r.getLong("version"),r.getBoolean("current")},tenant,subject,source);
+  var latest=jdbc.query("select c.id,c.status,"+sameSourceSql(sourceKind)+" as same from cp.subject_contexts c "
+   +"where c.tenant_id=? and c.subject_id=? and c.source_kind=? and c."+column+"=? order by c.created_at desc,c.id desc limit 1 for update",
+   (r,n)->new Object[]{r.getObject("id",UUID.class),r.getString("status"),r.getBoolean("same")},tenant,subject,sourceKind,source);
   int outcome=1;
-  if(!existing.isEmpty()) {
-   if((Boolean)existing.getFirst()[2]) return 0;
-   jdbc.update("update cp.subject_contexts set status='SUPERSEDED',status_reason='Origem alterada',version=version+1 where tenant_id=? and id=?",
-    tenant,existing.getFirst()[0]);
-   outcome=2;
+  if(!latest.isEmpty()) {
+   String status=(String)latest.getFirst()[1];
+   if("REVOKED".equals(status)) return -2;
+   if("ACTIVE".equals(status)) {
+    if((Boolean)latest.getFirst()[2]) return 0;
+    jdbc.update("update cp.subject_contexts set status='SUPERSEDED',status_reason='Origem alterada',version=version+1 where tenant_id=? and id=?",
+     tenant,latest.getFirst()[0]);
+    outcome=2;
+   }
   }
   jdbc.update("insert into cp.subject_contexts(tenant_id,subject_id,context_kind,source_kind,"+column+",valid_until,created_by) "
    +"values(?,?,'RESIDENT',?,?,now()+interval '1 day',?)",tenant,subject,sourceKind,source,actor);
   return outcome;
  }
- /** [sujeito, vínculo] do contexto de vínculo revogado mais recente daquela origem; null se não for o caso. */
+ /** Os dados materializados ainda são os da origem (sem olhar vigência nem estado do sujeito). */
+ private static String sameSourceSql(String sourceKind) {
+  if("MEMBERSHIP".equals(sourceKind))
+   return "coalesce((select m.version=c.source_version and m.unit_id is not distinct from c.unit_id and m.valid_from=c.valid_from "
+    +"and m.valid_until is not distinct from c.valid_until and cp.membership_context_kind(m.tenant_id,m.id)=c.context_kind "
+    +"from cp.memberships m where m.tenant_id=c.tenant_id and m.id=c.membership_id),false)";
+  return "coalesce((select p.version=c.source_version and p.unit_id is not distinct from c.unit_id and p.valid_from=c.valid_from "
+   +"and p.valid_until is not distinct from c.valid_until and (case when p.rule_id is not null then 'SERVICE_PROVIDER' else 'VISITOR' end)=c.context_kind "
+   +"from cp.visit_permits p where p.tenant_id=c.tenant_id and p.id=c.permit_id),false)";
+ }
+ /** [sujeito, vínculo] quando o contexto é a revogação pendente (linha mais recente) de um vínculo; null se não for o caso. */
  public UUID[] revokedMembershipContext(UUID tenant,UUID context) {
   var rows=jdbc.query("""
    select r.subject_id,r.membership_id from cp.subject_contexts r where r.tenant_id=? and r.id=? and r.status='REVOKED' and r.source_kind='MEMBERSHIP'
     and not exists(select 1 from cp.subject_contexts later where later.tenant_id=r.tenant_id and later.subject_id=r.subject_id
-     and later.membership_id=r.membership_id and later.status='REVOKED' and later.created_at>r.created_at)
+     and later.source_kind='MEMBERSHIP' and later.membership_id=r.membership_id and (later.created_at,later.id)>(r.created_at,r.id))
    """,(r,n)->new UUID[]{r.getObject(1,UUID.class),r.getObject(2,UUID.class)},tenant,context);
   return rows.isEmpty()?null:rows.getFirst();
  }
  public boolean reauthorizedBy(UUID tenant,UUID context) {
-  Integer count=jdbc.queryForObject("select count(*) from cp.subject_contexts where tenant_id=? and reauthorizes_context_id=? and status='ACTIVE'",
+  Integer count=jdbc.queryForObject("select count(*) from cp.subject_contexts where tenant_id=? and reauthorizes_context_id=?",
    Integer.class,tenant,context);
   return count!=null && count>0;
  }

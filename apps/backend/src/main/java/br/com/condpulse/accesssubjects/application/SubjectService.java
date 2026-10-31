@@ -127,9 +127,9 @@ public class SubjectService {
   if(reason==null || reason.length()<3) throw new BusinessProblem("ACCESS_SUBJECT_REASON_REQUIRED",400,"Informe o motivo (3 a 300 caracteres).");
   mapped(()->transactions.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.MANAGE_MEMBERSHIPS);
-   var revoked=store.revokedMembershipContext(tenant,contextId);
-   if(revoked==null) throw new BusinessProblem("ACCESS_SUBJECT_NOT_REAUTHORIZABLE",409,"Só o último contexto de vínculo revogado pode ser reautorizado.");
    if(store.reauthorizedBy(tenant,contextId)) return null;
+   var revoked=store.revokedMembershipContext(tenant,contextId);
+   if(revoked==null) throw new BusinessProblem("ACCESS_SUBJECT_NOT_REAUTHORIZABLE",409,"Só a revogação pendente de um vínculo pode ser reautorizada.");
    UUID created=store.insertReauthorized(tenant,revoked[0],revoked[1],contextId,actor);
    audit.record(tenant,actor,"SUBJECT_CONTEXT_REAUTHORIZED","SUBJECT_CONTEXT",created,reason);
    return null;

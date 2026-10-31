@@ -3475,6 +3475,13 @@ def subject_checks():
     expect(error(con + reauth + f"'{CO}')", "42501", **as_con), "portaria nao reautoriza")
     query(mgr + reauth + f"'{MG}')", **as_mgr)
     expect(current(CXR) == "t", "reautorizacao explicita da gestao devolve o contexto")
+    CXS = "38100000-0000-4000-8000-000000000007"
+    query(f"UPDATE cp.memberships SET version=version+1 WHERE id='{MXA}'")
+    query(mgr + f"UPDATE cp.subject_contexts SET status='SUPERSEDED',status_reason='Origem alterada',version=1 WHERE id='{CXR}'; " + context(CXS, SXA, MXA), **as_mgr)
+    expect(current(CXS) == "t", "cadeia reautorizada segue: sucessor por mudanca na origem sem nova reautorizacao")
+    expect(error(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Outra ordem',version=1 WHERE id='{CXS}'; "
+                 + reauth.replace(CXR, "38100000-0000-4000-8000-000000000008") + f"'{MG}')", "23514", **as_mgr),
+           "reautorizacao precisa citar a revogacao pendente mais recente")
     query(mgr + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Ordem da gestao',version=1 WHERE id='{CV}'", **as_mgr)
     expect(error(con + f"INSERT INTO cp.subject_contexts(tenant_id,subject_id,context_kind,source_kind,permit_id,created_by) "
                  f"VALUES('{TA}','{SV}','VISITOR','VISIT_PERMIT','{PV}','{CO}')", "23514", **as_con),

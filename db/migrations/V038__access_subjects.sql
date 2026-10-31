@@ -212,19 +212,22 @@ BEGIN
    RAISE EXCEPTION 'responsável precisa ser sujeito ativo com conta' USING ERRCODE='23514';
   END IF;
  END IF;
- -- Revogação de um contexto vale até reautorização explícita: nova linha da mesma origem precisa citar a revogação mais
- -- recente; convite revogado nunca volta (novo convite é nova origem).
- IF NEW.source_kind IN ('MEMBERSHIP','VISIT_PERMIT') AND EXISTS(SELECT 1 FROM cp.subject_contexts r WHERE r.tenant_id=NEW.tenant_id
-    AND r.subject_id=NEW.subject_id AND r.status='REVOKED' AND r.membership_id IS NOT DISTINCT FROM NEW.membership_id
-    AND r.permit_id IS NOT DISTINCT FROM NEW.permit_id) THEN
-  IF NEW.source_kind<>'MEMBERSHIP' OR NEW.reauthorizes_context_id IS NULL OR NOT EXISTS(SELECT 1 FROM cp.subject_contexts r
-     WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.reauthorizes_context_id AND r.subject_id=NEW.subject_id AND r.status='REVOKED'
-      AND r.membership_id=NEW.membership_id AND NOT EXISTS(SELECT 1 FROM cp.subject_contexts later WHERE later.tenant_id=r.tenant_id
-       AND later.subject_id=r.subject_id AND later.membership_id=r.membership_id AND later.status='REVOKED' AND later.created_at>r.created_at)) THEN
-   RAISE EXCEPTION 'origem com contexto revogado exige reautorização explícita' USING ERRCODE='23514';
+ -- Revogação de um contexto vale até reautorização explícita: se a linha mais recente da mesma origem e sujeito está
+ -- REVOKED, a nova precisa citá-la (só vínculo; convite revogado nunca volta: novo convite é nova origem). Depois de
+ -- reautorizada, a cadeia segue normalmente (substituição por mudança na origem não exige nova reautorização).
+ IF NEW.source_kind IN ('MEMBERSHIP','VISIT_PERMIT') THEN
+  SELECT r.id,r.status INTO g FROM cp.subject_contexts r WHERE r.tenant_id=NEW.tenant_id AND r.subject_id=NEW.subject_id
+   AND r.source_kind=NEW.source_kind AND r.membership_id IS NOT DISTINCT FROM NEW.membership_id AND r.permit_id IS NOT DISTINCT FROM NEW.permit_id
+   ORDER BY r.created_at DESC,r.id DESC LIMIT 1;
+  IF FOUND AND g.status='REVOKED' THEN
+   IF NEW.source_kind<>'MEMBERSHIP' OR NEW.reauthorizes_context_id IS DISTINCT FROM g.id THEN
+    RAISE EXCEPTION 'origem com contexto revogado exige reautorização explícita' USING ERRCODE='23514';
+   END IF;
+  ELSIF NEW.reauthorizes_context_id IS NOT NULL THEN
+   RAISE EXCEPTION 'reautorização sem revogação pendente da mesma origem' USING ERRCODE='23514';
   END IF;
  ELSIF NEW.reauthorizes_context_id IS NOT NULL THEN
-  RAISE EXCEPTION 'reautorização sem contexto revogado da mesma origem' USING ERRCODE='23514';
+  RAISE EXCEPTION 'autorização funcional não é reautorizada' USING ERRCODE='23514';
  END IF;
  NEW.created_at:=clock_timestamp(); NEW.updated_at:=NEW.created_at;
  RETURN NEW;
