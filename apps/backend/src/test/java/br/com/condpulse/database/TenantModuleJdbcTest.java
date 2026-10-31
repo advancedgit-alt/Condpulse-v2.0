@@ -53,6 +53,7 @@ class TenantModuleJdbcTest {
  @AfterEach void clear() throws Exception { RequestContextHolder.resetRequestAttributes(); db.clearPlatformFixtures(); }
  @AfterAll static void cleanup() throws Exception { if(db!=null) db.close(); }
 
+ private static int open(UUID account,UUID tenant) { return tenants.<Integer>execute(account,tenant,context->1); }
  private static String code(org.junit.jupiter.api.function.Executable action) { return assertThrows(BusinessProblem.class,action).code(); }
  private static TenantModuleModels.ChangeTenantModule change(String module,boolean enabled,long version) {
   return new TenantModuleModels.ChangeTenantModule(module,enabled,version,"Ajuste ficticio do ensaio JDBC");
@@ -71,7 +72,7 @@ class TenantModuleJdbcTest {
   assertEquals(8,page.modules().size());
   assertTrue(page.modules().stream().allMatch(m->m.defaultState() && m.tenantEnabled() && m.enabled() && m.version()==0));
   route(TenantModule.PARCELS);
-  assertEquals(1,tenants.execute(db.accountA,db.tenantA,context->1),"Sem linha o condomínio segue liberado");
+  assertEquals(1,open(db.accountA,db.tenantA),"Sem linha o condomínio segue liberado");
   assertEquals("MFA_REQUIRED",code(()->modules.list(db.accountA,AAL1,db.tenantA)));
   assertEquals("PLATFORM_ACCESS_DENIED",code(()->modules.list(db.accountB,AAL2,db.tenantA)),"Morador não lê a central");
   assertEquals("TENANT_NOT_FOUND",code(()->modules.list(db.accountA,AAL2,UUID.randomUUID())));
@@ -103,15 +104,15 @@ class TenantModuleJdbcTest {
   assertEquals("MODULE_DISABLED",code(()->tenants.execute(db.accountA,db.tenantA,context->1)));
   assertEquals("TENANT_ACCESS_DENIED",code(()->tenants.execute(db.accountB,db.tenantA,context->1)),
    "Quem não tem vínculo recebe 404 antes de saber do módulo");
-  assertEquals(1,tenants.execute(db.accountB,db.tenantB,context->1));
+  assertEquals(1,open(db.accountB,db.tenantB));
   route(TenantModule.PARCELS,TenantModule.VISITS);
-  assertEquals(1,tenants.execute(db.accountA,db.tenantA,context->1),"Rota de dois módulos vale com qualquer um liberado");
+  assertEquals(1,open(db.accountA,db.tenantA),"Rota de dois módulos vale com qualquer um liberado");
   route(TenantModule.RESERVATIONS);
-  assertEquals(1,tenants.execute(db.accountA,db.tenantA,context->1));
+  assertEquals(1,open(db.accountA,db.tenantA));
   route();
   assertEquals("MODULE_DISABLED",code(()->tenants.execute(db.accountA,db.tenantA,context->1)),"Conjunto vazio falha fechado");
   RequestContextHolder.resetRequestAttributes();
-  assertEquals(1,tenants.execute(db.accountA,db.tenantA,context->1),"Fora de rota marcada (worker, jobs) nada é exigido");
+  assertEquals(1,open(db.accountA,db.tenantA),"Fora de rota marcada (worker, jobs) nada é exigido");
 
   var me=db.tx.execute(status->new CurrentIdentityQuery(db.jdbc,ALL).execute(db.accountA));
   var modulesA=me.tenantModules().stream().filter(t->t.tenantId().equals(db.tenantA)).findFirst().orElseThrow();
@@ -124,7 +125,7 @@ class TenantModuleJdbcTest {
   var enabled=modules.change(db.accountA,AAL2,db.tenantA,change("parcels",true,1));
   assertTrue(enabled.applied()); assertEquals(2,enabled.module().version()); assertTrue(enabled.module().enabled());
   route(TenantModule.PARCELS);
-  assertEquals(1,tenants.execute(db.accountA,db.tenantA,context->1),"Religar vale na próxima requisição");
+  assertEquals(1,open(db.accountA,db.tenantA),"Religar vale na próxima requisição");
   assertEquals("1",db.adminString("select count(*) from platform.platform_audit_log where tenant_id=? and action='TENANT_MODULE_ENABLED'",db.tenantA));
   db.assertEmptyContext();
  }
