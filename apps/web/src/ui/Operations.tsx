@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api, ApiError, newOperationKey } from '../api/client';
+import { api, ApiError, isModuleDisabled, newOperationKey } from '../api/client';
 import type { CancelReservation, CreateReservation, Reservation } from '../api/types';
 import { Notice, errorMessage } from './primitives';
 import { useAuth } from './Auth';
@@ -67,7 +67,7 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
       if (!alive.current) return false;
       const uncertain = !(error instanceof ApiError) || error.uncertain || error.status >= 500 || error.code === 'IDEMPOTENCY_KEY_EXPIRED';
       update({ intent, status: uncertain ? 'uncertain' : 'failed', error });
-      if (error instanceof ApiError && [403, 404].includes(error.status)) {
+      if (error instanceof ApiError && [403, 404].includes(error.status) && !isModuleDisabled(error)) {
         window.dispatchEvent(new CustomEvent('condpulse:context-denied', { detail: { scope: { accountId: intent.accountId, tenantId: intent.tenantId, unitId: intent.unitId, route: intent.route }, error } }));
       }
       if (error instanceof ApiError && error.code === 'AMENITY_POLICY_CHANGED') {

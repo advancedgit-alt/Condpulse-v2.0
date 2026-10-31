@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { collapseText, displayText } from '../api/text';
 import { visits, type AccessRecord, type Arrival, type CreatePermitBody, type CreateRuleBody, type VisitPermit, type VisitRule } from '../api/visits';
 import { useAuth } from './Auth';
+import { condoOf, panelEnabled } from './shell/paths';
 import { Empty, ErrorState, Icon, Loading, Notice, errorMessage } from './primitives';
 import { dateInZone, formatWhen, toInstant, wallTimeInZone } from './dateTime';
 import { codeOf, repeatFailure, settleFailure, uncertain, useIntent } from './operationIntent';
@@ -23,8 +24,16 @@ export function VisitsPage() {
   if (!identity || !membership) return <div className="panel"><Empty title="Unidade indisponível">Selecione uma unidade em que você mora para acompanhar os acessos.</Empty></div>;
   try { dateInZone(membership.timeZone); }
   catch { return <Notice tone="error">O fuso do condomínio precisa ser conferido pela gestão antes de acompanhar os acessos.</Notice>; }
-  return <UnitAccess key={`${identity.accountId}:${tenantId}:${unitId}`} accountId={identity.accountId} tenantId={tenantId} unitId={unitId}
-    tenantName={membership.tenantName} timeZone={membership.timeZone} adult={membership.role !== 'DEPENDENT'} />;
+  // Cada painel segue o próprio módulo: visitas (chegadas, convites, recorrentes, histórico) e credenciais (equipamentos).
+  const condo = condoOf(identity, tenantId);
+  const scope = { accountId: identity.accountId, tenantId, unitId, tenantName: membership.tenantName, timeZone: membership.timeZone,
+    adult: membership.role !== 'DEPENDENT' };
+  return <>
+    {panelEnabled(condo, 'morador.acessos.visitas') ? <UnitAccess key={`${identity.accountId}:${tenantId}:${unitId}`} {...scope} />
+      : <div className="residence-heading"><div><span className="eyebrow">ACESSOS</span><h1>Acessos da unidade</h1>
+        <p>Visitas e convites estão desligados pela administradora neste condomínio. Abaixo, as credenciais e o histórico dos equipamentos.</p></div></div>}
+    {panelEnabled(condo, 'morador.acessos.equipamentos') ? <UnitDeviceAccess accountId={identity.accountId} tenantId={tenantId} unitId={unitId} timeZone={membership.timeZone} /> : null}
+  </>;
 }
 
 interface Scope { accountId: string; tenantId: string; unitId: string; tenantName: string; timeZone: string; adult: boolean }
@@ -92,7 +101,6 @@ function UnitAccess(scope: Scope) {
             : records.isError && !records.data ? <ErrorState error={records.error} retry={() => void records.refetch()} />
               : <AccessHistory scope={scope} records={records.data?.records ?? []} truncated={records.data?.truncated ?? false} />}
       </section>
-      <UnitDeviceAccess accountId={scope.accountId} tenantId={scope.tenantId} unitId={scope.unitId} timeZone={scope.timeZone} />
     </>}
   </>;
 }

@@ -5,14 +5,16 @@ import { accessInstall } from '../../api/accessInstall';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../Auth';
 import { technicalSessionKey } from '../installation/InstallationPage';
-import { Empty, ErrorState, Icon, Loading, type IconName } from '../primitives';
-import { ENTRY_PATH, activeResidentUnits, condoAreas, condominiums, conciergePath, installationPath, managementPath, principalPath, residentPath, residentRoot,
-  type AreaId, type Condo } from './paths';
+import { Empty, ErrorState, Icon, Loading, ModuleOff, type IconName } from '../primitives';
+import { tenantModuleLabels } from '../../api/tenantModules';
+import type { TenantModuleId } from '../../api/types';
+import { ENTRY_PATH, activeResidentUnits, condoAreas, condoHomePath, condoOf, conciergeHome, conciergePath, installationPath, maintenancePath, managementPath,
+  principalPath, residentPath, residentRoot, type AreaId, type Condo } from './paths';
 
 /** Condomínio da conta pelo id do endereço (undefined quando a conta não tem vínculo nele). */
 export function useCondo(tenantId: string): Condo | undefined {
   const { identity } = useAuth();
-  return condominiums(identity?.memberships ?? []).find((condo) => condo.tenantId === tenantId);
+  return condoOf(identity, tenantId);
 }
 
 /**
@@ -31,14 +33,15 @@ export function useTechnicalAccess(accountId: string | undefined, tenantId: stri
 const areaDetails: Record<Exclude<AreaId, 'inicio'>, { icon: IconName; text: string }> = {
   morador: { icon: 'home', text: 'Sua unidade: acessos, encomendas, reservas, pedidos e financeiro.' },
   portaria: { icon: 'door', text: 'Encomendas, visitas e ocorrências do turno. Exige segundo fator.' },
-  zeladoria: { icon: 'truck', text: 'Pedidos e manutenção atribuídos à equipe. Em breve: o papel de zelador ainda não existe no servidor.' },
+  zeladoria: { icon: 'truck', text: 'Pedidos de manutenção atribuídos a você: conversa com a unidade e andamento. Exige segundo fator.' },
   gestao: { icon: 'building', text: 'Unidades, pessoas, reservas, avisos, pedidos, financeiro e mapa de acesso. Exige segundo fator.' },
   implantacao: { icon: 'key', text: 'Áreas físicas, pontos, equipamentos, canais e aceite. Exige concessão técnica vigente.' },
 };
 
-export function areaPath(tenantId: string, area: AreaId): string {
+export function areaPath(tenantId: string, area: AreaId, condo?: Condo): string {
   if (area === 'morador') return residentRoot(tenantId);
-  if (area === 'portaria') return conciergePath(tenantId);
+  if (area === 'portaria') return conciergePath(tenantId, conciergeHome(condo));
+  if (area === 'zeladoria') return maintenancePath(tenantId);
   if (area === 'gestao') return managementPath(tenantId);
   if (area === 'implantacao') return installationPath(tenantId);
   return `/c/${tenantId}/inicio`;
@@ -49,6 +52,23 @@ export function CondoIndex() {
   const { tenantId = '' } = useParams();
   const condo = useCondo(tenantId);
   return <Navigate to={principalPath(tenantId, condo)} replace />;
+}
+
+/** /c/{condomínio}/portaria: abre a primeira seção liberada pela administradora. */
+export function ConciergeIndex() {
+  const { tenantId = '' } = useParams();
+  return <Navigate to={conciergePath(tenantId, conciergeHome(useCondo(tenantId)))} replace />;
+}
+
+/**
+ * Rota de um módulo desligado pela administradora, aberta direto pelo endereço: explica o motivo e não consulta a API.
+ * O menu já esconde a seção; o servidor continua respondendo 403 MODULE_DISABLED.
+ */
+export function CondoModuleOff({ tenantId, modules }: { tenantId: string; modules: readonly TenantModuleId[] }) {
+  const names = modules.map((module) => tenantModuleLabels[module]).join(' / ');
+  return <><ModuleOff>{names} não está liberado para este condomínio. A administradora pode religar o módulo na central; quando isso acontecer, a
+    área volta ao menu. Nenhum dado foi apagado.</ModuleOff>
+    <Link className="button button-secondary" to={condoHomePath(tenantId)}>Voltar ao início do condomínio</Link></>;
 }
 
 /** Início do condomínio: atalhos para as áreas dos papéis da conta. */
@@ -66,8 +86,8 @@ export function CondoHome() {
     {areas.length === 0 ? <div className="panel"><Empty icon="shield" title="Nenhuma área disponível">Seu vínculo neste condomínio ainda não dá acesso a uma área da aplicação. Procure a gestão.</Empty></div>
       : <ul className="area-cards" aria-label="Áreas do condomínio">{areas.map((area) => <li key={area.id}>
         {area.disabled ? <div className="area-card area-card-disabled" aria-disabled="true"><span className="round-icon"><Icon name={areaDetails[area.id as keyof typeof areaDetails].icon} /></span>
-          <span><strong>{area.label}</strong> <span className="status-pill status-neutral">Em breve</span><span>{areaDetails[area.id as keyof typeof areaDetails].text}</span></span></div>
-          : <Link className="area-card" to={areaPath(tenantId, area.id)}><span className="round-icon"><Icon name={areaDetails[area.id as keyof typeof areaDetails].icon} /></span>
+          <span><strong>{area.label}</strong> <span className="status-pill status-neutral">Desligado pela administradora</span><span>{areaDetails[area.id as keyof typeof areaDetails].text}</span></span></div>
+          : <Link className="area-card" to={areaPath(tenantId, area.id, condo)}><span className="round-icon"><Icon name={areaDetails[area.id as keyof typeof areaDetails].icon} /></span>
             <span><strong>{area.label}</strong><span>{areaDetails[area.id as keyof typeof areaDetails].text}</span></span><Icon name="arrow" /></Link>}
       </li>)}</ul>}
   </>;

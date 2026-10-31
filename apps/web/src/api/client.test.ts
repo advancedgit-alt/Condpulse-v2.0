@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, CondPulseApi, newOperationKey } from './client';
+import { ApiError, CondPulseApi, isModuleDisabled, newOperationKey } from './client';
 import type { CreateReservation, CurrentIdentity, Reservation, Session } from './types';
 
 const account = '10000000-0000-4000-8000-000000000001';
@@ -8,7 +8,7 @@ const tenant = '20000000-0000-4000-8000-000000000001';
 const unit = '30000000-0000-4000-8000-000000000001';
 const amenity = '40000000-0000-4000-8000-000000000001';
 const session: Session = { accountId: account, expiresAt: '2030-01-01T20:00:00Z' };
-const identity: CurrentIdentity = { accountId: account, memberships: [] };
+const identity: CurrentIdentity = { accountId: account, memberships: [], tenantModules: [] };
 const create: CreateReservation = { unitId: unit, amenityId: amenity, startsAt: '2030-01-01T15:00:00Z',
   endsAt: '2030-01-01T16:00:00Z', acceptedPolicyVersion: 1 };
 const reservation: Reservation = { reservationId: '50000000-0000-4000-8000-000000000001', unitId: unit,
@@ -92,6 +92,36 @@ describe('cliente BFF same-origin', () => {
     expect(parsed.memberships.map((item) => item.role)).toEqual(['RESIDENT', 'MAINTENANCE']);
     fetcher.mockImplementation(async () => json({ accountId: account, memberships: [{ ...resident, role: 42 }] }));
     await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('módulos por condomínio em /v1/me: ausentes viram null, módulo desconhecido fica de fora, repetição derruba', async () => {
+    const fetcher = mockFetch();
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [] }));
+    expect((await new CondPulseApi({ fetch: fetcher }).currentIdentity()).tenantModules).toBeNull();
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [],
+      tenantModules: [{ tenantId: tenant, enabled: ['requests', 'future_module', 'parcels'] }] }));
+    expect((await new CondPulseApi({ fetch: fetcher }).currentIdentity()).tenantModules).toEqual([{ tenantId: tenant, enabled: ['parcels', 'requests'] }]);
+    for (const tenantModules of [{}, [{ tenantId: tenant, enabled: 'requests' }], [{ tenantId: 'x', enabled: [] }],
+      [{ tenantId: tenant, enabled: [] }, { tenantId: tenant.toUpperCase(), enabled: [] }], [{ tenantId: tenant, enabled: ['Requests!'] }]]) {
+      fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], tenantModules }));
+      await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
+    }
+  });
+
+  it('403 MODULE_DISABLED avisa a casca sem encerrar a sessão; outros 403 não avisam', async () => {
+    const fetcher = mockFetch();
+    const client = new CondPulseApi({ fetch: fetcher });
+    const disabled = vi.fn(); const expired = vi.fn();
+    client.onModuleDisabled(disabled); client.onSessionExpired(expired);
+    fetcher.mockImplementation(async () => problem(403, 'MODULE_DISABLED'));
+    const failure = await client.units(tenant).catch((error: unknown) => error);
+    expect(isModuleDisabled(failure)).toBe(true);
+    expect(disabled).toHaveBeenCalledTimes(1);
+    fetcher.mockImplementation(async () => problem(403, 'STAFF_ACCESS_DENIED'));
+    await expect(client.units(tenant)).rejects.toMatchObject({ code: 'STAFF_ACCESS_DENIED' });
+    expect(disabled).toHaveBeenCalledTimes(1);
+    expect(expired).not.toHaveBeenCalled();
+    expect(isModuleDisabled(new Error('x'))).toBe(false);
   });
 
   it('faz refresh singleflight para consultas concorrentes e repete cada consulta uma vez', async () => {

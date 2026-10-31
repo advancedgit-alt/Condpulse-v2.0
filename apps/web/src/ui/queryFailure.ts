@@ -1,10 +1,13 @@
-import { ApiError } from '../api/client';
+import { ApiError, isModuleDisabled } from '../api/client';
 
 interface QueryLike { isError: boolean; error: unknown; data: unknown }
 
-/** Falha de autorização (sessão, segundo fator, vínculo, concessão ou escopo): os dados em cache deixam de valer. */
+/**
+ * Falha de autorização (sessão, segundo fator, vínculo, concessão ou escopo): os dados em cache deixam de valer. Módulo
+ * desligado pela administradora não é perda de acesso: a tela mostra o estado próprio do módulo.
+ */
 export function isAuthorizationError(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 401 || error.status === 403 || error.code === 'TENANT_ACCESS_DENIED');
+  return error instanceof ApiError && !isModuleDisabled(error) && (error.status === 401 || error.status === 403 || error.code === 'TENANT_ACCESS_DENIED');
 }
 
 /**

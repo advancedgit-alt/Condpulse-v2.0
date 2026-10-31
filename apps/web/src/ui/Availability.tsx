@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, isModuleDisabled } from '../api/client';
 import type { Amenity } from '../api/types';
 import { scopeKey, type Scope } from './Operations';
 import { ErrorState, Loading, Notice } from './primitives';
@@ -21,7 +21,7 @@ export function useAmenityAvailability(scope: Scope, area: Amenity, timeZone: st
     staleTime: 30_000,
   });
   useEffect(() => {
-    if (query.error instanceof ApiError && [403, 404].includes(query.error.status)) {
+    if (query.error instanceof ApiError && [403, 404].includes(query.error.status) && !isModuleDisabled(query.error)) {
       window.dispatchEvent(new CustomEvent('condpulse:context-denied', { detail: { scope, error: query.error } }));
     }
   }, [query.error, scope]);

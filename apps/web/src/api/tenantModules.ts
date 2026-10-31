@@ -1,11 +1,11 @@
 import { api, CondPulseApi, identifier, invalidResponse, isDate, isInteger, isString, isUUID, record } from './client';
+import { tenantModuleIds, type TenantModuleId } from './types';
 
 /**
  * Módulos por condomínio (V045): decisão da central, flag global e efeito real. Só metadados de liberação: nenhuma
  * chave, segredo ou conteúdo de morador. A gravação vale pela versão lida, com motivo, e o servidor confere de novo.
  */
-export const tenantModuleIds = ['reservations', 'parcels', 'visits', 'announcements', 'requests', 'finance', 'access_credentials', 'facial_access'] as const;
-export type TenantModuleId = typeof tenantModuleIds[number];
+export { tenantModuleIds, type TenantModuleId };
 export const tenantModuleLabels: Record<TenantModuleId, string> = {
   reservations: 'Reservas e áreas comuns', parcels: 'Encomendas', visits: 'Visitas e acessos', announcements: 'Avisos',
   requests: 'Pedidos e anexos', finance: 'Financeiro da unidade', access_credentials: 'Credenciais de acesso', facial_access: 'Acesso facial',

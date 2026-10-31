@@ -36,6 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Envio pendente pertence à sessão encerrada: a próxima entrada nesta aba não o herda.
     pendingOperation.clearAll();
   }), [queries]);
+  // Módulo desligado pela central no meio do uso (403 MODULE_DISABLED): relê /v1/me para o menu esconder a seção.
+  useEffect(() => api.onModuleDisabled(() => { void queries.invalidateQueries({ queryKey: ['identity'] }); }), [queries]);
   const needsLogin = mode === 'anonymous' || mode === 'ready' && !identity.isFetching
     && identity.error instanceof ApiError && identity.error.status === 401;
   const loginAvailability = useQuery({

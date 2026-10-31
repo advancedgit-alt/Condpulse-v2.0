@@ -19,7 +19,7 @@ import { OccurrenceSection } from '../concierge/Occurrences';
 import { FinanceSection } from './Finance';
 import { AccessMapSection } from './AccessMap';
 import { ManagementProvider, type ManagementScope } from './shared';
-import { ENTRY_PATH } from '../shell/paths';
+import { ENTRY_PATH, condoOf, panelEnabled, sectionEnabled, type Condo } from '../shell/paths';
 import './Management.css';
 
 export const managementSections = [
@@ -87,12 +87,14 @@ function StaffGate({ scope, section }: { scope: ManagementScope; section: Manage
 
 function ManagementConsole({ scope, section }: { scope: ManagementScope; section: ManagementSection }) {
   const base = `/c/${scope.tenantId}/gestao`;
+  const { identity } = useAuth();
+  const condo = condoOf(identity, scope.tenantId);
   return <>
     <div className="residence-heading"><div><span className="eyebrow">GESTÃO DO CONDOMÍNIO</span><h1>{scope.tenantName}</h1>
       <p>Decisões e cadastros ficam registrados na auditoria com autor e motivo. Horários em {scope.timeZone}.</p></div>
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de gestão</span></div></div></div>
-    <SectionTabs label="Seções da gestão" current={section} items={managementSections.map((item) => ({ id: item.id, label: item.label, to: `${base}/${item.id}` }))} />
-    {section === 'pendencias' ? <Overview /> : null}
+    <SectionTabs label="Seções da gestão" current={section} items={managementSections.filter((item) => sectionEnabled(condo, 'gestao', item.id)).map((item) => ({ id: item.id, label: item.label, to: `${base}/${item.id}` }))} />
+    {section === 'pendencias' ? <Overview condo={condo} /> : null}
     {section === 'reservas' ? <ReservationAgenda /> : null}
     {section === 'areas' ? <AmenitySection /> : null}
     {section === 'unidades' ? <UnitSection /> : null}
@@ -109,14 +111,16 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
   </>;
 }
 
-function Overview() {
+/** Pendências: reservas só com o módulo liberado pela administradora; vínculos não dependem de módulo. */
+function Overview({ condo }: { condo: Condo | undefined }) {
+  const reservations = panelEnabled(condo, 'gestao.pendencias.reservas');
   return <div className="management-columns">
-    <section className="management-section" aria-labelledby="pending-reservations-title">
+    {reservations ? <section className="management-section" aria-labelledby="pending-reservations-title">
       <div className="section-heading"><div><span className="section-index">01 / RESERVAS</span><h2 id="pending-reservations-title">Pedidos aguardando decisão</h2></div></div>
       <PendingReservations />
-    </section>
+    </section> : null}
     <section className="management-section" aria-labelledby="pending-people-title">
-      <div className="section-heading"><div><span className="section-index">02 / PESSOAS</span><h2 id="pending-people-title">Vínculos pendentes</h2></div></div>
+      <div className="section-heading"><div><span className="section-index">{reservations ? '02 / PESSOAS' : 'PESSOAS'}</span><h2 id="pending-people-title">Vínculos pendentes</h2></div></div>
       <MembershipList status="PENDING" empty="Nenhum vínculo aguardando aprovação." />
     </section>
   </div>;

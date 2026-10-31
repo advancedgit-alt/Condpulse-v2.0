@@ -10,9 +10,24 @@ export interface Membership {
   role: 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE' | 'MANAGER' | 'SUPPORT';
 }
 
+/** Módulos por condomínio (V045). Lista aqui para o parser de /v1/me não depender da API da central. */
+export const tenantModuleIds = ['reservations', 'parcels', 'visits', 'announcements', 'requests', 'finance', 'access_credentials', 'facial_access'] as const;
+export type TenantModuleId = typeof tenantModuleIds[number];
+
+/** Módulos liberados (flag global ligada e condomínio liberado pela central) de um condomínio dos vínculos. */
+export interface TenantModules {
+  tenantId: UUID;
+  enabled: TenantModuleId[];
+}
+
 export interface CurrentIdentity {
   accountId: UUID;
   memberships: Membership[];
+  /**
+   * Módulos liberados por condomínio, só para o menu: a API confere de novo e responde 403 MODULE_DISABLED. null quando
+   * o servidor ainda não informa (versão anterior à V045): nada é escondido e cada tela trata o 403.
+   */
+  tenantModules: TenantModules[] | null;
 }
 
 export interface Session {

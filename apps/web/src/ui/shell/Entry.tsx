@@ -33,7 +33,7 @@ export function EntryPage() {
   const { identity } = useAuth();
   const access = usePlatformAccess(identity?.accountId, true);
   if (!identity) return null;
-  const condos = condominiums(identity.memberships);
+  const condos = condominiums(identity.memberships, identity.tenantModules);
   const invitation = storedInvitation();
   const managerInvitation = storedInvitation('manager');
   const decision = entryDecision(condos, access, Boolean(invitation || managerInvitation));
