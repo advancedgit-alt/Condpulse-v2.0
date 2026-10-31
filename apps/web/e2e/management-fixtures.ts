@@ -26,6 +26,8 @@ export interface ManagementState {
   waitlist?: Record<string, unknown>[];
   waitlistFailures?: number;
   waitlistQueries?: string[];
+  /** Locações em vigor (V034); vazias por padrão. */
+  rentals?: Record<string, unknown>[];
 }
 
 async function json(route: Route, status: number, body: unknown) {
@@ -135,6 +137,7 @@ export async function installManagementApi(page: Page, initial: Partial<Manageme
       return;
     }
     if (request.method() === 'GET' && path === '/invitations') { await json(route, 200, []); return; }
+    if (request.method() === 'GET' && path === '/rentals') { await json(route, 200, state.rentals ?? []); return; }
     if (request.method() === 'POST' && path === '/invitations') {
       state.invitationBodies.push(request.postDataJSON());
       await json(route, 201, { invitationId: '71000000-0000-4000-8000-000000000001', token: INVITATION_TOKEN,
