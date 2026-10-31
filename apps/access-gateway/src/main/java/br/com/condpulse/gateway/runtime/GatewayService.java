@@ -231,7 +231,8 @@ public final class GatewayService {
    // Restrição sempre pode ser tentada, inclusive sem perfil aprovado: ela só retira.
    return switch(type) {
     case REMOVE_FACE -> manifest.supports(Operation.REMOVE_FACE) || personRemovalCovers(adapter,false,true)?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:REMOVE_FACE";
-    case REMOVE_CREDENTIAL -> manifest.supports(BaseAdapter.removeOperation(kind(command)))?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:"+BaseAdapter.removeOperation(kind(command));
+    case REMOVE_CREDENTIAL -> manifest.supports(BaseAdapter.removeOperation(kind(command))) || personRemovalCovers(adapter,false,true)
+     ?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:"+BaseAdapter.removeOperation(kind(command));
     case REVOKE_RIGHTS -> manifest.supports(Operation.REVOKE_RIGHTS)?null:"NAO_SUPORTADO_SEM_DOCUMENTACAO:REVOKE_RIGHTS";
     default -> null;
    };
@@ -290,7 +291,9 @@ public final class GatewayService {
    case APPLY_RIGHTS -> adapter.applyRights(rights(c));
    case REMOVE_FACE -> adapter.manifest().supports(Operation.REMOVE_FACE)?adapter.removeFace(c.subjectRef())
     :personRemovalCovers(adapter,false,true)?adapter.removePerson(c.subjectRef()):OperationResult.notSupported(Operation.REMOVE_FACE);
-   case REMOVE_CREDENTIAL -> adapter.removeCredential(c.subjectRef(),kind(c));
+   // Mesma regra de cascata do gate de gravação: sem retirada individual, só a remoção da pessoa com cascata declarada.
+   case REMOVE_CREDENTIAL -> adapter.manifest().supports(BaseAdapter.removeOperation(kind(c)))?adapter.removeCredential(c.subjectRef(),kind(c))
+    :personRemovalCovers(adapter,false,true)?adapter.removePerson(c.subjectRef()):OperationResult.notSupported(BaseAdapter.removeOperation(kind(c)));
    case REVOKE_RIGHTS -> adapter.revokeRights(c.subjectRef());
    case REVOKE_ALL -> revokeAll(adapter,c.subjectRef());
   };
