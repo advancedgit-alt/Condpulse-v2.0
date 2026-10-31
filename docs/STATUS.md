@@ -41,7 +41,8 @@ Esta seção resume o estado vigente; as seções seguintes são o histórico de
 - `CP_PARCEL_CODE_KEY`: gerada no runner (32 bytes) e gravada como sensitive pelo workflow `runtime-flags` (apply 41083523914, inspect 41083425728); valor nunca exibido. Vale a partir do deployment seguinte.
 - `CP_ACCESS_CREDENTIALS_ENABLED=true` (Production) gravada pelo workflow `runtime-flags` (apply 41083523914); conferência de leitura no mesmo run. Vale a partir do deployment seguinte.
 - BLOQUEADO: carga representativa do CP-052 (100 rps/1.000 sessões fora do runner) — responsável — ambiente dedicado ou janela na homologação com OK de custo e de uso do limite de 16 conexões da role, mais contas de teste sintéticas no Auth. O ensaio no runner ([CARGA.md](CARGA.md)) não declara capacidade.
-- BLOQUEADO: documentação da integração facial (portaria e áreas comuns) — responsável — `docs/integracoes/facial/`.
+- Integração facial: pacote Acesso Facial v1.1 recebido em 31/10/2026 em `docs/integracoes/facial/pacote-v1.1/` (SHA-256 conferido; .docx e .png omitidos); auditoria AC-001 em [AUDITORIA_AC001.md](integracoes/facial/AUDITORIA_AC001.md), no PR; nada implementado nem homologado. AC-002 decidido pelo responsável em 31/10/2026: piloto no Condomínio Teste 1 (homologação), quatro marcas (Control iD, Hikvision, Dahua, Intelbras) parametrizadas por condomínio, equipamento físico escolhido depois.
+- BLOQUEADO: bancada G3, comissionamento G4, piloto G5 e aceites G6 do acesso facial — responsável — equipamento físico no Condomínio Teste 1.
 - Continuidade autônoma: [PROMPT_CONTINUIDADE.md](PROMPT_CONTINUIDADE.md) define o backlog e o ciclo de entrega.
 - OK do responsável para integrar a produção dado em 30/10/2026; execução em andamento conforme [PRODUCAO_PREPARACAO.md](PRODUCAO_PREPARACAO.md).
 

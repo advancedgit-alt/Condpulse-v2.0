@@ -1,0 +1,74 @@
+{
+  "status": "CONTRATO_ESTAVEL_APOS_AJUSTES",
+  "specification_date": "2026-10-30",
+  "counts": {
+    "paths": 27,
+    "operations": 32,
+    "schemas": 62,
+    "references_resolved": 435,
+    "object_schemas_closed": 60,
+    "idempotent_mutations": 15,
+    "methods": {
+      "get": 15,
+      "post": 16,
+      "patch": 1
+    },
+    "file_examples_validated": 2,
+    "additional_positive_checks": 4,
+    "negative_payload_cases": 14
+  },
+  "resolved_findings": [
+    "REQUIRE_ASSISTANCE e UNAVAILABLE não autorizam atuação automática",
+    "OWNER_NONRESIDENT e EMERGENCY_RESPONDER incluídos",
+    "/edge/decisions agora telemetria local idempotente e sem abertura",
+    "ASSISTED nos modos gerais",
+    "bindingRevision e installationRevision inteiros; IDs continuam UUID",
+    "snapshot de binding único com leitores entrada/saída e sensores separados",
+    "maximumAgeYears e defaultEffect explícitos",
+    "PublicationAccepted restrito ao recibo inicial APPROVED/PUBLISHING",
+    "README documenta nomes conceituais do manual e campos wire",
+    "eventos preservam referência de canal quando conhecida"
+  ],
+  "checks": [
+    "YAML parse sem chaves duplicadas",
+    "refs internas resolvidas",
+    "required compatível com properties",
+    "operationId único",
+    "paths UUID e parâmetros sem duplicação",
+    "auth em todas as operações",
+    "Idempotency-Key em mutações",
+    "erros400/401/403/404/409/422/429/503",
+    "exemplos em arquivo iguais aos embutidos",
+    "tipos/required/enums/const/condicionais dos exemplos e casos adicionais",
+    "sem tenantId/actorId livres nos request properties",
+    "14 payloads negativos rejeitados no subconjunto de validação implementado"
+  ],
+  "negative_cases": [
+    "tenantId livre",
+    "mínimo sem evidência",
+    "máximo sem evidência",
+    "defaultEffect permissivo",
+    "UUID inválido",
+    "receivedAt no payload",
+    "provisionamento ausente",
+    "direção fora do enum",
+    "REQUIRE_ASSISTANCE com atuação",
+    "ALLOW sem revisão de vínculo",
+    "revisão UUID em vez de inteiro",
+    "ator livre na telemetria",
+    "direction no topo cria ambiguidade de binding",
+    "snapshot incompleto sem campo saída"
+  ],
+  "limitations": [
+    "Sem biblioteca de validação OpenAPI/JSONSchema completa instalada; auditoria estrutural e validador restrito aos recursos usados, não certificação completa OAS.",
+    "Ordenação maximumAgeYears>=minimumAgeYears, relógio/validade, coerência dos sentidos, unicidade física, autorização e demais invariantes dependem do backend e testes; nenhuma execução de API/hardware/release foi realizada."
+  ],
+  "remaining_known_contract_findings": [],
+  "sha256": "7648f34a46c5424055d769841cdde6ddb30efb6eb7ce7a38bdc81eed21174902",
+  "files": [
+    "contratos/openapi_acesso_proposto.yaml",
+    "contratos/README.md",
+    "contratos/exemplos/policy18plus.json",
+    "contratos/exemplos/event.json"
+  ]
+}

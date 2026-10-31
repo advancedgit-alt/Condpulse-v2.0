@@ -1,0 +1,938 @@
+{
+  "versao": "1.1",
+  "pesquisa_em": "2026-10-30",
+  "aviso": "Seleção técnica para investigação. Não importar como homologado. API/protocolo declarado não comprova todas as operações.",
+  "modelos": [
+    {
+      "id": "CI-M01",
+      "fabricante": "Control iD",
+      "modelo": "iDFace Lite e Pro",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1 via módulo externo",
+      "interfaces_documentadas": [
+        "REST",
+        "Ethernet",
+        "Wiegand",
+        "RS-485 ao módulo",
+        "SIP conforme versão"
+      ],
+      "ressalvas": "Lite 3.000; página especifica Pro 30.000 e introdução ainda 10.000. Não assumir capacidade sem licença, hardware e firmware.",
+      "source_ids": [
+        "CI01",
+        "CI06"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "conflito_faces_pro": [
+          10000,
+          30000
+        ],
+        "faces_lite_publicadas": 3000
+      }
+    },
+    {
+      "id": "CI-M02",
+      "fabricante": "Control iD",
+      "modelo": "iDFace Max",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "Relé interno e módulo externo; independência de portas a ensaiar",
+      "interfaces_documentadas": [
+        "REST",
+        "Ethernet",
+        "OSDP como periférico",
+        "Wiegand no módulo",
+        "PoE conforme ficha",
+        "SIP Pro"
+      ],
+      "ressalvas": "Licenças publicadas 10.000 / 50.000 / 100.000; número de faces efetivo depende da licença.",
+      "source_ids": [
+        "CI02",
+        "CI06"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "opcoes_faces_licenca": [
+          10000,
+          50000,
+          100000
+        ]
+      }
+    },
+    {
+      "id": "CI-M03",
+      "fabricante": "Control iD",
+      "modelo": "iDBlock Next",
+      "categoria": "CATRACA_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interior",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "Catraca com até 2 iDFace",
+      "interfaces_documentadas": [
+        "REST",
+        "TCP/IP",
+        "Monitor de giro"
+      ],
+      "ressalvas": "Página da catraca cita 3.000 Lite e 10.000 Pro; não herdar 30.000 do terminal avulso.",
+      "source_ids": [
+        "CI03",
+        "CI12"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "CI-M04",
+      "fabricante": "Control iD",
+      "modelo": "iDBlock Balcão Facial",
+      "categoria": "CATRACA_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 100000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Conferir instalação e ficha do conjunto",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "Catraca com até 2 iDFace Max",
+      "interfaces_documentadas": [
+        "REST",
+        "TCP/IP",
+        "Monitor de giro"
+      ],
+      "ressalvas": "Até 100.000 conforme modelo e licença; número declarado não é medição.",
+      "source_ids": [
+        "CI04"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "CI-M05",
+      "fabricante": "Control iD",
+      "modelo": "iDBox V2",
+      "categoria": "CONTROLADORA",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Gabinete e condições conforme manual",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "4 portas / 4 relés",
+      "interfaces_documentadas": [
+        "REST",
+        "Ethernet",
+        "Wiegand",
+        "RS-485",
+        "OSDP Secure Channel declarado"
+      ],
+      "ressalvas": "Não reconhece face por si. Combinação com leitor e proteção ativa precisam ser homologadas.",
+      "source_ids": [
+        "CI05"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "HK-M01",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T341AMF",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 3000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Respeitar manual, iluminação e condições reais; IP não dispensa projeto.",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "SDK",
+        "HTTPS",
+        "Ethernet",
+        "Wiegand"
+      ],
+      "ressalvas": "Documento de 2023 não comprova continuidade comercial ou suporte. Não herdar RS-485, SIP ou OSDP de outros modelos.",
+      "source_ids": [
+        "HK01"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "faces": 3000,
+          "cartoes": 3000,
+          "digitais": 3000,
+          "eventos": 150000
+        },
+        "variantes": [
+          "DS-K1T341AM",
+          "DS-K1T341AMF-S"
+        ],
+        "firmware_documentado_apenas": null
+      }
+    },
+    {
+      "id": "HK-M02",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T342MFWX",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 1500,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "Push SDK",
+        "SIP com servidores listados na ficha",
+        "Ethernet",
+        "Wi-Fi",
+        "RS-485",
+        "Wiegand"
+      ],
+      "ressalvas": "Capacidade deve incluir moradores, funcionários e visitantes válidos em cada destino. Não tratar -E1 como versão idêntica.",
+      "source_ids": [
+        "HK02"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "faces": 1500,
+          "cartoes": 3000,
+          "digitais": 3000,
+          "eventos": 150000
+        },
+        "variantes": [
+          "DS-K1T342MFWX-E1",
+          "DS-K1T342MWX"
+        ],
+        "firmware_documentado_apenas": null
+      }
+    },
+    {
+      "id": "HK-M03",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T343MWX",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 1500,
+      "faces_homologadas": null,
+      "ambiente_documentado": "INTERNO",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "Push SDK",
+        "SIP com servidores listados na página",
+        "Ethernet",
+        "Wi-Fi",
+        "RS-485",
+        "Wiegand"
+      ],
+      "ressalvas": "Uso interno explícito; não atribuir IP65 por analogia. Firmware listado publicamente não é firmware homologado CondPulse.",
+      "source_ids": [
+        "HK03"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "faces": 1500,
+          "cartoes": 3000,
+          "digitais": null,
+          "eventos": null
+        },
+        "variantes": [
+          "DS-K1T343MFWX"
+        ],
+        "firmware_documentado_apenas": "V4.48.40_260629"
+      }
+    },
+    {
+      "id": "HK-M04",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T344MBWX-QRE1",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 3000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "Ethernet",
+        "Wi-Fi",
+        "Bluetooth",
+        "RS-485",
+        "Wiegand somente entrada"
+      ],
+      "ressalvas": "Receber guia de API específico antes de implementar. QR suportado não comprova uso único ou token CondPulse. Wiegand é somente entrada na ficha; não projetar saída por inferência.",
+      "source_ids": [
+        "HK04"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "pessoas": 3000,
+          "faces": 3000,
+          "cartoes": 3000,
+          "eventos": 150000
+        },
+        "variantes": [],
+        "firmware_documentado_apenas": null
+      }
+    },
+    {
+      "id": "HK-M05",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T671M-L",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "SDK",
+        "SIP",
+        "Ethernet",
+        "RS-485",
+        "Wiegand"
+      ],
+      "ressalvas": "Capacidades conflitantes entre documentos oficiais do mesmo nome comercial. Não publicar capacidade unificada antes de resolver região, hardware e firmware.",
+      "source_ids": [
+        "HK05",
+        "HK06"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "faces": null,
+          "cartoes": null,
+          "eventos": 50000,
+          "conflito": {
+            "fonte_HK05_PTBR": {
+              "faces": 10000,
+              "cartoes": 10000
+            },
+            "fonte_HK06_global_antiga": {
+              "faces": 6000,
+              "cartoes": 6000
+            }
+          },
+          "resolucao": "EXIGE_IDENTIFICACAO_HARDWARE_FIRMWARE_E_CONFIRMACAO_FABRICANTE"
+        },
+        "variantes": [
+          "DS-K1T671M",
+          "DS-K1T671MF-L"
+        ],
+        "firmware_documentado_apenas": null
+      }
+    },
+    {
+      "id": "HK-M06",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T673DWX",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 10000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "Push SDK",
+        "SIP com servidores listados na ficha",
+        "OSDP V2.1.7, baud 19200",
+        "Ethernet",
+        "Wi-Fi",
+        "RS-485",
+        "Wiegand"
+      ],
+      "ressalvas": "OSDP documentado em ficha não comprova Secure Channel ou suporte no firmware instalado. Digitais requerem módulo opcional.",
+      "source_ids": [
+        "HK07"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "faces": 10000,
+          "cartoes": 50000,
+          "digitais_com_modulo": 10000,
+          "eventos": 150000
+        },
+        "variantes": [
+          "DS-K1T673DWX-E1",
+          "DS-K1T673TDWX"
+        ],
+        "firmware_documentado_apenas": null
+      }
+    },
+    {
+      "id": "HK-M07",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T673DWX-E1",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 10000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "OSDP, baud 9600/19200/38400",
+        "Ethernet",
+        "Wi-Fi",
+        "RS-485",
+        "Wiegand"
+      ],
+      "ressalvas": "Secure Channel precisa de teste e confirmação. Versão -E1 deve ter perfil próprio; não reutilizar cegamente firmware da versão base.",
+      "source_ids": [
+        "HK08"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "capacidade": {
+          "faces": 10000,
+          "cartoes": 50000,
+          "digitais_com_modulo": 10000,
+          "eventos": 150000
+        },
+        "variantes": [
+          "DS-K1T673DWX",
+          "DS-K1T673TDWX-E1"
+        ],
+        "firmware_documentado_apenas": null
+      }
+    },
+    {
+      "id": "HK-M08",
+      "fabricante": "Hikvision",
+      "modelo": "DS-K1T680DW",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P2",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 100000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Conferir proteção aplicável; IP não comprovado",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "ISAPI",
+        "ISUP 5.0",
+        "RS-485",
+        "Wiegand",
+        "Ethernet",
+        "Wi-Fi"
+      ],
+      "ressalvas": "Alta capacidade apenas quando necessidade justificar. IP/IK não comprovados na ficha consultada.",
+      "source_ids": [
+        "HK09"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "DH-M01",
+      "fabricante": "Dahua",
+      "modelo": "DHI-ASI6214D-W",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 6000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "interior",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "CGI",
+        "ONVIF",
+        "SDK/API",
+        "OSDP"
+      ],
+      "ressalvas": "RS-485/Wiegand compartilham porta; confirmar SKU e firmware",
+      "source_ids": [
+        "DH01"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 300000
+      }
+    },
+    {
+      "id": "DH-M02",
+      "fabricante": "Dahua",
+      "modelo": "ASI6214J-MFW-V1",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 20000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "IP65; instalação conforme manual",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "CGI",
+        "ONVIF",
+        "SDK/API",
+        "OSDP"
+      ],
+      "ressalvas": "Não transferir capacidade para modelo sem -V1",
+      "source_ids": [
+        "DH02"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 300000
+      }
+    },
+    {
+      "id": "DH-M03",
+      "fabricante": "Dahua",
+      "modelo": "ASI8214S-W-V1",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 100000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "interior/exterior",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "SDK/API",
+        "OSDP"
+      ],
+      "ressalvas": "Duas saídas alarme não são duas portas; ficha disponível omite -V1 no nome",
+      "source_ids": [
+        "DH03"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 300000
+      }
+    },
+    {
+      "id": "DH-M04",
+      "fabricante": "Dahua",
+      "modelo": "ASI3214A-W-E1",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 3000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "interior",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "CGI",
+        "ONVIF",
+        "SDK/API",
+        "OSDP"
+      ],
+      "ressalvas": "Não prometer QR sem validação, campos da ficha diferem",
+      "source_ids": [
+        "DH04"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 50000
+      }
+    },
+    {
+      "id": "DH-M05",
+      "fabricante": "Dahua",
+      "modelo": "ASI3213G-MW",
+      "categoria": "TERMINAL_FACIAL",
+      "prioridade_proposta": "P1_parque_instalado",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 1500,
+      "faces_homologadas": null,
+      "ambiente_documentado": "interior",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "CGI",
+        "SDK",
+        "OSDP"
+      ],
+      "ressalvas": "Sem EOL explícito na fonte consultada; confirmar ciclo de suporte",
+      "source_ids": [
+        "DH05"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 150000
+      }
+    },
+    {
+      "id": "DH-M06",
+      "fabricante": "Dahua",
+      "modelo": "ASI7213X-T1",
+      "categoria": "TERMINAL_FACIAL_LEGADO",
+      "prioridade_proposta": "P1_legado",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 100000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "interior",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1",
+      "interfaces_documentadas": [
+        "CGI",
+        "ONVIF",
+        "SDK",
+        "OSDP"
+      ],
+      "ressalvas": "Catálogo global descontinuado; não priorizar compra nova",
+      "source_ids": [
+        "DH06"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 300000
+      }
+    },
+    {
+      "id": "DH-M07",
+      "fabricante": "Dahua",
+      "modelo": "ASC3202B",
+      "categoria": "CONTROLADOR_NAO_FACIAL",
+      "prioridade_proposta": "P0_topologia",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "interior",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "2",
+      "interfaces_documentadas": [
+        "CGI",
+        "ONVIF",
+        "SDK/API"
+      ],
+      "ressalvas": "1 porta bidirecional ou 2 unidirecionais; 1.000 usuários modo master/10.000 modo sub; combinar leitor exige homologação própria",
+      "source_ids": [
+        "DH07"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {
+        "registros_publicados": 300000
+      }
+    },
+    {
+      "id": "IB-M01",
+      "fabricante": "Intelbras",
+      "modelo": "SS 3532 MF W",
+      "categoria": "CONTROLADOR_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 10000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno/externo conforme instalação",
+      "grau_ip_documentado": "IP55",
+      "portas_documentadas": "1 relé de porta integrado; expansão XR 2201 condicionada a modo e topologia homologados",
+      "interfaces_documentadas": [
+        "API/CGI",
+        "Ethernet",
+        "Wi-Fi",
+        "PoE 802.3af",
+        "RS-485",
+        "Wiegand",
+        "OSDP para leitor auxiliar",
+        "SIP padrão na ficha 2026"
+      ],
+      "ressalvas": "10.000 é capacidade publicada condicionada ao firmware V3.002.00IB000.0.R.250625; não medida. Não extrapolar a variante FE ou modelo sem W. Timeout on-line pode levar à decisão local: enforcement offline deve ser ensaiado.",
+      "source_ids": [
+        "IB01",
+        "IB02",
+        "IB04",
+        "IB19"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "IB-M02",
+      "fabricante": "Intelbras",
+      "modelo": "SS 3542 MF W",
+      "categoria": "CONTROLADOR_FACIAL_COM_DIGITAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 10000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno/externo conforme instalação",
+      "grau_ip_documentado": "IP55",
+      "portas_documentadas": "1 saída de contato seco; segunda saída mediante módulo e topologia a homologar",
+      "interfaces_documentadas": [
+        "API de integração Bio-T — contrato atual pendente",
+        "Ethernet",
+        "Wi-Fi",
+        "PoE 802.3af",
+        "RS-485",
+        "Wiegand",
+        "OSDP para leitor auxiliar",
+        "SIP — validar versão"
+      ],
+      "ressalvas": "Página atual anuncia até 10.000 faces e digitais. Valor publicado, sem medição local e sem firmware homologado. Biometria digital e leitor auxiliar exigem ensaios próprios.",
+      "source_ids": [
+        "IB03",
+        "IB04",
+        "IB05",
+        "IB19"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "IB-M03",
+      "fabricante": "Intelbras",
+      "modelo": "SS 5532 MF W",
+      "categoria": "CONTROLADOR_FACIAL",
+      "prioridade_proposta": "P0",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": null,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno/externo condicionado à revisão e instalação",
+      "grau_ip_documentado": "IP55 na documentação selecionada",
+      "portas_documentadas": "1 relé de porta integrado; expansão deve ser validada por revisão",
+      "interfaces_documentadas": [
+        "API/CGI",
+        "Ethernet",
+        "Wi-Fi",
+        "RS-485",
+        "Wiegand",
+        "OSDP para leitor auxiliar",
+        "SIP com divergência documental"
+      ],
+      "ressalvas": "Publicações consultadas citam 50.000 faces, porém vinculam a capacidade a ramos diferentes: V1.000.00IB000.0.R.240725 (2026) e V3.002.00IB000.0.R.250625 (2025). faces=null até vincular SKU/hardware/firmware. SIP proprietário na ficha versus padrão no comparativo. Não equiparar versão V2.",
+      "source_ids": [
+        "IB06",
+        "IB07",
+        "IB05",
+        "IB20"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "IB-M04",
+      "fabricante": "Intelbras",
+      "modelo": "SS 5542 MF W",
+      "categoria": "CONTROLADOR_FACIAL_COM_DIGITAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 50000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno/externo conforme instalação",
+      "grau_ip_documentado": "IP55",
+      "portas_documentadas": "1 relé de porta integrado; módulo adicional sujeito ao manual e ao ensaio",
+      "interfaces_documentadas": [
+        "API",
+        "Ethernet",
+        "Wi-Fi",
+        "RS-485",
+        "Wiegand",
+        "OSDP para leitor auxiliar",
+        "SIP proprietário na ficha 2026"
+      ],
+      "ressalvas": "50.000 faces e 10.000 digitais são valores publicados, condicionados ao firmware V1.000.00IB000.0.R.240725 na ficha. SIP deve ser confirmado diante de divergência do comparativo. Templates, pessoas e credenciais têm limites distintos.",
+      "source_ids": [
+        "IB08",
+        "IB20",
+        "IB05"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "IB-M05",
+      "fabricante": "Intelbras",
+      "modelo": "SS 5531 MF EX",
+      "categoria": "CONTROLADOR_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 50000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno/externo conforme instalação",
+      "grau_ip_documentado": "IP55",
+      "portas_documentadas": "1 relé de porta integrado; XR 2201 documentado para segurança/porta adicional, sujeito a validação",
+      "interfaces_documentadas": [
+        "API/CGI",
+        "Ethernet",
+        "RS-485",
+        "Wiegand",
+        "OSDP para leitor auxiliar",
+        "SIP padrão na ficha julho/2026"
+      ],
+      "ressalvas": "50.000 faces é valor publicado. Modelo EX não equivale ao SS 5531 MF W. Sem Wi-Fi declarado na ficha selecionada. Alcance ampliado depende de firmware e não substitui ensaio no local.",
+      "source_ids": [
+        "IB09"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "IB-M06",
+      "fabricante": "Intelbras",
+      "modelo": "SS 3531 MF LITE",
+      "categoria": "CONTROLADOR_FACIAL",
+      "prioridade_proposta": "P1",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 6000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno",
+      "grau_ip_documentado": null,
+      "portas_documentadas": "1 relé de porta integrado; XR 2201 como módulo adicional sujeito à topologia validada",
+      "interfaces_documentadas": [
+        "API/CGI",
+        "Ethernet",
+        "RS-485/Wiegand compartilhado",
+        "OSDP para leitor auxiliar",
+        "SIP — revisão deve ser confirmada"
+      ],
+      "ressalvas": "6.000 faces é valor publicado, não medido. Não prometer Wi-Fi ou uso externo. Ficha 2026 diz SIP padrão; ficha 2025 diz proprietário. Nenhum grau IP foi atribuído.",
+      "source_ids": [
+        "IB10",
+        "IB11"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    },
+    {
+      "id": "IB-M07",
+      "fabricante": "Intelbras",
+      "modelo": "SS 7530 FACE",
+      "categoria": "CONTROLADOR_FACIAL_PARQUE_EXISTENTE",
+      "prioridade_proposta": "P2",
+      "status": "CANDIDATO_DOCUMENTADO",
+      "bancada": "NAO_EXECUTADA",
+      "firmware_homologado": null,
+      "capacidades_aprovadas": [],
+      "faces_publicadas": 100000,
+      "faces_homologadas": null,
+      "ambiente_documentado": "Interno/externo conforme manual e instalação",
+      "grau_ip_documentado": "IP65",
+      "portas_documentadas": "1 controle de bloqueio; 2 relés de alarme não equivalem a 2 portas adicionais",
+      "interfaces_documentadas": [
+        "CGI",
+        "SDK/API histórico documentado",
+        "Ethernet",
+        "RS-485",
+        "Wiegand",
+        "OSDP",
+        "ONVIF sem comprovação de gerenciamento facial por esse protocolo"
+      ],
+      "ressalvas": "Ficha 2020 declara 100.000 imagens faciais/usuários. Downloads distinguem SS75xx e SS75xx V2; não intercambiar firmware. Fim de vida e estoque não confirmados. Não confundir com SS 7530 MF FACE.",
+      "source_ids": [
+        "IB12",
+        "IB13"
+      ],
+      "consultado_em": "2026-10-30",
+      "detalhes": {}
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1080" viewBox="0 0 1700 1080"><rect width="100%" height="100%" fill="white"/>
+<text x="850" y="45" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="39" font-weight="700" fill="#000000">Áreas diferentes exigem pontos e direitos diferentes</text>
+<rect x="530" y="115" width="640" height="105" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="147" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Condomínio e contexto do tenant</text>
+<text x="850.0" y="185" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Dados, políticas e instalação próprios</text>
+<rect x="40" y="320" width="500" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="290.0" y="352" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Hall</text>
+<text x="290.0" y="390" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Área de circulação</text>
+<text x="290.0" y="421" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Moradores e visitas autorizadas</text>
+<rect x="600" y="320" width="500" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="352" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Academia</text>
+<text x="850.0" y="390" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Morador com idade verificada</text>
+<text x="850.0" y="421" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">18 anos ou mais</text>
+<rect x="1160" y="320" width="500" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="1410.0" y="352" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Salão de festas</text>
+<text x="1410.0" y="390" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Área vinculada à reserva</text>
+<text x="1410.0" y="421" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Responsável e convidados válidos</text>
+<path d="M650 220 L290 320" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="290,320 302.01889685804605,309.4384604192546 305.744204255272,322.84956704926816" fill="#007F86"/>
+<path d="M850 220 L850 320" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,320 843.0405514542203,305.5928463623572 856.9594485457797,305.5928463623572" fill="#007F86"/>
+<path d="M1050 220 L1410 320" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="1410,320 1394.255795744728,322.84956704926816 1397.981103141954,309.4384604192546" fill="#007F86"/>
+<rect x="40" y="545" width="500" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="290.0" y="577" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">AP01 Entrada social</text>
+<text x="290.0" y="615" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Exterior para hall</text>
+<text x="290.0" y="646" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Leitor 1 e canal 1</text>
+<rect x="600" y="545" width="500" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="577" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">AP02 Porta da academia</text>
+<text x="850.0" y="615" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Corredor para academia</text>
+<text x="850.0" y="646" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Leitor 2 e canal 2</text>
+<rect x="1160" y="545" width="500" height="130" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="1410.0" y="577" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">AP03 Porta do salão</text>
+<text x="1410.0" y="615" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Corredor para salão</text>
+<text x="1410.0" y="646" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Leitor 3 e canal 3</text>
+<path d="M290 450 L290 545" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="290,545 283.0405514542203,530.5928463623571 296.9594485457797,530.5928463623571" fill="#007F86"/>
+<path d="M850 450 L850 545" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,545 843.0405514542203,530.5928463623571 856.9594485457797,530.5928463623571" fill="#007F86"/>
+<path d="M1410 450 L1410 545" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="1410,545 1403.0405514542203,530.5928463623571 1416.9594485457797,530.5928463623571" fill="#007F86"/>
+<rect x="455" y="785" width="790" height="125" rx="16" fill="#F4F7FA" stroke="#007F86" stroke-width="3"/>
+<text x="850.0" y="817" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="31" font-weight="700" fill="#102A43">Controladora com canais independentes</text>
+<text x="850.0" y="855" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Canal, sentido, leitor e sensor comissionados</text>
+<text x="850.0" y="886" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#102A43">Uma saída de alarme não equivale a outra porta</text>
+<path d="M290 675 L580 785" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="580,785 564.061149093619,786.3975091356248 568.9975448814284,773.383374785945" fill="#007F86"/>
+<path d="M850 675 L850 785" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="850,785 843.0405514542203,770.5928463623571 856.9594485457797,770.5928463623571" fill="#007F86"/>
+<path d="M1410 675 L1120 785" stroke="#007F86" stroke-width="5" fill="none"/><polygon points="1120,785 1131.0024551185716,773.383374785945 1135.938850906381,786.3975091356248" fill="#007F86"/>
+<text x="850" y="980" text-anchor="middle" dominant-baseline="middle" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#102A43">Exemplo sintético. Mapear também rotas acessíveis, saídas e passagens alternativas.</text>
+</svg>

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "events": [
+    {
+      "schemaVersion": "1.0",
+      "eventId": "00000000-0000-4000-8000-000000000201",
+      "deviceId": "00000000-0000-4000-8000-000000000202",
+      "deviceProvisioningId": "00000000-0000-4000-8000-000000000203",
+      "eventEpoch": "EXEMPLO-BOOT-0001",
+      "nativeEventId": "EXEMPLO-000042",
+      "sourceConnectorId": "00000000-0000-4000-8000-000000000204",
+      "bindingRevision": null,
+      "pointId": null,
+      "subjectRef": "EXEMPLO-PESSOA-001",
+      "kind": "IDENTITY_RECOGNIZED",
+      "occurredAt": "2026-10-30T15:00:00-03:00",
+      "direction": "UNKNOWN",
+      "timeQuality": "DEVICE_UNVERIFIED",
+      "correlationId": "00000000-0000-4000-8000-000000000205",
+      "policyVersion": null,
+      "evidence": {
+        "level": "DEVICE_REPORTED",
+        "sourceKind": "DEVICE_EVENT",
+        "nativeKind": "EXEMPLO_RECONHECIMENTO",
+        "evidenceRef": null,
+        "inferenceReason": null
+      },
+      "deviceChannelId": null,
+      "nativeChannelId": null
+    }
+  ]
+}
