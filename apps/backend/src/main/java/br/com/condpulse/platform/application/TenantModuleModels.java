@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** Módulos por condomínio na central (V044). */
+/** Módulos por condomínio na central (V045). */
 public final class TenantModuleModels {
  private TenantModuleModels() {}
  /**

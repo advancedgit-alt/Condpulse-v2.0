@@ -18,7 +18,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Módulos por condomínio (V044): marca na requisição os módulos exigidos pela rota (anotação {@link RequiresTenantModule}
+ * Módulos por condomínio (V045): marca na requisição os módulos exigidos pela rota (anotação {@link RequiresTenantModule}
  * no método ou na classe), preferindo os de flag global ligada. A conferência no banco acontece no executor do condomínio,
  * na mesma transação da operação. Rotas sem anotação não exigem módulo.
  */

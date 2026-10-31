@@ -157,6 +157,10 @@ public class SecurityConfiguration {
       "/v1/tenants/*/management/access-policies/*/validate","/v1/tenants/*/management/access-policies/*/simulate",
       "/v1/tenants/*/management/access-policies/*/versions/*/approve","/v1/tenants/*/management/access-policies/*/versions/*/reject").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/management/access-policies/*").authenticated()
+    // Direitos derivados e revogações (AC-009/AC-015, V044): gestão com memberships.manage + policy.publish (AAL2).
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/access-grants","/v1/tenants/*/management/access-subjects/*/revocation-markers").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/access-policies/*/grants/derive",
+      "/v1/tenants/*/management/access-grants/*/revoke").authenticated()
     // Instalação física (AC-004 parte 2, V042): MASTER de implantação (installation.*, AAL2); gestão assina as regras.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/technical/access-devices","/v1/tenants/*/technical/device-channels",
       "/v1/tenants/*/technical/point-bindings","/v1/tenants/*/technical/installation-acceptances",
@@ -199,7 +203,7 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/platform/outbox/tasks/*/replay").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*").authenticated()
     .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*").authenticated()
-    // Módulos por condomínio (V044): tenants.read para ler, tenant_modules.manage para alterar (no serviço e no banco).
+    // Módulos por condomínio (V045): tenants.read para ler, tenant_modules.manage para alterar (no serviço e no banco).
     .requestMatchers(HttpMethod.GET,"/v1/platform/tenants/*/modules").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/tenants/*/modules").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/tenants","/v1/platform/tenants/*/manager-invitations",

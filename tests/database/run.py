@@ -3847,6 +3847,7 @@ def facial_cleanup(ids, tenant=None):
     tenant = tenant or TA
     actors = "','".join([ids["PL"], ids["MG"], ids["MI"]])
     query(f"DELETE FROM cp.audit_log WHERE actor_id in ('{actors}'); "
+          f"WITH g AS (DELETE FROM cp.access_grants WHERE tenant_id='{tenant}') DELETE FROM cp.revocation_markers WHERE tenant_id='{tenant}'; "
           f"WITH v AS (DELETE FROM cp.access_policy_validations WHERE tenant_id='{tenant}') DELETE FROM cp.access_policy_versions WHERE tenant_id='{tenant}'; "
           f"DELETE FROM cp.access_policies WHERE tenant_id='{tenant}'; DELETE FROM cp.point_bindings WHERE tenant_id='{tenant}'; "
           f"DELETE FROM cp.installation_acceptances WHERE tenant_id='{tenant}'; DELETE FROM cp.device_channels WHERE tenant_id='{tenant}'; "
@@ -4149,6 +4150,174 @@ def policy_checks():
            "politicas com RLS FORCE")
     facial_cleanup(ids)
 
+def grant_checks():
+    """V044 (AC-009/AC-015): direitos derivados por sujeito, contexto e area; marcas de revogacao que vencem derivacao antiga
+    e alcancam cartao/QR. Instalacao, politica, sujeito e contexto pelos fluxos reais (gatilhos e RLS ligados)."""
+    caps = ["faceEnrollment","faceDeletion","perDoorRights","secureTransport","offlineRestriction","localValidity"]
+    ids = facial_installation(6, caps)
+    MG, AR = ids["MG"], ids["AREA"]
+    RS = "10000000-0000-4000-8000-0000000006a1"
+    MRS, SRS, CRS, CRF = ("44100000-0000-4000-8000-000000000001", "44200000-0000-4000-8000-000000000001",
+                          "44300000-0000-4000-8000-000000000001", "44300000-0000-4000-8000-000000000002")
+    PO, V1, L1 = "44400000-0000-4000-8000-000000000001", "44500000-0000-4000-8000-000000000001", "44600000-0000-4000-8000-000000000001"
+    G1, G2, G3, G4 = (f"44700000-0000-4000-8000-00000000000{i}" for i in range(1, 5))
+    CR = "44800000-0000-4000-8000-000000000001"
+    both = "SET LOCAL app.capabilities='memberships.manage,policy.edit,policy.publish'; SET LOCAL app.policy_destination_scan='on'; "
+    mm = "SET LOCAL app.capabilities='memberships.manage'; "
+    as_mgr = dict(tenant=TA, actor=MG, role="cp_api")
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{RS}','ACTIVE'); INSERT INTO cp.memberships(id,tenant_id,account_id,unit_id,display_name,role,status) "
+          f"VALUES('{MRS}','{TA}','{RS}','{UA}','MORADOR DIREITO','RESIDENT','ACTIVE')")
+    doc = ('{"schemaVersion":"1.0","name":"Area","areaId":"%s","timezone":"America/Sao_Paulo","eligibleContexts":["RESIDENT"],'
+           '"visitorPolicy":"DENY","reservation":{"mode":"NOT_REQUIRED","entryGraceBeforeSeconds":0,"entryGraceAfterSeconds":0}}' % AR)
+    query(both + f"INSERT INTO cp.access_policies(id,tenant_id,area_id,name,created_by) VALUES('{PO}','{TA}','{AR}','Area','{MG}'); "
+          f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
+          f"VALUES('{V1}','{TA}','{PO}','1.0','{doc}'::jsonb,'Regra ficticia de direitos','{MG}')", **as_mgr)
+    h = value(f"select canonical_hash from cp.access_policy_versions where id='{V1}'")
+    rev = value(f"select cp.installation_current_revision('{TA}')")
+    query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
+          f"affected_point_ids,required_capabilities,validated_by) VALUES('{L1}','{TA}','{PO}','{V1}','{h}',{rev},'VALIDATED','[]'::jsonb,"
+          f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
+          f"UPDATE cp.access_policy_versions SET validation_id='{L1}',state='VALIDATED',version=1 WHERE id='{V1}'; "
+          f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V1}'", **as_mgr)
+    query(mm + f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,account_id) VALUES('{SRS}','{TA}','ACCOUNT','{RS}'); "
+          f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,membership_id,created_by) "
+          f"VALUES('{CRS}','{TA}','{SRS}','RESIDENT','MEMBERSHIP','{MRS}','{MG}')", **as_mgr)
+    def grant(identifier, epoch=0, until="now()+interval '20 days'", context=CRS, kind="MEMBERSHIP", origin=MRS, version=None):
+        ov = version if version is not None else value(f"select version from cp.memberships where id='{MRS}'")
+        col = "origin_membership_id" if kind == "MEMBERSHIP" else "origin_functional_context_id"
+        return (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,{col},origin_version,"
+                f"valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{identifier}','{TA}','{SRS}','{context}','{AR}','{PO}',"
+                f"'{V1}','{kind}','{origin}',{ov},now(),{until},{epoch},ARRAY['ELIGIBLE_CONTEXT'],'{MG}')")
+    expect(error(mm + grant(G1), "42501", **as_mgr), "derivar exige vinculos e publicacao")
+    expect(error(both + grant(G1, until="now()+interval '40 days'"), "23514", **as_mgr), "vigencia nunca alem do horizonte de 30 dias")
+    expect(error(both + grant(G1, version=99), "23514", **as_mgr), "origem em outra versao nao deriva")
+    query(both + grant(G1), **as_mgr)
+    expect(value(f"select (generation>0)::text||':'||length(derivation_key)||':'||origin_key from cp.access_grants where id='{G1}'") == f"true:64:MEMBERSHIP:{MRS}",
+           "geracao, chave e origem pelo banco")
+    expect(value(both + f"select cp.access_grant_current('{TA}','{G1}',now())", **as_mgr) == "t", "direito derivado vigente")
+    expect(error(both + grant(G2), "23505", **as_mgr), "um direito ativo por contexto, area e origem")
+    expect(error(both + grant(G2, epoch=5), "23514", **as_mgr), "epoca do sujeito diferente nao deriva")
+    # Contexto funcional nao elegivel na regra (so RESIDENT).
+    query(mm + f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,functional_authorization_ref,approved_by_account_id,"
+          f"valid_until,created_by) VALUES('{CRF}','{TA}','{SRS}','EMPLOYEE','FUNCTIONAL_AUTHORIZATION','autorizacao-ficticia-1','{MG}',"
+          f"now()+interval '10 days','{MG}')", **as_mgr)
+    expect(error(both + grant(G2, context=CRF, kind="FUNCTIONAL_AUTHORIZATION", origin=CRF, version=0), "23514", **as_mgr), "contexto nao elegivel nao deriva")
+    # Cartao do morador; bloqueio do sujeito: marca, direito revogado e cartao revogado na mesma transacao.
+    query(f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+          f"VALUES('{CR}','{TA}','{ids['KA']}','{MRS}','{UA}','CARD','Cartao direito','{MG}')")
+    query(mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch=1,version=1 WHERE id='{SRS}'", **as_mgr)
+    expect(value(f"select target_kind||':'||reason_code||':'||subject_restriction_epoch||':'||array_to_string(covered_methods,',') "
+                 f"from cp.revocation_markers where subject_id='{SRS}'") == "SUBJECT:SUBJECT_BLOCKED:1:FACE,CARD,PIN,QR,INTERMEDIARY_GRANT",
+           "AC-015: bloqueio grava marca que cobre face, cartao, PIN, QR e intermediario")
+    expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G1}'") == "REVOKED:SUBJECT_BLOCKED", "bloqueio revoga o direito")
+    expect(value(f"select desired_state||':'||desired_version from cp.access_credentials where id='{CR}'") == "REVOKED:2"
+           and value(f"select count(*) from cp.outbox where aggregate_id='{CR}' and event_type='CREDENTIAL_REVOKED'") == "1",
+           "bloqueio revoga o cartao com evento prioritario")
+    expect(error(mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+                 f"VALUES('44800000-0000-4000-8000-000000000002','{TA}','{ids['KA']}','{MRS}','{UA}','QR','QR bloqueado','{MG}')", "23514", **as_mgr),
+           "sujeito restrito nao recebe credencial")
+    expect(error(both + grant(G2, epoch=0), "23514", **as_mgr), "derivacao antiga (epoca anterior) nao vence a revogacao")
+    query(mm + f"UPDATE cp.access_subjects SET status='ACTIVE',blocked_reason=NULL,blocked_by=NULL,restriction_epoch=2,version=2 WHERE id='{SRS}'", **as_mgr)
+    query(both + grant(G2, epoch=2), **as_mgr)
+    expect(value(f"select (g2.generation>m.revoked_through_generation)::text from cp.access_grants g2, cp.revocation_markers m "
+                 f"where g2.id='{G2}' and m.subject_id='{SRS}' and m.target_kind='SUBJECT'") == "true",
+           "reativacao legitima nasce em geracao nova, acima da marca")
+    expect(error(both + f"UPDATE cp.revocation_markers SET reason_code='MANUAL_REVOCATION' WHERE subject_id='{SRS}'", "42501", **as_mgr), "marca imutavel para a API")
+    expect(error(f"UPDATE cp.revocation_markers SET reason_code='MANUAL_REVOCATION' WHERE subject_id='{SRS}'", "23514"), "marca imutavel ate para o dono")
+    expect(error(both + f"DELETE FROM cp.revocation_markers WHERE subject_id='{SRS}'", "42501", **as_mgr), "marca nao e apagada")
+    expect(error(both + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G2}','ORIGIN_CHANGED')",
+                 "23514", **as_mgr), "varredura nao marca direito ainda vigente")
+    expect(error(f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SRS}','{G2}','MANUAL_REVOCATION')",
+                 "42501", tenant=TA, actor=RS, role="cp_api"), "morador nao revoga direito")
+    expect(error(both + f"UPDATE cp.access_grants SET status='EXPIRED',status_reason_code='WINDOW_ENDED',version=1 WHERE id='{G2}'", "23514", **as_mgr),
+           "direito vigente nao expira")
+    # Contexto revogado: marca CONTEXT, direito revogado e contexto nunca mais recebe direito.
+    query(mm + f"UPDATE cp.subject_contexts SET status='REVOKED',status_reason='Ordem da gestao',version=1 WHERE id='{CRS}'", **as_mgr)
+    expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G2}'") == "REVOKED:CONTEXT_REVOKED", "contexto revogado revoga o direito")
+    expect(value(f"select count(*)::text||':'||bool_and(previous_entry_hash is not null or journal_sequence=1)::text||':'||max(journal_sequence) "
+                 f"from cp.revocation_markers where tenant_id='{TA}' and subject_id='{SRS}'") == "2:true:"
+           + value(f"select max(journal_sequence) from cp.revocation_markers where tenant_id='{TA}'"), "diario encadeado e continuo por condominio")
+    expect(value(f"select count(*) from cp.revocation_markers a join cp.revocation_markers b on b.tenant_id=a.tenant_id "
+                 f"and b.journal_sequence=a.journal_sequence+1 where a.tenant_id='{TA}' and b.previous_entry_hash is distinct from a.entry_hash") == "0",
+           "cada entrada cita o hash da anterior")
+    # Visitante (AC-009): direito do convite nunca alem dele; convite revogado derruba o direito na hora e a varredura grava a marca.
+    V2, L2 = "44500000-0000-4000-8000-000000000002", "44600000-0000-4000-8000-000000000002"
+    VV, PV, SV, CV = ("44900000-0000-4000-8000-000000000001", "44900000-0000-4000-8000-000000000002", "44900000-0000-4000-8000-000000000003",
+                      "44900000-0000-4000-8000-000000000004")
+    doc2 = doc.replace('"eligibleContexts":["RESIDENT"],"visitorPolicy":"DENY"', '"eligibleContexts":["RESIDENT","VISITOR"],"visitorPolicy":"ALLOW_WITH_VALID_PERMIT"')
+    query(both + f"INSERT INTO cp.access_policy_versions(id,tenant_id,policy_id,document_schema_version,document,change_reason,authored_by) "
+          f"VALUES('{V2}','{TA}','{PO}','1.0','{doc2}'::jsonb,'Regra ficticia com visitante','{MG}')", **as_mgr)
+    h2 = value(f"select canonical_hash from cp.access_policy_versions where id='{V2}'")
+    query(both + f"INSERT INTO cp.access_policy_validations(id,tenant_id,policy_id,policy_version_id,canonical_hash,installation_revision,status,issues,"
+          f"affected_point_ids,required_capabilities,validated_by) VALUES('{L2}','{TA}','{PO}','{V2}','{h2}',{rev},'VALIDATED','[]'::jsonb,"
+          f"ARRAY['{ids['PT']}']::uuid[],ARRAY['perDoorRights'],'{MG}'); "
+          f"UPDATE cp.access_policy_versions SET validation_id='{L2}',state='VALIDATED',version=1 WHERE id='{V2}'; "
+          f"UPDATE cp.access_policy_versions SET state='APPROVED',version=2 WHERE id='{V2}'", **as_mgr)
+    query(f"INSERT INTO cp.visitors(id,tenant_id,full_name,created_by) VALUES('{VV}','{TA}','CONVIDADO FICTICIO','{RS}'); "
+          f"INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until,reservation_id) "
+          f"VALUES('{PV}','{TA}','{VV}','{UA}','{RS}',now(),now()+interval '2 days',NULL); "
+          f"INSERT INTO cp.access_subjects(id,tenant_id,origin_kind,visitor_id) VALUES('{SV}','{TA}','VISITOR','{VV}'); "
+          f"INSERT INTO cp.subject_contexts(id,tenant_id,subject_id,context_kind,source_kind,permit_id,valid_until,created_by) "
+          f"VALUES('{CV}','{TA}','{SV}','VISITOR','VISIT_PERMIT','{PV}',now()+interval '2 days','{MG}')")
+    guest = (f"INSERT INTO cp.access_grants(id,tenant_id,subject_id,context_id,area_id,policy_id,policy_version_id,origin_kind,origin_permit_id,origin_version,"
+             f"valid_from,valid_until,subject_restriction_epoch,reason_codes,derived_by) VALUES('{G3}','{TA}','{SV}','{CV}','{AR}','{PO}','{V2}','VISIT_PERMIT',"
+             f"'{PV}',0,now()+interval '1 hour',now()+interval '1 day',0,ARRAY['VISIT_PERMIT'],'{MG}')")
+    scan = "SET LOCAL app.subject_context_scan='on'; "
+    expect(error(both + scan + guest.replace("'1 day'", "'3 days'"), "23514", **as_mgr), "direito do convidado nunca alem do convite")
+    query(both + scan + guest, **as_mgr)
+    later = "now()+interval '2 hours'"
+    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',{later})", **as_mgr) == "t", "visitante com convite vigente tem direito")
+    expect(value(both + f"select cp.access_grant_current('{TA}','{G3}',{later})", **as_mgr) == "f", "sem a conferencia ligada a gestao nao le o convite: nega")
+    expect(error(both + scan + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) "
+                 f"VALUES('{TA}','GRANT','{SV}','{G3}','ORIGIN_CHANGED')", "23514", **as_mgr), "direito ainda por comecar nao e origem invalida")
+    expect(error(both + scan + f"UPDATE cp.access_grants SET status='EXPIRED',status_reason_code='WINDOW_ENDED',version=1 WHERE id='{G3}'", "23514", **as_mgr),
+           "direito ainda por comecar nao expira")
+    query(f"UPDATE cp.visit_permits SET state='REVOKED',revoked_by='{RS}',revoked_at=now(),revoke_reason='Cancelado',version=version+1 WHERE id='{PV}'")
+    expect(value(both + scan + f"select cp.access_grant_current('{TA}','{G3}',{later})", **as_mgr) == "f",
+           "AC-009: convite cancelado derruba na hora o direito do visitante")
+    query(both + scan + f"INSERT INTO cp.revocation_markers(tenant_id,target_kind,subject_id,grant_id,reason_code) VALUES('{TA}','GRANT','{SV}','{G3}','ORIGIN_CHANGED')", **as_mgr)
+    expect(value(f"select status||':'||status_reason_code from cp.access_grants where id='{G3}'") == "REVOKED:ORIGIN_CHANGED",
+           "varredura grava a marca do direito que deixou de valer")
+    expect(error(both + scan + guest.replace(G3, G4), "23514", **as_mgr), "convite cancelado nao gera direito novo")
+    # Corrida cartao x bloqueio (mesmo lock por condominio): nenhuma ordem deixa cartao ativo para sujeito bloqueado.
+    def card(identifier):
+        return (mm + f"INSERT INTO cp.access_credentials(id,tenant_id,connector_id,membership_id,unit_id,kind,label,created_by) "
+                f"VALUES('{identifier}','{TA}','{ids['KA']}','{MRS}','{UA}','CARD','Cartao corrida','{MG}')")
+    def block(epoch, version):
+        return (mm + f"UPDATE cp.access_subjects SET status='BLOCKED',blocked_reason='Ordem do sindico',blocked_by='{MG}',restriction_epoch={epoch},"
+                f"version={version} WHERE id='{SRS}'")
+    def unblock(epoch, version):
+        query(mm + f"UPDATE cp.access_subjects SET status='ACTIVE',blocked_reason=NULL,blocked_by=NULL,restriction_epoch={epoch},version={version} "
+              f"WHERE id='{SRS}'", **as_mgr)
+    def race(first, second):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            a = pool.submit(query, first + "; SELECT pg_sleep(1.5)", check=False, **as_mgr)
+            time.sleep(0.5)
+            b = pool.submit(query, second, check=False, **as_mgr)
+            return a.result(), b.result()
+    K1, K2 = "44800000-0000-4000-8000-000000000011", "44800000-0000-4000-8000-000000000012"
+    blocked_first, card_late = race(block(3, 3), card(K1))
+    expect(blocked_first.returncode == 0 and card_late.returncode != 0 and "23514" in card_late.stderr
+           and value(f"select count(*) from cp.access_credentials where id='{K1}'") == "0", "corrida: bloqueio primeiro recusa o cartao concorrente")
+    unblock(4, 4)
+    card_first, blocked_late = race(card(K2), block(5, 5))
+    expect(card_first.returncode == 0 and blocked_late.returncode == 0
+           and value(f"select desired_state from cp.access_credentials where id='{K2}'") == "REVOKED", "corrida: cartao primeiro e revogado pela cascata do bloqueio")
+    unblock(6, 6)
+    query(f"DELETE FROM cp.outbox WHERE aggregate_id='{K2}'; DELETE FROM cp.access_credentials WHERE id='{K2}'")
+    expect(value(both + f"select count(*) from cp.access_grants", tenant=TB, actor=MG, role="cp_api") == "0", "HAC-007: direitos nao atravessam condominio")
+    expect(value(f"select count(*) from cp.access_grants where id='{G1}'", tenant=TA, actor=RS, role="cp_api") == "0", "morador nao le direitos da gestao")
+    expect(error("select derived_by from cp.access_grants", "42501", tenant=TA, role="cp_worker"), "worker nao le autoria do direito")
+    expect(value("select count(*) from cp.revocation_markers", tenant=TA, role="cp_worker") != "0", "worker le as marcas")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' and c.relname in "
+                 "('access_grants','revocation_markers') and c.relrowsecurity and c.relforcerowsecurity") == "2", "direitos e marcas com RLS FORCE")
+    query(f"DELETE FROM cp.outbox WHERE aggregate_id='{CR}'; DELETE FROM cp.credential_syncs WHERE credential_id='{CR}'; DELETE FROM cp.access_credentials WHERE id='{CR}'")
+    query(f"WITH g AS (DELETE FROM cp.access_grants WHERE tenant_id='{TA}') DELETE FROM cp.revocation_markers WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.subject_contexts WHERE subject_id in ('{SRS}','{SV}'); DELETE FROM cp.access_subjects WHERE id in ('{SRS}','{SV}'); "
+          f"DELETE FROM cp.visit_permits WHERE id='{PV}'; DELETE FROM cp.visitors WHERE id='{VV}'; "
+          f"DELETE FROM cp.memberships WHERE id='{MRS}'; DELETE FROM platform.accounts WHERE id='{RS}'")
+    facial_cleanup(ids)
+
 def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
     query(f"DELETE FROM cp.audit_log WHERE actor_id in ('{MG}','{MI}','{MS}'); "
           f"DELETE FROM cp.point_bindings WHERE tenant_id in ('{TA}','{TB}'); DELETE FROM cp.installation_acceptances WHERE tenant_id in ('{TA}','{TB}'); "
@@ -4162,7 +4331,7 @@ def binding_cleanup(MG, MI, MS, KA, KB, P1, A1, A2, HOK, HNO, G1, G2, D1, D2):
           f"DELETE FROM platform.accounts WHERE id in ('{MG}','{MI}','{MS}','10000000-0000-4000-8000-0000000042a4')")
 
 def tenant_module_checks():
-    """V044: modulos por condominio. Central (tenant_modules.manage) grava pela versao com o proprio ator e trilha exigida
+    """V045: modulos por condominio. Central (tenant_modules.manage) grava pela versao com o proprio ator e trilha exigida
     no COMMIT; runtime le no contexto do condominio, nos condominios dos proprios vinculos e pelo link publico."""
     PL = "10000000-0000-4000-8000-0000000044a1"
     query(f"INSERT INTO platform.accounts(id,status) VALUES('{PL}','ACTIVE')")
@@ -4339,6 +4508,7 @@ def main():
     area_checks()
     binding_checks()
     policy_checks()
+    grant_checks()
     tenant_module_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")

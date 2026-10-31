@@ -25,8 +25,11 @@ public class PolicyService {
  private final TenantTransactionExecutor tenants;
  private final PolicyStore store;
  private final AuditRecorder audit;
- public PolicyService(TenantTransactionExecutor tenants,PolicyStore store,AuditRecorder audit) {
-  this.tenants=tenants; this.store=store; this.audit=audit;
+ private final SubjectFactsPort subjects;
+ public PolicyService(TenantTransactionExecutor tenants,PolicyStore store,AuditRecorder audit) { this(tenants,store,audit,null); }
+ /** subjects: leitura dos fatos reais para a simulação com sujeito (V044); null mantém só a simulação sintética. */
+ public PolicyService(TenantTransactionExecutor tenants,PolicyStore store,AuditRecorder audit,SubjectFactsPort subjects) {
+  this.tenants=tenants; this.store=store; this.audit=audit; this.subjects=subjects;
  }
 
  // ---- políticas
@@ -129,11 +132,17 @@ public class PolicyService {
   if(policyId==null) throw notFound("POLICY_NOT_FOUND");
   if(request==null || request.policyVersionId()==null || request.pointId()==null || request.at()==null)
    throw invalid("POLICY_SIMULATION_INVALID","Informe revisão, passagem e horário.");
-  if(!"SYNTHETIC".equals(request.mode()))
-   throw invalid("POLICY_SIMULATION_MODE_UNSUPPORTED","Nesta versão só há simulação sintética; sujeito real entra com os direitos.");
-  if(!PolicyEngine.validSubject(request.subject())) throw invalid("POLICY_SIMULATION_SUBJECT_INVALID","Cenário sintético incompleto ou inválido.");
+  boolean real="AUTHORIZED_EXISTING_SUBJECT".equals(request.mode());
+  if(!real && !"SYNTHETIC".equals(request.mode()))
+   throw invalid("POLICY_SIMULATION_MODE_UNSUPPORTED","Modo de simulação: SYNTHETIC ou AUTHORIZED_EXISTING_SUBJECT.");
+  if(real && subjects==null) throw invalid("POLICY_SIMULATION_MODE_UNSUPPORTED","Simulação com sujeito real indisponível.");
+  if(real && (request.subjectId()==null || request.contextId()==null || request.subject()!=null))
+   throw invalid("POLICY_SIMULATION_SUBJECT_INVALID","Informe sujeito e contexto reais, sem cenário sintético.");
+  if(!real && !PolicyEngine.validSubject(request.subject())) throw invalid("POLICY_SIMULATION_SUBJECT_INVALID","Cenário sintético incompleto ou inválido.");
   return mapped(()->tenants.execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.EDIT_POLICIES);
+   // Sujeito real: fatos pessoais só para quem já gere vínculos (mesma leitura da conferência de idade).
+   if(real) context.requireCapability(StaffCapability.MANAGE_MEMBERSHIPS);
    var policy=store.policy(tenant,policyId);
    if(policy==null) throw notFound("POLICY_NOT_FOUND");
    var v=store.version(tenant,policyId,request.policyVersionId());
@@ -144,7 +153,11 @@ public class PolicyService {
    var point=store.destinations(tenant,policy.areaId(),request.pointId(),1).stream().findFirst()
     .orElseThrow(()->new BusinessProblem("POLICY_POINT_NOT_IN_AREA",422,"A passagem não dá ingresso nesta área."));
    // Mesmos impeditivos da validação (regra, área, total de passagens e esta passagem): nenhum impeditivo vira ALLOW.
-   var outcome=PolicyEngine.evaluate(v.document(),area,point,store.countDestinations(tenant,policy.areaId()),request.subject(),request.at());
+   int targets=store.countDestinations(tenant,policy.areaId());
+   var outcome=real
+    ?PolicyEngine.evaluateSubject(v.document(),area,point,targets,subjects.facts(tenant,request.subjectId(),request.contextId(),policy.areaId(),v.versionId(),
+      v.document(),context.timeZone(),request.at()),request.at())
+    :PolicyEngine.evaluate(v.document(),area,point,targets,request.subject(),request.at());
    return new PolicyModels.SimulationResult(outcome.result(),outcome.reasonCodes(),PolicyEngine.explain(outcome.reasonCodes()),v.versionId(),
     point.bindingRevision(),outcome.missingCapabilities(),true,false);
   }));

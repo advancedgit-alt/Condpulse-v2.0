@@ -10,7 +10,7 @@ import java.util.Set;
 public enum PlatformCapability {
  READ_TENANTS("tenants.read"),
  MANAGE_TENANTS("tenants.manage"),
- /** Módulos por condomínio (V044): liga e desliga módulos de um condomínio, com motivo, versão e trilha. */
+ /** Módulos por condomínio (V045): liga e desliga módulos de um condomínio, com motivo, versão e trilha. */
  MANAGE_TENANT_MODULES("tenant_modules.manage"),
  READ_AUDIT("platform.audit.read"),
  /** Financeiro da assinatura CondPulse (fase 5): planos, assinaturas, cobranças e pagamentos manuais. */

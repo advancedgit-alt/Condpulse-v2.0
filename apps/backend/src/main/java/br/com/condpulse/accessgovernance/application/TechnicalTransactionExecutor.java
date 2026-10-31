@@ -69,7 +69,7 @@ public class TechnicalTransactionExecutor {
     if(until==null || grant.validUntil().isAfter(until)) until=grant.validUntil();
    }
    jdbc.queryForObject("select set_config('app.tenant_id',?,true)",String.class,tenantId.toString());
-   // Módulo da rota liberado pela central para este condomínio (V044), depois da concessão vigente.
+   // Módulo da rota liberado pela central para este condomínio (V045), depois da concessão vigente.
    br.com.condpulse.tenancy.application.TenantModuleGate.check(jdbc,tenantId);
    String published=scopes.stream().map(TechnicalScope::key).sorted().collect(Collectors.joining(","));
    if(!published.isEmpty())

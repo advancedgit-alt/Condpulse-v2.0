@@ -19,7 +19,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
- * Módulos por condomínio na central administradora (V044). Leitura com tenants.read; mudança com tenant_modules.manage,
+ * Módulos por condomínio na central administradora (V045). Leitura com tenants.read; mudança com tenant_modules.manage,
  * AAL2, motivo, versão lida e evento TENANT_MODULE_ENABLED/DISABLED na mesma transação (o banco exige o evento no COMMIT).
  * Pedido igual ao estado atual devolve applied=false sem gravar; versão divergente com mudança real é 409.
  */

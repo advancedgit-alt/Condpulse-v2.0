@@ -42,7 +42,7 @@ public class CurrentIdentityQuery {
   return new CurrentIdentity(accountId,memberships,modules(memberships));
  }
 
- /** Estado por condomínio dos vínculos; a linha é visível pela política de vínculo ativo da própria conta (V044). */
+ /** Estado por condomínio dos vínculos; a linha é visível pela política de vínculo ativo da própria conta (V045). */
  private List<CurrentIdentity.TenantModules> modules(List<CurrentIdentity.Membership> memberships) {
   var tenants=new LinkedHashSet<UUID>();
   for(var membership:memberships) tenants.add(membership.tenantId());

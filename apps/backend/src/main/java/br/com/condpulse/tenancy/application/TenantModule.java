@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * Módulos que a central administradora libera ou suspende por condomínio (platform.tenant_modules, V044). Cada módulo
+ * Módulos que a central administradora libera ou suspende por condomínio (platform.tenant_modules, V045). Cada módulo
  * corresponde a uma flag global existente: o módulo só vale com a flag ligada E o condomínio liberado. Sem linha no
  * banco o condomínio segue liberado (estado atual).
  */

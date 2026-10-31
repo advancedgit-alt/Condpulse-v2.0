@@ -174,4 +174,29 @@ class PolicyEngineTest {
   assertEquals(PolicyEngine.evaluate(d,ACTIVE,COMMISSIONED,subject("DEPENDENT","UNKNOWN"),SAT_23),
    PolicyEngine.evaluate(d,ACTIVE,COMMISSIONED,subject("DEPENDENT","UNKNOWN"),SAT_23),"Mesma entrada, mesma saída");
  }
+
+ static PolicyModels.SubjectFacts real(String context,String age,boolean active,boolean current,boolean grant,boolean revoked) {
+  return new PolicyModels.SubjectFacts(true,active,current,context,"MEMBERSHIP",age,false,false,grant,revoked);
+ }
+ @Test void realSubjectSharesTheRuleAndNeedsAnUnrevokedGrant() {
+  var d=doc(List.of("RESIDENT","DEPENDENT"),"DENY",18,DAY,"SAFE_LOCAL_SUBSET","DENY");
+  var ok=PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,real("RESIDENT","VERIFIED_MEETS_MINIMUM",true,true,true,false),SAT_10);
+  assertEquals("ALLOW",ok.result(),ok.reasonCodes().toString());
+  var noGrant=PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,real("RESIDENT","VERIFIED_MEETS_MINIMUM",true,true,false,false),SAT_10);
+  assertEquals("DENY",noGrant.result()); assertEquals(List.of("NO_ACTIVE_GRANT"),noGrant.reasonCodes());
+  var revoked=PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,real("RESIDENT","VERIFIED_MEETS_MINIMUM",false,true,false,true),SAT_10);
+  assertEquals("DENY",revoked.result());
+  assertTrue(revoked.reasonCodes().containsAll(List.of("SUBJECT_BLOCKED","REVOKED","NO_ACTIVE_GRANT")),"Revogação vence direito antigo");
+  var minor=PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,real("DEPENDENT","VERIFIED_BELOW_MINIMUM",true,true,true,false),SAT_10);
+  assertEquals("DENY",minor.result()); assertTrue(minor.reasonCodes().contains("AGE_BELOW_MINIMUM"),"HAC-031 com sujeito real");
+  var night=PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,real("RESIDENT","VERIFIED_MEETS_MINIMUM",true,true,true,false),SAT_23);
+  assertEquals("DENY",night.result()); assertTrue(night.reasonCodes().contains("OUTSIDE_SCHEDULE"));
+  var unmapped=PolicyEngine.evaluateSubject(d,ACTIVE,new PolicyModels.Destination(POINT,"MAPPED","FROM_TO",null,null,null,List.of()),1,
+   real("RESIDENT","VERIFIED_MEETS_MINIMUM",true,true,false,false),SAT_10);
+  assertEquals("UNAVAILABLE",unmapped.result(),"Mesmos impeditivos da validação");
+  assertEquals("DENY",PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,new PolicyModels.SubjectFacts(false,false,false,null,null,null,false,false,false,false),
+   SAT_10).result());
+  assertEquals("DENY",PolicyEngine.evaluateSubject(d,ACTIVE,COMMISSIONED,1,real("MANAGER","VERIFIED_MEETS_MINIMUM",true,true,true,false),SAT_10).result(),
+   "Tipo de contexto desconhecido nunca libera");
+ }
 }

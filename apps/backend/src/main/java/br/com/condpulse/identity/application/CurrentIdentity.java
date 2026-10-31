@@ -3,7 +3,7 @@ import java.util.List;
 import java.util.UUID;
 /**
  * Conta, vínculos vigentes e, por condomínio dos vínculos, os módulos liberados (flag global ligada e condomínio
- * liberado pela central, V044) para o menu. A API de cada módulo confere de novo a cada requisição.
+ * liberado pela central, V045) para o menu. A API de cada módulo confere de novo a cada requisição.
  */
 public record CurrentIdentity(UUID accountId,List<Membership> memberships,List<TenantModules> tenantModules) {
  public CurrentIdentity {

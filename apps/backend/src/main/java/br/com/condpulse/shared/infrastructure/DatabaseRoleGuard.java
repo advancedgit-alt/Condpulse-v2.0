@@ -264,6 +264,19 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.access_policies') and c.attname in ('status','current_published_version_id','envelope_acceptance_id',
         'envelope_hash','version')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.access_grants'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.revocation_markers'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.revocation_markers'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_grants') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('status','status_reason_code','revoked_at','revocation_marker_id','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.access_grants') and c.attname in ('generation','derivation_key','origin_key','status','status_reason_code',
+        'revoked_at','revocation_marker_id','created_at','updated_at','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.revocation_markers') and c.attname in ('revoked_through_generation','subject_restriction_epoch','effective_at',
+        'dedupe_key','journal_stream_id','journal_sequence','entry_hash','previous_entry_hash','external_durability_status','journal_receipt_ref',
+        'journal_persisted_at','created_by','created_at','covered_methods')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** platform.tenant_modules (V044): leitura com tenants.read/tenant_modules.manage e gravação com tenant_modules.manage. */
+/** platform.tenant_modules (V045): leitura com tenants.read/tenant_modules.manage e gravação com tenant_modules.manage. */
 @Repository @Profile("api")
 public class TenantModuleStore {
  private final JdbcTemplate jdbc;

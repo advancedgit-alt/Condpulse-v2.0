@@ -29,7 +29,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * V044 com PostgreSQL real e o login da API: módulos por condomínio decididos pela central (tenant_modules.manage, AAL2,
+ * V045 com PostgreSQL real e o login da API: módulos por condomínio decididos pela central (tenant_modules.manage, AAL2,
  * motivo, versão e trilha exigida no COMMIT), conferidos pelo executor do condomínio na mesma transação e expostos em /v1/me.
  */
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")

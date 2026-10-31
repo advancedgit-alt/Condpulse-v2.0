@@ -113,7 +113,7 @@ devolve só contagens e o nome/situação/início dos gestores, mas o banco não
 fechadas (contadores mantidos por gatilho ou função `SECURITY DEFINER` com dono sem acesso de escrita) ficam para
 decisão própria.
 
-## Módulos por condomínio (V044)
+## Módulos por condomínio (V045)
 
 A central libera ou suspende módulos de cada condomínio, dentro das flags globais (a flag desligada continua sem rota).
 

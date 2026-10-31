@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Módulos por condomínio na central (V044), atrás de CP_PLATFORM_ENABLED. Papel de plataforma, AAL2 e trilha no serviço e no banco. */
+/** Módulos por condomínio na central (V045), atrás de CP_PLATFORM_ENABLED. Papel de plataforma, AAL2 e trilha no serviço e no banco. */
 @RestController @Profile("api")
 @ConditionalOnProperty(name="condpulse.platform.enabled",havingValue="true")
 public class TenantModuleController {
