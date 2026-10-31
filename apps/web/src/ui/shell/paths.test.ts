@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { Membership } from '../../api/types';
-import { condoAreas, condominiums, entryDecision, legacyTarget, placeOf, principalPath } from './paths';
+import { activeResidentUnits, condoAreas, condominiums, entryDecision, legacyTarget, placeOf, principalPath } from './paths';
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
@@ -43,10 +43,20 @@ describe('áreas por papel dentro do condomínio', () => {
   it('papel principal: gestão, portaria, morador; várias unidades abrem o seletor interno', () => {
     expect(principalPath(A, condominiums([membership(A, 'RESIDENT', U1), membership(A, 'MANAGER')])[0])).toBe(`/c/${A}/gestao/pendencias`);
     expect(principalPath(A, condominiums([membership(A, 'RESIDENT', U1), membership(A, 'CONCIERGE')])[0])).toBe(`/c/${A}/portaria/encomendas`);
-    expect(principalPath(A, condominiums([membership(A, 'RESIDENT', U1)])[0])).toBe(`/c/${A}/morador/${U1}/inicio`);
+    // Morador passa sempre pelo seletor interno, que confere se a unidade continua ativa.
+    expect(principalPath(A, condominiums([membership(A, 'RESIDENT', U1)])[0])).toBe(`/c/${A}/morador`);
     expect(principalPath(A, condominiums([membership(A, 'RESIDENT', U1), membership(A, 'OWNER', U2)])[0])).toBe(`/c/${A}/morador`);
     expect(principalPath(A, condominiums([membership(A, 'SUPPORT')])[0])).toBe(`/c/${A}/inicio`);
     expect(principalPath(A, undefined)).toBe(`/c/${A}/implantacao/roteiro`);
+  });
+});
+
+describe('unidades do morador', () => {
+  it('unidade do vínculo que /units não devolve (inativa) não abre', () => {
+    const units = [{ id: U2, label: '102', blockName: 'Bloco 1' }];
+    expect(activeResidentUnits([U1], units)).toEqual([]);
+    expect(activeResidentUnits([U1, U2], units)).toEqual([{ unitId: U2, label: 'Bloco 1 · 102' }]);
+    expect(activeResidentUnits([U2], [{ id: U2, label: '102', blockName: null }])).toEqual([{ unitId: U2, label: '102' }]);
   });
 });
 
@@ -61,7 +71,7 @@ describe('roteamento automático depois do login', () => {
     expect(entryDecision(one, 'yes', false)).toEqual({ kind: 'select' });
   });
   it('um condomínio vai direto à área do papel principal; vários mostram o seletor; nenhum, o vazio', () => {
-    expect(entryDecision(one, 'no', false)).toEqual({ kind: 'redirect', to: `/c/${A}/morador/${U1}/inicio` });
+    expect(entryDecision(one, 'no', false)).toEqual({ kind: 'redirect', to: `/c/${A}/morador` });
     expect(entryDecision(two, 'no', false)).toEqual({ kind: 'select' });
     expect(entryDecision([], 'no', false)).toEqual({ kind: 'empty' });
   });

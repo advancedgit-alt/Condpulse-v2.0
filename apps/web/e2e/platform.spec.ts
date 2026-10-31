@@ -95,7 +95,9 @@ test('conta sem papel de plataforma vê área restrita sem dados da plataforma',
   await page.goto('/central');
   await expect(page.getByRole('heading', { name: 'Área restrita' })).toBeVisible();
   await expect(page.getByText('Condomínio Sintético B')).toHaveCount(0);
-  expect(platform.requests).toEqual(['GET /v1/platform/session']);
+  // Só a sessão é consultada (pela entrada, que decide o roteamento, e pela porta da central); nenhum dado da plataforma.
+  expect(platform.requests.length).toBeGreaterThan(0);
+  expect(platform.requests.filter((request) => request !== 'GET /v1/platform/session')).toEqual([]);
 });
 
 test('administrador confirma o segundo fator, suspende com motivo e a repetição não vira sucesso', async ({ page }) => {

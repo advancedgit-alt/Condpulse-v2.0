@@ -63,14 +63,28 @@ export function condoAreas(condo: Condo | undefined, technical: boolean): Area[]
   return areas;
 }
 
-/** Área do papel principal: gestão, depois portaria, depois morador; sem nenhuma delas, o início do condomínio. */
+/**
+ * Área do papel principal: gestão, depois portaria, depois morador; sem nenhuma delas, o início do condomínio. O morador
+ * sempre passa pelo seletor interno, que confere em /units se a unidade do vínculo continua ativa antes de abrir a área
+ * (/v1/me mantém o vínculo de uma unidade desativada).
+ */
 export function principalPath(tenantId: string, condo: Condo | undefined): string {
   if (!condo) return installationPath(tenantId);
   if (condo.roles.includes('MANAGER')) return managementPath(tenantId);
   if (condo.roles.includes('CONCIERGE')) return conciergePath(tenantId);
-  if (condo.unitIds.length === 1) return residentPath(tenantId, condo.unitIds[0]!);
-  if (condo.unitIds.length > 1) return residentRoot(tenantId);
+  if (condo.unitIds.length > 0) return residentRoot(tenantId);
   return condoHomePath(tenantId);
+}
+
+/**
+ * Unidades do morador que podem abrir: só as dos vínculos residenciais que /units ainda devolve (a API lista só unidades
+ * ativas). Mantém a ordem dos vínculos e o rótulo exibido (bloco · unidade).
+ */
+export function activeResidentUnits(unitIds: readonly string[], units: readonly { id: string; label: string; blockName: string | null }[]) {
+  return unitIds.flatMap((unitId) => {
+    const unit = units.find((item) => item.id === unitId);
+    return unit ? [{ unitId, label: `${unit.blockName ? `${unit.blockName} · ` : ''}${unit.label}` }] : [];
+  });
 }
 
 /** Resultado da consulta de papel de plataforma feita na entrada. */

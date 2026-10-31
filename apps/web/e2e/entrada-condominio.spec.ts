@@ -135,3 +135,24 @@ test('rotas antigas redirecionam para os endereços novos preservando parâmetro
   await page.goto('/master/fila');
   await expect(page).toHaveURL(/\/central\/operacao$/);
 });
+
+test('vínculo com unidade desativada não abre o painel nem volta em ciclo: mostra que não há unidade ativa', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  await installIdentity(page, api, [{ tenantId: TENANT_B, tenantName: 'Condomínio Sintético B', unitId: UNIT_B, role: 'RESIDENT' }], false);
+  // /v1/me ainda traz o vínculo, mas /units lista só unidades ativas e não devolve a unidade desativada.
+  await page.route(`**/v1/tenants/${TENANT_B}/units`, async (route) => {
+    if (!api.authenticated) { await route.fallback(); return; }
+    await json(route, 200, []);
+  });
+  await signIn(page);
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_B}/morador$`));
+  await expect(page.getByText('Nenhuma unidade ativa')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_B}/morador$`));
+  // Endereço direto do painel da unidade desativada: "Selecionar unidade" leva ao mesmo estado vazio, sem ciclo.
+  await page.goto(`/c/${TENANT_B}/morador/${UNIT_B}/inicio`);
+  await page.getByRole('link', { name: 'Selecionar unidade' }).click();
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_B}/morador$`));
+  await expect(page.getByText('Nenhuma unidade ativa')).toBeVisible();
+  await scanAccessibility(page, 'morador sem unidade ativa');
+});

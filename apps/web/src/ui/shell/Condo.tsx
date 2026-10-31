@@ -6,7 +6,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../Auth';
 import { technicalSessionKey } from '../installation/InstallationPage';
 import { Empty, ErrorState, Icon, Loading, type IconName } from '../primitives';
-import { ENTRY_PATH, condoAreas, condominiums, conciergePath, installationPath, managementPath, principalPath, residentPath, residentRoot,
+import { ENTRY_PATH, activeResidentUnits, condoAreas, condominiums, conciergePath, installationPath, managementPath, principalPath, residentPath, residentRoot,
   type AreaId, type Condo } from './paths';
 
 /** Condomínio da conta pelo id do endereço (undefined quando a conta não tem vínculo nele). */
@@ -73,7 +73,11 @@ export function CondoHome() {
   </>;
 }
 
-/** Área do morador sem unidade no endereço: uma unidade abre direto; mais de uma mostra o seletor interno. */
+/**
+ * Área do morador sem unidade no endereço. Sempre confere em /units quais unidades dos vínculos continuam ativas
+ * (/v1/me mantém o vínculo de unidade desativada): uma ativa abre direto; mais de uma mostra o seletor interno; nenhuma
+ * mostra o estado vazio, sem redirecionar para uma tela que devolveria a pessoa para cá.
+ */
 export function ResidentUnitPicker() {
   const { identity } = useAuth();
   const { tenantId = '' } = useParams();
@@ -82,7 +86,7 @@ export function ResidentUnitPicker() {
   const unitIds = condo?.unitIds ?? [];
   const [denied, setDenied] = useState<unknown>(null);
   const units = useQuery({ queryKey: ['private', identity?.accountId, 'tenant', tenantId, 'units'], queryFn: ({ signal }) => api.units(tenantId, signal),
-    enabled: Boolean(identity) && unitIds.length > 1 && !denied });
+    enabled: Boolean(identity) && unitIds.length > 0 && !denied });
   useEffect(() => {
     if (units.error instanceof ApiError && [403, 404].includes(units.error.status)) {
       setDenied(units.error);
@@ -92,21 +96,18 @@ export function ResidentUnitPicker() {
     }
   }, [units.error, queries, identity?.accountId, tenantId]);
   if (!identity) return null;
-  if (unitIds.length === 0) return <div className="panel"><Empty icon="home" title="Nenhuma unidade vinculada">Seu cadastro não tem unidade vigente neste condomínio. A gestão precisa validar o vínculo.</Empty>
-    <Link className="button button-secondary" to={`/c/${tenantId}/inicio`}>Voltar ao início do condomínio</Link></div>;
-  if (unitIds.length === 1) return <Navigate to={residentPath(tenantId, unitIds[0]!)} replace />;
-  const label = (unitId: string) => {
-    const unit = units.data?.find((item) => item.id === unitId);
-    return unit ? `${unit.blockName ? `${unit.blockName} · ` : ''}${unit.label}` : null;
-  };
+  const home = <Link className="button button-secondary" to={`/c/${tenantId}/inicio`}>Voltar ao início do condomínio</Link>;
+  if (unitIds.length === 0) return <div className="panel"><Empty icon="home" title="Nenhuma unidade vinculada">Seu cadastro não tem unidade vigente neste condomínio. A gestão precisa validar o vínculo.</Empty>{home}</div>;
+  if (denied || (units.isError && !units.data)) return <ErrorState error={denied ?? units.error} retry={() => { setDenied(null); void units.refetch(); }} />;
+  if (units.isPending) return <div className="panel"><Loading label="Conferindo suas unidades…" /></div>;
+  const available = activeResidentUnits(unitIds, units.data ?? []);
+  if (available.length === 0) return <div className="panel"><Empty icon="home" title="Nenhuma unidade ativa">Não há unidade ativa disponível nos seus vínculos. Procure a gestão do condomínio.</Empty>{home}</div>;
+  if (available.length === 1) return <Navigate to={residentPath(tenantId, available[0]!.unitId)} replace />;
   return <>
     <div className="residence-heading"><div><span className="eyebrow">MORADOR</span><h1>Escolha a unidade.</h1>
       <p>Reservas, acessos, encomendas e financeiro aparecem de acordo com a unidade escolhida. O vínculo é conferido de novo em cada operação.</p></div></div>
-    {denied || (units.isError && !units.data) ? <ErrorState error={denied ?? units.error} retry={() => { setDenied(null); void units.refetch(); }} />
-      : units.isPending ? <div className="panel"><Loading label="Consultando suas unidades…" /></div>
-        : <ul className="area-cards" aria-label="Unidades">{unitIds.map((unitId) => label(unitId) === null ? null : <li key={unitId}>
-          <Link className="area-card" to={residentPath(tenantId, unitId)}><span className="round-icon"><Icon name="home" /></span>
-            <span><strong><bdi>{label(unitId)}</bdi></strong><span>Abrir a área do morador desta unidade</span></span><Icon name="arrow" /></Link></li>)}</ul>}
-    {units.isSuccess && unitIds.every((unitId) => label(unitId) === null) ? <div className="panel"><Empty icon="home" title="Nenhuma unidade ativa">Não há unidade ativa disponível nos seus vínculos. Procure a gestão do condomínio.</Empty></div> : null}
+    <ul className="area-cards" aria-label="Unidades">{available.map((unit) => <li key={unit.unitId}>
+      <Link className="area-card" to={residentPath(tenantId, unit.unitId)}><span className="round-icon"><Icon name="home" /></span>
+        <span><strong><bdi>{unit.label}</bdi></strong><span>Abrir a área do morador desta unidade</span></span><Icon name="arrow" /></Link></li>)}</ul>
   </>;
 }
