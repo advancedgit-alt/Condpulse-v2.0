@@ -186,6 +186,16 @@ test('R4.4: cada troca de painel é registrada com a origem; voltar ao mesmo pai
   await page.getByRole('link', { name: /Parceiro Sintético – Painel do Parceiro/ }).click();
   await expect(page.getByText('Operador Sintético')).toBeVisible();
   expect(switches, 'mesmo painel sem outro contexto no meio não é troca').toHaveLength(2);
+  // Sair e entrar de novo na mesma janela (sem recarregar): a sessão nova começa com origem ENTRY e chave nova.
+  await page.getByRole('button', { name: 'Sair' }).click();
+  await page.getByLabel('E-mail', { exact: true }).fill('morador-sintetico@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByLabel('Senha', { exact: true }).press('Enter');
+  await page.getByRole('link', { name: /Parceiro Sintético – Painel do Parceiro/ }).click();
+  await expect(page.getByText('Operador Sintético')).toBeVisible();
+  expect(switches, 'novo login registra a entrada no mesmo painel').toHaveLength(3);
+  expect(switches[2]).toMatchObject({ role: 'PARTNER_ADMIN', from: { kind: 'ENTRY' } });
+  expect(switches[2].switchId).not.toBe(switches[1].switchId);
 });
 
 test('R4.4: falha ao registrar a troca não abre o painel; nova tentativa usa a mesma chave', async ({ page }) => {

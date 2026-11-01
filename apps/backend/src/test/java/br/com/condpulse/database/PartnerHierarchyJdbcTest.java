@@ -189,7 +189,8 @@ class PartnerHierarchyJdbcTest {
   var store=new PartnerStore(db.jdbc);
   var switchesOn=new ContextSwitchService(new PartnerTransactionExecutor(db.jdbc,db.manager),store,true);
   var switchesOff=new ContextSwitchService(new PartnerTransactionExecutor(db.jdbc,db.manager),store,false);
-  UUID p=partner("PARCEIRO TROCA FICTICIO");
+  // Nome único: o harness SQL roda antes no mesmo banco do CI e deixa o próprio parceiro de troca (o log só acrescenta).
+  UUID p=partner("PARCEIRO TROCA JDBC "+UUID.randomUUID().toString().substring(0,8).toUpperCase());
   member(p,lead,"SECURITY_LEAD"); member(p,operator,"REMOTE_OPERATOR"); member(p,admin,"TECHNICIAN");
   contract(p,db.tenantA);
   var entry=new PartnerModels.ContextRef("ENTRY",null,null,null);
