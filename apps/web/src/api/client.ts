@@ -586,7 +586,7 @@ const messages: Record<string, string> = {
   // Troca de contexto (R4.4, V052).
   CONTEXT_SWITCH_INVALID: 'Não foi possível identificar o acesso escolhido. Volte para meus acessos e escolha de novo.',
   CONTEXT_SWITCH_UNAVAILABLE: 'Não foi possível registrar a entrada neste painel. Tente novamente.',
-  // Comando de Segurança (CPX-012 a CPX-014, V053).
+  // Comando de Segurança (CPX-012 a CPX-014, V054).
   SECURITY_COMMAND_UNAVAILABLE: 'Não foi possível concluir no Comando de Segurança agora. Nada foi gravado; tente novamente.',
   INCIDENT_NOT_FOUND: 'Incidente não encontrado.',
   INCIDENT_CHANGED: 'O incidente mudou desde a leitura. Atualize e tente de novo.',

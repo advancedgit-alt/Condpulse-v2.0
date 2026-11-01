@@ -37,7 +37,7 @@ public class PartnerConfiguration {
    @Value("${condpulse.security-log.enabled:false}") boolean securityLog) {
   return new ContextSwitchService(partners,store,securityLog);
  }
- /** Comando de Segurança (V053): só com CP_SECURITY_LOG_ENABLED=true (lê e grava o Log de Segurança). */
+ /** Comando de Segurança (V054): só com CP_SECURITY_LOG_ENABLED=true (lê e grava o Log de Segurança). */
  @Bean @ConditionalOnProperty(name="condpulse.security-log.enabled",havingValue="true")
  SecurityCommandService securityCommandService(PartnerTransactionExecutor partners,JdbcTemplate jdbc,SecurityLogStore log) {
   return new SecurityCommandService(partners,new SecurityCommandStore(jdbc),log);

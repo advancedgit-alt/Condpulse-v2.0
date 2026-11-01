@@ -47,7 +47,7 @@ public class SecurityLogStore {
    (r,n)->event(r),tenant,fromSeq,toSeq);
  }
  /**
-  * Linha do tempo de um incidente (V053): eventos com correlation_id = incidente e eventos anexados a ele, em ordem de seq,
+  * Linha do tempo de um incidente (V054): eventos com correlation_id = incidente e eventos anexados a ele, em ordem de seq,
   * até limit+1 linhas (para saber se passou do limite). O RLS do log e dos anexos vale como em qualquer leitura.
   */
  public List<SecurityLogModels.Event> incidentTimeline(UUID tenant,UUID incident,int limit) {

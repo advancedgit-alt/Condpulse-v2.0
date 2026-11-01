@@ -276,7 +276,7 @@ test('contrato publica somente a superficie implementada da fundacao',()=>{
  assert.ok(spec.components.schemas.PartnerContextSwitchResult.properties.status.enum.includes('LOG_DISABLED'));
  assert.deepEqual(Object.keys(spec.components.schemas.PartnerContextRef.properties),['kind','partnerId','role','tenantId'],'contexto só com identificadores');
  assert.deepEqual(spec.components.schemas.PartnerContextExitRequest.properties.to.properties.kind.enum,['TENANT','PLATFORM'],'saída só para condomínio por vínculo ou central');
- // Comando de Segurança (V053): exige também o log ligado; dossiê com motivo como a exportação; revisão com veredito fechado.
+ // Comando de Segurança (V054): exige também o log ligado; dossiê com motivo como a exportação; revisão com veredito fechado.
  for(const [path,item] of Object.entries(spec.paths).filter(([p])=>p.includes('/command/'))) for(const operation of Object.values(item))
   assert.deepEqual(operation['x-feature-flags'],['CP_PARTNERS_ENABLED','CP_SECURITY_LOG_ENABLED'],path);
  assert.equal(spec.components.schemas.SecurityIncidentDossierRequest.properties.reason.minLength,10);

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CPX-012 a CPX-014 (V053) com PostgreSQL real e o login da API: o líder vê o semáforo dos condomínios com contrato,
+ * CPX-012 a CPX-014 (V054) com PostgreSQL real e o login da API: o líder vê o semáforo dos condomínios com contrato,
  * abre, designa, anexa, encerra e exporta incidentes com INCIDENT_* e EVIDENCE_EXPORTED no log, e revisa aberturas
  * remotas (REMOTE_OPEN_REVIEWED); gestor do parceiro e operador são recusados; a cadeia segue íntegra.
  */

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import static br.com.condpulse.partners.api.PartnerPlatformController.*;
 
 /**
- * Comando de Segurança do gestor líder (CPX-012 a CPX-014, V053): exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED;
+ * Comando de Segurança do gestor líder (CPX-012 a CPX-014, V054): exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED;
  * security.command, alcance e AAL2 conferidos no serviço e no banco.
  */
 @RestController @Profile("api")

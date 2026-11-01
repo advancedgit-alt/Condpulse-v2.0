@@ -299,7 +299,8 @@ export function IncidentsSection() {
 }
 
 // ---- CPX-014: revisão de aberturas remotas ----
-function ReviewForm({ item, tenantId, done }: { item: RemoteOpen; tenantId: string; done(): Promise<void> }) {
+/** A confirmação fica na lista (done): o formulário sai da tela assim que a revisão é gravada. */
+function ReviewForm({ item, tenantId, done }: { item: RemoteOpen; tenantId: string; done(message: string): Promise<void> }) {
   const { context } = usePartnerScope();
   const action = useAction(tenantId);
   const [draft, setDraft] = useState<ReviewDraft>({ verdict: '', note: '' });
@@ -311,7 +312,8 @@ function ReviewForm({ item, tenantId, done }: { item: RemoteOpen; tenantId: stri
     if (typeof body === 'string') { setProblem(body); return; }
     setProblem(null);
     void action.run(() => securityCommand.review(context.partnerId, tenantId, item.eventId, body),
-      (result) => `Abertura #${result.seq} marcada como ${verdictLabels[result.review!.verdict].toLowerCase()}.`, done);
+      (result) => `Abertura #${result.seq} marcada como ${verdictLabels[result.review!.verdict].toLowerCase()}.`,
+      (result) => done(`Abertura #${result.seq} marcada como ${verdictLabels[result.review!.verdict].toLowerCase()}.`));
   }
   return <form className="reason-form" onSubmit={submit} aria-label={`${correcting ? 'Corrigir revisão' : 'Revisar'} da abertura #${item.seq}`}>
     <fieldset><legend>{correcting ? 'Corrigir a revisão' : 'Revisão'}</legend>
@@ -333,6 +335,7 @@ function TenantRemoteOpens({ tenantId, timeZone }: { tenantId: string; timeZone:
   const [draft, setDraft] = useState<ReviewFilter>('PENDING');
   const [request, setRequest] = useState<{ status: ReviewFilter; run: number } | null>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const pages = useInfiniteQuery({ queryKey: commandKey(accountId, context.partnerId, 'remote-opens', tenantId.toLowerCase(), request?.status ?? null, request?.run ?? 0),
     enabled: request !== null, initialPageParam: undefined as number | undefined, refetchOnWindowFocus: false,
     queryFn: ({ signal, pageParam }) => securityCommand.remoteOpens(context.partnerId, tenantId, { status: request!.status, ...(pageParam !== undefined ? { beforeSeq: pageParam } : {}) }, signal),
@@ -345,13 +348,17 @@ function TenantRemoteOpens({ tenantId, timeZone }: { tenantId: string; timeZone:
   const operator = (item: RemoteOpen) => item.operatorAccountId
     ? team.data?.find((member) => member.accountId.toLowerCase() === item.operatorAccountId!.toLowerCase())?.displayName ?? `conta ${short(item.operatorAccountId)}`
     : 'sem operador';
-  const reload = async () => { setReviewing(null); await queries.invalidateQueries({ queryKey: commandKey(accountId, context.partnerId) }); };
+  const reload = async (message: string) => {
+    setNotice(message); setReviewing(null);
+    await queries.invalidateQueries({ queryKey: commandKey(accountId, context.partnerId) });
+  };
   return <div className="stack-form">
     <form className="reservation-filter" aria-label="Filtro das aberturas remotas" onSubmit={(event) => { event.preventDefault(); setRequest((current) => ({ status: draft, run: (current?.run ?? 0) + 1 })); }}>
       <label htmlFor={`remote-filter-${tenantId}`}>Situação</label>
       <select id={`remote-filter-${tenantId}`} value={draft} onChange={(event) => setDraft(event.target.value as ReviewFilter)}>
         {reviewFilters.map((item) => <option key={item} value={item}>{reviewFilterLabels[item]}</option>)}</select>
       <button className="button button-compact" type="submit" disabled={pages.isFetching}>Consultar aberturas</button></form>
+    {notice ? <Notice tone="success">{notice}</Notice> : null}
     {request === null ? <div className="panel"><Empty icon="door" title="Consulta sob pedido">Escolha a situação e consulte. Cada consulta fica registrada no log.</Empty></div>
       : pages.isPending ? <div className="panel"><Loading label="Consultando as aberturas remotas…" /></div>
         : pages.isError && items.length === 0 ? <FailureState error={pages.error} retry={() => void pages.refetch()} off={OFF_TEXT} subject={SUBJECT} />
@@ -365,7 +372,7 @@ function TenantRemoteOpens({ tenantId, timeZone }: { tenantId: string; timeZone:
                   {verdictLabels[item.review.verdict]}{item.review.note ? `: ${item.review.note}` : ''}</span>
                   : <span className="status-pill status-pending">Sem revisão</span>}</div>
               {reviewing === item.eventId ? <ReviewForm item={item} tenantId={tenantId} done={reload} />
-                : <div className="button-row"><button className="text-button" type="button" onClick={() => setReviewing(item.eventId)}
+                : <div className="button-row"><button className="text-button" type="button" onClick={() => { setNotice(null); setReviewing(item.eventId); }}
                   aria-label={`${item.review ? 'Corrigir revisão' : 'Revisar'} da abertura #${item.seq}`}>{item.review ? 'Corrigir revisão' : 'Revisar'}</button></div>}</li>)}</ul>}
     {pages.isError && items.length > 0 ? <Notice tone="error">{errorMessage(pages.error)}</Notice> : null}
     {pages.hasNextPage ? <button className="button button-secondary" type="button" disabled={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>

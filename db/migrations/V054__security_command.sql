@@ -55,6 +55,11 @@ CREATE POLICY operator_schedules_command_read ON cp.operator_schedules FOR SELEC
  USING(partner_id=platform.current_partner_id() AND platform.capability_published('security.command'));
 CREATE POLICY partner_members_command_read ON platform.partner_members FOR SELECT TO cp_api
  USING(partner_id=platform.current_partner_id() AND platform.capability_published('security.command'));
+-- Situação das contas da própria equipe: conta suspensa ou encerrada não conta como operador escalado (a mesma regra de
+-- platform.partner_reach). Só id e status; equipe não lê contas (sem ciclo de políticas).
+CREATE POLICY account_command_read ON platform.accounts FOR SELECT TO cp_api
+ USING(platform.capability_published('security.command') AND id IN (SELECT m.account_id FROM platform.partner_members m
+  WHERE m.partner_id=platform.current_partner_id()));
 
 -- 3. Incidentes (E11.5). Do condomínio e do parceiro que o abriu; só o líder com alcance lê e muda.
 CREATE TABLE cp.incidents (
@@ -93,11 +98,13 @@ CREATE TABLE cp.incident_links (
 );
 CREATE INDEX incident_links_event ON cp.incident_links(tenant_id,log_event_id);
 
--- Líder do mesmo parceiro do incidente com alcance no condomínio (contrato ativo). Lê só o próprio parceiro: outro
--- parceiro que assuma o condomínio depois não vê os incidentes do anterior.
+-- Líder do mesmo parceiro do incidente, no contexto desse parceiro (app.partner_id), com alcance no condomínio (contrato
+-- ativo). Lê só o próprio parceiro: outro parceiro que assuma o condomínio depois não vê os incidentes do anterior, e a
+-- mesma conta líder em dois parceiros só vê, no contexto de um, os incidentes dele.
 CREATE FUNCTION cp.incident_command(target_tenant uuid,target_partner uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
- SELECT target_tenant=platform.current_tenant_id() AND platform.capability_published('security.command')
+ SELECT target_tenant=platform.current_tenant_id() AND target_partner=platform.current_partner_id()
+  AND platform.capability_published('security.command')
   AND EXISTS(SELECT 1 FROM platform.partner_reach() r WHERE r.tenant_id=target_tenant AND r.partner_id=target_partner
    AND 'security.command'=ANY(platform.partner_role_capabilities(r.role))) $$;
 REVOKE ALL ON FUNCTION cp.incident_command(uuid,uuid) FROM PUBLIC;

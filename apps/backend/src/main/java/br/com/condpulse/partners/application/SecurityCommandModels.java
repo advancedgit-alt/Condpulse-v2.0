@@ -6,14 +6,14 @@ import java.util.UUID;
 import br.com.condpulse.securitylog.application.SecurityLogModels;
 
 /**
- * Comando de Segurança do gestor líder (CPX-012 a CPX-014, V053): visão da carteira com semáforo, incidentes com linha do
+ * Comando de Segurança do gestor líder (CPX-012 a CPX-014, V054): visão da carteira com semáforo, incidentes com linha do
  * tempo a partir do Log de Segurança e dossiê, e revisão de aberturas remotas. Só identificadores e o nome de exibição da
  * equipe; nenhum dado de morador.
  */
 public final class SecurityCommandModels {
  private SecurityCommandModels() {}
 
- /** Contagens do condomínio (cp.security_command_summary, V053) mais a escala vigente do parceiro. */
+ /** Contagens do condomínio (cp.security_command_summary, V054) mais a escala vigente do parceiro. */
  public record Indicators(int devicesTotal,int devicesOffline,int devicesUnknown,int securityOccurrencesOpen,int criticalAlertsUnlinked,
    int incidentsOpen,int incidentsCriticalOpen,int remoteOpensPendingReview,int operatorsOnDuty) {}
  /** light: RED, AMBER ou GREEN (critério em SecurityCommandRules e docs/PARCEIROS.md); reasons na ordem de gravidade. */

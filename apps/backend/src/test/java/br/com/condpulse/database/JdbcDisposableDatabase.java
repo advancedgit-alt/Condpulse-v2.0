@@ -163,7 +163,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   // Eventos do Log de Segurança (V050) referenciam o parceiro de quem agiu: saem antes, com os gatilhos desligados.
   update(connection,"set session_replication_role=replica");
   try {
-   // Incidentes (V053) não são apagados com gatilhos ligados; anexos e incidentes saem antes do parceiro e do log.
+   // Incidentes (V054) não são apagados com gatilhos ligados; anexos e incidentes saem antes do parceiro e do log.
    update(connection,"delete from cp.incident_links where incident_id in (select id from cp.incidents where partner_id in "+partners+")",
     accountA,accountB,accountC);
    update(connection,"delete from cp.incidents where partner_id in "+partners,accountA,accountB,accountC);

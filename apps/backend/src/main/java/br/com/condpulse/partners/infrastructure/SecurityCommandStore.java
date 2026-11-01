@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Comando de Segurança (V053) na transação do parceiro (app.partner_id e capacidades do papel publicadas). Consultas de
+ * Comando de Segurança (V054) na transação do parceiro (app.partner_id e capacidades do papel publicadas). Consultas de
  * condomínio rodam depois de {@link #enterTenant}; o banco confere o alcance de líder (platform.partner_reach) em cada
  * política e função, não só a capacidade publicada.
  */
@@ -33,13 +33,17 @@ public class SecurityCommandStore {
    order by t.name,t.id limit ?
    """,(r,n)->new ReachedTenant(r.getObject("id",UUID.class),r.getString("name"),r.getString("time_zone")),partner,limit);
  }
- /** Operadores e supervisores ativos com escala vigente agora, por condomínio (leitura da V053, só o próprio parceiro). */
+ /**
+  * Operadores e supervisores com papel e conta ativos e escala vigente agora, por condomínio (leitura da V054, só o próprio
+  * parceiro): mesma regra de platform.partner_reach, sem contar conta suspensa ou encerrada.
+  */
  public Map<UUID,Integer> operatorsOnDuty(UUID partner) {
   var counts=new TreeMap<UUID,Integer>();
   jdbc.query("""
    select s.tenant_id,count(distinct s.account_id) as n from cp.operator_schedules s
    join platform.partner_members m on m.id=s.member_id and m.partner_id=s.partner_id and m.status='ACTIVE'
     and m.role in ('REMOTE_OPERATOR','SECURITY_SUPERVISOR')
+   join platform.accounts a on a.id=s.account_id and a.status='ACTIVE'
    where s.partner_id=? and s.status='ACTIVE' and s.starts_at<=now() and s.ends_at>now() group by s.tenant_id
    """,r->{ counts.put(r.getObject("tenant_id",UUID.class),r.getInt("n")); },partner);
   return counts;
@@ -80,11 +84,11 @@ public class SecurityCommandStore {
  }
  /** Incidentes do condomínio do contexto (RLS: só do parceiro com alcance de líder). */
  public List<SecurityCommandModels.Incident> incidents(UUID tenant,String state,int limit) {
-  return jdbc.query(INCIDENT+" where i.tenant_id=? and i.state=? order by i.opened_at desc,i.id limit ?",SecurityCommandStore::incident,
-   tenant,state,limit);
+  return jdbc.query(INCIDENT+" where i.tenant_id=? and i.partner_id=platform.current_partner_id() and i.state=? order by i.opened_at desc,i.id limit ?",
+   SecurityCommandStore::incident,tenant,state,limit);
  }
  public SecurityCommandModels.Incident incident(UUID tenant,UUID id) {
-  var rows=jdbc.query(INCIDENT+" where i.tenant_id=? and i.id=?",SecurityCommandStore::incident,tenant,id);
+  var rows=jdbc.query(INCIDENT+" where i.tenant_id=? and i.partner_id=platform.current_partner_id() and i.id=?",SecurityCommandStore::incident,tenant,id);
   return rows.isEmpty()?null:rows.getFirst();
  }
  public void insertIncident(UUID id,UUID tenant,String title,String severity) {

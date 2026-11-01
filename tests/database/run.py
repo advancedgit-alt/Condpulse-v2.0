@@ -5378,7 +5378,7 @@ def context_switch_checks():
            "cadeias integras depois das trocas e recusas")
 
 def security_command_checks():
-    """V053 (CPX-012 a CPX-014): Comando de Seguranca. Contagens do semaforo so para o lider com alcance (contrato ativo);
+    """V054 (CPX-012 a CPX-014): Comando de Seguranca. Contagens do semaforo so para o lider com alcance (contrato ativo);
     incidentes do parceiro que abriu, com INCIDENT_* no log (correlation_id) no mesmo COMMIT; anexos so em incidente
     aberto; revisao de abertura remota uma por abertura, com correcao encadeada, nunca da propria abertura."""
     C1, C2, C3 = (f"00000000-0000-4000-8000-0000000053a{n}" for n in range(1, 4))
@@ -5442,6 +5442,19 @@ def security_command_checks():
            "lider le escala e equipe do proprio parceiro (central sem operador, responsavel)")
     expect(value(ctx(capabilities="security.log.read") + f"select count(*) from cp.operator_schedules where partner_id='{PX}'", actor=LD, role="cp_api") == "0",
            "sem security.command publicada a escala do parceiro fica fechada")
+    # Cobertura da central (achado P2 do Codex no #165): conta suspensa nao conta como operador escalado, como em partner_reach.
+    on_duty = (f"select count(distinct s.account_id) from cp.operator_schedules s join platform.partner_members m on m.id=s.member_id "
+               f"and m.partner_id=s.partner_id and m.status='ACTIVE' and m.role in ('REMOTE_OPERATOR','SECURITY_SUPERVISOR') "
+               f"join platform.accounts a on a.id=s.account_id and a.status='ACTIVE' where s.partner_id='{PX}' and s.status='ACTIVE' "
+               f"and s.starts_at<=now() and s.ends_at>now()")
+    expect(value(ctx() + on_duty, actor=LD, role="cp_api") == "1", "operador com conta ativa e escala vigente cobre a central")
+    expect(value(ctx() + f"select count(*) from platform.accounts where id='{OP}'", actor=LD, role="cp_api") == "1"
+           and value(ctx(partner=PQ) + f"select count(*) from platform.accounts where id='{OP}'", actor=LD, role="cp_api") == "0"
+           and value(ctx(capabilities="security.log.read") + f"select count(*) from platform.accounts where id='{OP}'", actor=LD, role="cp_api") == "0",
+           "lider le so a situacao das contas da equipe do proprio parceiro, com security.command")
+    query(f"UPDATE platform.accounts SET status='SUSPENDED' WHERE id='{OP}'")
+    expect(value(ctx() + on_duty, actor=LD, role="cp_api") == "0", "conta suspensa nao conta como operador escalado")
+    query(f"UPDATE platform.accounts SET status='ACTIVE' WHERE id='{OP}'")
     # Incidentes.
     open_incident = lambda ident, tenant=C1, severity="CRITICAL": (
         f"INSERT INTO cp.incidents(id,tenant_id,title,severity) VALUES('{ident}','{tenant}','Arrombamento ficticio','{severity}')")
@@ -5459,6 +5472,14 @@ def security_command_checks():
     expect(value(ctx() + summary, tenant=C1, actor=LD, role="cp_api") == "3|1|1|1|0|1|1|0", "alerta critico anexado a incidente sai da contagem")
     expect(value(ctx(partner=PQ) + "select count(*) from cp.incidents", tenant=C1, actor=LQ, role="cp_api") == "0",
            "lider de outro parceiro nao ve o incidente")
+    # Mesma conta lider em dois parceiros (achado P2 do Codex no #165): no contexto do outro parceiro nao ve nem muda o incidente.
+    query(f"SET session_replication_role=replica; INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by) "
+          f"VALUES('49000000-0000-4000-8000-0000000053d9','{PQ}','{LD}','SECURITY_LEAD','LIDER DUPLO','{LQ}')")
+    expect(value(ctx(partner=PQ) + "select count(*) from cp.incidents", tenant=C1, actor=LD, role="cp_api") == "0"
+           and value(ctx(partner=PQ) + f"with u as (update cp.incidents set assignee_member_id='{MO}',version=version+1 where id='{I1}' returning 1) select count(*) from u",
+                     tenant=C1, actor=LD, role="cp_api") == "0"
+           and value(ctx() + "select count(*) from cp.incidents", tenant=C1, actor=LD, role="cp_api") == "1",
+           "lider de dois parceiros so ve e muda os incidentes do parceiro do contexto")
     expect(error(ctx() + link(I1, CRIT), "23505", tenant=C1, actor=LD, role="cp_api"), "evento anexado uma vez")
     expect(error(ctx() + link(I1, "53100000-0000-4000-8000-0000000000ff"), "23503", tenant=C1, actor=LD, role="cp_api"), "anexo so de evento do log do condominio")
     assign = lambda member: f"UPDATE cp.incidents SET assignee_member_id='{member}',version=version+1 WHERE id='{I1}'"

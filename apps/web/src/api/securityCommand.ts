@@ -3,7 +3,7 @@ import { securityLogEvent, type SecurityLogEvent } from './securityLog';
 import type { ISODateTime, UUID } from './types';
 
 /**
- * Comando de Segurança do gestor líder (CPX-012 a CPX-014, V053, SecurityCommandController). Exige security.command e AAL2;
+ * Comando de Segurança do gestor líder (CPX-012 a CPX-014, V054, SecurityCommandController). Exige security.command e AAL2;
  * com CP_PARTNERS_ENABLED ou CP_SECURITY_LOG_ENABLED desligada as rotas não existem (404, API_NOT_AVAILABLE).
  * Ler a linha do tempo ou as aberturas remotas grava SENSITIVE_VIEWED no servidor.
  */

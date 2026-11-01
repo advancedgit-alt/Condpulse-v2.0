@@ -38,8 +38,8 @@ Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na V
 | V048 relatórios do gateway | `EDGE_REPORT_RECEIVED` (REJECTED = atenção) |
 | Vínculos | `ROLE_GRANTED` (nasce ou passa a ACTIVE), `ROLE_REVOKED` (ACTIVE → SUSPENDED/REVOKED) |
 | API, troca de contexto (V052, R4.4) | `CONTEXT_SWITCHED` (ver abaixo) |
-| V053 incidentes (CPX-013) | `INCIDENT_OPENED` (severidade do incidente), `INCIDENT_ASSIGNED`, `INCIDENT_CLOSED`, com `correlation_id` = incidente; `EVIDENCE_EXPORTED` no dossiê |
-| API, revisão de abertura remota (V053, CPX-014) | `REMOTE_OPEN_REVIEWED` (conferida = INFO, irregular = ATTENTION) |
+| V054 incidentes (CPX-013) | `INCIDENT_OPENED` (severidade do incidente), `INCIDENT_ASSIGNED`, `INCIDENT_CLOSED`, com `correlation_id` = incidente; `EVIDENCE_EXPORTED` no dossiê |
+| API, revisão de abertura remota (V054, CPX-014) | `REMOTE_OPEN_REVIEWED` (conferida = INFO, irregular = ATTENTION) |
 
 Os tipos fora do catálogo inicial do PRD (5.2) são acréscimos para as fontes existentes, sem inferir passagem
 (R5.10). Ainda sem gravação: políticas (V043, `POLICY_PUBLISHED`), login/MFA, conector fora do ar, abertura remota
@@ -102,7 +102,7 @@ Os tipos fora do catálogo inicial do PRD (5.2) são acréscimos para as fontes 
   parceiro com alcance no condomínio (V049, `PartnerCapability`) e são conferidas de novo por `platform.has_capability`.
   `security.log.read.shift` (supervisor) ainda não tem política no log: recusada até uma fatia própria (log do turno).
 
-## Comando de Segurança: incidentes e aberturas remotas (CPX-012 a CPX-014, V053)
+## Comando de Segurança: incidentes e aberturas remotas (CPX-012 a CPX-014, V054)
 
 - **Incidentes:** `cp.incidents` grava no log, no COMMIT, `INCIDENT_OPENED`/`INCIDENT_ASSIGNED`/`INCIDENT_CLOSED` com
   `subject_type=INCIDENT`, `correlation_id` = incidente e `details` só com severidade, responsável (id do membro),

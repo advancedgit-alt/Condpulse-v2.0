@@ -19,7 +19,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
 
 /**
- * Comando de Segurança (CPX-012 a CPX-014, PRD complementar §4.3.4; V053), atrás de CP_PARTNERS_ENABLED e
+ * Comando de Segurança (CPX-012 a CPX-014, PRD complementar §4.3.4; V054), atrás de CP_PARTNERS_ENABLED e
  * CP_SECURITY_LOG_ENABLED. Tudo na transação do parceiro (PartnerTransactionExecutor: conta ativa, papel ativo, AAL2) com
  * security.command; cada condomínio entra no contexto só depois de conferido no alcance de líder agora, e o banco confere
  * o alcance de novo em cada política (platform.partner_reach).
