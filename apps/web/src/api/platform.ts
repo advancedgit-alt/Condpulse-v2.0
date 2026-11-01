@@ -6,8 +6,8 @@ import type { ISODateTime, UUID } from './types';
 /** As três últimas só aparecem com o acesso facial ligado (CP_FACIAL_ACCESS_ENABLED); sessão com elas continua válida. */
 export type PlatformCapability = 'billing.manage' | 'billing.read' | 'outbox.operate' | 'platform.audit.read' | 'tenant_modules.manage' | 'tenants.manage' | 'tenants.read'
   | 'technical_grants.manage' | 'access_catalog.manage' | 'homologation.approve'
-  /** Hierarquia de parceiro (V049): só aparecem com CP_PARTNERS_ENABLED ligada; a central não tem tela própria para elas ainda. */
-  | 'partners.read' | 'partners.manage';
+  /** Hierarquia de parceiro (CP_PARTNERS_ENABLED) e condomínio demo (CP_DEMO_ENABLED, V053). */
+  | 'partners.read' | 'partners.manage' | 'platform.demo.manage';
 export interface PlatformSession { accountId: UUID; role: 'PLATFORM_ADMIN'; capabilities: PlatformCapability[]; mfaRequired: boolean }
 export interface OnboardingReceipt {
   operationId: UUID; accounts: number | null; units: number | null; memberships: number | null; amenities: number | null;
@@ -19,7 +19,7 @@ export interface TenantUsage { activeUnits: number; activeMemberships: number; a
 export interface TenantBilling { activeSubscription: boolean; openCharges: number; overdueCharges: number }
 export interface PlatformTenant {
   tenantId: UUID; name: string; timeZone: string; active: boolean; version: number; createdAt: ISODateTime;
-  updatedAt: ISODateTime; onboarding: OnboardingReceipt | null; origin: 'ONBOARDING' | 'PLATFORM' | null;
+  updatedAt: ISODateTime; onboarding: OnboardingReceipt | null; origin: 'DEMO' | 'ONBOARDING' | 'PLATFORM' | null;
   /** null: API anterior a V035 (a web publica antes da API): a tela mostra "não informado". */
   usage: TenantUsage | null;
   billing: TenantBilling | null;
@@ -69,7 +69,7 @@ export interface OutboxTask {
 export interface OutboxTaskPage { tasks: OutboxTask[]; truncated: boolean }
 
 const CAPABILITIES: readonly PlatformCapability[] = ['billing.manage', 'billing.read', 'outbox.operate', 'platform.audit.read', 'tenant_modules.manage', 'tenants.manage', 'tenants.read',
-  'technical_grants.manage', 'access_catalog.manage', 'homologation.approve', 'partners.read', 'partners.manage'];
+  'technical_grants.manage', 'access_catalog.manage', 'homologation.approve', 'partners.read', 'partners.manage', 'platform.demo.manage'];
 const nullableCount = (value: unknown): value is number | null => value === null || isInteger(value);
 function count(value: unknown): value is number { return isInteger(value) && value >= 0; }
 const INVITATION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -106,7 +106,7 @@ export function platformTenant(value: unknown, uncertain = false): PlatformTenan
   if (!record(value) || !isUUID(value.tenantId) || !isString(value.name) || value.name.length < 1 || codePoints(value.name) > 160
       || !isString(value.timeZone) || typeof value.active !== 'boolean' || !isInteger(value.version) || !isDate(value.createdAt)
       || !isDate(value.updatedAt) || !('onboarding' in value)
-      || !(value.origin === undefined || value.origin === null || oneOf(value.origin, ['ONBOARDING', 'PLATFORM'] as const))) throw invalidResponse(uncertain);
+      || !(value.origin === undefined || value.origin === null || oneOf(value.origin, ['DEMO', 'ONBOARDING', 'PLATFORM'] as const))) throw invalidResponse(uncertain);
   return { tenantId: value.tenantId, name: value.name, timeZone: value.timeZone, active: value.active, version: value.version,
     createdAt: value.createdAt, updatedAt: value.updatedAt, onboarding: receipt(value.onboarding),
     origin: (value.origin ?? null) as PlatformTenant['origin'], usage: usage(value.usage, uncertain), billing: billingSummary(value.billing, uncertain) };
@@ -202,6 +202,42 @@ export function managerInvitationLink(origin: string, token: string): string {
   return `${origin}/convite-gestor#token=${token}`;
 }
 
+/** Condomínio demo (CPX-046, V053): geração com condomínio e parceiro sintéticos, sempre com o prefixo [DEMO]. */
+export interface DemoGeneration {
+  generationId: UUID; generation: number; tenantId: UUID; tenantName: string; partnerId: UUID; partnerName: string;
+  status: 'ACTIVE' | 'RETIRED'; createdAt: ISODateTime; createdBy: UUID; retiredAt: ISODateTime | null; counts: Record<string, number>;
+}
+export interface DemoState { current: DemoGeneration | null; retired: DemoGeneration[] }
+export interface DemoProvisioned { generation: DemoGeneration; retiredTenantId: UUID | null; applied: boolean }
+export interface ProvisionDemoInput { expectedTenantId: UUID | null; reason: string; confirmation: 'DEMO' }
+const DEMO_PREFIX = '[DEMO] ';
+export function demoGeneration(value: unknown, uncertain = false): DemoGeneration {
+  if (!record(value) || !isUUID(value.generationId) || !isInteger(value.generation) || value.generation < 1 || !isUUID(value.tenantId)
+      || !isString(value.tenantName) || !value.tenantName.startsWith(DEMO_PREFIX) || !isUUID(value.partnerId)
+      || !isString(value.partnerName) || !value.partnerName.startsWith(DEMO_PREFIX) || !oneOf(value.status, ['ACTIVE', 'RETIRED'] as const)
+      || !isDate(value.createdAt) || !isUUID(value.createdBy) || !(value.retiredAt === null || value.retiredAt === undefined || isDate(value.retiredAt))
+      || (value.status === 'RETIRED') !== isDate(value.retiredAt) || !record(value.counts)
+      || !Object.entries(value.counts).every(([key, item]) => /^[A-Za-z]{1,40}$/.test(key) && count(item))) throw invalidResponse(uncertain);
+  return { generationId: value.generationId, generation: value.generation, tenantId: value.tenantId, tenantName: value.tenantName,
+    partnerId: value.partnerId, partnerName: value.partnerName, status: value.status, createdAt: value.createdAt, createdBy: value.createdBy,
+    retiredAt: (value.retiredAt ?? null) as ISODateTime | null, counts: { ...(value.counts as Record<string, number>) } };
+}
+export function demoState(value: unknown): DemoState {
+  if (!record(value) || !Array.isArray(value.retired)) throw invalidResponse();
+  const current = value.current === null || value.current === undefined ? null : demoGeneration(value.current);
+  if (current && current.status !== 'ACTIVE') throw invalidResponse();
+  const retired = value.retired.map((item) => demoGeneration(item));
+  if (retired.some((item) => item.status !== 'RETIRED')) throw invalidResponse();
+  return { current, retired };
+}
+export function demoProvisioned(value: unknown): DemoProvisioned {
+  if (!record(value) || typeof value.applied !== 'boolean' || !(value.retiredTenantId === null || value.retiredTenantId === undefined
+      || isUUID(value.retiredTenantId))) throw invalidResponse(true);
+  const generation = demoGeneration(value.generation, true);
+  if (generation.status !== 'ACTIVE' && value.applied) throw invalidResponse(true);
+  return { generation, retiredTenantId: (value.retiredTenantId ?? null) as UUID | null, applied: value.applied };
+}
+
 export function createPlatformApi(client: CondPulseApi = api) {
   return {
     session: async (signal?: AbortSignal) => client.call('/v1/platform/session', platformSession, signal ? { signal } : {}),
@@ -228,6 +264,10 @@ export function createPlatformApi(client: CondPulseApi = api) {
       if (cursor) query.set('cursor', cursor);
       return client.call(`/v1/platform/audit-events?${query}`, auditPage, signal ? { signal } : {});
     },
+    demo: async (signal?: AbortSignal) => client.call('/v1/platform/demo-tenant', demoState, signal ? { signal } : {}),
+    /** Cria ou reseta o demo; quem repete por resultado incerto conserva a mesma chave e o mesmo pedido. */
+    provisionDemo: async (body: ProvisionDemoInput, key: string) =>
+      client.call('/v1/platform/demo-tenant', demoProvisioned, { method: 'POST', body, key }),
     outbox: async (signal?: AbortSignal) => client.call('/v1/platform/outbox', outboxSummary, signal ? { signal } : {}),
     outboxTasks: async (state: 'FAILED' | 'SKIPPED', tenantId: string | null, signal?: AbortSignal) => {
       const query = new URLSearchParams({ state });

@@ -32,7 +32,7 @@ public class PlatformStore {
     case when jsonb_typeof(r.counts->'units')='number' then (r.counts->>'units')::integer end as units,
     case when jsonb_typeof(r.counts->'memberships')='number' then (r.counts->>'memberships')::integer end as memberships,
     case when jsonb_typeof(r.counts->'amenities')='number' then (r.counts->>'amenities')::integer end as amenities,
-    case when r.operation_id is not null then 'ONBOARDING'
+    case when t.demo then 'DEMO' when r.operation_id is not null then 'ONBOARDING'
      when exists(select 1 from platform.tenant_creations c where c.tenant_id=t.id) then 'PLATFORM' end as origin,
     (select count(*) from cp.units u where u.tenant_id=t.id and u.status='ACTIVE') as active_units,
     (select count(*) from cp.memberships m where m.tenant_id=t.id and m.status='ACTIVE'

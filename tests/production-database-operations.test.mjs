@@ -136,7 +136,7 @@ test('exact production guard migrates a fresh database from V001, replays and bl
     assert.equal(run.status,0,`Disposable production guard scenarios: ${run.stderr}`);
     const versions=readdirSync(join(root,'db/migrations')).filter(name=>/^V[0-9]{3}__.+\.sql$/.test(name)).length;
     assert.deepEqual(JSON.parse(run.stdout.trim()),{passed:true,fresh:versions,replay:0,shortRangeDenied:true,gapDenied:true,legacyBaselineDenied:true,
-      checksumDriftDenied:true,aboveHeadDenied:true});
+      checksumDriftDenied:true,aboveHeadDenied:true,demoOwnerAccepted:true,foreignOwnerDenied:true});
     assert.equal(run.stderr.trim(),'');
   } finally { cleanup(temporary,'condpulse-prodops-jdbc-'); }
 });

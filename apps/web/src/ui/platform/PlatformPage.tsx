@@ -13,6 +13,7 @@ import { OutboxSection } from './Outbox';
 import { TechnicalGrantSection } from './TechnicalGrants';
 import { ModuleSection } from './Modules';
 import { FacialSection } from './Facial';
+import { DemoSection } from './Demo';
 import { BillingSection, billingActionLabel, billingAuditDetails } from './Billing';
 import { PLATFORM_ZONE, PlatformContext, isUncertain, platformKey, react, short, tenantListKey, useAccessGuard, usePlatform, type Outcome } from './shared';
 import { InvitationLinkNotice, TenantCreateForm, TenantDetailView, creationOutcome } from './TenantViews';
@@ -21,6 +22,7 @@ import { ENTRY_PATH, centralPath, centralTenantPath } from '../shell/paths';
 
 export type { Outcome } from './shared';
 const sections = [{ id: 'condominios', label: 'Condomínios', icon: 'building' }, { id: 'modulos', label: 'Módulos por condomínio', icon: 'grid' },
+  { id: 'demo', label: 'Condomínio demo', icon: 'home' },
   { id: 'financeiro', label: 'Financeiro', icon: 'card' },
   { id: 'concessoes', label: 'Concessões técnicas', icon: 'key' }, { id: 'facial', label: 'Acesso facial', icon: 'door' }, { id: 'operacao', label: 'Operação', icon: 'list' },
   { id: 'auditoria', label: 'Auditoria', icon: 'clock' }] as const satisfies readonly { id: string; label: string; icon: IconName }[];
@@ -36,6 +38,7 @@ type Section = typeof sections[number]['id'];
 export function visiblePlatformSections(capabilities: readonly string[]) {
   return sections.filter((item) => (item.id !== 'financeiro' || capabilities.includes('billing.read'))
     && (item.id !== 'modulos' || capabilities.includes('tenants.read'))
+    && (item.id !== 'demo' || capabilities.includes('platform.demo.manage'))
     && (item.id !== 'facial' || capabilities.includes('access_catalog.manage'))
     && (item.id !== 'operacao' || capabilities.includes('outbox.operate'))
     && (item.id !== 'concessoes' || capabilities.includes('technical_grants.manage')));
@@ -115,7 +118,7 @@ function PlatformConsole({ section, tenantId }: { section: Section; tenantId: st
       <div className="context-badge"><Icon name="shield" /><div><strong>Segundo fator confirmado</strong><span>Sessão de plataforma</span></div></div></div>
     <SectionTabs label="Seções da central" current={current} items={visible.map((item) => ({ id: item.id, label: item.label, to: centralPath(item.id) }))} />
     {current === 'financeiro' ? <BillingSection /> : current === 'auditoria' ? <AuditSection /> : current === 'operacao' ? <OutboxSection />
-      : current === 'concessoes' ? <TechnicalGrantSection /> : current === 'facial' ? <FacialSection /> : current === 'modulos' ? <ModuleSection />
+      : current === 'concessoes' ? <TechnicalGrantSection /> : current === 'facial' ? <FacialSection /> : current === 'modulos' ? <ModuleSection /> : current === 'demo' ? <DemoSection />
       : tenantId ? <TenantDetailView key={tenantId} tenantId={tenantId} describe={describeEvent}
         editor={(tenant, close) => <TenantEditor tenant={tenant} close={close} />} /> : <TenantSection />}
   </>;
@@ -165,7 +168,7 @@ function TenantSection() {
         : !tenants.data || tenants.data.tenants.length === 0 ? <div className="panel"><Empty icon="building" title="Nenhum condomínio">{search
           ? 'Nenhum condomínio corresponde à busca.' : 'Os condomínios cadastrados pelo onboarding aparecerão aqui.'}</Empty></div>
           : <ol className="management-list" aria-label="Condomínios">{tenants.data.tenants.map((tenant) => <li key={tenant.tenantId} className="management-row">
-            <div><strong><bdi>{tenant.name}</bdi></strong> <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
+            <div><strong><bdi>{tenant.name}</bdi></strong> {tenant.origin === 'DEMO' ? <span className="status-pill demo-pill">DEMO</span> : null} <span className={`status-pill ${tenant.active ? 'status-ready' : 'status-neutral'}`}>{tenant.active ? 'Ativo' : 'Suspenso'}</span>
               <span>Fuso {tenant.timeZone} · versão {tenant.version} · atualizado em {formatWhen(tenant.updatedAt, PLATFORM_ZONE)} · {originText(tenant.origin)}</span>
               <span>{usageText(tenant, PLATFORM_ZONE)}</span>
               {billingText(tenant) ? <span>{billingText(tenant)}</span> : null}
@@ -248,6 +251,11 @@ const actionLabels: Record<string, string> = {
   TENANT_RENAMED: 'Condomínio renomeado', TENANT_SUSPENDED: 'Condomínio suspenso', TENANT_REACTIVATED: 'Condomínio reativado',
   TENANT_CREATED: 'Condomínio criado no painel', TENANT_MANAGER_INVITED: 'Convite de gestor emitido',
   TENANT_MANAGER_INVITATION_REVOKED: 'Convite de gestor revogado', OUTBOX_TASK_REPLAYED: 'Tarefa devolvida para a fila',
+  DEMO_TENANT_PROVISIONED: 'Condomínio demo criado', DEMO_TENANT_RETIRED: 'Condomínio demo aposentado (reset)',
+  PARTNER_CREATED: 'Parceiro criado', PARTNER_SUSPENDED: 'Parceiro suspenso', PARTNER_REACTIVATED: 'Parceiro reativado',
+  PARTNER_MEMBER_ADDED: 'Papel no parceiro concedido', PARTNER_MEMBER_REVOKED: 'Papel no parceiro revogado',
+  PARTNER_CONTRACT_STARTED: 'Contrato com parceiro iniciado', PARTNER_CONTRACT_ENDED: 'Contrato com parceiro encerrado',
+  PARTNER_SCHEDULE_CREATED: 'Escala criada', PARTNER_SCHEDULE_CANCELLED: 'Escala cancelada',
 };
 /** Rótulo e detalhes do evento da plataforma, usados na trilha e na ficha do condomínio. */
 function describeEvent(action: string, details: Record<string, string>): string {
@@ -255,6 +263,8 @@ function describeEvent(action: string, details: Record<string, string>): string 
   if (action === 'TENANT_CREATED' && details.units) return `${label}: ${details.units} unidade(s), ${details.amenities === '1' ? 'com' : 'sem'} área inicial, fuso ${details.timeZone ?? '—'}`;
   if (action === 'TENANT_MANAGER_INVITED' && details.displayName) return `${label} para ${details.displayName} (${details.validDays ?? '?'} dia(s))`;
   if (action === 'TENANT_MANAGER_INVITATION_REVOKED' && details.replaced === 'true') return `${label} (substituído por novo convite)`;
+  if (action === 'DEMO_TENANT_PROVISIONED' && details.generation) return `${label}: geração ${details.generation}, ${details.units ?? '?'} unidade(s), dados fictícios`;
+  if (details.demo === 'true' && action.startsWith('PARTNER_')) return `${label} (condomínio demo)`;
   return label;
 }
 

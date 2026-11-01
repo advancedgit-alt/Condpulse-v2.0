@@ -5377,6 +5377,119 @@ def context_switch_checks():
     expect(all(value(f"select intact from cp.security_log_verify('{t}')") == "t" for t in (X1, X2, X3)),
            "cadeias integras depois das trocas e recusas")
 
+def demo_checks():
+    """V053 (CPX-046): condominio demo isolado, com dados sinteticos, criado e resetado so pela central
+    (platform.demo.manage) pela funcao de dono cp_demo; condominio real nunca vira demo nem e resetado."""
+    PD, NP = "10000000-0000-4000-8000-0000000055a1", "10000000-0000-4000-8000-0000000055a2"
+    query(f"INSERT INTO platform.accounts(id,status) VALUES('{PD}','ACTIVE'),('{NP}','ACTIVE'); "
+          f"INSERT INTO platform.platform_roles(account_id,role,status,reason) VALUES('{PD}','PLATFORM_ADMIN','ACTIVE','Operacao ficticia')")
+    caps = "SET LOCAL app.platform_capabilities='platform.demo.manage,tenants.read'; "
+    def provision(expected="NULL", key="demo-chave-ficticia-0001", reason="Demo ficticio", actor=PD, prefix=caps):
+        return query(prefix + f"select generation||'|'||tenant_id||'|'||applied||'|'||coalesce(retired_tenant_id::text,'-') "
+                     f"from platform.demo_provision({expected},'{reason}','{key}')", actor=actor, role="cp_api", check=False)
+    real_before = value("select count(*) from platform.tenants where not demo")
+    real_log = value("select count(*) from cp.security_log s join platform.tenants t on t.id=s.tenant_id where not t.demo")
+    expect(value("select count(*) from pg_roles where rolname='cp_demo' and not (rolsuper or rolbypassrls or rolcanlogin or rolcreaterole "
+                 "or rolcreatedb or rolreplication)") == "1", "cp_demo sem login e sem privilegio elevado")
+    expect(value("select pg_has_role('cp_api','cp_demo','MEMBER') or pg_has_role('cp_worker','cp_demo','MEMBER') "
+                 "or pg_has_role('cp_onboarding','cp_demo','MEMBER')") == "f", "roles de runtime nao sao membros de cp_demo")
+    expect(value("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace join pg_roles r on r.oid=p.proowner "
+                 "where p.prosecdef and n.nspname in ('cp','platform') and (r.rolsuper or r.rolbypassrls or r.rolname<>'cp_demo')") == "0",
+           "toda funcao SECURITY DEFINER de cp/platform pertence a cp_demo (sem BYPASSRLS)")
+    expect(value("select has_function_privilege('cp_worker','platform.demo_provision(uuid,text,text)','EXECUTE') "
+                 "or has_function_privilege('cp_onboarding','platform.demo_provision(uuid,text,text)','EXECUTE')") == "f",
+           "so a API executa a operacao do demo")
+    # Sem capacidade (AAL1), sem papel de plataforma ou com condominio no contexto: recusado.
+    r = provision(prefix="SET LOCAL app.platform_capabilities='tenants.read,tenants.manage'; ")
+    expect(r.returncode != 0 and "42501" in r.stderr, "sem platform.demo.manage (AAL1) a central nao cria demo")
+    r = provision(actor=NP)
+    expect(r.returncode != 0 and "42501" in r.stderr, "conta sem papel de plataforma nao cria demo mesmo com capacidade publicada")
+    r = query(caps + f"select platform.demo_provision(NULL,'Demo ficticio','demo-chave-ficticia-0009')", tenant=TA, actor=PD, role="cp_api", check=False)
+    expect(r.returncode != 0 and "42501" in r.stderr, "operacao do demo recusa condominio no contexto")
+    r = provision(reason="x")
+    expect(r.returncode != 0 and "22023" in r.stderr, "motivo curto e recusado")
+    r = provision(expected=f"'{TA}'")
+    expect(r.returncode != 0 and "CPD01" in r.stderr, "condominio real nunca e resetado (CPD01)")
+    r = provision()
+    expect(r.returncode == 0, "central cria o primeiro demo: " + r.stderr[-300:])
+    gen1, demo1, applied, _ = r.stdout.strip().split("|")
+    expect(gen1 == "1" and applied == "true", "primeira geracao aplicada")
+    again = provision()
+    expect(again.returncode == 0 and again.stdout.strip().split("|")[1] == demo1 and again.stdout.strip().split("|")[2] == "false",
+           "repeticao da mesma chave devolve a mesma geracao sem criar outra")
+    r = provision(reason="Outro motivo ficticio")
+    expect(r.returncode != 0 and "CPD03" in r.stderr, "mesma chave com outro pedido e recusada (CPD03)")
+    r = provision(key="demo-chave-ficticia-0002")
+    expect(r.returncode != 0 and "CPD02" in r.stderr, "criar de novo sem informar o demo atual pede recarga (CPD02)")
+    r = provision(expected=f"'{TA}'", key="demo-chave-ficticia-0003")
+    expect(r.returncode != 0 and "CPD01" in r.stderr, "reset apontando condominio real recusado com demo existente")
+    # Conteudo sintetico da geracao.
+    counts = value(f"select (select count(*) from cp.units where tenant_id='{demo1}')||'|'||(select count(*) from cp.blocks where tenant_id='{demo1}')"
+                   f"||'|'||(select count(*) from cp.amenities where tenant_id='{demo1}' and policy->>'schemaVersion'='1')"
+                   f"||'|'||(select count(*) from cp.announcements where tenant_id='{demo1}' and state='PUBLISHED')"
+                   f"||'|'||(select count(*) from cp.parcels where tenant_id='{demo1}' and status='RECEIVED')"
+                   f"||'|'||(select count(*) from cp.visit_permits where tenant_id='{demo1}')"
+                   f"||'|'||(select count(*) from cp.concierge_occurrences where tenant_id='{demo1}')"
+                   f"||'|'||(select count(*) from cp.service_requests where tenant_id='{demo1}')")
+    expect(counts == "32|2|3|2|3|2|2|2", f"demo com torres, unidades, areas com regra, avisos, encomendas, visitas, ocorrencias e pedidos ({counts})")
+    expect(value(f"select count(*) from cp.memberships where tenant_id='{demo1}' and role='MANAGER'") == "0",
+           "demo sem gestor vigente: o primeiro gestor real entra pelo convite da central")
+    expect(value(f"select count(*) from cp.memberships m join platform.accounts a on a.id=m.account_id where m.tenant_id='{demo1}' and not a.synthetic") == "0",
+           "nenhuma conta real recebe vinculo no demo")
+    expect(value(f"select count(*) from platform.partner_members m join platform.accounts a on a.id=m.account_id "
+                 f"join platform.demo_generations g on g.partner_id=m.partner_id where g.tenant_id='{demo1}' and not a.synthetic") == "0",
+           "nenhuma conta real recebe papel no parceiro demo")
+    expect(value(f"select count(*) from platform.partner_tenant_contracts c join platform.partners p on p.id=c.partner_id "
+                 f"where c.tenant_id='{demo1}' and c.status='ACTIVE' and p.demo and c.starts_at<=now() and c.ends_at>now()") == "1",
+           "parceiro sintetico com contrato vigente com o demo")
+    expect(value(f"select count(*) from cp.operator_schedules where tenant_id='{demo1}' and status='ACTIVE'") == "4", "escala de exemplo")
+    expect(value(f"select count(*) from cp.security_log where tenant_id='{demo1}' and event_type='SHIFT_STARTED' and actor_role='REMOTE_OPERATOR' "
+                 f"and partner_id is not null") == "1", "evento de exemplo do operador em escala com parceiro definido pelo banco")
+    expect(value(f"select intact from cp.security_log_verify('{demo1}')") == "t", "cadeia do Log de Seguranca do demo integra")
+    expect(value(f"select count(*) from platform.tenants where demo and (name !~ '^\\[DEMO\\] ')") == "0", "demo sempre com prefixo [DEMO]")
+    expect(value("select count(*) from platform.platform_audit_log where action='DEMO_TENANT_PROVISIONED' and actor_id='" + PD + "'") == "1",
+           "criacao registrada na trilha da plataforma")
+    expect(value(f"select count(*) from platform.partners p where p.demo and p.name !~ '^\\[DEMO\\] '") == "0", "parceiro demo com prefixo")
+    # Isolamento e marca imutavel.
+    expect(error(f"INSERT INTO platform.tenants(id,name,active,demo) VALUES(gen_random_uuid(),'[DEMO] Falso',true,true)", "42501",
+                 actor=PD, role="cp_api"), "runtime nao cria condominio marcado como demo")
+    expect(error(f"UPDATE platform.tenants SET demo=true WHERE id='{TA}'", "42501"), "condominio real nunca vira demo (nem pelo dono do schema)")
+    expect(error(f"UPDATE platform.tenants SET demo=false WHERE id='{demo1}'", "42501"), "demo nunca vira condominio real")
+    expect(error(f"UPDATE platform.tenants SET name='[DEMO] Disfarce' WHERE id='{TA}'", "23514"), "condominio real nao usa o prefixo [DEMO]")
+    expect(error("UPDATE platform.accounts SET synthetic=true WHERE id='" + AA + "'", "42501"), "conta real nunca vira sintetica")
+    synthetic = value(f"select m.account_id from cp.memberships m where m.tenant_id='{demo1}' limit 1")
+    expect(error(f"INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status) "
+                 f"VALUES('{TA}','{synthetic}','{UA}','SINTETICA','RESIDENT','PENDING')", "42501"), "conta sintetica nao entra em condominio real")
+    demo_partner = value(f"select partner_id from platform.demo_generations where tenant_id='{demo1}'")
+    expect(error(f"INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) "
+                 f"VALUES(gen_random_uuid(),'{demo_partner}','{TA}','SECURITY_OPERATOR',now()+interval '400 days','Mistura','{PD}')", "42501"),
+           "parceiro demo nao contrata condominio real")
+    expect(value(f"select platform.tenant_is_demo('{demo1}')||'|'||platform.tenant_is_demo('{TA}')", actor=AA, role="cp_api") == "true|false",
+           "consulta de marca responde para a API sem expor o condominio")
+    expect(value(f"select count(*) from platform.tenants where id='{demo1}'", actor=PD, role="cp_api") == "0",
+           "demo nao aparece para quem nao tem vinculo nem catalogo")
+    expect(value("select count(*) from platform.demo_generations", actor=PD, role="cp_api") == "0", "geracoes so com capacidade da central")
+    expect(value(caps + "select count(*) from platform.demo_generations", actor=PD, role="cp_api") == "1", "central le a geracao ativa")
+    expect(error(caps + f"UPDATE platform.demo_generations SET status='RETIRED'", "42501", actor=PD, role="cp_api"), "API nao altera geracao fora da funcao")
+    # Reset: aposenta a geracao (nada apagado) e cria outra.
+    r = provision(expected=f"'{demo1}'", key="demo-chave-ficticia-0004", reason="Reset ficticio")
+    expect(r.returncode == 0, "central reseta o demo atual: " + r.stderr[-300:])
+    gen2, demo2, applied, retired = r.stdout.strip().split("|")
+    expect(gen2 == "2" and demo2 != demo1 and retired == demo1, "reset cria a geracao 2 e aposenta a 1")
+    expect(value(f"select t.active||'|'||g.status||'|'||c.status||'|'||p.status from platform.demo_generations g join platform.tenants t on t.id=g.tenant_id "
+                 f"join platform.partner_tenant_contracts c on c.id=g.contract_id join platform.partners p on p.id=g.partner_id where g.tenant_id='{demo1}'")
+           == "false|RETIRED|ENDED|SUSPENDED", "geracao aposentada: condominio suspenso, contrato encerrado e parceiro suspenso")
+    expect(value(f"select count(*) from cp.units where tenant_id='{demo1}'") == "32", "reset nao apaga os dados da geracao anterior")
+    expect(value(f"select intact from cp.security_log_verify('{demo1}')") == "t" and
+           value(f"select count(*) from cp.security_log where tenant_id='{demo1}' and event_type='PARTNER_CONTRACT_CHANGED' and details->>'change'='ENDED'") == "1",
+           "encerramento no Log de Seguranca do demo aposentado com cadeia integra")
+    r = provision(expected=f"'{demo1}'", key="demo-chave-ficticia-0005", reason="Reset atrasado")
+    expect(r.returncode != 0 and "CPD02" in r.stderr, "reset de geracao ja aposentada pede recarga")
+    expect(value("select count(*) from platform.demo_generations where status='ACTIVE'") == "1", "uma unica geracao ativa")
+    expect(value("select count(*) from platform.tenants where not demo") == real_before and
+           value("select count(*) from cp.security_log s join platform.tenants t on t.id=s.tenant_id where not t.demo") == real_log,
+           "nenhum condominio real nem Log de Seguranca real tocado pelo demo")
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -5516,6 +5629,7 @@ def main():
     security_log_checks()
     partner_checks()
     context_switch_checks()
+    demo_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",
