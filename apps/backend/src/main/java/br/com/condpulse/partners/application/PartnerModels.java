@@ -39,6 +39,11 @@ public final class PartnerModels {
  /** Entrada no painel do papel role do parceiro da rota; switchId é a chave da troca (repetição não grava de novo). */
  public record ContextSwitchRequest(UUID switchId,String role,UUID tenantId,ContextRef from) {}
  /**
+  * Saída do painel do papel role do parceiro da rota para um condomínio por vínculo (TENANT) ou para a central (PLATFORM),
+  * R4.4: grava o lado da origem; switchId é a chave da troca.
+  */
+ public record ContextExitRequest(UUID switchId,String role,ContextRef to) {}
+ /**
   * RECORDED (recorded eventos gravados), ALREADY_RECORDED (mesma troca já gravada), NOT_REQUIRED (nenhum lado é papel de
   * segurança ou o contexto não mudou), NO_TENANT_REACHED (papel de segurança sem condomínio alcançado agora) ou
   * LOG_DISABLED (CP_SECURITY_LOG_ENABLED=false: conferido, nada gravado).

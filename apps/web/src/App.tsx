@@ -19,12 +19,13 @@ import { UnitEvents } from './ui/UnitEvents';
 import { OwnerRentalPage, rentalKey } from './ui/Rental';
 import { UnitFinancePage, financeRoles } from './ui/Finance';
 import { rental } from './api/rental';
+import { partners } from './api/partners';
 import { EntryPage, usePlatformAccess } from './ui/shell/Entry';
 import { ConciergeIndex, CondoHome, CondoIndex, CondoModuleOff, ResidentUnitPicker, areaPath, useCondo, useTechnicalAccess } from './ui/shell/Condo';
 import { ENTRY_PATH, centralPath, condoAreas, condominiums, currentPartnerSection, legacyTarget, maintenancePath, partnerContextOf, partnerPanelLabels, partnerPath,
   partnerSections, placeModules, placeOf, residentRoot, sectionEnabled, type AreaId } from './ui/shell/paths';
 import { MaintenancePage, maintenanceSections } from './ui/maintenance/MaintenancePage';
-import { contextKeyOf, contextRefOfKey, isPreviousContextData, noteContext } from './ui/shell/contextSwitch';
+import { contextKeyOf, contextRefOfKey, isPreviousContextData, noteContext, recordExit } from './ui/shell/contextSwitch';
 import { PartnerPage } from './ui/partner/PartnerPage';
 import { Brand, Icon, Loading, OfflineNotice, type IconName } from './ui/primitives';
 import { BrandingProvider, ThemeProvider, ThemeToggle, useBrandingStyle } from './ui/theme/ThemeContext';
@@ -198,7 +199,14 @@ function Shell() {
         isPreviousContextData(query.queryKey) && query.getObserversCount() === 0;
       void queries.cancelQueries({ predicate }); queries.removeQueries({ predicate });
     }
-    if (reference) noteContext(accountId, reference);
+    if (reference) {
+      const exit = noteContext(accountId, reference);
+      // Saída de um painel de parceiro: registra o lado da origem (R4.4) sem segurar o contexto novo.
+      if (exit && exit.from.kind === 'PARTNER' && (exit.to.kind === 'TENANT' || exit.to.kind === 'PLATFORM')) {
+        const { partnerId, role } = exit.from; const to = exit.to;
+        void recordExit(exit, () => partners.exitContext(partnerId, { switchId: exit.switchId, role, to }));
+      }
+    }
     if (shownContext !== contextKey) setShownContext(contextKey);
   }, [contextKey, shownContext, accountId, queries]);
   // Troca de unidade ou de condomínio: os dados privados do contexto anterior saem do cache (a decisão da entrada fica).

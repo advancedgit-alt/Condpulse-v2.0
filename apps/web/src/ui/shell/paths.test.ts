@@ -224,7 +224,7 @@ function partner(role: PartnerContext['role'], partnerId = P, partnerName = part
 describe('entrada por contexto de parceiro (CPX-004)', () => {
   it('conta só com um papel de parceiro vai direto ao painel dele', () => {
     expect(entryDecision([], 'no', false, [partner('PARTNER_ADMIN')])).toEqual({ kind: 'redirect', to: `/p/${P}/gestao/equipe` });
-    expect(entryDecision([], 'no', false, [partner('SECURITY_LEAD')])).toEqual({ kind: 'redirect', to: `/p/${P}/comando/log` });
+    expect(entryDecision([], 'no', false, [partner('SECURITY_LEAD')])).toEqual({ kind: 'redirect', to: `/p/${P}/comando/carteira-seguranca` });
     // Painel sem seção pronta abre a casca do painel, que mostra "em breve".
     expect(entryDecision([], 'no', false, [partner('REMOTE_OPERATOR')])).toEqual({ kind: 'redirect', to: `/p/${P}/console` });
   });
@@ -254,8 +254,8 @@ describe('entrada por contexto de parceiro (CPX-004)', () => {
 describe('casca do parceiro por capacidade (CPX-005, R4.5)', () => {
   it('cada painel lista só as seções das capacidades do papel; sem backend fica em breve', () => {
     expect(partnerSections(partner('PARTNER_ADMIN')).map((item) => [item.id, item.ready])).toEqual([['equipe', true], ['escala', true], ['carteira', true], ['log', true]]);
-    expect(partnerSections(partner('SECURITY_LEAD')).map((item) => [item.id, item.ready])).toEqual([['carteira-seguranca', false], ['log', true],
-      ['aberturas', false], ['politicas', false], ['bloqueio', false]]);
+    expect(partnerSections(partner('SECURITY_LEAD')).map((item) => [item.id, item.ready])).toEqual([['carteira-seguranca', true], ['incidentes', true],
+      ['aberturas', true], ['log', true], ['politicas', false], ['bloqueio', false]]);
     expect(partnerSections(partner('SECURITY_SUPERVISOR')).every((item) => !item.ready)).toBe(true);
     expect(partnerSections(partner('TECHNICIAN')).map((item) => item.id)).toEqual(['equipamentos']);
   });

@@ -22,6 +22,7 @@ export interface OperatorSchedule {
 export type ContextSwitchFrom =
   | { kind: 'ENTRY' } | { kind: 'PLATFORM' } | { kind: 'TENANT'; tenantId: UUID } | { kind: 'PARTNER'; partnerId: UUID; role: PartnerRole };
 export interface ContextSwitchBody { switchId: UUID; role: PartnerRole; from: ContextSwitchFrom }
+export interface ContextExitBody { switchId: UUID; role: PartnerRole; to: { kind: 'TENANT'; tenantId: UUID } | { kind: 'PLATFORM' } }
 export const contextSwitchStatuses = ['RECORDED', 'ALREADY_RECORDED', 'NOT_REQUIRED', 'NO_TENANT_REACHED', 'LOG_DISABLED'] as const;
 export interface ContextSwitchResult { status: typeof contextSwitchStatuses[number]; recorded: number }
 export function contextSwitchResult(value: unknown): ContextSwitchResult {
@@ -106,6 +107,10 @@ export function createPartnersApi(client: CondPulseApi = api) {
       { method: 'POST', body: { switchId: identifier(body.switchId), role: body.role, from: body.from.kind === 'TENANT'
         ? { kind: 'TENANT', tenantId: identifier(body.from.tenantId) } : body.from.kind === 'PARTNER'
           ? { kind: 'PARTNER', partnerId: identifier(body.from.partnerId), role: body.from.role } : { kind: body.from.kind } } }),
+    /** R4.4: saída do painel do papel role para um condomínio por vínculo ou para a central (lado da origem). */
+    exitContext: async (partnerId: string, body: ContextExitBody) => client.call(`${base(partnerId)}/context-exits`, contextSwitchResult,
+      { method: 'POST', body: { switchId: identifier(body.switchId), role: body.role,
+        to: body.to.kind === 'TENANT' ? { kind: 'TENANT', tenantId: identifier(body.to.tenantId) } : { kind: 'PLATFORM' } } }),
     portfolio: async (partnerId: string, signal?: AbortSignal) => client.call(`${base(partnerId)}/portfolio`,
       (value) => page(value, partnerId, 'contracts', (item) => partnerContract(item, partnerId)), signal ? { signal } : {}),
   };

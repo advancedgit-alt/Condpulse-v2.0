@@ -38,10 +38,12 @@ Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na V
 | V048 relatórios do gateway | `EDGE_REPORT_RECEIVED` (REJECTED = atenção) |
 | Vínculos | `ROLE_GRANTED` (nasce ou passa a ACTIVE), `ROLE_REVOKED` (ACTIVE → SUSPENDED/REVOKED) |
 | API, troca de contexto (V052, R4.4) | `CONTEXT_SWITCHED` (ver abaixo) |
+| V053 incidentes (CPX-013) | `INCIDENT_OPENED` (severidade do incidente), `INCIDENT_ASSIGNED`, `INCIDENT_CLOSED`, com `correlation_id` = incidente; `EVIDENCE_EXPORTED` no dossiê |
+| API, revisão de abertura remota (V053, CPX-014) | `REMOTE_OPEN_REVIEWED` (conferida = INFO, irregular = ATTENTION) |
 
 Os tipos fora do catálogo inicial do PRD (5.2) são acréscimos para as fontes existentes, sem inferir passagem
-(R5.10). Ainda sem gravação: políticas (V043, `POLICY_PUBLISHED`), login/MFA, conector fora do ar e os épicos
-novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
+(R5.10). Ainda sem gravação: políticas (V043, `POLICY_PUBLISHED`), login/MFA, conector fora do ar, abertura remota
+(`REMOTE_OPEN`, CPX-027) e os épicos novos (permanência, bloqueio, escala), que gravam ao nascer.
 
 ## Troca de contexto (`CONTEXT_SWITCHED`, R4.4, V052)
 
@@ -77,9 +79,15 @@ novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
   monta o novo contexto. O painel de parceiro não mostra nenhuma seção nem consulta dados enquanto o registro não
   terminar: falha mostra nova tentativa (mesma chave), recusa vai para o tratador único do painel.
 - Limites: o registro é feito pela web; não autoriza nada (cada consulta continua conferida por requisição e as leituras
-  sensíveis gravam `SENSITIVE_VIEWED`), e um cliente que não chame a rota só deixa de registrar a própria troca. Saída de
-  um painel de segurança direto para um condomínio por vínculo ou para a central ainda não grava o lado da origem (só a
-  entrada em painel de parceiro chama a rota); recarregar a página começa com origem `ENTRY`.
+  sensíveis gravam `SENSITIVE_VIEWED`), e um cliente que não chame a rota só deixa de registrar a própria troca;
+  recarregar a página começa com origem `ENTRY`.
+- **Saída do painel (CPX-012, sem migration nova; fechava a pendência do PR #161):** `POST /v1/partners/{partnerId}/context-exits` com a chave, o papel
+  de origem e o destino (`TENANT` com `tenantId`, ou `PLATFORM`). Para papel de segurança grava `side=FROM` em cada
+  condomínio que a origem ainda alcança (o banco confere o alcance do lado `FROM` pela mesma guarda da V052); o id deriva
+  também do conteúdo, então entrada e saída com a mesma chave nunca colidem. Mesmas respostas (`RECORDED`,
+  `ALREADY_RECORDED`, `NOT_REQUIRED`, `NO_TENANT_REACHED`, `LOG_DISABLED`). A web chama ao montar o condomínio ou a
+  central depois de um painel de parceiro, sem segurar o contexto novo (que tem autorização própria), com até três
+  tentativas na mesma chave quando o servidor está indisponível; recarregar a página continua começando em `ENTRY`.
 
 ## Leitura, exportação e consultas sensíveis (API)
 
@@ -93,6 +101,37 @@ novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
 - `security.log.read` (PARTNER_ADMIN, SECURITY_LEAD) e `security.log.export` (SECURITY_LEAD) vêm dos papéis de
   parceiro com alcance no condomínio (V049, `PartnerCapability`) e são conferidas de novo por `platform.has_capability`.
   `security.log.read.shift` (supervisor) ainda não tem política no log: recusada até uma fatia própria (log do turno).
+
+## Comando de Segurança: incidentes e aberturas remotas (CPX-012 a CPX-014, V053)
+
+- **Incidentes:** `cp.incidents` grava no log, no COMMIT, `INCIDENT_OPENED`/`INCIDENT_ASSIGNED`/`INCIDENT_CLOSED` com
+  `subject_type=INCIDENT`, `correlation_id` = incidente e `details` só com severidade, responsável (id do membro),
+  desfecho e ids dos eventos anexados — nunca título nem relatório. A linha do tempo é montada a partir do log (eventos
+  correlacionados + anexados), e lê-la grava `SENSITIVE_VIEWED` (`view=INCIDENT_TIMELINE`, `incidentId`, `count`).
+- **Revisão de abertura remota:** `REMOTE_OPEN_REVIEWED` só pela API (`cp_api`, com ator) e por quem tem
+  `security.remote_open.review` com alcance no condomínio (gatilho `security_log_a_remote_open_review`, antes da cadeia).
+  Forma fechada: `subject_type=SECURITY_LOG_EVENT`, `subject_id` = um `REMOTE_OPEN` do mesmo condomínio e legível por quem
+  revisa, `details` só `{verdict}` (`CONFERRED`→INFO, `IRREGULAR`→ATTENTION), origem `REMOTE_CENTRAL`, motivo obrigatório
+  para irregular. Uma revisão por abertura (índice único parcial); mudar é correção (`corrects_id` = revisão mais recente
+  da mesma abertura, com motivo; uma correção por revisão, também por índice único). Quem abriu não revisa a própria
+  abertura (`42501`). A lista de aberturas grava `SENSITIVE_VIEWED` (`view=REMOTE_OPEN_REVIEW`).
+- **Visão da carteira:** só contagens (`cp.security_command_summary`), sem conteúdo de evento nem dado pessoal; por isso não
+  grava `SENSITIVE_VIEWED`. Critério do semáforo em [PARCEIROS.md](PARCEIROS.md#visão-da-carteira--critério-do-semáforo-cpx012-v1).
+
+### Dossiê de incidente (`cpdx1`)
+
+`POST /v1/partners/{p}/command/tenants/{t}/incidents/{i}/dossier` segue as regras da exportação (R5.7): só
+`security.log.export` (líder com alcance), motivo de 10 a 500 caracteres e `EVIDENCE_EXPORTED` na mesma transação, com
+`correlation_id` = incidente e `details` com `count`, `firstSeq`, `lastSeq`, `eventsDigest` e `canonicalization`. Antes de
+exportar, cada evento da linha do tempo é conferido no banco (digest `cpsl1` recalculado igual ao hash gravado e
+`prev_hash` igual ao hash do evento anterior do condomínio); elo quebrado responde 409 `SECURITY_LOG_CHAIN_BROKEN` e nada
+sai. Quem exporta é equipe do parceiro: os eventos saem sem a máscara da gestão local, como na exportação do log
+(`maskedForTenant` só vale para `security.log.read.tenant`). O manifesto traz:
+
+`eventsDigest = hex(sha256(utf8("cpdx1|" + tenantId + "|" + incidentId + "|" + seq1 + ":" + hash1 + "|" + seq2 + ":" + hash2 ...)))`
+
+com os eventos em ordem de seq. Cada `hash` pode ser recalculado pela forma `cpsl1` abaixo e conferido contra a cadeia e
+as âncoras; o incidente (título, relatório) vai junto no arquivo, mas não é encadeado.
 
 ## Forma canônica do hash (`cpsl1`)
 

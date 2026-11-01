@@ -233,12 +233,17 @@ public class SecurityConfiguration {
     // Hierarquia de parceiro (V049, ADR-0011): autenticação aqui; papel de plataforma ou de parceiro vigente, AAL2,
     // contrato e escala conferidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/partners","/v1/platform/partners/*","/v1/platform/partners/*/schedules",
-      "/v1/partners/*/team","/v1/partners/*/schedules","/v1/partners/*/portfolio").authenticated()
+      "/v1/partners/*/team","/v1/partners/*/schedules","/v1/partners/*/portfolio","/v1/partners/*/command/portfolio",
+      "/v1/partners/*/command/team","/v1/partners/*/command/incidents","/v1/partners/*/command/tenants/*/incidents/*",
+      "/v1/partners/*/command/tenants/*/remote-opens").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/platform/partners","/v1/platform/partners/*/contracts",
       "/v1/platform/partners/*/contracts/*/end","/v1/platform/partners/*/members","/v1/platform/partners/*/members/*/revoke",
       "/v1/platform/partners/*/schedules","/v1/platform/partners/*/schedules/*/cancel",
       "/v1/partners/*/team","/v1/partners/*/team/*/revoke","/v1/partners/*/schedules","/v1/partners/*/schedules/*/cancel",
-      "/v1/partners/*/context-switches").authenticated()
+      "/v1/partners/*/context-switches","/v1/partners/*/context-exits","/v1/partners/*/command/incidents",
+      "/v1/partners/*/command/tenants/*/incidents/*/assignment","/v1/partners/*/command/tenants/*/incidents/*/links",
+      "/v1/partners/*/command/tenants/*/incidents/*/close","/v1/partners/*/command/tenants/*/incidents/*/dossier",
+      "/v1/partners/*/command/tenants/*/remote-opens/*/reviews").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/partners/*/status").authenticated()
     .requestMatchers(HttpMethod.GET,"/auth/csrf","/auth/mfa").permitAll()
     .requestMatchers(HttpMethod.POST,"/auth/login","/auth/refresh","/auth/logout","/auth/mfa/enroll","/auth/mfa/verify",

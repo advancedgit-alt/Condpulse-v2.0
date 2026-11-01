@@ -334,6 +334,17 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce(has_any_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'UPDATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.security_log_anchors'),'DELETE,TRUNCATE'),false)
      or coalesce(has_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'anchored_at','INSERT'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.incidents'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.incident_links'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.incident_links'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.incidents') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('assignee_member_id','state','outcome','report','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.incidents') and c.attname in ('partner_id','opened_by','opened_at','assigned_by','assigned_at',
+        'closed_by','closed_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.incident_links') and c.attname in ('linked_by','linked_at')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

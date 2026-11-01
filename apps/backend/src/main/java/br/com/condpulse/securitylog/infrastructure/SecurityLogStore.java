@@ -47,6 +47,15 @@ public class SecurityLogStore {
    (r,n)->event(r),tenant,fromSeq,toSeq);
  }
  /**
+  * Linha do tempo de um incidente (V053): eventos com correlation_id = incidente e eventos anexados a ele, em ordem de seq,
+  * até limit+1 linhas (para saber se passou do limite). O RLS do log e dos anexos vale como em qualquer leitura.
+  */
+ public List<SecurityLogModels.Event> incidentTimeline(UUID tenant,UUID incident,int limit) {
+  return jdbc.query("select "+COLUMNS+" from cp.security_log s where s.tenant_id=? and (s.correlation_id=? or s.id in "
+   +"(select l.log_event_id from cp.incident_links l where l.tenant_id=? and l.incident_id=?)) order by s.seq limit ?",
+   (r,n)->event(r),tenant,incident,tenant,incident,limit+1);
+ }
+ /**
   * Intervalo íntegro pelo banco: digest recalculado de cada evento igual ao hash gravado e, a partir do segundo evento
   * do condomínio, prev_hash do primeiro igual ao hash do anterior.
   */

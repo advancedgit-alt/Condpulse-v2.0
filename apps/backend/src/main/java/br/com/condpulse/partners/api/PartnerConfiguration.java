@@ -3,6 +3,9 @@ package br.com.condpulse.partners.api;
 import br.com.condpulse.partners.application.ContextSwitchService;
 import br.com.condpulse.partners.application.PartnerService;
 import br.com.condpulse.partners.application.PartnerTransactionExecutor;
+import br.com.condpulse.partners.application.SecurityCommandService;
+import br.com.condpulse.partners.infrastructure.SecurityCommandStore;
+import br.com.condpulse.securitylog.infrastructure.SecurityLogStore;
 import br.com.condpulse.partners.infrastructure.PartnerStore;
 import br.com.condpulse.platform.application.PlatformTransactionExecutor;
 import br.com.condpulse.platform.infrastructure.PlatformStore;
@@ -33,5 +36,10 @@ public class PartnerConfiguration {
  @Bean ContextSwitchService contextSwitchService(PartnerTransactionExecutor partners,PartnerStore store,
    @Value("${condpulse.security-log.enabled:false}") boolean securityLog) {
   return new ContextSwitchService(partners,store,securityLog);
+ }
+ /** Comando de Segurança (V053): só com CP_SECURITY_LOG_ENABLED=true (lê e grava o Log de Segurança). */
+ @Bean @ConditionalOnProperty(name="condpulse.security-log.enabled",havingValue="true")
+ SecurityCommandService securityCommandService(PartnerTransactionExecutor partners,JdbcTemplate jdbc,SecurityLogStore log) {
+  return new SecurityCommandService(partners,new SecurityCommandStore(jdbc),log);
  }
 }
