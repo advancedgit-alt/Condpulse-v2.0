@@ -14,7 +14,7 @@ public record CurrentIdentity(UUID accountId,List<Membership> memberships,List<T
   partnerContexts=partnerContexts==null?List.of():List.copyOf(partnerContexts);
   demoTenantIds=demoTenantIds==null?List.of():List.copyOf(demoTenantIds);
  }
- /** demoTenantIds (V055, CPX-046): condomínios alcançados marcados como DEMO, para a indicação visual em todas as telas. */
+ /** demoTenantIds (V053, CPX-046): condomínios alcançados marcados como DEMO, para a indicação visual em todas as telas. */
  public CurrentIdentity(UUID accountId,List<Membership> memberships,List<TenantModules> tenantModules,
     List<PartnerContext> partnerContexts) {
   this(accountId,memberships,tenantModules,partnerContexts,List.of());

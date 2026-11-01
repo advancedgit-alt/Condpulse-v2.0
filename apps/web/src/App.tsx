@@ -238,7 +238,7 @@ function Shell() {
     : !condoWorld ? 'SEUS ACESSOS' : areasAsMain ? 'ÁREAS DO CONDOMÍNIO' : areaTitles[area].toUpperCase();
   const breadcrumb = mastering ? 'Administração da plataforma' : condoWorld ? areaTitles[area] : partnerWorld ? (partnerContext ? partnerPanelLabels[partnerContext.panel] : 'Parceiro') : 'Seus acessos';
   const breadcrumbName = mastering ? 'Central administradora' : partnerWorld ? partnerContext?.partnerName ?? 'Painel do parceiro' : condoWorld ? (contextSelected ? tenant?.tenantName : condo?.tenantName ?? managed?.tenantName ?? portaria?.tenantName) ?? (installing ? 'Instalação física' : 'Condomínio') : 'Meus condomínios';
-  // Condomínio demo (V055, CPX-046): indicação visual em todas as telas do condomínio e do parceiro demo.
+  // Condomínio demo (V053, CPX-046): indicação visual em todas as telas do condomínio e do parceiro demo.
   const demo = condoWorld ? isDemoTenant(auth.identity, tenantId, condo?.tenantName ?? null)
     : partnerWorld ? Boolean(partnerContext?.partnerName.startsWith('[DEMO] ')) : false;
   const footer = mastering ? 'Central administradora · Ações exigem segundo fator' : partnerWorld ? 'Parceiro · Ações exigem segundo fator' : condoWorld ? areaFooters[area] : 'CondPulse · Seu acesso é pessoal';

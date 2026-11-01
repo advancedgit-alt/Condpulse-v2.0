@@ -11,7 +11,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
- * Condomínio demo (CPX-046, V055, ADR-0012). A central (papel de plataforma, platform.demo.manage, AAL2) cria ou reseta o
+ * Condomínio demo (CPX-046, V053, ADR-0012). A central (papel de plataforma, platform.demo.manage, AAL2) cria ou reseta o
  * demo isolado com dados sintéticos. Toda a gravação é da função do banco com dono cp_demo, na transação da plataforma:
  * trilha da plataforma e Log de Segurança do demo na mesma transação. Condomínio real nunca é resetado (CPD01) e nenhuma
  * conta real recebe papel: o vínculo de pessoas reais segue pelos caminhos explícitos da central.

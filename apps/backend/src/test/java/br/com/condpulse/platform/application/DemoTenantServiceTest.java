@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-/** CPX-046: validação antes da transação e tradução dos SQLSTATE próprios da V055, sem expor mensagem do banco. */
+/** CPX-046: validação antes da transação e tradução dos SQLSTATE próprios da V053, sem expor mensagem do banco. */
 class DemoTenantServiceTest {
  private static final UUID ACCOUNT=UUID.randomUUID();
 

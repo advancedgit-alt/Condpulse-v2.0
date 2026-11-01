@@ -2,7 +2,7 @@ import { test, expect, type Route } from '@playwright/test';
 import { ACCOUNT, TENANT_A, installSyntheticApi, signIn } from './fixtures';
 import { scanAccessibility } from './a11y';
 
-// Condomínio demo (CPX-046, V055). Dados exclusivamente sintéticos e interceptados pelo runner.
+// Condomínio demo (CPX-046, V053). Dados exclusivamente sintéticos e interceptados pelo runner.
 
 async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) });

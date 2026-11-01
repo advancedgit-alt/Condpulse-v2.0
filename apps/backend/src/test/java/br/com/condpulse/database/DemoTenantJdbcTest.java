@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** V055 com PostgreSQL real: condomínio demo criado e resetado pela central, isolado e sem papel para conta real. */
+/** V053 com PostgreSQL real: condomínio demo criado e resetado pela central, isolado e sem papel para conta real. */
 @EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
 class DemoTenantJdbcTest {
  private static final AssuranceLevel AAL2=AssuranceLevel.AAL2;

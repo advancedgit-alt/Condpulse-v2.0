@@ -461,7 +461,7 @@ const messages: Record<string, string> = {
   TENANT_UNITS_INVALID: 'Informe de 1 a 250 unidades.',
   TENANT_UNITS_DUPLICATED: 'Há unidades repetidas na lista. Cada identificação deve aparecer uma única vez.',
   TENANT_CREATION_KEY_REUSED: 'Esta criação já foi enviada com outros dados. Atualize a lista e confira antes de iniciar outra.',
-  // Condomínio demo (CPX-046, V055).
+  // Condomínio demo (CPX-046, V053).
   DEMO_RESET_REAL_TENANT: 'Somente o condomínio demo pode ser resetado. Condomínios reais nunca são resetados.',
   DEMO_CHANGED: 'O condomínio demo mudou desde que a tela foi aberta. Atualize e confira antes de repetir.',
   DEMO_KEY_REUSED: 'Esta operação já foi enviada com outros dados. Atualize a tela antes de repetir.',
@@ -770,7 +770,7 @@ function identity(value: unknown): CurrentIdentity {
     demoTenantIds: demoTenantList(value.demoTenantIds) };
 }
 
-/** Condomínios DEMO (V055): ausente (servidor anterior) vira lista vazia; formato inválido recusa a resposta. */
+/** Condomínios DEMO (V053): ausente (servidor anterior) vira lista vazia; formato inválido recusa a resposta. */
 function demoTenantList(value: unknown): string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || !value.every(isUUID)) throw invalidResponse();

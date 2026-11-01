@@ -158,7 +158,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
  }
  /**
-  * Condomínio demo (V055) inteiro, de qualquer geração (inclusive as da suíte SQL que rodou antes no mesmo banco
+  * Condomínio demo (V053) inteiro, de qualquer geração (inclusive as da suíte SQL que rodou antes no mesmo banco
   * descartável): tudo é só acréscimo, então sai com os gatilhos desligados, na ordem das chaves estrangeiras.
   */
  static void deleteDemo(Connection connection) throws SQLException {

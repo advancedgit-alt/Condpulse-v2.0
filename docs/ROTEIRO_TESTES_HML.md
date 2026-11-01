@@ -1,9 +1,9 @@
 # Roteiro de testes na homologação com o condomínio demo
 
 Para o responsável testar, com login real e segundo fator, cada jornada que existe hoje no CondPulse, usando o
-condomínio demo (CPX-046, V055, [ADR-0012](adr/0012-condominio-demo.md)). Tudo aqui é homologação
+condomínio demo (CPX-046, V053, [ADR-0012](adr/0012-condominio-demo.md)). Tudo aqui é homologação
 (`https://project-rhvdq.vercel.app`); nada deste roteiro vale para o segundo projeto Supabase (`tkxcujckpsuawnzkvpjg`),
-que não recebe a V055 sem OK explícito.
+que não recebe a V053 sem OK explícito.
 
 Este roteiro descreve só telas que existem no código desta base. Onde a tela ainda não existe, o passo diz isso e não
 deve ser tentado. Nenhum passo foi executado com login real até agora: o resultado esperado vem do código e dos testes
@@ -13,7 +13,7 @@ automatizados (`tests/database/run.py`, JUnit/JDBC, vitest e Playwright), não d
 
 | Pré-requisito | Como | Quem |
 | --- | --- | --- |
-| V053, V054 e V055 aplicadas na homologação | Executor Flyway protegido (docs/EXECUTOR_BANCO.md), com OK do responsável | Operação, com OK |
+| V053 aplicada na homologação | Executor Flyway protegido (docs/EXECUTOR_BANCO.md), com OK do responsável | Operação, com OK |
 | API publicada com o código desta entrega | Merge na base → deploy da API na Fly (docs/FLY_API.md) e da web na Vercel | Operação |
 | Flags na Vercel Production, copiadas para a Fly (`fly-api inspect → apply → deploy`) | `CP_DEMO_ENABLED=true`, `CP_PARTNERS_ENABLED=true`, `CP_SECURITY_LOG_ENABLED=true`; as já ligadas (`CP_PLATFORM_ENABLED`, `CP_MANAGEMENT_ENABLED`, `CP_RESERVATIONS_ENABLED`, `CP_PARCELS_ENABLED`, `CP_VISITS_ENABLED`, `CP_NOTIFICATIONS_ENABLED`, `CP_ANNOUNCEMENTS_ENABLED`, `CP_REQUESTS_ENABLED`) continuam | Responsável (Vercel) e operação (Fly) |
 | Papel `PLATFORM_ADMIN` da sua conta | `ops/sql/platform-admin-grant.sql`, procedimento de [PAINEL_MASTER.md](PAINEL_MASTER.md) | Operação, com OK |

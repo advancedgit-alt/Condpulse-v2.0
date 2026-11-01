@@ -2,7 +2,7 @@
 
 Estado: proposta nesta entrega (branch `feat/cpx-condominio-demo`), pendente de revisão no PR. Referências: PRD
 complementar Segurança v1.0 (E10.4, CPX-046), ADR-0007 (tenancy), ADR-0011 (parceiro e Log de Segurança),
-`db/migrations/V055__demo_tenant.sql`, [ROTEIRO_TESTES_HML.md](../ROTEIRO_TESTES_HML.md).
+`db/migrations/V053__demo_tenant.sql`, [ROTEIRO_TESTES_HML.md](../ROTEIRO_TESTES_HML.md).
 
 ## Contexto
 
@@ -37,7 +37,7 @@ horários e estados vêm do banco; a API não grava `created_by` de outra conta,
    gatilhos da V049 (com `details.demo=true`). Log de Segurança do demo: `PARTNER_CONTRACT_CHANGED`, `SCHEDULE_ASSIGNED`,
    `ROLE_GRANTED` e eventos de exemplo; nenhum Log de Segurança real é tocado.
 6. **Flag.** `CP_DEMO_ENABLED` (padrão `false`) além de `CP_PLATFORM_ENABLED`. A migration não cria demo: ele só nasce
-   pela ação da central. O segundo projeto Supabase (produção) não recebe a V055 sem OK do responsável.
+   pela ação da central. O segundo projeto Supabase (produção) não recebe a V053 sem OK do responsável.
 
 ## Consequências
 

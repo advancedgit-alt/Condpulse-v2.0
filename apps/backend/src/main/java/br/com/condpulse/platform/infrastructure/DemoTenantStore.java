@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Leitura das gerações (política demo_generations_platform_read) e chamada da função platform.demo_provision (dono
- * cp_demo, V055). A API nunca grava diretamente nas tabelas do demo.
+ * cp_demo, V053). A API nunca grava diretamente nas tabelas do demo.
  */
 @Repository @Profile("api")
 public class DemoTenantStore {

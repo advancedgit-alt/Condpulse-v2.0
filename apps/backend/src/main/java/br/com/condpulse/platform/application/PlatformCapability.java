@@ -28,7 +28,7 @@ public enum PlatformCapability {
  READ_PARTNERS("partners.read"),
  /** Cria e suspende parceiros, vincula/desvincula condomínios e gerencia equipe e escala; nunca abre portão. */
  MANAGE_PARTNERS("partners.manage"),
- /** Condomínio demo (CPX-046, V055): cria e reseta o demo isolado com dados sintéticos; nunca toca condomínio real. */
+ /** Condomínio demo (CPX-046, V053): cria e reseta o demo isolado com dados sintéticos; nunca toca condomínio real. */
  MANAGE_DEMO("platform.demo.manage");
 
  /** Capacidades que só aparecem na sessão do painel com CP_FACIAL_ACCESS_ENABLED ligada. */

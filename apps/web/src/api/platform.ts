@@ -6,7 +6,7 @@ import type { ISODateTime, UUID } from './types';
 /** As três últimas só aparecem com o acesso facial ligado (CP_FACIAL_ACCESS_ENABLED); sessão com elas continua válida. */
 export type PlatformCapability = 'billing.manage' | 'billing.read' | 'outbox.operate' | 'platform.audit.read' | 'tenant_modules.manage' | 'tenants.manage' | 'tenants.read'
   | 'technical_grants.manage' | 'access_catalog.manage' | 'homologation.approve'
-  /** Hierarquia de parceiro (CP_PARTNERS_ENABLED) e condomínio demo (CP_DEMO_ENABLED, V055). */
+  /** Hierarquia de parceiro (CP_PARTNERS_ENABLED) e condomínio demo (CP_DEMO_ENABLED, V053). */
   | 'partners.read' | 'partners.manage' | 'platform.demo.manage';
 export interface PlatformSession { accountId: UUID; role: 'PLATFORM_ADMIN'; capabilities: PlatformCapability[]; mfaRequired: boolean }
 export interface OnboardingReceipt {
@@ -202,7 +202,7 @@ export function managerInvitationLink(origin: string, token: string): string {
   return `${origin}/convite-gestor#token=${token}`;
 }
 
-/** Condomínio demo (CPX-046, V055): geração com condomínio e parceiro sintéticos, sempre com o prefixo [DEMO]. */
+/** Condomínio demo (CPX-046, V053): geração com condomínio e parceiro sintéticos, sempre com o prefixo [DEMO]. */
 export interface DemoGeneration {
   generationId: UUID; generation: number; tenantId: UUID; tenantName: string; partnerId: UUID; partnerName: string;
   status: 'ACTIVE' | 'RETIRED'; createdAt: ISODateTime; createdBy: UUID; retiredAt: ISODateTime | null; counts: Record<string, number>;

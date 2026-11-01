@@ -70,7 +70,7 @@ condpulse:
     # Hierarquia de parceiro (V049, ADR-0011). Desligada por padrão; fatia nova até o portão da Onda 0.
     enabled: ${CP_PARTNERS_ENABLED:false}
   demo:
-    # Condomínio demo (CPX-046, V055, ADR-0012): criar/resetar pela central. Desligado por padrão; ligar só na homologação.
+    # Condomínio demo (CPX-046, V053, ADR-0012): criar/resetar pela central. Desligado por padrão; ligar só na homologação.
     enabled: ${CP_DEMO_ENABLED:false}
   security-log:
     # Log de Segurança (V050, PRD complementar seção 5): API de busca/integridade/exportação, SENSITIVE_VIEWED nas

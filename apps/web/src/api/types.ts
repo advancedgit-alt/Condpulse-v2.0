@@ -34,7 +34,7 @@ export interface CurrentIdentity {
    */
   partnerContexts: PartnerContext[];
   /**
-   * Condomínios alcançados marcados como DEMO (V055, CPX-046): dados sintéticos, só para teste. Usado para a indicação
+   * Condomínios alcançados marcados como DEMO (V053, CPX-046): dados sintéticos, só para teste. Usado para a indicação
    * visual "DEMO" em todas as telas do condomínio. Vazio quando o servidor não informa.
    */
   demoTenantIds: string[];

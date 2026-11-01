@@ -5378,7 +5378,7 @@ def context_switch_checks():
            "cadeias integras depois das trocas e recusas")
 
 def demo_checks():
-    """V055 (CPX-046): condominio demo isolado, com dados sinteticos, criado e resetado so pela central
+    """V053 (CPX-046): condominio demo isolado, com dados sinteticos, criado e resetado so pela central
     (platform.demo.manage) pela funcao de dono cp_demo; condominio real nunca vira demo nem e resetado."""
     PD, NP = "10000000-0000-4000-8000-0000000055a1", "10000000-0000-4000-8000-0000000055a2"
     query(f"INSERT INTO platform.accounts(id,status) VALUES('{PD}','ACTIVE'),('{NP}','ACTIVE'); "

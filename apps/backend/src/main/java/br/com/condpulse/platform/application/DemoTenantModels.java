@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-/** Condomínio demo (CPX-046, V055): geração ativa, histórico e o pedido de criar/resetar. */
+/** Condomínio demo (CPX-046, V053): geração ativa, histórico e o pedido de criar/resetar. */
 public final class DemoTenantModels {
  private DemoTenantModels() {}
  /** Geração do demo: condomínio e parceiro sintéticos marcados como DEMO. */

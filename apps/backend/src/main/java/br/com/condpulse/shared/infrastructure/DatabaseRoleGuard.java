@@ -41,7 +41,7 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // Gateway (V048): identidade, entrega e relatório nunca apagados; relatório nunca muda; identidade, tentativa, prazos e
   // horários vêm do banco. Áreas e pontos (V041): nunca apagados; código, condomínio, autoria inicial e horários fixos. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
-  // Demo (V055): a runtime não é membro de cp_demo, não grava gerações nem as marcas demo/sintética, e toda função
+  // Demo (V053): a runtime não é membro de cp_demo, não grava gerações nem as marcas demo/sintética, e toda função
   // SECURITY DEFINER de cp/platform pertence a cp_demo (sem SUPERUSER/BYPASSRLS).
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre

@@ -22356,7 +22356,7 @@
           }
         ],
         "x-feature-flag": "CP_DEMO_ENABLED",
-        "description": "Condomínio demo (CPX-046, V055): geração ativa e as últimas aposentadas (platform.demo.manage com AAL2).",
+        "description": "Condomínio demo (CPX-046, V053): geração ativa e as últimas aposentadas (platform.demo.manage com AAL2).",
         "responses": {
           "200": {
             "description": "Resultado autorizado",
@@ -22578,7 +22578,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Condomínios alcançados (vínculo ou parceiro) marcados como DEMO (V055, CPX-046), para a indicação visual DEMO em todas as telas. Campo novo e aditivo."
+            "description": "Condomínios alcançados (vínculo ou parceiro) marcados como DEMO (V053, CPX-046), para a indicação visual DEMO em todas as telas. Campo novo e aditivo."
           }
         }
       },
@@ -24308,7 +24308,7 @@
               "PLATFORM",
               null
             ],
-            "description": "DEMO: condomínio demo sintético (V055, CPX-046); ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
+            "description": "DEMO: condomínio demo sintético (V053, CPX-046); ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
           },
           "usage": {
             "$ref": "#/components/schemas/PlatformTenantUsage",

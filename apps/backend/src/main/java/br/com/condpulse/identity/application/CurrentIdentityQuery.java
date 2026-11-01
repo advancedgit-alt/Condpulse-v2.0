@@ -56,7 +56,7 @@ public class CurrentIdentityQuery {
   return new CurrentIdentity(accountId,memberships,modules(reached),partners,demoTenants(reached));
  }
 
- /** Condomínios alcançados marcados como DEMO (V055); a linha é visível pelas mesmas políticas de vínculo e alcance. */
+ /** Condomínios alcançados marcados como DEMO (V053); a linha é visível pelas mesmas políticas de vínculo e alcance. */
  private List<UUID> demoTenants(java.util.Set<UUID> tenants) {
   var result=new ArrayList<UUID>();
   for(UUID tenant:tenants)

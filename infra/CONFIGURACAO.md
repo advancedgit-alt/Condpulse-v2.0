@@ -31,7 +31,7 @@ CP_REALTIME_MAX_STREAMS (40 por instancia) e CP_REALTIME_MAX_PER_ACCOUNT (3). Ve
 Log de Seguranca (V050, CPX-006 a CPX-011): CP_SECURITY_LOG_ENABLED=false por padrao (API: busca, integridade,
 exportacao e SENSITIVE_VIEWED; worker: ancora diaria). A gravacao pelas fontes e do banco. Ver docs/LOG_SEGURANCA.md.
 Parceiros (V049, ADR-0011): CP_PARTNERS_ENABLED=false por padrao (hierarquia de parceiro na API).
-Condominio demo (V055, CPX-046, ADR-0012): CP_DEMO_ENABLED=false por padrao (criar/resetar o demo sintetico pela central;
+Condominio demo (V053, CPX-046, ADR-0012): CP_DEMO_ENABLED=false por padrao (criar/resetar o demo sintetico pela central;
 exige tambem CP_PLATFORM_ENABLED). Ligar so na homologacao, com OK do responsavel. Ver docs/ROTEIRO_TESTES_HML.md.
 
 Flags na Fly (homologacao):
