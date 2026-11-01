@@ -26,8 +26,10 @@ function StaysNow() {
   const scope = useManagement();
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [outcome, setOutcome] = useState<{ tone: 'success' | 'info' | 'warning'; text: string } | null>(null);
+  // Uma leitura por ação (abrir a seção, trocar o filtro, "Atualizar"): a consulta nunca se repete sozinha — nem ao
+  // remontar a seção nem ao voltar à janela —, porque cada leitura grava SENSITIVE_VIEWED no servidor.
   const list = useQuery({ queryKey: staysKey(scope, 'open', overdueOnly), queryFn: ({ signal }) => stays.open(scope.tenantId, overdueOnly, signal),
-    refetchOnWindowFocus: false });
+    staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: false });
   if (useAccessGuard(list.error)) return null;
   // Rota inexistente (CP_VISITS_ENABLED desligada no servidor): a seção não aparece.
   if (codeOf(list.error) === 'API_NOT_AVAILABLE') return null;
@@ -94,7 +96,8 @@ function DayClose() {
   const [draft, setDraft] = useState(today);
   const [requested, setRequested] = useState<{ date: string; run: number } | null>(null);
   const report = useQuery({ queryKey: staysKey(scope, 'day-close', requested?.date ?? null, requested?.run ?? 0), enabled: requested !== null,
-    queryFn: ({ signal }) => stays.dayClose(scope.tenantId, requested!.date, signal), refetchOnWindowFocus: false });
+    queryFn: ({ signal }) => stays.dayClose(scope.tenantId, requested!.date, signal), staleTime: Infinity, refetchOnMount: false,
+    refetchOnWindowFocus: false, refetchOnReconnect: false, retry: false });
   if (useAccessGuard(report.error)) return null;
   if (codeOf(report.error) === 'API_NOT_AVAILABLE') return <section className="management-section" aria-labelledby="day-close-title">
     <div className="section-heading"><div><span className="section-index">FECHAMENTO</span><h2 id="day-close-title">Fechamento do dia</h2></div></div>

@@ -33,8 +33,9 @@ export function PartnerStaysSection() {
 function TenantStays({ tenantId, tenantName, timeZone }: { tenantId: string; tenantName: string; timeZone: string }) {
   const scope = usePartnerScope();
   const [overdueOnly, setOverdueOnly] = useState(false);
-  const list = useQuery({ queryKey: partnerStaysKey(scope.accountId, tenantId, 'open', overdueOnly), retry: false, refetchOnWindowFocus: false,
-    queryFn: ({ signal }) => stays.open(tenantId, overdueOnly, signal) });
+  // Uma leitura por ação do usuário (cada consulta grava SENSITIVE_VIEWED): nunca refaz sozinha.
+  const list = useQuery({ queryKey: partnerStaysKey(scope.accountId, tenantId, 'open', overdueOnly), retry: false, staleTime: Infinity,
+    refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false, queryFn: ({ signal }) => stays.open(tenantId, overdueOnly, signal) });
   const guarded = usePartnerAccessGuard(list.error, tenantId);
   const refused = scope.deniedTenant(tenantId);
   if (refused) return <FailureState error={refused} retry={() => undefined} off={OFF_TEXT} subject="Permanências" />;
