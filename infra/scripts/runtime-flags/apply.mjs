@@ -2,13 +2,19 @@ import {createHash, randomBytes as secureRandomBytes} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
 /**
- * Liga módulos aprovados e gera chaves próprias da aplicação no projeto Vercel fixo do CondPulse (homologação).
+ * Altera apenas o perfil escolhido no projeto Vercel fixo do CondPulse (homologação).
+ * demo: somente CP_DEMO_ENABLED, sem gerar segredos. access: lote histórico de credenciais/facial e chave de retirada.
  * Nunca lê nem imprime valor de segredo: o segredo é gerado aqui, enviado como "sensitive" e só os metadados voltam.
  * inspect mostra o estado e o fingerprint; apply exige o ACK com esse fingerprint (o estado não mudou entre os dois).
  */
 export const TARGET=Object.freeze({project:'prj_IeUa4Zjg1IwaPqJQwv525H14I837',team:'team_6fzA029jxhDb1LpnrnphWGQ0'});
 export const FLAGS=Object.freeze({CP_ACCESS_CREDENTIALS_ENABLED:'true',CP_FACIAL_ACCESS_ENABLED:'true'});
 export const GENERATED=Object.freeze(['CP_PARCEL_CODE_KEY']);
+const PROFILES=Object.freeze({
+ access:Object.freeze({flags:FLAGS,generated:GENERATED}),
+ demo:Object.freeze({flags:Object.freeze({CP_DEMO_ENABLED:'true'}),generated:Object.freeze([])})
+});
+function configuration(profile){need(Object.hasOwn(PROFILES,profile),'FLAGS_PROFILE_INVALID');return PROFILES[profile];}
 const ENV_PATH=`/v10/projects/${TARGET.project}/env?teamId=${TARGET.team}`;
 const PROJECT_PATH=`/v9/projects/${TARGET.project}?teamId=${TARGET.team}`;
 const SHA=/^[a-f0-9]{40}$/;
@@ -19,12 +25,14 @@ const object=v=>{need(v!==null&&typeof v==='object'&&!Array.isArray(v),'FLAGS_RE
 
 export function validateRequest(env){
  const operation=env.CP_FLAGS_OPERATION||'inspect',source=env.CP_FLAGS_EXPECTED_COMMIT||'';
+ const profile=env.CP_FLAGS_PROFILE||'access';
+ configuration(profile);
  need(['inspect','apply'].includes(operation)&&SHA.test(source)&&source===env.GITHUB_SHA&&env.GITHUB_EVENT_NAME==='workflow_dispatch'
   &&env.GITHUB_REPOSITORY==='advancedgit-alt/Condpulse-v2.0'&&env.GITHUB_REF==='refs/heads/ccr-5e725112-3x8hyg','FLAGS_REQUEST_INVALID');
- const ack=env.CP_FLAGS_ACK||'',prefix=`${TARGET.project}:flags:${source}:`;
+ const ack=env.CP_FLAGS_ACK||'',prefix=`${TARGET.project}:flags:${profile==='access'?'':`${profile}:`}${source}:`;
  need(operation==='inspect'?ack==='':ack.startsWith(prefix)&&/^[a-f0-9]{64}$/.test(ack.slice(prefix.length)),'FLAGS_ACK_INVALID');
  need(operation!=='apply'||env.MAINTENANCE_CONFIRMED==='true','FLAGS_MAINTENANCE_REQUIRED');
- return Object.freeze({operation,source,ack,prefix});
+ return Object.freeze({operation,source,ack,prefix,profile});
 }
 
 /** Destinos fixos da API da Vercel, sem redirecionamento, com prazo e tamanho limitados. */
@@ -44,16 +52,17 @@ export function createRequester(fetcher=globalThis.fetch){
 }
 
 /** Estado só com metadados: valor das flags (texto simples) e presença dos segredos. */
-export function state(envs){
+export function state(envs,profile='access'){
+ const selected=configuration(profile);
  need(Array.isArray(envs),'FLAGS_RESPONSE_INVALID');
  const production=envs.filter(e=>Array.isArray(e.target)&&e.target.includes('production'));
  const flags={},secrets={};
- for(const [key] of Object.entries(FLAGS)){
+ for(const [key] of Object.entries(selected.flags)){
   const found=production.filter(e=>e.key===key);need(found.length<=1,'FLAGS_DUPLICATE_ENV');
   if(found.length) need(found[0].type==='plain'&&typeof found[0].value==='string','FLAGS_PLAIN_EXPECTED');
   flags[key]=found.length?found[0].value:null;
  }
- for(const key of GENERATED){
+ for(const key of selected.generated){
   const found=production.filter(e=>e.key===key);need(found.length<=1,'FLAGS_DUPLICATE_ENV');
   if(found.length) need(['sensitive','secret','encrypted'].includes(found[0].type),'FLAGS_SECRET_TYPE_INVALID');
   secrets[key]=found.length>0;
@@ -63,26 +72,26 @@ export function state(envs){
 export const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 export async function execute(env,{request=createRequester(),randomBytes=secureRandomBytes}={}){
- const req=validateRequest(env),token=env.CP_VERCEL_TOKEN;
+ const req=validateRequest(env),token=env.CP_VERCEL_TOKEN,selected=configuration(req.profile);
  need(typeof token==='string'&&token.length>=20,'FLAGS_TOKEN_MISSING');
  const project=object(await request({method:'GET',path:PROJECT_PATH,token}));
  const link=object(project.link??{});
  need(project.id===TARGET.project&&project.accountId===TARGET.team&&link.type==='github'&&link.org==='advancedgit-alt'&&link.repo==='Condpulse-v2.0','FLAGS_PROJECT_MISMATCH');
- const before=state(object(await request({method:'GET',path:`${ENV_PATH}&decrypt=false`,token})).envs);
+ const before=state(object(await request({method:'GET',path:`${ENV_PATH}&decrypt=false`,token})).envs,req.profile);
  const print=fingerprint(before);
- if(req.operation==='inspect') return {operation:'inspect',state:before,ack:`${req.prefix}${print}`};
+ if(req.operation==='inspect') return {operation:'inspect',profile:req.profile,state:before,ack:`${req.prefix}${print}`};
  need(req.ack===`${req.prefix}${print}`,'FLAGS_STATE_CHANGED');
  const changed=[];
- for(const [key,value] of Object.entries(FLAGS)) if(before.flags[key]!==value){
+ for(const [key,value] of Object.entries(selected.flags)) if(before.flags[key]!==value){
   await request({method:'POST',path:`${ENV_PATH}&upsert=true`,token,body:{key,value,type:'plain',target:['production']}});changed.push(key);
  }
- for(const key of GENERATED) if(!before.secrets[key]){
+ for(const key of selected.generated) if(!before.secrets[key]){
   const value=randomBytes(32).toString('base64');
   await request({method:'POST',path:`${ENV_PATH}&upsert=true`,token,body:{key,value,type:'sensitive',target:['production']}});changed.push(key);
  }
- const after=state(object(await request({method:'GET',path:`${ENV_PATH}&decrypt=false`,token})).envs);
- need(Object.entries(FLAGS).every(([k,v])=>after.flags[k]===v)&&GENERATED.every(k=>after.secrets[k]),'FLAGS_READBACK_MISMATCH');
- return {operation:'apply',changed,state:after,note:'Vale a partir do próximo deployment de produção.'};
+ const after=state(object(await request({method:'GET',path:`${ENV_PATH}&decrypt=false`,token})).envs,req.profile);
+ need(Object.entries(selected.flags).every(([k,v])=>after.flags[k]===v)&&selected.generated.every(k=>after.secrets[k]),'FLAGS_READBACK_MISMATCH');
+ return {operation:'apply',profile:req.profile,changed,state:after,note:'Vale a partir do próximo deployment de produção.'};
 }
 
 if(import.meta.url===pathToFileURL(process.argv[1]).href){

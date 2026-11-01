@@ -22,7 +22,7 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 - Java25/Spring Boot4.1.2, monólito modular com API/BFF e worker separados.
 - React/TypeScript/Vite na web e React Native/Expo no mobile.
 - PostgreSQL como banco único principal, projetos Supabase exclusivos em São Paulo.
-- Supabase Auth/Storage; homologacao da aplicacao na Vercel conforme ADR-0005, solicitada pelo responsavel. Coolify dedicado permanece alternativa. Sem MongoDB inicial.
+- Supabase Auth/Storage; HML com web na Vercel e API/worker na Fly, gru. Coolify dedicado permanece alternativa. Sem MongoDB inicial.
 - Flyway controla migrations. Runtime sem DDL/SUPERUSER/BYPASSRLS.
 
 ## Estado e pendências

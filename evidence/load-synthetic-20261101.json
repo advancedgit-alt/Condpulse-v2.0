@@ -1,0 +1,130 @@
+{
+  "generatedAt": "2026-11-01T15:41:28.955Z",
+  "environment": "GitHub Actions runner: API, PostgreSQL 17 e gerador na mesma máquina; sem rede real, sem Supabase/Vercel",
+  "capacityClaim": "NENHUMA — número do runner, só para comparar versões",
+  "commit": "44c5a40e1b48e3e6148ed917c7d3e94f1a6ed8ab",
+  "target": {
+    "rps": 100,
+    "seconds": 120,
+    "sessions": 1000,
+    "dbPool": 2,
+    "maxInFlight": 256
+  },
+  "achieved": {
+    "requests": 11999,
+    "dropped": 0,
+    "rps": 100,
+    "maxInFlight": 141
+  },
+  "saturation": {
+    "maxDbConnections": 2,
+    "apiCpuSeconds": 60.44,
+    "apiCpuShare": 0.5,
+    "maxRssMb": 368
+  },
+  "cost": "Não medido: o runner não representa o custo da homologação ou da produção.",
+  "classes": {
+    "me": {
+      "count": 1818,
+      "ok": 1818,
+      "expected4xx": 0,
+      "errors": 0,
+      "codes": {
+        "200": 1818
+      },
+      "p50": 10.495434,
+      "p95": 845.79459,
+      "p99": 1273.072257,
+      "max": 2997.39723
+    },
+    "units": {
+      "count": 1748,
+      "ok": 1748,
+      "expected4xx": 0,
+      "errors": 0,
+      "codes": {
+        "200": 1748
+      },
+      "p50": 10.947403,
+      "p95": 795.460156,
+      "p99": 1346.984417,
+      "max": 3985.153377
+    },
+    "amenities": {
+      "count": 1814,
+      "ok": 1814,
+      "expected4xx": 0,
+      "errors": 0,
+      "codes": {
+        "200": 1814
+      },
+      "p50": 10.980848,
+      "p95": 767.97215,
+      "p99": 1406.234909,
+      "max": 3774.150755
+    },
+    "reservations": {
+      "count": 3013,
+      "ok": 3013,
+      "expected4xx": 0,
+      "errors": 0,
+      "codes": {
+        "200": 3013
+      },
+      "p50": 10.881132,
+      "p95": 758.661895,
+      "p99": 1740.361851,
+      "max": 2927.616223
+    },
+    "availability": {
+      "count": 2401,
+      "ok": 2401,
+      "expected4xx": 0,
+      "errors": 0,
+      "codes": {
+        "200": 2401
+      },
+      "p50": 32.775423,
+      "p95": 915.500359,
+      "p99": 2012.544928,
+      "max": 4662.955805
+    },
+    "create": {
+      "count": 857,
+      "ok": 795,
+      "expected4xx": 62,
+      "errors": 0,
+      "codes": {
+        "201": 795,
+        "400:RESERVATION_WINDOW_INVALID": 53,
+        "409:RESERVATION_CONFLICT": 9
+      },
+      "p50": 26.591656,
+      "p95": 880.517278,
+      "p99": 1909.728471,
+      "max": 2907.070453
+    },
+    "cancel": {
+      "count": 348,
+      "ok": 348,
+      "expected4xx": 0,
+      "errors": 0,
+      "codes": {
+        "200": 348
+      },
+      "p50": 26.097576,
+      "p95": 860.89394,
+      "p99": 1630.851615,
+      "max": 2551.310186
+    }
+  },
+  "overall": {
+    "count": 11999,
+    "errors": 0,
+    "errorRate": 0,
+    "p50": 18.885427,
+    "p95": 805.644317,
+    "p99": 1738.32466
+  },
+  "reservationsCommitted": 795
+}
