@@ -183,7 +183,13 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   String partners="(select id from platform.partners where created_by in (?,?,?))";
   // Eventos do Log de Segurança (V050) referenciam o parceiro de quem agiu: saem antes, com os gatilhos desligados.
   update(connection,"set session_replication_role=replica");
-  try { update(connection,"delete from cp.security_log where partner_id in "+partners,accountA,accountB,accountC); }
+  try {
+   // Incidentes (V054) não são apagados com gatilhos ligados; anexos e incidentes saem antes do parceiro e do log.
+   update(connection,"delete from cp.incident_links where incident_id in (select id from cp.incidents where partner_id in "+partners+")",
+    accountA,accountB,accountC);
+   update(connection,"delete from cp.incidents where partner_id in "+partners,accountA,accountB,accountC);
+   update(connection,"delete from cp.security_log where partner_id in "+partners,accountA,accountB,accountC);
+  }
   finally { update(connection,"set session_replication_role=origin"); }
   update(connection,"delete from cp.operator_schedules where tenant_id in (?,?) or partner_id in "+partners,tenantA,tenantB,accountA,accountB,accountC);
   update(connection,"delete from platform.partner_tenant_contracts where tenant_id in (?,?) or partner_id in "+partners,

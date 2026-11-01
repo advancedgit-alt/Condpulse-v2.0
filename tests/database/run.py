@@ -5377,6 +5377,159 @@ def context_switch_checks():
     expect(all(value(f"select intact from cp.security_log_verify('{t}')") == "t" for t in (X1, X2, X3)),
            "cadeias integras depois das trocas e recusas")
 
+def security_command_checks():
+    """V054 (CPX-012 a CPX-014): Comando de Seguranca. Contagens do semaforo so para o lider com alcance (contrato ativo);
+    incidentes do parceiro que abriu, com INCIDENT_* no log (correlation_id) no mesmo COMMIT; anexos so em incidente
+    aberto; revisao de abertura remota uma por abertura, com correcao encadeada, nunca da propria abertura."""
+    C1, C2, C3 = (f"00000000-0000-4000-8000-0000000053a{n}" for n in range(1, 4))
+    LD, OP, AD, TC, LQ = (f"10000000-0000-4000-8000-0000000053b{n}" for n in range(1, 6))
+    PX, PQ = "49000000-0000-4000-8000-0000000053c1", "49000000-0000-4000-8000-0000000053c2"
+    ML, MO, MA, MT, MQ = (f"49000000-0000-4000-8000-0000000053d{n}" for n in range(1, 6))
+    K1 = "43000000-0000-4000-8000-0000000053e1"
+    D1, D2, D3, D4 = (f"44000000-0000-4000-8000-0000000053f{n}" for n in range(1, 5))
+    I1, I2 = "53000000-0000-4000-8000-000000000001", "53000000-0000-4000-8000-000000000002"
+    CRIT, RO, RL = ("53100000-0000-4000-8000-000000000001", "53100000-0000-4000-8000-000000000002",
+                    "53100000-0000-4000-8000-000000000003")
+    query(f"""INSERT INTO platform.accounts(id,status) VALUES('{LD}','ACTIVE'),('{OP}','ACTIVE'),('{AD}','ACTIVE'),('{TC}','ACTIVE'),('{LQ}','ACTIVE');
+        INSERT INTO platform.tenants(id,name,active) VALUES('{C1}','FICTICIO COMANDO 1',true),('{C2}','FICTICIO COMANDO 2',true),
+          ('{C3}','FICTICIO COMANDO 3',true);
+        SET session_replication_role=replica;
+        INSERT INTO platform.partners(id,name,created_by,updated_by) VALUES('{PX}','PARCEIRO COMANDO FICTICIO','{LD}','{LD}'),
+          ('{PQ}','OUTRO PARCEIRO COMANDO FICTICIO','{LQ}','{LQ}');
+        INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by) VALUES
+          ('{ML}','{PX}','{LD}','SECURITY_LEAD','LIDER COMANDO','{LD}'),('{MO}','{PX}','{OP}','REMOTE_OPERATOR','OPERADOR COMANDO','{LD}'),
+          ('{MA}','{PX}','{AD}','PARTNER_ADMIN','GESTOR COMANDO','{LD}'),('{MT}','{PX}','{TC}','TECHNICIAN','TECNICO COMANDO','{LD}'),
+          ('{MQ}','{PQ}','{LQ}','SECURITY_LEAD','LIDER OUTRO','{LQ}');
+        INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) VALUES
+          (gen_random_uuid(),'{PX}','{C1}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio','{LD}'),
+          (gen_random_uuid(),'{PX}','{C2}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio','{LD}'),
+          (gen_random_uuid(),'{PQ}','{C3}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio','{LQ}');
+        INSERT INTO cp.operator_schedules(id,tenant_id,partner_id,member_id,account_id,starts_at,ends_at,reason,created_by)
+          VALUES(gen_random_uuid(),'{C1}','{PX}','{MO}','{OP}',now()-interval '1 hour',now()+interval '4 hours','Turno ficticio','{LD}');
+        INSERT INTO cp.concierge_occurrences(tenant_id,category,title,description,created_by,created_by_name) VALUES
+          ('{C1}','SECURITY','Portao forcado','Ficticio','{LD}','PORTARIA FICTICIA'),('{C1}','NOISE','Barulho','Ficticio','{LD}','PORTARIA FICTICIA');
+        INSERT INTO cp.access_connectors(id,tenant_id,provider,label) VALUES('{K1}','{C1}','SIMULATED','Comando');
+        INSERT INTO cp.access_devices(id,tenant_id,connector_id,external_id,label,status) VALUES('{D1}','{C1}','{K1}','c-1','No ar','ACTIVE'),
+          ('{D2}','{C1}','{K1}','c-2','Fora do ar','ACTIVE'),('{D3}','{C1}','{K1}','c-3','Sem saude','ACTIVE'),('{D4}','{C1}','{K1}','c-4','Retirado','RETIRED');
+        SET session_replication_role=origin;
+        INSERT INTO cp.access_connector_health(tenant_id,connector_id,reachable) VALUES('{C1}','{K1}',true);
+        INSERT INTO cp.access_device_health(tenant_id,device_id,online,last_heartbeat) VALUES('{C1}','{D1}',true,clock_timestamp()),
+          ('{C1}','{D2}',false,clock_timestamp()),('{C1}','{D4}',false,clock_timestamp());
+        INSERT INTO cp.security_log(id,tenant_id,event_type,severity,source,device_id,details)
+          VALUES('{CRIT}','{C1}','FORCED_OPEN','CRITICAL','DEVICE','{D2}','{{}}');""")
+    caps = ("security.blocklist.approve,security.command,security.log.export,security.log.read,security.policy.publish,"
+            "security.remote_open.review")
+    def ctx(partner=PX, capabilities=caps):
+        return f"SET LOCAL app.partner_id='{partner}'; SET LOCAL app.capabilities='{capabilities}'; "
+    summary = "select array_to_string(array[devices_total,devices_offline,devices_unknown,security_occurrences_open,critical_alerts_unlinked,incidents_open,incidents_critical_open,remote_opens_pending_review],'|') from cp.security_command_summary(600,300)"
+    expect(value(ctx() + summary, tenant=C1, actor=LD, role="cp_api") == "3|1|1|1|1|0|0|0",
+           "semaforo: 3 equipamentos ativos (1 fora do ar, 1 sem informacao), 1 ocorrencia de seguranca e 1 alerta critico sem incidente")
+    expect(error(ctx(capabilities="security.log.read") + summary, "42501", tenant=C1, actor=LD, role="cp_api"),
+           "contagens exigem security.command publicada")
+    expect(error(ctx() + summary, "42501", tenant=C3, actor=LD, role="cp_api"), "condominio sem contrato do parceiro recusa as contagens")
+    expect(error(ctx() + summary, "42501", tenant=C1, actor=AD, role="cp_api"), "gestor do parceiro nao tem security.command no alcance")
+    expect(error(ctx() + summary, "42501", tenant=C1, actor=OP, role="cp_api"), "operador nao tem visao da carteira")
+    expect(value(ctx() + "select count(*) from cp.access_device_health", tenant=C1, actor=LD, role="cp_api") == "3",
+           "lider le a saude dos equipamentos do condominio alcancado")
+    expect(value(ctx() + "select count(*) from cp.access_device_health", tenant=C1, actor=AD, role="cp_api") == "0",
+           "sem security.command no alcance a saude continua fechada")
+    expect(value(ctx() + "with u as (update cp.concierge_occurrences set state='RESOLVED',resolution='x',version=version+1 returning 1) select count(*) from u",
+                 tenant=C1, actor=LD, role="cp_api") == "0", "lider so le ocorrencias; nao encerra")
+    expect(error(ctx() + f"INSERT INTO cp.concierge_occurrences(tenant_id,category,title,description) VALUES('{C1}','SECURITY','Teste','Ficticio')",
+                 "42501", tenant=C1, actor=LD, role="cp_api"), "lider nao registra ocorrencia")
+    expect(value(ctx() + f"select count(*) from cp.operator_schedules where partner_id='{PX}'", actor=LD, role="cp_api") == "1"
+           and value(ctx() + f"select count(*) from platform.partner_members where partner_id='{PX}'", actor=LD, role="cp_api") == "4",
+           "lider le escala e equipe do proprio parceiro (central sem operador, responsavel)")
+    expect(value(ctx(capabilities="security.log.read") + f"select count(*) from cp.operator_schedules where partner_id='{PX}'", actor=LD, role="cp_api") == "0",
+           "sem security.command publicada a escala do parceiro fica fechada")
+    # Cobertura da central (achado P2 do Codex no #165): conta suspensa nao conta como operador escalado, como em partner_reach.
+    on_duty = (f"select count(distinct s.account_id) from cp.operator_schedules s join platform.partner_members m on m.id=s.member_id "
+               f"and m.partner_id=s.partner_id and m.status='ACTIVE' and m.role in ('REMOTE_OPERATOR','SECURITY_SUPERVISOR') "
+               f"join platform.accounts a on a.id=s.account_id and a.status='ACTIVE' where s.partner_id='{PX}' and s.status='ACTIVE' "
+               f"and s.starts_at<=now() and s.ends_at>now()")
+    expect(value(ctx() + on_duty, actor=LD, role="cp_api") == "1", "operador com conta ativa e escala vigente cobre a central")
+    expect(value(ctx() + f"select count(*) from platform.accounts where id='{OP}'", actor=LD, role="cp_api") == "1"
+           and value(ctx(partner=PQ) + f"select count(*) from platform.accounts where id='{OP}'", actor=LD, role="cp_api") == "0"
+           and value(ctx(capabilities="security.log.read") + f"select count(*) from platform.accounts where id='{OP}'", actor=LD, role="cp_api") == "0",
+           "lider le so a situacao das contas da equipe do proprio parceiro, com security.command")
+    query(f"UPDATE platform.accounts SET status='SUSPENDED' WHERE id='{OP}'")
+    expect(value(ctx() + on_duty, actor=LD, role="cp_api") == "0", "conta suspensa nao conta como operador escalado")
+    query(f"UPDATE platform.accounts SET status='ACTIVE' WHERE id='{OP}'")
+    # Incidentes.
+    open_incident = lambda ident, tenant=C1, severity="CRITICAL": (
+        f"INSERT INTO cp.incidents(id,tenant_id,title,severity) VALUES('{ident}','{tenant}','Arrombamento ficticio','{severity}')")
+    link = lambda incident, event, tenant=C1: f"INSERT INTO cp.incident_links(tenant_id,incident_id,log_event_id) VALUES('{tenant}','{incident}','{event}')"
+    expect(error(f"SET LOCAL app.capabilities='{caps}'; " + open_incident(I1), "42501", tenant=C1, actor=LD, role="cp_api"),
+           "incidente exige o parceiro no contexto")
+    expect(error(ctx() + open_incident(I1), "42501", tenant=C1, actor=AD, role="cp_api"), "gestor do parceiro nao abre incidente")
+    expect(error(ctx() + open_incident(I1, tenant=C3), "42501", tenant=C3, actor=LD, role="cp_api"), "condominio fora do contrato recusa o incidente")
+    expect(error(ctx() + open_incident(I1).replace("'Arrombamento ficticio'", "'ab'"), "23514", tenant=C1, actor=LD, role="cp_api"), "titulo de 3 a 120")
+    query(ctx() + open_incident(I1) + "; " + link(I1, CRIT), tenant=C1, actor=LD, role="cp_api")
+    expect(value(f"select partner_id||'|'||opened_by||'|'||state||'|'||version from cp.incidents where id='{I1}'") == f"{PX}|{LD}|OPEN|0",
+           "parceiro, autoria e estado do incidente vem do banco")
+    expect(value(f"select severity||'|'||correlation_id||'|'||actor_role||'|'||(details->'linkedEventIds'->>0) from cp.security_log where event_type='INCIDENT_OPENED' and subject_id='{I1}'")
+           == f"CRITICAL|{I1}|SECURITY_LEAD|{CRIT}", "INCIDENT_OPENED no mesmo COMMIT, correlacionado e com os eventos anexados")
+    expect(value(ctx() + summary, tenant=C1, actor=LD, role="cp_api") == "3|1|1|1|0|1|1|0", "alerta critico anexado a incidente sai da contagem")
+    expect(value(ctx(partner=PQ) + "select count(*) from cp.incidents", tenant=C1, actor=LQ, role="cp_api") == "0",
+           "lider de outro parceiro nao ve o incidente")
+    # Mesma conta lider em dois parceiros (achado P2 do Codex no #165): no contexto do outro parceiro nao ve nem muda o incidente.
+    query(f"SET session_replication_role=replica; INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by) "
+          f"VALUES('49000000-0000-4000-8000-0000000053d9','{PQ}','{LD}','SECURITY_LEAD','LIDER DUPLO','{LQ}')")
+    expect(value(ctx(partner=PQ) + "select count(*) from cp.incidents", tenant=C1, actor=LD, role="cp_api") == "0"
+           and value(ctx(partner=PQ) + f"with u as (update cp.incidents set assignee_member_id='{MO}',version=version+1 where id='{I1}' returning 1) select count(*) from u",
+                     tenant=C1, actor=LD, role="cp_api") == "0"
+           and value(ctx() + "select count(*) from cp.incidents", tenant=C1, actor=LD, role="cp_api") == "1",
+           "lider de dois parceiros so ve e muda os incidentes do parceiro do contexto")
+    expect(error(ctx() + link(I1, CRIT), "23505", tenant=C1, actor=LD, role="cp_api"), "evento anexado uma vez")
+    expect(error(ctx() + link(I1, "53100000-0000-4000-8000-0000000000ff"), "23503", tenant=C1, actor=LD, role="cp_api"), "anexo so de evento do log do condominio")
+    assign = lambda member: f"UPDATE cp.incidents SET assignee_member_id='{member}',version=version+1 WHERE id='{I1}'"
+    for label, member in (("tecnico", MT), ("gestor do parceiro", MA), ("membro de outro parceiro", MQ)):
+        expect(error(ctx() + assign(member), "23514", tenant=C1, actor=LD, role="cp_api"), f"responsavel nao pode ser {label}")
+    query(ctx() + assign(MO), tenant=C1, actor=LD, role="cp_api")
+    expect(value(f"select details->>'assigneeMemberId' from cp.security_log where event_type='INCIDENT_ASSIGNED' and subject_id='{I1}'") == MO,
+           "designacao grava INCIDENT_ASSIGNED")
+    expect(error(ctx() + f"UPDATE cp.incidents SET title='Outro titulo',version=version+1 WHERE id='{I1}'", "42501", tenant=C1, actor=LD, role="cp_api"),
+           "titulo do incidente nao muda (sem privilegio de coluna)")
+    expect(error(ctx() + f"UPDATE cp.incidents SET state='CLOSED',outcome='RESOLVED',version=version+1 WHERE id='{I1}'", "23514", tenant=C1, actor=LD, role="cp_api"),
+           "encerramento exige relatorio")
+    query(ctx() + f"UPDATE cp.incidents SET state='CLOSED',outcome='RESOLVED',report='Relatorio ficticio do encerramento',version=version+1 WHERE id='{I1}'",
+          tenant=C1, actor=LD, role="cp_api")
+    expect(value(f"select closed_by||'|'||(select count(*) from cp.security_log where event_type='INCIDENT_CLOSED' and subject_id='{I1}' and details->>'outcome'='RESOLVED') from cp.incidents where id='{I1}'")
+           == f"{LD}|1", "encerramento grava INCIDENT_CLOSED com o desfecho")
+    expect(error(ctx() + assign(ML), "23514", tenant=C1, actor=LD, role="cp_api"), "incidente encerrado nao muda")
+    expect(error(ctx() + link(I1, CRIT).replace(f"'{CRIT}'", f"(select id from cp.security_log where tenant_id='{C1}' and event_type='INCIDENT_CLOSED')"),
+                 "23514", tenant=C1, actor=LD, role="cp_api"), "anexo so em incidente aberto")
+    expect(error(ctx() + f"DELETE FROM cp.incidents WHERE id='{I1}'", "42501", tenant=C1, actor=LD, role="cp_api"), "incidente nao e apagado")
+    # Revisao de aberturas remotas.
+    remote = lambda ident: (f"INSERT INTO cp.security_log(id,tenant_id,event_type,severity,source,reason,details) "
+                            f"VALUES('{ident}','{C1}','REMOTE_OPEN','INFO','REMOTE_CENTRAL','Autorizado por ligacao ficticia','{{}}')")
+    query(remote(RO), tenant=C1, actor=OP, role="cp_api")
+    query(remote(RL), tenant=C1, actor=LD, role="cp_api")
+    def review(subject, verdict="CONFERRED", reason="NULL", corrects="NULL", severity=None, details=None, subject_type="SECURITY_LOG_EVENT"):
+        level = severity or ("ATTENTION" if verdict == "IRREGULAR" else "INFO")
+        body = details or f'{{"verdict":"{verdict}"}}'
+        return (f"INSERT INTO cp.security_log(tenant_id,event_type,severity,source,subject_type,subject_id,reason,corrects_id,details) "
+                f"VALUES('{C1}','REMOTE_OPEN_REVIEWED','{level}','REMOTE_CENTRAL','{subject_type}','{subject}',{reason},{corrects},'{body}') RETURNING id")
+    expect(value(ctx() + summary, tenant=C1, actor=LD, role="cp_api").endswith("|2"), "duas aberturas remotas sem revisao nos ultimos 7 dias")
+    expect(error(ctx(capabilities="security.log.read") + review(RO), "42501", tenant=C1, actor=LD, role="cp_api"), "revisao exige security.remote_open.review")
+    expect(error(ctx() + review(RO), "42501", tenant=C1, actor=OP, role="cp_api"), "operador nao revisa abertura")
+    expect(error(ctx() + review(RL), "42501", tenant=C1, actor=LD, role="cp_api"), "ninguem revisa a propria abertura remota")
+    expect(error(ctx() + review(CRIT), "23514", tenant=C1, actor=LD, role="cp_api"), "revisao so de evento REMOTE_OPEN")
+    expect(error(ctx() + review(RO, "IRREGULAR"), "23514", tenant=C1, actor=LD, role="cp_api"), "irregular exige motivo")
+    expect(error(ctx() + review(RO, severity="CRITICAL"), "23514", tenant=C1, actor=LD, role="cp_api"), "severidade segue o veredito")
+    expect(error(ctx() + review(RO, details='{"verdict":"CONFERRED","nome":"x"}'), "23514", tenant=C1, actor=LD, role="cp_api"), "details fechado")
+    expect(error(review(RO), "42501", tenant=C1, actor=None, role="cp_worker"), "worker nao revisa abertura")
+    first = value(ctx() + review(RO), tenant=C1, actor=LD, role="cp_api")
+    expect(error(ctx() + review(RO), "23505", tenant=C1, actor=LD, role="cp_api"), "uma revisao por abertura")
+    expect(error(ctx() + review(RO, "IRREGULAR", reason="'Sem autorizacao registrada'", corrects=f"'{CRIT}'"), "23514", tenant=C1, actor=LD, role="cp_api"),
+           "correcao aponta para revisao da mesma abertura")
+    second = value(ctx() + review(RO, "IRREGULAR", reason="'Sem autorizacao registrada'", corrects=f"'{first}'"), tenant=C1, actor=LD, role="cp_api")
+    expect(bool(second), "correcao encadeada com motivo")
+    expect(error(ctx() + review(RO, reason="'Outra'", corrects=f"'{first}'"), "23505", tenant=C1, actor=LD, role="cp_api"),
+           "revisao ja corrigida nao recebe segunda correcao")
+    expect(value(ctx() + summary, tenant=C1, actor=LD, role="cp_api").endswith("|1"), "abertura revisada sai das pendentes")
+    expect(all(value(f"select intact from cp.security_log_verify('{t}')") == "t" for t in (C1, C2, C3)),
+           "cadeias integras depois de incidentes, revisoes e recusas")
 def demo_checks():
     """V053 (CPX-046): condominio demo isolado, com dados sinteticos, criado e resetado so pela central
     (platform.demo.manage) pela funcao de dono cp_demo; condominio real nunca vira demo nem e resetado."""
@@ -5629,6 +5782,7 @@ def main():
     security_log_checks()
     partner_checks()
     context_switch_checks()
+    security_command_checks()
     demo_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")

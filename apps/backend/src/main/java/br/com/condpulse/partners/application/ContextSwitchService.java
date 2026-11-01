@@ -72,6 +72,63 @@ public class ContextSwitchService {
   }
  }
 
+ /**
+  * Saída de um painel de parceiro para um condomínio por vínculo ou para a central (R4.4): o painel de destino não é de
+  * parceiro, então só o lado da origem é gravado (FROM), em cada condomínio que o papel de origem ainda alcança. Mesmas
+  * regras de idempotência, flags e recusa da entrada.
+  */
+ public PartnerModels.ContextSwitchResult recordExit(UUID actor,AssuranceLevel assurance,String sessionId,UUID partnerId,
+   PartnerModels.ContextExitRequest request) {
+  var input=exitInput(partnerId,request);
+  String session=sessionId!=null && SESSION.matcher(sessionId).matches()?sessionId:null;
+  try {
+   return partners.execute(actor,partnerId,assurance,context->applyExit(actor,context,input,session));
+  } catch(BusinessProblem problem) {
+   throw problem;
+  } catch(DataAccessException error) {
+   if(duplicate(error)) return new PartnerModels.ContextSwitchResult("ALREADY_RECORDED",0);
+   if("42501".equals(SqlStates.of(error))) throw denied();
+   throw unavailable();
+  } catch(TransactionException error) {
+   throw unavailable();
+  }
+ }
+
+ PartnerModels.ContextSwitchResult applyExit(UUID actor,PartnerContext context,Input input,String session) {
+  var from=input.from(); var to=input.to();
+  if(!context.roles().contains(from.role()))
+   throw new BusinessProblem("PARTNER_ACCESS_DENIED",403,"Este papel não está ativo para a sua conta neste parceiro.");
+  if(!SECURITY_ROLES.contains(from.role())) return new PartnerModels.ContextSwitchResult("NOT_REQUIRED",0);
+  if(context.assurance()!=AssuranceLevel.AAL2)
+   throw new BusinessProblem("MFA_REQUIRED",403,"Confirme o segundo fator de autenticação para continuar.");
+  if(!logEnabled) return new PartnerModels.ContextSwitchResult("LOG_DISABLED",0);
+  var sides=sides(List.of(),store.reach(from.partnerId(),from.role()));
+  if(sides.isEmpty()) return new PartnerModels.ContextSwitchResult("NO_TENANT_REACHED",0);
+  var described=new LinkedHashMap<String,Object>();
+  described.put("from",describe(from)); described.put("to",describe(to));
+  String content=json(described);
+  var rows=new ArrayList<PartnerStore.ContextSwitchRow>();
+  for(var entry:sides.entrySet()) {
+   var details=new LinkedHashMap<String,Object>();
+   details.put("from",describe(from)); details.put("to",describe(to)); details.put("side","FROM");
+   rows.add(new PartnerStore.ContextSwitchRow(eventId(actor,input.switchId(),content,entry.getKey()),entry.getKey(),source(from.role()),
+    from.partnerId(),json(details)));
+  }
+  store.recordContextSwitch(rows,session);
+  return new PartnerModels.ContextSwitchResult("RECORDED",rows.size());
+ }
+
+ static Input exitInput(UUID partnerId,PartnerModels.ContextExitRequest request) {
+  if(partnerId==null || request==null || request.switchId()==null) throw invalid("Informe a chave da troca de contexto.");
+  if(request.role()==null || !PartnerCapability.ROLES.contains(request.role())) throw invalid("Papel de parceiro desconhecido.");
+  var to=request.to();
+  boolean valid=to!=null && to.partnerId()==null && to.role()==null && ("PLATFORM".equals(to.kind()) && to.tenantId()==null
+   || "TENANT".equals(to.kind()) && to.tenantId()!=null);
+  if(!valid) throw invalid("Destino da saída: condomínio por vínculo (TENANT) ou central (PLATFORM).");
+  return new Input(request.switchId(),new PartnerModels.ContextRef(to.kind(),null,null,to.tenantId()),
+   new PartnerModels.ContextRef("PARTNER",partnerId,request.role(),null));
+ }
+
  PartnerModels.ContextSwitchResult apply(UUID actor,PartnerContext context,Input input,String session) {
   var to=input.to(); var from=input.from();
   if(!context.roles().contains(to.role()))

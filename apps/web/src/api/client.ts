@@ -591,6 +591,21 @@ const messages: Record<string, string> = {
   // Troca de contexto (R4.4, V052).
   CONTEXT_SWITCH_INVALID: 'Não foi possível identificar o acesso escolhido. Volte para meus acessos e escolha de novo.',
   CONTEXT_SWITCH_UNAVAILABLE: 'Não foi possível registrar a entrada neste painel. Tente novamente.',
+  // Comando de Segurança (CPX-012 a CPX-014, V054).
+  SECURITY_COMMAND_UNAVAILABLE: 'Não foi possível concluir no Comando de Segurança agora. Nada foi gravado; tente novamente.',
+  INCIDENT_NOT_FOUND: 'Incidente não encontrado.',
+  INCIDENT_CHANGED: 'O incidente mudou desde a leitura. Atualize e tente de novo.',
+  INCIDENT_CLOSED: 'O incidente já foi encerrado.',
+  INCIDENT_ASSIGNEE_INVALID: 'O responsável precisa ser líder, supervisor ou operador ativo do parceiro.',
+  INCIDENT_EVENT_NOT_FOUND: 'Evento do log não encontrado neste condomínio.',
+  INCIDENT_LINKS_LIMIT: 'O incidente aceita no máximo 50 eventos anexados.',
+  INCIDENT_DOSSIER_EMPTY: 'O incidente ainda não tem eventos no log.',
+  INCIDENT_TIMELINE_TOO_LARGE: 'A linha do tempo passa de 500 eventos; consulte o log por período.',
+  INCIDENT_DOSSIER_REASON_REQUIRED: 'Informe o motivo da exportação, com 10 a 500 caracteres.',
+  REMOTE_OPEN_NOT_FOUND: 'Abertura remota não encontrada.',
+  REMOTE_OPEN_ALREADY_REVIEWED: 'Esta abertura já foi revisada. Atualize a lista e corrija a revisão mais recente.',
+  REMOTE_OPEN_SELF_REVIEW: 'Ninguém revisa a própria abertura remota.',
+  REMOTE_OPEN_REVIEW_INVALID: 'Revisão inválida para esta abertura.',
 };
 
 export class ApiError extends Error {
