@@ -137,6 +137,11 @@ test('cinco manifestos Compose separam aplicacao, DDL e operacao sem daemon ou c
     assert.ok(validateRelease(sync, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
     const missingSync = structuredClone(worker); delete missingSync.services.worker.environment.CP_WORKER_ACCESS_SYNC_ENABLED;
     assert.ok(validateRelease(missingSync, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
+    assert.equal(worker.services.worker.environment.CP_WORKER_STAYS_ENABLED, 'false', 'alertas de permanencia desligados');
+    const stays = structuredClone(worker); stays.services.worker.environment.CP_WORKER_STAYS_ENABLED = 'true';
+    assert.ok(validateRelease(stays, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
+    const missingStays = structuredClone(worker); delete missingStays.services.worker.environment.CP_WORKER_STAYS_ENABLED;
+    assert.ok(validateRelease(missingStays, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'));
     const missing = structuredClone(worker); delete missing.services.worker.environment.CP_WORKER_WAITLIST_ENABLED;
     assert.ok(validateRelease(missing, 'worker').some(error => error.code === 'FEATURES_MUST_REMAIN_DISABLED'), 'flag ausente nao vale como desligada');
     const apiLogin = structuredClone(worker); apiLogin.services.worker.environment.DATABASE_USER = 'cp_runtime_ci';

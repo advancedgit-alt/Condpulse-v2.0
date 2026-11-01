@@ -120,10 +120,15 @@ public class AccessStore {
  }
  /** Unidade, pessoa, horários e origem são preenchidos pelo banco a partir da referência. */
  public void insert(UUID id,UUID tenant,UUID arrival,UUID permit,String type,UUID entry,UUID corrects,String evidence,String note,UUID actor) {
+  insert(id,tenant,arrival,permit,type,entry,corrects,evidence,note,actor,null);
+ }
+ /** A entrada abre a permanência no banco (V055, mesma instrução); stayKind só na entrada. */
+ public void insert(UUID id,UUID tenant,UUID arrival,UUID permit,String type,UUID entry,UUID corrects,String evidence,String note,UUID actor,
+   String stayKind) {
   jdbc.update("""
-   insert into cp.access_events(id,tenant_id,arrival_id,permit_id,event_type,entry_event_id,corrects_event_id,evidence,note,recorded_by)
-   values(?,?,?,?,?,?,?,?,?,?)
-   """,id,tenant,arrival,permit,type,entry,corrects,evidence,note,actor);
+   insert into cp.access_events(id,tenant_id,arrival_id,permit_id,event_type,entry_event_id,corrects_event_id,evidence,note,recorded_by,stay_kind)
+   values(?,?,?,?,?,?,?,?,?,?,?)
+   """,id,tenant,arrival,permit,type,entry,corrects,evidence,note,actor,stayKind);
  }
  /** Intenção de aviso na mesma transação, com dados mínimos (sem nome do visitante). Registros são imutáveis: versão 0. */
  public void event(UUID tenant,String eventType,UUID aggregate,UUID unit,String type) {

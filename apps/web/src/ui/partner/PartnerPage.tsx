@@ -14,6 +14,7 @@ import { completeSwitch, planSwitch, type ContextRef } from '../shell/contextSwi
 import { applyRefusal, failureKind, initialRefusalState, partnerKey, refusalOf, type RefusalState } from './model';
 import { MemberSection, PortfolioSection, ScheduleSection } from './PartnerTeam';
 import { SecurityLogSection } from './SecurityLog';
+import { PartnerStaysSection } from './Stays';
 
 /**
  * Casca /p/{parceiro}/{painel} (CPX-005, PRD complementar §4.1 e R4.5). O papel vem de /v1/me (partnerContexts); as
@@ -153,6 +154,7 @@ function SectionBody({ section }: { section: string }): ReactNode {
   if (section === 'escala') return <ScheduleSection />;
   if (section === 'carteira') return <PortfolioSection />;
   if (section === 'log') return <SecurityLogSection />;
+  if (section === 'permanencias') return <PartnerStaysSection />;
   return null;
 }
 

@@ -219,6 +219,7 @@ test('fly.worker.toml: app/região fixas, imagem do worker, sem HTTP, pool 1, pa
   for(const line of ['app = "condpulse-v2-0-worker"','primary_region = "gru"','dockerfile = "infra/fly-worker/Dockerfile"',
     'SPRING_PROFILES_ACTIVE = "worker"','DB_POOL_SIZE = "1"','CP_WORKER_OUTBOX_ENABLED = "true"','CP_WORKER_POLL_MILLIS = "2000"',
     'CP_WORKER_WAITLIST_ENABLED = "false"','CP_WORKER_WAITLIST_MILLIS = "60000"','CP_WORKER_ACCESS_SYNC_ENABLED = "false"','CP_SECURITY_LOG_ENABLED = "true"',
+    'CP_WORKER_STAYS_ENABLED = "false"','CP_WORKER_STAYS_MILLIS = "60000"',
     'policy = "on-failure"','size = "shared-cpu-1x"','memory = "1gb"',
     'DATABASE_URL = "jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/tmp/condpulse-db-ca.crt"'])
     assert.ok(toml.includes(line),line);
@@ -236,7 +237,8 @@ const launcherEnv={SPRING_PROFILES_ACTIVE:'worker',
   DATABASE_URL:'jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/tmp/condpulse-db-ca.crt',
   DATABASE_USER:`cp_worker_${'1'.repeat(32)}.rpnrqfrfwywglvyykgrg`,DATABASE_PASSWORD:'SYNTHETIC_WORKER_PASSWORD_NEVER_OUTPUT',
   CP_DB_CA_BASE64:Buffer.from(CA_PEM).toString('base64'),DB_POOL_SIZE:'1',CP_WORKER_OUTBOX_ENABLED:'false',CP_WORKER_WAITLIST_ENABLED:'true',
-  CP_WORKER_ACCESS_SYNC_ENABLED:'false',CP_WORKER_POLL_MILLIS:'2000',CP_WORKER_WAITLIST_MILLIS:'60000'};
+  CP_WORKER_ACCESS_SYNC_ENABLED:'false',CP_WORKER_POLL_MILLIS:'2000',CP_WORKER_WAITLIST_MILLIS:'60000',CP_WORKER_STAYS_ENABLED:'false',
+  CP_WORKER_STAYS_MILLIS:'60000'};
 function launch(overrides={},remove=[]){
   const dir=mkdtempSync(join(tmpdir(),'condpulse-fly-worker-launcher-'));
   try{
@@ -266,6 +268,8 @@ test('launcher do worker: aceita só a configuração revisada e falha fechado s
     [{CP_WORKER_ACCESS_SYNC_ENABLED:'true'},'FLY_WORKER_ACCESS_SYNC_FORBIDDEN'],
     [{CP_WORKER_POLL_MILLIS:'100'},'FLY_WORKER_POLL_INVALID'],[{CP_WORKER_POLL_MILLIS:'2000;x'},'FLY_WORKER_POLL_INVALID'],
     [{CP_WORKER_WAITLIST_MILLIS:'5000'},'FLY_WORKER_WAITLIST_INTERVAL_INVALID'],
+    [{CP_WORKER_STAYS_ENABLED:'sim'},'FLY_WORKER_FLAG_INVALID'],[{CP_WORKER_STAYS_MILLIS:'5000'},'FLY_WORKER_STAYS_INTERVAL_INVALID'],
+    [{CP_WORKER_STAYS_MILLIS:'900000'},'FLY_WORKER_STAYS_INTERVAL_INVALID'],
     [{CP_BFF_ENCRYPTION_KEY:'SYNTHETIC_SENTINEL'},'FLY_WORKER_PRIVILEGED_ENV_FORBIDDEN'],
     [{CP_STORAGE_SERVICE_KEY:'SYNTHETIC_SENTINEL'},'FLY_WORKER_PRIVILEGED_ENV_FORBIDDEN'],
     [{SUPABASE_SERVICE_ROLE_KEY:'SYNTHETIC_SENTINEL'},'FLY_WORKER_PRIVILEGED_ENV_FORBIDDEN'],
@@ -280,7 +284,7 @@ test('launcher do worker: aceita só a configuração revisada e falha fechado s
     assert.notEqual(result.status,0,code);assert.equal(result.stderr.trim(),code,JSON.stringify(overrides));assert.equal(result.stdout,'');
     assert.ok(!(result.stdout+result.stderr).includes('SYNTHETIC'),'nenhum valor ecoado');
   }
-  for(const key of ['CP_DB_CA_BASE64','DB_POOL_SIZE','CP_WORKER_ACCESS_SYNC_ENABLED']){
+  for(const key of ['CP_DB_CA_BASE64','DB_POOL_SIZE','CP_WORKER_ACCESS_SYNC_ENABLED','CP_WORKER_STAYS_ENABLED','CP_WORKER_STAYS_MILLIS']){
     const result=launch({},[key]);assert.notEqual(result.status,0,key);
   }
 });

@@ -334,6 +334,22 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce(has_any_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'UPDATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.security_log_anchors'),'DELETE,TRUNCATE'),false)
      or coalesce(has_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'anchored_at','INSERT'),false)
+     -- Permanências (V055): nunca apagadas; abertas só pela entrada (unidade, pessoa, horários e prazos vêm do banco); a API
+     -- muda só estado, confirmação e justificativa; o worker só marca os alertas, sem ler a pessoa.
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.stays'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.stay_rules'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.stays') and c.attnum>0 and not c.attisdropped and c.attname not in ('tenant_id','entry_event_id')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.stays') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','closure','exit_event_id','closed_by','justification','justified_by','due_alerted_at','l1_alerted_at','l2_alerted_at')),false)
+     or coalesce(pg_has_role(current_user,'cp_worker','USAGE') and ((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE'))
+       from pg_attribute c where c.attrelid=to_regclass('cp.stays') and c.attname in ('state','closure','exit_event_id','closed_by','justification','justified_by'))
+       or has_column_privilege(current_user,to_regclass('cp.stays'),'visitor_id','SELECT')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.stay_rules') and c.attname in ('tenant_id','kind','updated_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.stay_rules') and c.attname in ('version','updated_at')),false)
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))

@@ -8,7 +8,7 @@ const WEB_HEALTH = ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:80
 const SERVICE_KEYS = new Set(['image', 'user', 'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'mem_limit', 'cpus', 'pids_limit', 'logging', 'restart', 'stop_grace_period', 'environment', 'volumes', 'networks', 'expose', 'healthcheck', 'depends_on', 'init', 'command', 'entrypoint']);
 const API_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'PORT', 'CP_JWT_ISSUER', 'CP_JWT_JWK_SET_URI', 'CP_BFF_ORIGIN', 'CP_BFF_ENABLED', 'CP_RESERVATIONS_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const HOMOLOGATION_ENV = new Set([...API_ENV, 'CP_SUPABASE_PUBLISHABLE_KEY', 'CP_BFF_ENCRYPTION_KEY', 'CP_BFF_RATE_LIMIT_KEY', 'CP_BFF_SESSION_HOURS']);
-const WORKER_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'CP_WORKER_OUTBOX_ENABLED', 'CP_WORKER_WAITLIST_ENABLED', 'CP_WORKER_ACCESS_SYNC_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
+const WORKER_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'CP_WORKER_OUTBOX_ENABLED', 'CP_WORKER_WAITLIST_ENABLED', 'CP_WORKER_ACCESS_SYNC_ENABLED', 'CP_WORKER_STAYS_ENABLED', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const MIGRATE_ENV = new Set(['SPRING_PROFILES_ACTIVE', 'DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DB_POOL_SIZE', 'JAVA_TOOL_OPTIONS', 'TZ']);
 const BASELINE_PROJECT = 'rpnrqfrfwywglvyykgrg';
 const BASELINE_ENV = new Set(['DATABASE_URL', 'DATABASE_USER', 'DATABASE_PASSWORD', 'CP_BASELINE_PROJECT_REF', 'CP_BASELINE_ACK']);
@@ -229,7 +229,7 @@ export function validateRelease(config, mode) {
           || manifest.bind.create_host_path !== false) fail('ONBOARDING_MANIFEST_MOUNT_REQUIRED', `${path}.volumes`);
     }
     if (worker && (String(env.CP_WORKER_OUTBOX_ENABLED) !== 'false' || String(env.CP_WORKER_WAITLIST_ENABLED) !== 'false'
-      || String(env.CP_WORKER_ACCESS_SYNC_ENABLED) !== 'false')) fail('FEATURES_MUST_REMAIN_DISABLED', `${path}.environment`);
+      || String(env.CP_WORKER_ACCESS_SYNC_ENABLED) !== 'false' || String(env.CP_WORKER_STAYS_ENABLED) !== 'false')) fail('FEATURES_MUST_REMAIN_DISABLED', `${path}.environment`);
     if (name === 'api') {
       if (String(env.PORT) !== '8080') fail('PORT_EXACT', `${path}.environment.PORT`);
       if (homologation) {

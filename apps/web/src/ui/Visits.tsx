@@ -3,6 +3,8 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { collapseText, displayText } from '../api/text';
+import { stays, type Stay } from '../api/stays';
+import { StayList } from './stays/StayList';
 import { visits, type AccessRecord, type Arrival, type CreatePermitBody, type CreateRuleBody, type VisitPermit, type VisitRule } from '../api/visits';
 import { useAuth } from './Auth';
 import { condoOf, panelEnabled } from './shell/paths';
@@ -66,11 +68,12 @@ function UnitAccess(scope: Scope) {
   const permits = useQuery({ queryKey: unitKey(scope, 'permits'), queryFn: ({ signal }) => visits.unitPermits(scope.tenantId, scope.unitId, signal) });
   const rules = useQuery({ queryKey: unitKey(scope, 'rules'), queryFn: ({ signal }) => visits.unitRules(scope.tenantId, scope.unitId, signal) });
   const records = useQuery({ queryKey: unitKey(scope, 'access'), queryFn: ({ signal }) => visits.unitRecords(scope.tenantId, scope.unitId, signal) });
+  const openStays = useQuery({ queryKey: unitKey(scope, 'stays'), queryFn: ({ signal }) => stays.unitOpen(scope.tenantId, scope.unitId, signal) });
   const refresh = () => { void queries.invalidateQueries({ queryKey: unitKey(scope) }); };
   return <>
     <div className="residence-heading"><div><span className="eyebrow">ACESSOS</span><h1>Acessos da unidade</h1>
       <p>Chegadas que aguardam a sua resposta, convites e entradas registradas em {scope.tenantName}. Convite não substitui a conferência da portaria. Horários em {scope.timeZone}.</p></div>
-      <button className="button button-secondary button-compact" type="button" disabled={arrivals.isFetching || permits.isFetching || rules.isFetching || records.isFetching} onClick={refresh}>Atualizar</button></div>
+      <button className="button button-secondary button-compact" type="button" disabled={arrivals.isFetching || permits.isFetching || rules.isFetching || records.isFetching || openStays.isFetching} onClick={refresh}>Atualizar</button></div>
     {unavailable(arrivals.error) || unavailable(permits.error) ? <div className="panel"><Empty title="Acessos indisponíveis">Os acessos ainda não estão ativos neste ambiente.</Empty></div> : <>
       <section className="management-section" aria-labelledby="arrivals-title">
         <div className="section-heading"><div><span className="section-index">01 / CHEGADAS</span><h2 id="arrivals-title">Chegadas na portaria</h2></div></div>
@@ -100,6 +103,14 @@ function UnitAccess(scope: Scope) {
           : denied(records.error) ? <p className="field-help">O histórico de entradas desta unidade não está disponível para o seu vínculo.</p>
             : records.isError && !records.data ? <ErrorState error={records.error} retry={() => void records.refetch()} />
               : <AccessHistory scope={scope} records={records.data?.records ?? []} truncated={records.data?.truncated ?? false} />}
+      </section>
+      <section className="management-section" aria-labelledby="stays-title">
+        <div className="section-heading"><div><span className="section-index">05 / PERMANÊNCIAS</span><h2 id="stays-title">Quem entrou para a unidade e não tem saída registrada</h2></div></div>
+        {openStays.isPending ? <div className="panel"><Loading label="Consultando permanências…" /></div>
+          : denied(openStays.error) ? <p className="field-help">As permanências desta unidade não estão disponíveis para o seu vínculo.</p>
+            : unavailable(openStays.error) ? <p className="field-help">As permanências ainda não estão ativas neste ambiente.</p>
+              : openStays.isError && !openStays.data ? <ErrorState error={openStays.error} retry={() => void openStays.refetch()} />
+                : <UnitStays scope={scope} stays={openStays.data?.stays ?? []} />}
       </section>
     </>}
   </>;
@@ -181,6 +192,39 @@ function AccessHistory({ scope, records, truncated }: { scope: Scope; records: A
     })}</ol>
     {truncated ? <Notice tone="warning">O histórico mostra as 100 entradas mais recentes.</Notice> : null}
   </>;
+}
+
+/**
+ * CPX-018: permanências abertas da unidade. O morador ou responsável confirma que a pessoa saiu (a portaria continua
+ * podendo registrar a saída); dependente só acompanha. O servidor confere o vínculo e grava no Log de Segurança.
+ */
+function UnitStays({ scope, stays: items }: { scope: Scope; stays: Stay[] }) {
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  if (items.length === 0) return <>{outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
+    <div className="panel"><Empty title="Nenhuma permanência aberta">Quando a portaria registrar a entrada de alguém para a unidade, aparece aqui até a saída.</Empty></div></>;
+  return <>
+    {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
+    <StayList stays={items} timeZone={scope.timeZone} label="Permanências abertas da unidade" showJustification={false}
+      action={scope.adult ? (stay) => <ConfirmExit scope={scope} stay={stay} done={setOutcome} /> : undefined} />
+    {!scope.adult ? <p className="field-help">Só o morador ou o responsável da unidade confirma a saída.</p> : null}
+  </>;
+}
+
+function ConfirmExit({ scope, stay, done }: { scope: Scope; stay: Stay; done(outcome: Outcome): void }) {
+  const queries = useQueryClient();
+  const action = useLocalAction();
+  async function confirm() {
+    const { value, error } = await action.run(() => stays.confirmExit(scope.tenantId, scope.unitId, stay.stayId));
+    if (value) done(value.stay.stayId === stay.stayId && value.stay.closure === 'RESIDENT_CONFIRMED'
+      ? { tone: value.replayed ? 'info' : 'success', text: value.replayed ? 'A saída já estava confirmada por você.' : `Saída de ${stay.visitorName ?? 'pessoa'} confirmada. A portaria vê a confirmação.` }
+      : { tone: 'warning', text: 'A resposta não confirmou a saída. Atualize e confira.' });
+    else if (['STAY_NOT_OPEN', 'STAY_NOT_FOUND'].includes(codeOf(error))) done({ tone: 'warning', text: `${errorMessage(error)} Nada novo foi registrado.` });
+    await queries.invalidateQueries({ queryKey: unitKey(scope, 'stays') });
+  }
+  return <div className="button-row">
+    <button className="button button-secondary button-compact" type="button" disabled={action.pending} onClick={() => void confirm()}>{action.pending ? 'Confirmando…' : 'Confirmar que saiu'}</button>
+    {['STAY_NOT_OPEN', 'STAY_NOT_FOUND'].includes(codeOf(action.failure)) ? null : action.notice}
+  </div>;
 }
 
 const permitLabels: Record<VisitPermit['state'], [string, string]> = {

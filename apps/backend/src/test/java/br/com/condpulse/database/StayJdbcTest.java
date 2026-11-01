@@ -1,0 +1,182 @@
+package br.com.condpulse.database;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+import br.com.condpulse.identity.application.AssuranceLevel;
+import br.com.condpulse.notifications.application.WorkerTransactions;
+import br.com.condpulse.shared.application.BusinessProblem;
+import br.com.condpulse.shared.infrastructure.AuditRecorder;
+import br.com.condpulse.shared.infrastructure.SensitiveViewRecorder;
+import br.com.condpulse.stays.application.StayAlertJob;
+import br.com.condpulse.stays.application.StayModels;
+import br.com.condpulse.stays.application.StayService;
+import br.com.condpulse.stays.infrastructure.StayStore;
+import br.com.condpulse.tenancy.application.TenantTransactionExecutor;
+import br.com.condpulse.visits.application.AccessModels;
+import br.com.condpulse.visits.application.AccessService;
+import br.com.condpulse.visits.application.VisitModels;
+import br.com.condpulse.visits.application.VisitService;
+import br.com.condpulse.visits.infrastructure.AccessStore;
+import br.com.condpulse.visits.infrastructure.VisitStore;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * V055 (CPX-015 a CPX-019) com PostgreSQL real, o login da API e o do worker: a entrada abre a permanência, a saída
+ * fecha, o morador da unidade confirma a saída, a portaria justifica, o worker grava N1/N2 uma vez e o fechamento do dia
+ * lista as entradas sem saída, com SENSITIVE_VIEWED nas leituras da equipe.
+ */
+@EnabledIfEnvironmentVariable(named="CP_JDBC_TEST_OK",matches="DISPOSABLE")
+class StayJdbcTest {
+ private static final AssuranceLevel AAL2=AssuranceLevel.AAL2;
+ private static JdbcDisposableDatabase db;
+ private static JdbcWorkerPool workerDb;
+ private static VisitService visits;
+ private static AccessService access;
+ private static StayService stays;
+ private static StayAlertJob job;
+ private static UUID concierge,manager;
+
+ @BeforeAll static void setup() throws Exception {
+  db=new JdbcDisposableDatabase(1);
+  workerDb=new JdbcWorkerPool();
+  var transactions=new TenantTransactionExecutor(db.jdbc,db.manager);
+  var store=new VisitStore(db.jdbc);
+  visits=new VisitService(transactions,store,new AuditRecorder(db.jdbc));
+  access=new AccessService(transactions,store,new AccessStore(db.jdbc),new AuditRecorder(db.jdbc));
+  stays=new StayService(transactions,new StayStore(db.jdbc),store,new SensitiveViewRecorder(db.jdbc,true));
+  job=new StayAlertJob(new WorkerTransactions(workerDb.jdbc,workerDb.manager),workerDb.jdbc);
+  concierge=UUID.randomUUID(); manager=UUID.randomUUID(); db.extraAccounts.add(concierge); db.extraAccounts.add(manager);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE'),(?,'ACTIVE')",concierge,manager);
+  db.adminUpdate("""
+   insert into cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+   values(?,?,null,'PORTARIA PERMANENCIA JDBC','CONCIERGE','ACTIVE'),(?,?,null,'GESTAO PERMANENCIA JDBC','MANAGER','ACTIVE')
+   """,db.tenantA,concierge,db.tenantA,manager);
+ }
+ @BeforeEach void reset() throws Exception {
+  db.clearReservationFixtures(); db.restoreActiveFixtures(); db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+ @AfterAll static void cleanup() throws Exception {
+  try { if(workerDb!=null) workerDb.close(); } finally { if(db!=null) db.close(); }
+ }
+ private static String key() { return "stay-jdbc-"+UUID.randomUUID(); }
+ private static Instant now() { return Instant.now().truncatedTo(ChronoUnit.SECONDS); }
+ private static long events(UUID stay,String type) throws Exception {
+  return Long.parseLong(db.adminString("select count(*) from cp.security_log where subject_type='STAY' and subject_id=? and event_type=?",stay,type));
+ }
+ private static UUID stayOf(UUID entry) throws Exception {
+  return UUID.fromString(db.adminString("select id from cp.stays where entry_event_id=?",entry));
+ }
+ private AccessModels.AccessRecord enterByPermit(String name) {
+  var permit=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),new VisitModels.CreatePermit(name,null,null,now(),now().plus(Duration.ofHours(2)))).permit();
+  return access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(null,permit.permitId(),"DOCUMENT_CHECKED",null)).record();
+ }
+ private AccessModels.AccessRecord enterByArrival(String name,String kind) {
+  var arrival=visits.register(concierge,db.tenantA,AAL2,key(),new VisitModels.RegisterArrival(db.unitA,name,null,null)).arrival();
+  visits.decide(db.accountA,db.tenantA,arrival.arrivalId(),new VisitModels.Decision("APPROVE"));
+  return access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(arrival.arrivalId(),null,"DOCUMENT_CHECKED",null,kind)).record();
+ }
+
+ @Test void entryOpensStayAndOnlyTheUnitResidentConfirmsTheExit() throws Exception {
+  var entry=enterByPermit("Visita Permanencia");
+  UUID stay=stayOf(entry.entryId());
+  long viewed=Long.parseLong(db.adminString("select count(*) from cp.security_log where tenant_id=? and event_type='SENSITIVE_VIEWED' and details->>'view'='STAYS_NOW'",db.tenantA));
+  var open=stays.open(concierge,db.tenantA,AAL2,false).stays();
+  var listed=open.stream().filter(s->s.stayId().equals(stay)).findFirst().orElseThrow();
+  assertEquals("VISITOR",listed.kind()); assertEquals("MANUAL",listed.origin()); assertEquals("PERMIT",listed.basis());
+  assertEquals("Visita Permanencia",listed.visitorName()); assertEquals("NONE",listed.level()); assertFalse(listed.overdue());
+  assertEquals(viewed+1,Long.parseLong(db.adminString("select count(*) from cp.security_log where tenant_id=? and event_type='SENSITIVE_VIEWED' and details->>'view'='STAYS_NOW'",db.tenantA)),
+   "Leitura do painel pela equipe grava SENSITIVE_VIEWED");
+  assertEquals(1,events(stay,"STAY_OPENED"));
+  assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->stays.open(concierge,db.tenantA,AssuranceLevel.AAL1,false)).code());
+  assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->stays.open(db.accountA,db.tenantA,AAL2,false)).code());
+  // Unidade: vê a própria permanência, sem anotações da equipe; outra unidade não vê nem confirma.
+  assertTrue(stays.unitOpen(db.accountA,db.tenantA,db.unitA).stays().stream().anyMatch(s->s.stayId().equals(stay)));
+  assertEquals("UNIT_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->stays.unitOpen(db.accountC,db.tenantA,db.unitA)).code());
+  assertEquals("STAY_CONFIRMATION_DENIED",assertThrows(BusinessProblem.class,()->stays.confirmExit(db.accountC,db.tenantA,db.unitA,stay)).code());
+  assertEquals("STAY_NOT_FOUND",assertThrows(BusinessProblem.class,()->stays.confirmExit(db.accountC,db.tenantA,db.otherUnitA,stay)).code());
+  var confirmed=stays.confirmExit(db.accountA,db.tenantA,db.unitA,stay);
+  assertFalse(confirmed.replayed()); assertEquals("CLOSED",confirmed.stay().state()); assertEquals("RESIDENT_CONFIRMED",confirmed.stay().closure());
+  assertTrue(stays.confirmExit(db.accountA,db.tenantA,db.unitA,stay).replayed(),"Repetição devolve o mesmo resultado");
+  assertEquals("RESIDENT_APP",db.adminString("select source from cp.security_log where subject_id=? and event_type='STAY_CLOSED'",stay));
+  // A portaria ainda registra a saída manual da entrada; a permanência continua fechada pelo morador.
+  access.exit(concierge,db.tenantA,AAL2,entry.entryId(),key(),null);
+  assertEquals("CLOSED:RESIDENT_CONFIRMED",db.adminString("select state||':'||closure from cp.stays where id=?",stay));
+  assertEquals(1,events(stay,"STAY_CLOSED"));
+  db.assertEmptyContext();
+ }
+
+ @Test void workerAlertsOnceAndJustificationStopsEscalation() throws Exception {
+  var entry=enterByArrival("Entregador Permanencia","DELIVERY");
+  UUID stay=stayOf(entry.entryId());
+  assertEquals("DELIVERY:PLATFORM_DEFAULT",db.adminString("select kind||':'||expected_source from cp.stays where id=?",stay));
+  db.adminUpdateWithoutTriggers("update cp.stays set entered_at=now()-interval '2 hours',expected_exit_at=now()-interval '30 minutes',"
+   +"l1_at=now()-interval '5 minutes',l2_at=now()+interval '1 hour' where id=?",stay);
+  assertTrue(job.runOnce().stays()>=1);
+  assertEquals(1,events(stay,"STAY_DUE")); assertEquals(1,events(stay,"STAY_OVERDUE_L1")); assertEquals(0,events(stay,"STAY_OVERDUE_L2"));
+  job.runOnce();
+  assertEquals(1,events(stay,"STAY_DUE"),"Passada repetida não grava de novo"); assertEquals(1,events(stay,"STAY_OVERDUE_L1"));
+  var overdue=stays.open(concierge,db.tenantA,AAL2,true).stays().stream().filter(s->s.stayId().equals(stay)).findFirst().orElseThrow();
+  assertTrue(overdue.overdue()); assertEquals("L1",overdue.level()); assertEquals("L1",overdue.recordedLevel());
+  assertEquals("STAY_JUSTIFICATION_REQUIRED",assertThrows(BusinessProblem.class,()->stays.justify(concierge,db.tenantA,AAL2,stay,new StayModels.Justify(" "))).code());
+  var justified=stays.justify(concierge,db.tenantA,AAL2,stay,new StayModels.Justify("Entregador aguardando o morador"));
+  assertTrue(justified.stay().justified()); assertFalse(justified.replayed());
+  assertTrue(stays.justify(concierge,db.tenantA,AAL2,stay,new StayModels.Justify("Entregador aguardando o morador")).replayed());
+  assertEquals("STAY_ALREADY_JUSTIFIED",assertThrows(BusinessProblem.class,()->stays.justify(concierge,db.tenantA,AAL2,stay,new StayModels.Justify("Outro motivo"))).code());
+  assertNull(stays.unitOpen(db.accountA,db.tenantA,db.unitA).stays().stream().filter(s->s.stayId().equals(stay)).findFirst().orElseThrow().justification(),
+   "Justificativa é anotação da equipe");
+  db.adminUpdateWithoutTriggers("update cp.stays set l2_at=now()-interval '1 minute' where id=?",stay);
+  job.runOnce();
+  assertEquals(0,events(stay,"STAY_OVERDUE_L2"),"Permanência justificada não escala");
+  assertEquals("CONCIERGE",db.adminString("select source from cp.security_log where subject_id=? and event_type='STAY_JUSTIFIED'",stay));
+  db.assertEmptyContext(); workerDb.assertEmptyContext();
+ }
+
+ @Test void dayCloseListsEntriesWithoutExitAndManualExitCloses() throws Exception {
+  var left=enterByPermit("Visita Que Saiu");
+  var stayed=enterByPermit("Visita Sem Saida");
+  access.exit(concierge,db.tenantA,AAL2,left.entryId(),key(),null);
+  assertEquals("CLOSED:EXIT_RECORDED",db.adminString("select state||':'||closure from cp.stays where entry_event_id=?",left.entryId()));
+  var report=stays.dayClose(concierge,db.tenantA,AAL2,null);
+  var ids=report.entries().stream().map(StayModels.Stay::entryEventId).toList();
+  assertTrue(ids.contains(stayed.entryId())); assertFalse(ids.contains(left.entryId()));
+  assertEquals(report.entries().size(),report.stillOpen()); assertEquals(64,report.listHash().length());
+  assertEquals(report.listHash(),db.adminString("select details->>'listHash' from cp.security_log where tenant_id=? and event_type='SENSITIVE_VIEWED' "
+   +"and details->>'view'='STAY_DAY_CLOSE' order by seq desc limit 1",db.tenantA),"Evidência do relatório no Log de Segurança");
+  assertEquals("STAY_DAY_CLOSE_DATE_INVALID",assertThrows(BusinessProblem.class,()->stays.dayClose(concierge,db.tenantA,AAL2,LocalDate.now().plusDays(2))).code());
+  // Correção da entrada anula a permanência: sai do relatório.
+  access.correct(concierge,db.tenantA,AAL2,stayed.entryId(),key(),new AccessModels.Correct("Pessoa não entrou"));
+  assertFalse(stays.dayClose(concierge,db.tenantA,AAL2,null).entries().stream().anyMatch(s->s.entryEventId().equals(stayed.entryId())));
+  db.assertEmptyContext();
+ }
+
+ @Test void managerChangesTimeRulesAndEntryValidatesKind() throws Exception {
+  assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->stays.rules(concierge,db.tenantA,AAL2)).code());
+  var initial=stays.rules(manager,db.tenantA,AAL2).rules();
+  assertEquals(StayModels.KINDS,initial.stream().map(StayModels.Rule::kind).toList());
+  assertTrue(initial.stream().allMatch(r->"PLATFORM_DEFAULT".equals(r.source()) && r.version()==null));
+  assertEquals("STAY_RULE_INVALID",assertThrows(BusinessProblem.class,()->stays.changeRule(manager,db.tenantA,AAL2,"DELIVERY",
+   new StayModels.RuleChange(20,30,10,null))).code());
+  var created=stays.changeRule(manager,db.tenantA,AAL2,"DELIVERY",new StayModels.RuleChange(20,5,15,null)).rules();
+  var delivery=created.stream().filter(r->r.kind().equals("DELIVERY")).findFirst().orElseThrow();
+  assertEquals("TENANT_RULE",delivery.source()); assertEquals(Long.valueOf(0),delivery.version()); assertEquals(20,delivery.maxMinutes());
+  assertEquals("STAY_RULE_VERSION_CONFLICT",assertThrows(BusinessProblem.class,()->stays.changeRule(manager,db.tenantA,AAL2,"DELIVERY",
+   new StayModels.RuleChange(25,5,15,null))).code());
+  stays.changeRule(manager,db.tenantA,AAL2,"DELIVERY",new StayModels.RuleChange(25,5,15,0L));
+  assertEquals("STAY_RULE_VERSION_CONFLICT",assertThrows(BusinessProblem.class,()->stays.changeRule(manager,db.tenantA,AAL2,"DELIVERY",
+   new StayModels.RuleChange(30,5,15,0L))).code());
+  assertEquals("2",db.adminString("select count(*) from cp.security_log where tenant_id=? and event_type='RULE_CHANGED' and details->>'kind'='DELIVERY'",db.tenantA));
+  var entry=enterByArrival("Entregador Regra","DELIVERY");
+  assertEquals("TENANT_RULE:true",db.adminString("select expected_source||':'||(expected_exit_at=entered_at+interval '25 minutes') from cp.stays where entry_event_id=?",entry.entryId()));
+  assertEquals("STAY_KIND_INVALID",assertThrows(BusinessProblem.class,()->enterByArrival("Tipo Errado","PEDESTRE")).code());
+  db.adminUpdateWithoutTriggers("delete from cp.stay_rules where tenant_id=?",db.tenantA);
+  db.assertEmptyContext();
+ }
+}

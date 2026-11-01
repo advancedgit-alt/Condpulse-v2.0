@@ -68,9 +68,9 @@ export const panelModules = {
   'morador.inicio.caixa': null, 'morador.inicio.avisos': 'announcements', 'morador.inicio.pedidos': 'requests', 'morador.inicio.mudancas': 'requests',
   'morador.inicio.reservas': 'reservations', 'morador.inicio.financeiro': 'finance',
   'morador.reservas': 'reservations', 'morador.encomendas': 'parcels', 'morador.financeiro': 'finance',
-  'morador.acessos.visitas': 'visits', 'morador.acessos.equipamentos': 'access_credentials',
+  'morador.acessos.visitas': 'visits', 'morador.acessos.permanencias': 'visits', 'morador.acessos.equipamentos': 'access_credentials',
   'portaria.encomendas': 'parcels', 'portaria.ocorrencias': 'visits',
-  'portaria.visitas.chegadas': 'visits', 'portaria.visitas.revogacoes': 'access_credentials', 'portaria.visitas.saude': 'access_credentials',
+  'portaria.visitas.chegadas': 'visits', 'portaria.visitas.permanencias': 'visits', 'portaria.visitas.revogacoes': 'access_credentials', 'portaria.visitas.saude': 'access_credentials',
   'portaria.visitas.eventos': 'access_credentials', 'portaria.visitas.mudancas': 'requests',
   'zeladoria': 'requests',
   'gestao.pendencias.pessoas': null, 'gestao.pendencias.reservas': 'reservations',
@@ -209,7 +209,7 @@ export function partnerContextOf(contexts: readonly PartnerContext[], partnerId:
  * rota nem dado.
  */
 export type PartnerSectionId = 'equipe' | 'escala' | 'carteira' | 'log' | 'carteira-seguranca' | 'aberturas' | 'politicas' | 'bloqueio'
-  | 'turno' | 'log-turno' | 'fila' | 'equipamentos';
+  | 'turno' | 'log-turno' | 'fila' | 'equipamentos' | 'permanencias';
 export interface PartnerSection { id: PartnerSectionId; label: string; capability: PartnerCapability; ready: boolean }
 const partnerSectionCatalog: Record<PartnerPanel, readonly PartnerSection[]> = {
   gestao: [{ id: 'equipe', label: 'Equipe', capability: 'partner.team.manage', ready: true },
@@ -218,13 +218,16 @@ const partnerSectionCatalog: Record<PartnerPanel, readonly PartnerSection[]> = {
     { id: 'log', label: 'Log de Segurança', capability: 'security.log.read', ready: true }],
   comando: [{ id: 'carteira-seguranca', label: 'Visão da carteira', capability: 'security.command', ready: false },
     { id: 'log', label: 'Log de Segurança', capability: 'security.log.read', ready: true },
+    { id: 'permanencias', label: 'Permanências', capability: 'security.command', ready: true },
     { id: 'aberturas', label: 'Revisão de aberturas', capability: 'security.remote_open.review', ready: false },
     { id: 'politicas', label: 'Políticas de segurança', capability: 'security.policy.publish', ready: false },
     { id: 'bloqueio', label: 'Lista de bloqueio', capability: 'security.blocklist.approve', ready: false }],
   // O servidor ainda recusa a leitura de turno (security.log.read.shift) no log: fica em breve.
   turno: [{ id: 'turno', label: 'Fila do turno', capability: 'ops.shift.supervise', ready: false },
+    { id: 'permanencias', label: 'Permanências', capability: 'ops.shift.supervise', ready: true },
     { id: 'log-turno', label: 'Log do turno', capability: 'security.log.read.shift', ready: false }],
-  console: [{ id: 'fila', label: 'Fila de atendimento', capability: 'ops.remote.operate', ready: false }],
+  console: [{ id: 'fila', label: 'Fila de atendimento', capability: 'ops.remote.operate', ready: false },
+    { id: 'permanencias', label: 'Permanências', capability: 'ops.remote.operate', ready: true }],
   tecnico: [{ id: 'equipamentos', label: 'Equipamentos', capability: 'devices.commission', ready: false }],
 };
 export function partnerSections(context: Pick<PartnerContext, 'panel' | 'capabilities'>): PartnerSection[] {

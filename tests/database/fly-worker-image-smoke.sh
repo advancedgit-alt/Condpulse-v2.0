@@ -9,7 +9,7 @@ common=(--rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m -
   -e "DATABASE_URL=$jdbc" -e DATABASE_USER=cp_worker_11111111111111111111111111111111.rpnrqfrfwywglvyykgrg
   -e DATABASE_PASSWORD=SYNTHETIC_TEST_ONLY_password -e DB_POOL_SIZE=1 -e CP_WORKER_OUTBOX_ENABLED=false
   -e CP_WORKER_WAITLIST_ENABLED=false -e CP_WORKER_ACCESS_SYNC_ENABLED=false -e CP_WORKER_POLL_MILLIS=2000
-  -e CP_WORKER_WAITLIST_MILLIS=60000 -e CP_DB_CA_BASE64=SYNTHETIC_PUBLIC_CA_ONLY)
+  -e CP_WORKER_WAITLIST_MILLIS=60000 -e CP_WORKER_STAYS_ENABLED=false -e CP_WORKER_STAYS_MILLIS=60000 -e CP_DB_CA_BASE64=SYNTHETIC_PUBLIC_CA_ONLY)
 
 test "$(docker image inspect --format '{{json .Config.ExposedPorts}}' "$image")" = null
 test "$(docker image inspect --format '{{.Config.User}}' "$image")" = 10001:10001

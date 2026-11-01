@@ -225,8 +225,9 @@ describe('entrada por contexto de parceiro (CPX-004)', () => {
   it('conta só com um papel de parceiro vai direto ao painel dele', () => {
     expect(entryDecision([], 'no', false, [partner('PARTNER_ADMIN')])).toEqual({ kind: 'redirect', to: `/p/${P}/gestao/equipe` });
     expect(entryDecision([], 'no', false, [partner('SECURITY_LEAD')])).toEqual({ kind: 'redirect', to: `/p/${P}/comando/log` });
-    // Painel sem seção pronta abre a casca do painel, que mostra "em breve".
-    expect(entryDecision([], 'no', false, [partner('REMOTE_OPERATOR')])).toEqual({ kind: 'redirect', to: `/p/${P}/console` });
+    // Console: a única seção pronta é a de permanências (CPX-017); painel sem seção pronta abre a casca "em breve".
+    expect(entryDecision([], 'no', false, [partner('REMOTE_OPERATOR')])).toEqual({ kind: 'redirect', to: `/p/${P}/console/permanencias` });
+    expect(entryDecision([], 'no', false, [partner('TECHNICIAN')])).toEqual({ kind: 'redirect', to: `/p/${P}/tecnico` });
   });
   it('vários contextos (condomínio + parceiro, ou dois papéis no mesmo parceiro) mostram o seletor', () => {
     const [condo] = condominiums([membership(A, 'MANAGER')]);
@@ -255,8 +256,9 @@ describe('casca do parceiro por capacidade (CPX-005, R4.5)', () => {
   it('cada painel lista só as seções das capacidades do papel; sem backend fica em breve', () => {
     expect(partnerSections(partner('PARTNER_ADMIN')).map((item) => [item.id, item.ready])).toEqual([['equipe', true], ['escala', true], ['carteira', true], ['log', true]]);
     expect(partnerSections(partner('SECURITY_LEAD')).map((item) => [item.id, item.ready])).toEqual([['carteira-seguranca', false], ['log', true],
-      ['aberturas', false], ['politicas', false], ['bloqueio', false]]);
-    expect(partnerSections(partner('SECURITY_SUPERVISOR')).every((item) => !item.ready)).toBe(true);
+      ['permanencias', true], ['aberturas', false], ['politicas', false], ['bloqueio', false]]);
+    expect(partnerSections(partner('SECURITY_SUPERVISOR')).map((item) => [item.id, item.ready])).toEqual([['turno', false], ['permanencias', true], ['log-turno', false]]);
+    expect(partnerSections(partner('REMOTE_OPERATOR')).map((item) => [item.id, item.ready])).toEqual([['fila', false], ['permanencias', true]]);
     expect(partnerSections(partner('TECHNICIAN')).map((item) => item.id)).toEqual(['equipamentos']);
   });
   it('sem a capacidade a seção não existe, mesmo pedida no endereço', () => {
@@ -265,7 +267,8 @@ describe('casca do parceiro por capacidade (CPX-005, R4.5)', () => {
     expect(currentPartnerSection(limited, 'log')).toBe('equipe');
     expect(currentPartnerSection(limited, 'carteira')).toBe('equipe');
     expect(currentPartnerSection(partner('PARTNER_ADMIN'), 'carteira')).toBe('carteira');
-    expect(currentPartnerSection(partner('REMOTE_OPERATOR'), 'fila')).toBeNull();
+    expect(currentPartnerSection(partner('REMOTE_OPERATOR'), 'fila')).toBe('permanencias');
+    expect(currentPartnerSection(partner('TECHNICIAN'), 'equipamentos')).toBeNull();
     expect(partnerHomePath({ ...limited, capabilities: [] })).toBe(`/p/${P}/gestao`);
   });
   it('lugar do parceiro lido do endereço', () => {

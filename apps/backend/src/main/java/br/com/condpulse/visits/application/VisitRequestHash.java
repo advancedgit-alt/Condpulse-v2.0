@@ -26,6 +26,10 @@ final class VisitRequestHash {
  static String entry(UUID arrival,UUID permit,String evidence,String note) {
   return digest("ACCESS_ENTRY|"+arrival+"|"+permit+"|"+evidence+"|"+field(note));
  }
+ /** Com o tipo de permanência (V055); sem tipo, o mesmo hash de antes (repetições antigas continuam valendo). */
+ static String entry(UUID arrival,UUID permit,String evidence,String note,String stayKind) {
+  return stayKind==null?entry(arrival,permit,evidence,note):digest("ACCESS_ENTRY|"+arrival+"|"+permit+"|"+evidence+"|"+field(note)+"|"+stayKind);
+ }
  static String exit(UUID entry,String note) { return digest("ACCESS_EXIT|"+entry+"|"+field(note)); }
  static String correction(UUID event,String reason) { return digest("ACCESS_CORRECTION|"+event+"|"+field(reason)); }
  private static String field(String value) { return value==null?"-":value.length()+":"+value; }

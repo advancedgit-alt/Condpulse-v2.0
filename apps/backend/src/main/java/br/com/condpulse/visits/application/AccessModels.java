@@ -34,8 +34,14 @@ public final class AccessModels {
  public record RecordPage(List<AccessRecord> records,boolean truncated) {
   public RecordPage { records=List.copyOf(records); }
  }
- /** Entrada: exatamente uma base (chegada autorizada ou convite em vigor) e a conferência feita. */
- public record RecordEntry(UUID arrivalId,UUID permitId,String evidence,String note) {}
+ /**
+  * Entrada: exatamente uma base (chegada autorizada ou convite em vigor) e a conferência feita. stayKind (opcional, V055):
+  * tipo da permanência aberta pela entrada (VISITOR, SERVICE_PROVIDER, DELIVERY, CONSTRUCTION); sem ele, VISITOR; janela
+  * de prestador recorrente é sempre SERVICE_PROVIDER.
+  */
+ public record RecordEntry(UUID arrivalId,UUID permitId,String evidence,String note,String stayKind) {
+  public RecordEntry(UUID arrivalId,UUID permitId,String evidence,String note) { this(arrivalId,permitId,evidence,note,null); }
+ }
  public record RecordExit(String note) {}
  public record Correct(String reason) {}
  public record RecordMutation(AccessRecord record,boolean replayed,int status) {}

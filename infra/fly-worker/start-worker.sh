@@ -22,7 +22,7 @@ printf '%s' "${DATABASE_USER:-}" | grep -Eqx 'cp_worker_[a-f0-9]{32}\.rpnrqfrfwy
 [ -n "${CP_DB_CA_BASE64:-}" ] || fail FLY_WORKER_CA_REQUIRED
 # Pool 1-2: o teto do login é 2 (ADR-0006); vazio ou ausente é inválido.
 case "${DB_POOL_SIZE:-}" in 1|2) ;; *) fail FLY_WORKER_POOL_LIMIT ;; esac
-for value in "${CP_WORKER_OUTBOX_ENABLED:-}" "${CP_WORKER_WAITLIST_ENABLED:-}"; do
+for value in "${CP_WORKER_OUTBOX_ENABLED:-}" "${CP_WORKER_WAITLIST_ENABLED:-}" "${CP_WORKER_STAYS_ENABLED:-}"; do
   case "$value" in true|false) ;; *) fail FLY_WORKER_FLAG_INVALID ;; esac
 done
 # Reconciliação de credenciais depende do parceiro físico (CP-044): fica desligada aqui.
@@ -31,6 +31,9 @@ printf '%s' "${CP_WORKER_POLL_MILLIS:-}" | grep -Eqx '[1-9][0-9]{2,4}' || fail F
 [ "$CP_WORKER_POLL_MILLIS" -ge 500 ] && [ "$CP_WORKER_POLL_MILLIS" -le 60000 ] || fail FLY_WORKER_POLL_INVALID
 printf '%s' "${CP_WORKER_WAITLIST_MILLIS:-}" | grep -Eqx '[1-9][0-9]{4,6}' || fail FLY_WORKER_WAITLIST_INTERVAL_INVALID
 [ "$CP_WORKER_WAITLIST_MILLIS" -ge 10000 ] && [ "$CP_WORKER_WAITLIST_MILLIS" -le 3600000 ] || fail FLY_WORKER_WAITLIST_INTERVAL_INVALID
+# Alertas de permanência (V055): o intervalo é a tolerância do alerta, de 10 s a 10 min.
+printf '%s' "${CP_WORKER_STAYS_MILLIS:-}" | grep -Eqx '[1-9][0-9]{4,5}' || fail FLY_WORKER_STAYS_INTERVAL_INVALID
+[ "$CP_WORKER_STAYS_MILLIS" -ge 10000 ] && [ "$CP_WORKER_STAYS_MILLIS" -le 600000 ] || fail FLY_WORKER_STAYS_INTERVAL_INVALID
 
 # /tmp é efêmero. Só a CA pública validada é gravada aqui, nunca um segredo.
 umask 077
