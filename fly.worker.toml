@@ -24,7 +24,7 @@ kill_timeout = "35s"
   CP_WORKER_ACCESS_SYNC_ENABLED = "false"
   # Âncora diária do Log de Segurança (V050, CPX-008). O worker NÃO copia nada da Vercel (FLY_WORKER.md): ligar a flag
   # na Vercel liga só a API (via fly-api). Ligar aqui = PR revisado trocando para "true" + deploy do fly-worker.
-  CP_SECURITY_LOG_ENABLED = "false"
+  CP_SECURITY_LOG_ENABLED = "true"
 
 [[restart]]
   policy = "on-failure"
