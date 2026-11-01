@@ -43,8 +43,8 @@ Flags na Fly (homologacao):
   Ainda nao copiadas (fora desta fatia; ficam com o padrao da imagem na Fly): CP_TECHNICAL_GRANT_MAX_DAYS (30) e
   CP_AGE_EVIDENCE_KEY_VERSION (v1).
 - Worker (condpulse-v2-0-worker): NAO copia nada da Vercel (FLY_WORKER.md: os unicos segredos sao login, senha e CA).
-  As flags ficam em fly.worker.toml [env], revisadas por PR. CP_SECURITY_LOG_ENABLED="false" ali deixa a ancora
-  diaria desligada mesmo com a flag ligada na Vercel/API. Ligar a ancora = PR trocando para "true" e depois
+  As flags ficam em fly.worker.toml [env], revisadas por PR. CP_SECURITY_LOG_ENABLED="true" desde 01/11/2026
+  (ancora diaria ligada junto com a API). Mudar = PR trocando o valor e depois
   fly-worker deploy (V050 ja concede a cp_worker o necessario). Copiar da Vercel exigiria token da Vercel no workflow
   do worker, mudanca de escopo deliberadamente evitada.
 
