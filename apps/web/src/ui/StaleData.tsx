@@ -1,20 +1,21 @@
 import { useSyncExternalStore } from 'react';
 import { useQueryClient, type Query } from '@tanstack/react-query';
-import { ApiError } from '../api/client';
 import { Notice } from './primitives';
+import { isAuthorizationError } from './queryFailure';
 
 /** Consultas tratadas pelo próprio fluxo de acesso: a sessão e a disponibilidade do login têm telas próprias. */
 const ownedElsewhere = new Set(['identity', 'login-availability']);
 
 /**
  * Consulta na tela cuja última atualização falhou mas que continua mostrando os dados de antes (o TanStack Query
- * preserva `data` depois de um erro). Sessão encerrada (401) é tratada pelo acesso, não como dado antigo.
+ * preserva `data` depois de um erro). Falha de autorização (sessão encerrada, segundo fator exigido, papel ou vínculo
+ * perdido) é tratada pela porta de acesso de cada área, que troca a tela; não é dado antigo.
  */
 export function showsStaleData(query: Query): boolean {
   const { status, data, error, fetchStatus } = query.state;
   if (status !== 'error' || data === undefined || fetchStatus === 'fetching' || query.getObserversCount() === 0) return false;
   if (ownedElsewhere.has(String(query.queryKey[0]))) return false;
-  return !(error instanceof ApiError && error.status === 401);
+  return !isAuthorizationError(error);
 }
 
 /**
