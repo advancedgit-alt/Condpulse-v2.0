@@ -23,6 +23,12 @@ describe('contratos do painel master', () => {
     expect(() => platformSession({ accountId: account, role: 'MANAGER', capabilities: [], mfaRequired: false })).toThrow();
     expect(() => platformSession({ accountId: account, role: 'PLATFORM_ADMIN', capabilities: ['tenants.read', 'tenants.read'], mfaRequired: false })).toThrow();
   });
+  it('sessão com a hierarquia de parceiro ligada (partners.*) continua válida na central', () => {
+    const session = platformSession({ accountId: account, role: 'PLATFORM_ADMIN', mfaRequired: false,
+      capabilities: ['partners.manage', 'partners.read', 'platform.audit.read', 'tenants.manage', 'tenants.read'] });
+    expect(session.capabilities).toContain('partners.read');
+    expect(session.capabilities).toContain('tenants.read');
+  });
   it('condomínio exige recibo explícito (ou nulo) e campos coerentes', () => {
     expect(platformTenant(tenant).onboarding?.units).toBe(2);
     expect(platformTenant({ ...tenant, onboarding: null }).onboarding).toBeNull();
