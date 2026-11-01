@@ -24175,13 +24175,22 @@
             "items": {
               "type": "string",
               "enum": [
+                "access_catalog.manage",
                 "billing.manage",
                 "billing.read",
+                "homologation.approve",
+                "outbox.operate",
+                "partners.manage",
+                "partners.read",
                 "platform.audit.read",
+                "platform.demo.manage",
+                "technical_grants.manage",
+                "tenant_modules.manage",
                 "tenants.manage",
                 "tenants.read"
               ]
-            }
+            },
+            "description": "Capacidades do papel com AAL2 (PlatformCapability). billing.* só com CP_PLATFORM_BILLING_ENABLED; technical_grants/access_catalog/homologation só com CP_FACIAL_ACCESS_ENABLED; partners.* só com CP_PARTNERS_ENABLED; platform.demo.manage só com CP_DEMO_ENABLED."
           },
           "mfaRequired": {
             "type": "boolean"
