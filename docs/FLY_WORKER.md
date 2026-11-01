@@ -29,7 +29,7 @@ pela API (FLY_API.md).
 
 O worker não recebe nada da Vercel, do BFF nem do Storage. Por isso uma flag ligada na Vercel (por exemplo
 `CP_SECURITY_LOG_ENABLED`) não chega ao worker: a âncora diária do Log de Segurança segue o `fly.worker.toml`
-(`CP_SECURITY_LOG_ENABLED = "false"`) até um PR revisado trocar para `"true"` e um `deploy` do worker. Os únicos segredos da Fly são `DATABASE_USER`,
+(`CP_SECURITY_LOG_ENABLED`, ligada como `"true"` em 01/11/2026 por PR revisado + `deploy` do worker; desligar segue o mesmo caminho). Os únicos segredos da Fly são `DATABASE_USER`,
 `DATABASE_PASSWORD` (gerada no runner) e `CP_DB_CA_BASE64` (CA pública do Supabase validada com openssl no runner),
 gravados por `flyctl secrets import --stage` (valores só no stdin) e conferidos só pelos nomes.
 

@@ -23,8 +23,8 @@ kill_timeout = "35s"
   # Reconciliação de credenciais só com o adaptador do parceiro físico (CP-044); o launcher recusa "true".
   CP_WORKER_ACCESS_SYNC_ENABLED = "false"
   # Âncora diária do Log de Segurança (V050, CPX-008). O worker NÃO copia nada da Vercel (FLY_WORKER.md): ligar a flag
-  # na Vercel liga só a API (via fly-api). Ligar aqui = PR revisado trocando para "true" + deploy do fly-worker.
-  CP_SECURITY_LOG_ENABLED = "false"
+  # na Vercel liga só a API (via fly-api). Ligada em 01/11/2026 junto com a API, após o responsável ligar o log na Vercel.
+  CP_SECURITY_LOG_ENABLED = "true"
 
 [[restart]]
   policy = "on-failure"
