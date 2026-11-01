@@ -6,6 +6,14 @@ A fonte resumida do estado operacional é [ESTADO_ATUAL.md](ESTADO_ATUAL.md). Le
 SMTP, worker outbox e migrations V053/V054 já foram realizados; não repetir perguntas ou operações com base nos relatos antigos abaixo.
 A rodada autorizada de 01/11 corrige sessão/MFA e cobertura JDBC, integra permanências e prepara testes com dados sintéticos preservados.
 
+### Recibo da rodada de 01/11
+
+PR #172 integrado em 44c5a40, CI 41321268569 com cinco jobs success, revisões de código e segurança no head 02a9bbb. São 346 testes web unitários, 225 jornadas Chromium e 284 JDBC habilitados sem falha/erro/ignorado. A correção ainda não foi publicada na Fly.
+
+Carga real sintética pela aplicação: reserva/convidado, visita, pedido/mensagem, upload/download idêntico por SHA-256, arquivo inválido recusado, cota de reserva recusada sem segunda gravação e barreira de unidade cruzada na interface. IDs, fuso, resultados e limitações em [ESTADO_ATUAL.md](ESTADO_ATUAL.md) e [hml-functional-20261101.json](../evidence/hml-functional-20261101.json). Dados preservados.
+
+Carga descartável 41322229545 (44c5a40): 11.999 chamadas, 100rps, zero erros/descarte, p95 geral805,6ms. Metas de latência do PRD não atendidas nesse runner; não anunciar capacidade da HML. Backup/V055/deploy e nova sessão AAL2 continuam pendentes. A conferência do backup está bloqueada pelo CAPTCHA do painel Supabase.
+
 ## Histórico da situação registrada em 29/10/2026
 
 Os registros abaixo descrevem cada entrega na data em que ocorreu. Flags, número de migrations, papéis e bloqueios podem ter sido superados; não são inventário atual.

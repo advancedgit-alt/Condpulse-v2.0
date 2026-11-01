@@ -10,7 +10,7 @@ function fake(envs){
  return {calls,request:async({method,path,body})=>{calls.push({method,path,body});
   if(path.startsWith('/v9/projects')) return {id:TARGET.project,accountId:TARGET.team,link:{type:'github',org:'advancedgit-alt',repo:'Condpulse-v2.0'}};
   if(method==='GET') return {envs:envs.map(e=>({...e}))};
-  const existing=envs.find(e=>e.key===body.key);
+  const existing=envs.find(e=>e.key===body.key&&e.target.includes('production'));
   if(existing) Object.assign(existing,{value:body.type==='plain'?body.value:undefined,type:body.type});
   else envs.push({key:body.key,type:body.type,target:['production'],...(body.type==='plain'?{value:body.value}:{})});
   return {created:{key:body.key}};
@@ -51,4 +51,50 @@ test('ACK de outro estado é recusado sem escrita; segredo existente nunca é re
  assert.ok(f.calls.every(c=>c.method==='GET'));
  assert.deepEqual(state(envs).secrets,{CP_PARCEL_CODE_KEY:true});
  assert.throws(()=>state([{key:'CP_ACCESS_CREDENTIALS_ENABLED',type:'sensitive',target:['production']}]),/FLAGS_PLAIN_EXPECTED/);
+});
+
+test('perfil demo altera só a flag demo e nunca gera ou modifica segredo nem facial', async () => {
+ const envs=[
+  {key:'CP_FACIAL_ACCESS_ENABLED',type:'plain',value:'false',target:['production']},
+  {key:'CP_PARCEL_CODE_KEY',type:'sensitive',target:['production']},
+  {key:'CP_DEMO_ENABLED',type:'plain',value:'false',target:['preview']}
+ ];
+ const demo={...base,CP_FLAGS_PROFILE:'demo'};
+ const first=fake(envs);
+ const inspected=await execute(demo,{request:first.request});
+ assert.deepEqual(inspected.state,{flags:{CP_DEMO_ENABLED:null},secrets:{}});
+ assert.ok(first.calls.every(c=>c.method==='GET'));
+ const second=fake(envs);
+ const applied=await execute({...demo,CP_FLAGS_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',CP_FLAGS_ACK:inspected.ack},
+  {request:second.request,randomBytes:()=>assert.fail('Demo não gera segredo')});
+ assert.deepEqual(applied.changed,['CP_DEMO_ENABLED']);
+ assert.deepEqual(second.calls.filter(c=>c.method==='POST').map(c=>c.body),
+  [{key:'CP_DEMO_ENABLED',value:'true',type:'plain',target:['production']}]);
+ assert.equal(envs.find(e=>e.key==='CP_FACIAL_ACCESS_ENABLED').value,'false');
+ assert.equal(envs.find(e=>e.key==='CP_PARCEL_CODE_KEY').type,'sensitive');
+ assert.equal(envs.find(e=>e.key==='CP_DEMO_ENABLED'&&e.target.includes('preview')).value,'false');
+});
+
+test('ACK de access não pode autorizar demo e perfil desconhecido não faz chamada', async () => {
+ const access=await execute(base,{request:fake([]).request});
+ const calls=fake([]);
+ await assert.rejects(execute({...base,CP_FLAGS_PROFILE:'demo',CP_FLAGS_OPERATION:'apply',
+  MAINTENANCE_CONFIRMED:'true',CP_FLAGS_ACK:access.ack},{request:calls.request}),/FLAGS_ACK_INVALID/);
+ await assert.rejects(execute({...base,CP_FLAGS_PROFILE:'outro'},{request:calls.request}),/FLAGS_PROFILE_INVALID/);
+ assert.deepEqual(calls.calls,[]);
+});
+
+test('demo já ligado não escreve e ACK obsoleto ou tipo sensível recusam antes de gravar', async () => {
+ const envs=[{key:'CP_DEMO_ENABLED',type:'plain',value:'true',target:['production']}];
+ const demo={...base,CP_FLAGS_PROFILE:'demo'};
+ const first=fake(envs);const inspected=await execute(demo,{request:first.request});
+ const second=fake(envs);
+ assert.deepEqual((await execute({...demo,CP_FLAGS_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',CP_FLAGS_ACK:inspected.ack},
+  {request:second.request})).changed,[]);
+ assert.ok(second.calls.every(c=>c.method==='GET'));
+ envs[0].value='false';const stale=fake(envs);
+ await assert.rejects(execute({...demo,CP_FLAGS_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true',CP_FLAGS_ACK:inspected.ack},
+  {request:stale.request}),/FLAGS_STATE_CHANGED/);
+ assert.ok(stale.calls.every(c=>c.method==='GET'));
+ assert.throws(()=>state([{key:'CP_DEMO_ENABLED',type:'sensitive',target:['production']}],'demo'),/FLAGS_PLAIN_EXPECTED/);
 });

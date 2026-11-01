@@ -3,10 +3,16 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: inspect consulta; apply liga os módulos aprovados e gera chaves próprias ausentes
+        description: inspect consulta; apply altera apenas o perfil escolhido
         type: choice
         options: [inspect, apply]
         default: inspect
+        required: true
+      profile:
+        description: demo liga somente CP_DEMO_ENABLED; access mantém o lote histórico de credenciais/facial e chave de retirada
+        type: choice
+        options: [demo, access]
+        default: demo
         required: true
       expected_commit:
         description: SHA completo revisado da branch principal (40 hex)
@@ -47,6 +53,7 @@ jobs:
         env:
           CP_VERCEL_TOKEN: ${{ secrets.CP_VERCEL_TOKEN }}
           CP_FLAGS_OPERATION: ${{ inputs.operation }}
+          CP_FLAGS_PROFILE: ${{ inputs.profile }}
           CP_FLAGS_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           CP_FLAGS_ACK: ${{ inputs.flags_ack }}
           MAINTENANCE_CONFIRMED: ${{ inputs.maintenance_confirmed }}

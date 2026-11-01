@@ -26,6 +26,13 @@
       "processed_at": "2026-11-01T15:20:04.483142Z",
       "last_error": null,
       "interpretation": "Worker consumed event; InboxEffect has no handler for this type. No email or push proven."
+    },
+    "quota_negative": {
+      "attempted_starts_at": "2026-11-04T13:00:00Z",
+      "ui_result": "A unidade atingiu o limite de reservas previsto para esta área.",
+      "original_count": 1,
+      "refused_count": 0,
+      "evidence": "Read-only SQL after UI refusal"
     }
   },
   "guest": {
@@ -54,12 +61,88 @@
   "not_yet_proven": [
     "new login plus MFA after BFF correction deploy",
     "V055 HML and replay",
-    "attachment upload and scan",
     "staff response and in-app notification",
     "email recovery end to end",
     "physical hardware",
-    "load test",
+    "HML load and latency targets (runner load completed)",
     "backup restore",
     "operational production"
-  ]
+  ],
+  "request": {
+    "id": "4a523c37-1775-4318-9f89-c905b7a5b51e",
+    "title": "TESTE HML 20261101 — manutenção sintética",
+    "state": "OPEN",
+    "version": 0,
+    "message": {
+      "id": "2bf06a03-53aa-44bb-b782-6fa6a77d31e0",
+      "visibility": "RESIDENT"
+    },
+    "attachment": {
+      "id": "02342724-0a3a-47cc-a00f-cd77df80bcbb",
+      "state": "AVAILABLE",
+      "mime_type": "image/jpeg",
+      "size_bytes": 81255,
+      "sha256": "e2f9e7d3f9ae27891574d2828784ea39e943882e75f439f65ce49e77c527ae84",
+      "download_same_bytes": true
+    },
+    "invalid_attachment": {
+      "id": "adde37b3-8eff-478e-9b98-6e8e3a0fa1f6",
+      "state": "REJECTED",
+      "rejection": "TYPE_MISMATCH",
+      "size_bytes": 94,
+      "description": "Harmless plain text labeled JPEG, intentionally invalid fixture"
+    },
+    "evidence": [
+      "UI request and conversation",
+      "UI upload and download",
+      "read-only SQL states",
+      "local SHA256 comparison with downloaded bytes"
+    ]
+  },
+  "isolation_ui": {
+    "tenant": "70b78e08-540f-4d89-a6f3-df140c19cb7f",
+    "unit_from_other_tenant": "e66c13d1-f21f-47f1-9610-5c2c3cea85dc",
+    "result": "Unidade indisponível",
+    "prior_tenant_reservation_displayed": false,
+    "scope": "UI guard only; automated database tests cover RLS"
+  },
+  "correction": {
+    "pr": 172,
+    "merge_commit": "44c5a40e1b48e3e6148ed917c7d3e94f1a6ed8ab",
+    "ci_run": 41321268569,
+    "ci_result": "success; 5 jobs",
+    "web_unit_tests": 346,
+    "browser_journeys": 225,
+    "jdbc_tests": 284,
+    "code_and_security_review_head": "02a9bbbcccf6d7d2c9fb8d32fe15997001f2a982",
+    "api_deployed": false
+  },
+  "load": {
+    "run": 41322229545,
+    "commit": "44c5a40e1b48e3e6148ed917c7d3e94f1a6ed8ab",
+    "rps": 100,
+    "seconds": 120,
+    "sessions": 1000,
+    "pool": 2,
+    "result": "workflow success; latency targets not met in runner",
+    "scope": "Disposable PostgreSQL and API in GitHub runner; not HML capacity",
+    "metrics": {
+      "requests": 11999,
+      "achieved_rps": 100,
+      "dropped": 0,
+      "errors": 0,
+      "expected_rule_rejections": 62,
+      "p50_ms": 18.885427,
+      "p95_ms": 805.644317,
+      "p99_ms": 1738.32466,
+      "max_db_connections": 2,
+      "max_rss_mb": 368
+    },
+    "slo": {
+      "read_p95_target_ms": 400,
+      "command_p95_target_ms": 800,
+      "met": false,
+      "interpretation": "Each read class exceeds 400ms; create/cancel p95 exceed 800ms. Requires profiling; runner result is not HML acceptance."
+    }
+  }
 }
