@@ -30,6 +30,23 @@ CP_REALTIME_MAX_STREAMS (40 por instancia) e CP_REALTIME_MAX_PER_ACCOUNT (3). Ve
 
 Log de Seguranca (V050, CPX-006 a CPX-011): CP_SECURITY_LOG_ENABLED=false por padrao (API: busca, integridade,
 exportacao e SENSITIVE_VIEWED; worker: ancora diaria). A gravacao pelas fontes e do banco. Ver docs/LOG_SEGURANCA.md.
+Parceiros (V049, ADR-0011): CP_PARTNERS_ENABLED=false por padrao (hierarquia de parceiro na API).
+
+Flags na Fly (homologacao):
+- API (condpulse-v2-0): recebe as flags da Vercel Production pelo executor fly-api (docs/FLY_API.md), so as chaves de
+  COPIED em infra/scripts/fly-api/fly-api.mjs, inclusive CP_SECURITY_LOG_ENABLED e CP_PARTNERS_ENABLED. Ligar na
+  Vercel nao basta: e preciso rodar fly-api inspect -> apply -> deploy. Com o login READY, o apply regrava todas as
+  flags copiadas (a Fly so devolve nomes; um valor trocado na Vercel so chega assim). Flag cadastrada como
+  sensitive/secret na Vercel aborta com FLY_VERCEL_FLAG_TYPE_INVALID: cadastrar como Plain ou Encrypted.
+- Fora do COPIED de proposito: CP_FILES_ENABLED=true e CP_FINANCE_ENABLED (so com a chave do secret do GitHub),
+  chaves (CP_AGE_EVIDENCE_KEY, CP_PARCEL_CODE_KEY, CP_BFF_*_KEY) e CP_WORKER_* (so do worker).
+  Ainda nao copiadas (fora desta fatia; ficam com o padrao da imagem na Fly): CP_TECHNICAL_GRANT_MAX_DAYS (30) e
+  CP_AGE_EVIDENCE_KEY_VERSION (v1).
+- Worker (condpulse-v2-0-worker): NAO copia nada da Vercel (FLY_WORKER.md: os unicos segredos sao login, senha e CA).
+  As flags ficam em fly.worker.toml [env], revisadas por PR. CP_SECURITY_LOG_ENABLED="false" ali deixa a ancora
+  diaria desligada mesmo com a flag ligada na Vercel/API. Ligar a ancora = PR trocando para "true" e depois
+  fly-worker deploy (V050 ja concede a cp_worker o necessario). Copiar da Vercel exigiria token da Vercel no workflow
+  do worker, mudanca de escopo deliberadamente evitada.
 
 BFF: CP_BFF_ENABLED=false por padrao. Para habilitar depois da homologacao:
 - CP_BFF_ORIGIN: origem HTTPS exata da web, sem caminho/barra final.
