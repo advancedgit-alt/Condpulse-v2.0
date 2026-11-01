@@ -158,12 +158,13 @@ test('ACK de outro estado, segredo desconhecido, credencial já gravada e flag a
   assert.equal(f.imports.length,0);
 });
 
-test('login READY repete sem escrita; falha de leitura na Fly aborta o login e devolve os dois códigos',async()=>{
+test('login READY sem flag copiada na Vercel repete sem escrita; falha de leitura na Fly aborta o login e devolve os dois códigos',async()=>{
   const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true'};
-  const ready=flyFake(READY_NAMES),readyLogin=loginFake('READY');
-  const {applyAck}=await execute(base,deps(ready,readyLogin));
-  const repeat=await execute({...apply,CP_FLY_ACK:applyAck},deps(ready,readyLogin));
-  assert.equal(repeat.alreadyApplied,true);assert.equal(ready.imports.length+readyLogin.calls.length,0);
+  const noFlags={vercel:vercelFake(vercelEnvs().filter(e=>!Object.hasOwn(COPIED,e.key)||!e.target.includes('production'))).request};
+  const ready=flyFake(REQUIRED),readyLogin=loginFake('READY');
+  const {applyAck}=await execute(base,deps(ready,readyLogin,noFlags));
+  const repeat=await execute({...apply,CP_FLY_ACK:applyAck},deps(ready,readyLogin,noFlags));
+  assert.equal(repeat.alreadyApplied,true);assert.deepEqual(repeat.changed,[]);assert.equal(ready.imports.length+readyLogin.calls.length,0);
   const broken=flyFake(),brokenLogin=loginFake();
   const inspected=await execute(base,deps(broken,brokenLogin));
   broken.importSecrets=()=>{};// importação "silenciosa" sem efeito: a leitura de nomes não confere
@@ -268,25 +269,28 @@ test('chave do Storage: formato sb_secret_ estrito; ausente não muda nada; nunc
   const created=await execute({...apply,CP_FLY_ACK:i1.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(fresh,freshLogin));
   assert.deepEqual(created.changed,[...REQUIRED,'CP_BFF_ENABLED','CP_PARCELS_ENABLED',...STORAGE].sort());
   assert.match(fresh.imports[0],/^CP_FILES_ENABLED=true$/m);assert.ok(fresh.imports[0].includes(`CP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}`));
-  // Login READY sem chave: inalterado, nada escrito.
+  // Login READY sem chave: só as flags copiadas da Vercel são regravadas, nada de anexos.
   const ready=flyFake(READY_NAMES),readyLogin=loginFake('READY');
   const i2=await execute(base,deps(ready,readyLogin));
   const unchanged=await execute({...apply,CP_FLY_ACK:i2.applyAck},deps(ready,readyLogin));
-  assert.deepEqual(unchanged.changed,[]);assert.equal(ready.imports.length+readyLogin.calls.length,0);
+  assert.deepEqual(unchanged.changed,['CP_BFF_ENABLED','CP_PARCELS_ENABLED']);assert.equal(readyLogin.calls.length,0);
+  assert.deepEqual(ready.imports,['CP_BFF_ENABLED=true\nCP_PARCELS_ENABLED=true\n']);
   assert.ok(!unchanged.secretNames.includes('CP_FILES_ENABLED'));
-  // Login READY com chave: só os dois segredos de anexos, login de banco intocado, nomes conferidos.
-  const added=await execute({...apply,CP_FLY_ACK:i2.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(ready,readyLogin));
+  // Login READY com chave: flags copiadas e os dois segredos de anexos, login de banco intocado, nomes conferidos.
+  const i2b=await execute(base,deps(ready,readyLogin));
+  const added=await execute({...apply,CP_FLY_ACK:i2b.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(ready,readyLogin));
   assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
-  assert.deepEqual(ready.imports,[`CP_FILES_ENABLED=true\nCP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}\n`]);
-  assert.deepEqual(added.changed,STORAGE);assert.deepEqual(added.secretNames,[...new Set([...READY_NAMES,...STORAGE])].sort());
+  assert.equal(ready.imports[1],`CP_BFF_ENABLED=true\nCP_PARCELS_ENABLED=true\nCP_FILES_ENABLED=true\nCP_STORAGE_SERVICE_KEY=${STORAGE_SECRET}\n`);
+  assert.deepEqual(added.changed,['CP_BFF_ENABLED','CP_PARCELS_ENABLED',...STORAGE].sort());
+  assert.deepEqual(added.secretNames,[...new Set([...READY_NAMES,...STORAGE])].sort());
   assert.equal(ready.deploys,0,'apply não faz deploy');
-  // Repetir com a chave regrava só os dois; repetir sem a chave depois de gravada é recusado sem escrita.
+  // Repetir com a chave regrava flags e anexos; repetir sem a chave depois de gravada é recusado sem escrita.
   const i3=await execute(base,deps(ready,readyLogin));
   await execute({...apply,CP_FLY_ACK:i3.applyAck,CP_STORAGE_SERVICE_KEY:STORAGE_SECRET},deps(ready,readyLogin));
-  assert.equal(ready.imports.length,2);
+  assert.equal(ready.imports.length,3);
   const i4=await execute(base,deps(ready,readyLogin));
   await assert.rejects(execute({...apply,CP_FLY_ACK:i4.applyAck},deps(ready,readyLogin)),/FLY_STORAGE_KEY_REQUIRED/);
-  assert.equal(ready.imports.length,2);
+  assert.equal(ready.imports.length,3);
   // Deploy aceita os nomes de anexos como gerenciados (o deploy não recebe a chave).
   const deploy={...base,CP_FLY_OPERATION:'deploy',CP_FLY_GENERATION:'',MAINTENANCE_CONFIRMED:'true',CP_VERCEL_TOKEN:'',CP_SUPABASE_PUBLISHABLE_KEY:''};
   const deployed=await execute({...deploy,CP_FLY_ACK:i4.deployAck},deps(ready,null));
@@ -332,7 +336,7 @@ test('chave do Asaas: só sandbox; token gerado no runner configura o webhook an
   const ready=flyFake(READY_NAMES),readyLogin=loginFake('READY'),asaas=asaasFake();
   const i1=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
   const first=await execute({...apply,CP_FLY_ACK:i1.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(ready,readyLogin,{asaas:asaas.request}));
-  assert.deepEqual(first.changed,[...FINANCE].sort());assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
+  assert.deepEqual(first.changed,['CP_BFF_ENABLED','CP_PARCELS_ENABLED',...FINANCE].sort());assert.equal(readyLogin.calls.length,0,'login de banco não é tocado');
   assert.deepEqual(asaas.calls.map(c=>c.method),['GET','POST']);assert.ok(asaas.calls.every(c=>c.key===ASAAS_SECRET));
   const token=asaas.calls[1].body.authToken;assert.match(token,/^[A-Za-z0-9_-]{43}$/);
   assert.equal(asaas.calls[1].body.url,WEBHOOK_URL);assert.equal(asaas.calls[1].body.enabled,true);
@@ -342,7 +346,7 @@ test('chave do Asaas: só sandbox; token gerado no runner configura o webhook an
   // Token já na Fly: não regera nem chama o Asaas; repetir sem a chave depois de gravada é recusado.
   const i2=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
   const second=await execute({...apply,CP_FLY_ACK:i2.applyAck,CP_ASAAS_API_KEY:ASAAS_SECRET},deps(ready,readyLogin,{asaas:asaas.request}));
-  assert.equal(asaas.calls.length,2);assert.deepEqual(second.changed,['CP_ASAAS_API_KEY','CP_FINANCE_ENABLED']);
+  assert.equal(asaas.calls.length,2);assert.deepEqual(second.changed,['CP_ASAAS_API_KEY','CP_BFF_ENABLED','CP_FINANCE_ENABLED','CP_PARCELS_ENABLED']);
   const i3=await execute(base,deps(ready,readyLogin,{asaas:asaas.request}));
   await assert.rejects(execute({...apply,CP_FLY_ACK:i3.applyAck},deps(ready,readyLogin,{asaas:asaas.request})),/FLY_ASAAS_KEY_REQUIRED/);
   // Webhook já existente pela URL: atualiza (PUT), não duplica; sem e-mail configurado não chama o Asaas.
@@ -384,14 +388,42 @@ test('Asaas: só webhooks do sandbox, sem redirecionamento, e resposta conferida
   assert.equal(secretLines({CP_ASAAS_API_KEY:ASAAS_SECRET}),`CP_ASAAS_API_KEY=${ASAAS_SECRET}\n`);
 });
 
-test('login READY: flag copiada nova na Vercel entra na Fly sem tocar no banco; repetição não escreve',async()=>{
+test('login READY: flag copiada nova ou com valor trocado na Vercel é regravada na Fly sem tocar no banco',async()=>{
   const apply={...base,CP_FLY_OPERATION:'apply',MAINTENANCE_CONFIRMED:'true'};
   const ready=flyFake(READY_NAMES.filter(n=>n!=='CP_BFF_ENABLED')),readyLogin=loginFake('READY');
   const first=await execute(base,deps(ready,readyLogin));
   const applied=await execute({...apply,CP_FLY_ACK:first.applyAck},deps(ready,readyLogin));
-  assert.deepEqual(applied.changed,['CP_BFF_ENABLED']);assert.equal(readyLogin.calls.length,0);
+  assert.deepEqual(applied.changed,['CP_BFF_ENABLED','CP_PARCELS_ENABLED']);assert.equal(readyLogin.calls.length,0);
   assert.equal(ready.imports.length,1);assert.match(ready.imports[0],/^CP_BFF_ENABLED=true$/m);
-  const again=await execute(base,deps(ready,readyLogin));
-  const repeat=await execute({...apply,CP_FLY_ACK:again.applyAck},deps(ready,readyLogin));
-  assert.deepEqual(repeat.changed,[]);assert.equal(ready.imports.length,1);
+  // A Fly já tem CP_SECURITY_LOG_ENABLED (gravada "false" antes) e a Vercel passou a "true"; CP_PARTNERS_ENABLED é nova.
+  // A Fly só devolve nomes: o apply regrava todas as copiadas, então o valor novo chega à Fly.
+  const flipped={vercel:vercelFake([...vercelEnvs(),
+    {key:'CP_SECURITY_LOG_ENABLED',type:'plain',value:'true',target:['production']},
+    {key:'CP_PARTNERS_ENABLED',type:'encrypted',id:'env_partners',value:'CIPHERTEXT',target:['production']}],
+    {...singles,env_partners:{id:'env_partners',key:'CP_PARTNERS_ENABLED',type:'encrypted',decrypted:true,value:'true'}}).request};
+  const logFly=flyFake([...READY_NAMES,'CP_SECURITY_LOG_ENABLED']),logLogin=loginFake('READY');
+  const again=await execute(base,deps(logFly,logLogin,flipped));
+  assert.deepEqual(again.vercelCopied,{CP_BFF_ENABLED:'true',CP_PARCELS_ENABLED:'true',CP_PARTNERS_ENABLED:'true',CP_SECURITY_LOG_ENABLED:'true'});
+  const repeat=await execute({...apply,CP_FLY_ACK:again.applyAck},deps(logFly,logLogin,flipped));
+  assert.deepEqual(repeat.changed,['CP_BFF_ENABLED','CP_PARCELS_ENABLED','CP_PARTNERS_ENABLED','CP_SECURITY_LOG_ENABLED']);
+  assert.match(logFly.imports[0],/^CP_SECURITY_LOG_ENABLED=true$/m);assert.match(logFly.imports[0],/^CP_PARTNERS_ENABLED=true$/m);
+  assert.equal(logLogin.calls.length,0,'login de banco não é tocado');
+  assert.deepEqual(repeat.secretNames,[...new Set([...READY_NAMES,'CP_SECURITY_LOG_ENABLED','CP_PARTNERS_ENABLED'])].sort());
+});
+
+test('CP_PARTNERS_ENABLED: copiada só como true/false; variável sensível aborta sem ler o valor',async()=>{
+  assert.equal(String(COPIED.CP_PARTNERS_ENABLED),String(/^(?:true|false)$/));
+  assert.match(read('apps/backend/src/main/resources/application.yaml'),/\$\{CP_PARTNERS_ENABLED:false\}/);
+  for(const value of ['true','false'])
+    assert.deepEqual(await readVercelConfig(vercelFake([{key:'CP_PARTNERS_ENABLED',type:'plain',value,target:['production']}]).request,'t'),{CP_PARTNERS_ENABLED:value});
+  // Proposital: flag marcada como sensitive/secret na Vercel não é lida; o apply para e a Vercel precisa ser corrigida.
+  for(const flag of [{type:'sensitive'},{type:'secret'},{type:'encrypted',visibility:'secret'}]){
+    const fake=vercelFake([{key:'CP_PARTNERS_ENABLED',id:'env_partners',target:['production'],...flag}]);
+    await assert.rejects(readVercelConfig(fake.request,'t'),/FLY_VERCEL_FLAG_TYPE_INVALID/);
+    assert.ok(!fake.paths.some(p=>p.includes('env_partners')),'valor sensível nunca é lido');
+  }
+  for(const bad of ['TRUE','1','yes','true '])
+    await assert.rejects(readVercelConfig(vercelFake([{key:'CP_PARTNERS_ENABLED',type:'plain',value:bad,target:['production']}]).request,'t'),/FLY_VERCEL_VALUE_INVALID/);
+  // Só Production: a flag de Preview não é copiada.
+  assert.deepEqual(await readVercelConfig(vercelFake([{key:'CP_PARTNERS_ENABLED',type:'plain',value:'true',target:['preview']}]).request,'t'),{});
 });

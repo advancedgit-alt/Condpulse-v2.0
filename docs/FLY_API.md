@@ -56,8 +56,14 @@ lidos de volta e precisam bater exatamente.
   `CP_PARCEL_CODE_KEY`.
 - Copiados da Vercel Production **só se existirem** e só valores não sensíveis em formato fechado: flags
   `CP_*_ENABLED` (BFF, reservas, gestão, plataforma, cobrança, encomendas, visitas, notificações, avisos, pedidos,
-  credenciais de acesso, recuperação, tempo real), `CP_FILES_ENABLED` (só `false`), `CP_BFF_SESSION_HOURS`,
-  `CP_REALTIME_*`, `CP_STORAGE_BUCKET`. Variável `sensitive` nunca é lida.
+  credenciais de acesso, acesso facial, recuperação, tempo real, Log de Segurança, parceiros), `CP_FILES_ENABLED` (só
+  `false`), `CP_BFF_SESSION_HOURS`, `CP_REALTIME_*`, `CP_STORAGE_BUCKET`. Flag `true|false` exatos; variável
+  `sensitive`/`secret` na Vercel nunca é lida e aborta com `FLY_VERCEL_FLAG_TYPE_INVALID` (cadastrar como Plain ou
+  Encrypted).
+- Com o login já READY, o `apply` regrava em stage **todas** as copiadas presentes na Vercel, não só as ausentes: a
+  Fly devolve só nomes, então trocar `false` → `true` na Vercel só chega à Fly assim. Repetir o `apply` sempre regrava
+  essas flags (mesmo valor, sem reinício); valem no próximo `deploy`. Flag removida da Vercel e ainda presente na Fly
+  continua `FLY_STALE_COPIED_SECRET`.
 
 ### Anexos (chave do Storage)
 
@@ -65,8 +71,8 @@ lidos de volta e precisam bater exatamente.
   `sb_secret_` + 24 ou mais caracteres `[A-Za-z0-9_-]` (fora disso: `FLY_STORAGE_KEY_INVALID`, sem eco do valor).
 - Só o `apply` recebe a chave (nunca `inspect` nem `deploy`). Presente: grava `CP_STORAGE_SERVICE_KEY` e
   `CP_FILES_ENABLED=true`. Ausente: nada muda (`CP_FILES_ENABLED` segue ausente ou `false` vindo da Vercel).
-- Com o login já READY, o `apply` grava só esses dois segredos em stage, sem tocar no banco, e confere os nomes de
-  volta (exatamente os anteriores mais os dois). Valem no próximo `deploy`.
+- Com o login já READY, o `apply` grava esses dois segredos em stage (junto com as flags copiadas da Vercel), sem
+  tocar no banco, e confere os nomes de volta (exatamente os anteriores mais os gravados). Valem no próximo `deploy`.
 - Mesmo `generation` do login existente, com o SHA novo: o executor aceita o login READY marcado por um commit
   anterior da mesma geração, só para leitura (nenhuma escrita no banco). STAGED/DISABLED de outro commit ou marker de
   outra geração continuam `FLY_RUNTIME_ROLE_OWNERSHIP_CONFLICT`.
