@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-01",
+  "environment": "HML",
+  "supabase_project": "rpnrqfrfwywglvyykgrg",
+  "web": "https://project-rhvdq.vercel.app",
+  "deployed_api_commit": "75c420380776f53270f50b3233b28192152f73a6",
+  "reviewed_base_commit": "36511067f40cdd4a251d0e17f2d5621379a522d1",
+  "data": "synthetic, created through authenticated application UI, preserve until owner requests removal",
+  "tenant_id": "8c2e1850-7664-4fec-a6f5-ae902e88e675",
+  "unit_id": "e66c13d1-f21f-47f1-9610-5c2c3cea85dc",
+  "reservation": {
+    "id": "3446ff02-529f-4849-b254-338cb98a76fa",
+    "status": "CONFIRMED",
+    "starts_at": "2026-11-03T13:00:00Z",
+    "ends_at": "2026-11-03T14:00:00Z",
+    "occupied_until": "2026-11-03T14:30:00Z",
+    "ui_timezone": "America/Sao_Paulo",
+    "evidence": [
+      "UI confirmation and agenda",
+      "read-only SQL persisted state"
+    ],
+    "outbox": {
+      "event_type": "RESERVATION_CREATED",
+      "state": "SKIPPED",
+      "attempts": 1,
+      "processed_at": "2026-11-01T15:20:04.483142Z",
+      "last_error": null,
+      "interpretation": "Worker consumed event; InboxEffect has no handler for this type. No email or push proven."
+    }
+  },
+  "guest": {
+    "permit_id": "de6a0a54-a7f6-49c4-877c-bbff17e41c17",
+    "name": "TESTE HML 20261101 Convidado Sintético",
+    "state": "ACTIVE",
+    "valid_from": "2026-11-03T12:00:00Z",
+    "valid_until": "2026-11-03T14:00:00Z",
+    "reservation_id": "3446ff02-529f-4849-b254-338cb98a76fa",
+    "evidence": [
+      "UI scheduled guest",
+      "read-only SQL foreign key and validity"
+    ]
+  },
+  "visit": {
+    "permit_id": "4c264ef2-66bc-4448-98be-4e53d0525403",
+    "name": "TESTE HML 20261101 Visitante Sintético",
+    "state": "ACTIVE",
+    "valid_from": "2026-11-02T13:00:00Z",
+    "valid_until": "2026-11-02T15:00:00Z",
+    "evidence": [
+      "UI creation and schedule",
+      "read-only SQL persisted state"
+    ]
+  },
+  "not_yet_proven": [
+    "new login plus MFA after BFF correction deploy",
+    "V055 HML and replay",
+    "attachment upload and scan",
+    "staff response and in-app notification",
+    "email recovery end to end",
+    "physical hardware",
+    "load test",
+    "backup restore",
+    "operational production"
+  ]
+}

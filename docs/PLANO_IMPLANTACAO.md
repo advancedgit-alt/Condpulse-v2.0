@@ -2,6 +2,8 @@
 Versão de execução 0.1 — 27/10/2026. Referência: PRD CondPulse v1.0.
 Decisão técnica, implementação e homologação são estados diferentes.
 
+Estado operacional conferido em 01/11/2026: web na Vercel, API e worker contínuo na Fly (gru), banco HML até V054. SMTP Resend do Auth e worker outbox já configurados. Este plano nasceu em 27/10 e suas estimativas não substituem o estado atual: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+
 ## 1. Objetivo e limite
 Morador: vínculo, reserva, convite, encomenda, avisos, documentos e pedidos.
 Portaria: fila Agora/Previstos, chegada, conferência, retirada e contingência.
@@ -23,7 +25,7 @@ Cobrança em atraso nunca bloqueia automaticamente passagem física do morador.
 | Dados | PostgreSQL/Supabase dedicado | Integridade, tenancy, sessão durável, auditoria e filas |
 | Auth | Supabase Auth | Identidade, MFA; permissões locais permanecem na API |
 | Arquivos | Supabase Storage privado | Quarentena, autorização, links curtos e retenção |
-| Deploy | Coolify em servidor exclusivo | Imagem imutável, limites e health checks |
+| Deploy HML | Vercel (web) e Fly (API/worker), gru | Imagem revisada, limites e health checks; Coolify permanece alternativa |
 | Física | Um parceiro contratado inicialmente | Aplicação confirmada por equipamento/firmware |
 | CI/código | GitHub; Woodpecker preferencial | Revisão, testes, imagem, SBOM, staging e promoção |
 | Segredos | Cofre do ambiente | Menor privilégio, rotação e recuperação |
@@ -37,7 +39,7 @@ Local usa PostgreSQL descartável e dados sintéticos.
 Consulta de custo da organização em 27/10/2026:
 US$10/mês por novo projeto, total-base incremental US$20/mês para dois projetos.
 Consumo adicional, PITR, SMTP, domínio, lojas e servidor não estão nesse total.
-O projeto Condpulse-v2.0 (rpnrqfrfwywglvyykgrg) foi posteriormente encontrado ACTIVE_HEALTHY em sa-east-1, com PostgreSQL17.11.0.003. Não atribuir sua criação a esta execução: a chamada anterior foi interrompida. Em etapa posterior, após aceite explícito de US$10/mês de base, o segundo projeto CondPulse-producao (tkxcujckpsuawnzkvpjg) foi criado e conferido ACTIVE_HEALTHY na mesma região. Sua aplicação, migrations, credenciais e integração ainda não foram configuradas; a separação completa dos ambientes permanece pendente. Inventário e evidência: [AMBIENTES.md](AMBIENTES.md).
+O projeto Condpulse-v2.0 (rpnrqfrfwywglvyykgrg) foi posteriormente encontrado ACTIVE_HEALTHY em sa-east-1, com PostgreSQL17.11.0.003. Não atribuir sua criação a esta execução: a chamada anterior foi interrompida. Em etapa posterior, após aceite explícito de US$10/mês de base, o segundo projeto CondPulse-producao (tkxcujckpsuawnzkvpjg) foi criado e conferido ACTIVE_HEALTHY na mesma região. A consulta de 01/11 confirmou produção somente até V017, sem usuários Auth, buckets ou logins runtime/worker; aplicação e integração de produção ainda não estão prontas. A separação completa dos ambientes permanece pendente. Inventário e evidência: [AMBIENTES.md](AMBIENTES.md).
 Não registrar projeto como provisionado sem retorno e read-back ACTIVE_HEALTHY.
 Não habilitar adicional pago sem aceite específico do custo.
 

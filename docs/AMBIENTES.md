@@ -6,7 +6,9 @@ Registro do lote de 28/10/2026, em America/Sao_Paulo. Base documental do reposit
 do plano de gerenciamento Supabase; esse SHA identifica a base deste registro,
 não um deployment ou uma migration executada no projeto novo.
 
-## Inventário atual
+## Inventário conferido em 01/11/2026
+
+Estado vigente e recibos: [ESTADO_ATUAL.md](ESTADO_ATUAL.md). O registro de criação de 28/10 acima é histórico.
 
 | Recurso | Homologação preparatória | Produção reservada |
 | --- | --- | --- |
@@ -14,11 +16,11 @@ não um deployment ou uma migration executada no projeto novo.
 | Project ref | `rpnrqfrfwywglvyykgrg` | `tkxcujckpsuawnzkvpjg` |
 | Região | `sa-east-1`, São Paulo | `sa-east-1`, São Paulo |
 | PostgreSQL registrado | `17.11.0.003` | `17.11.0.003`, engine17 |
-| Aplicação | Projeto Vercel `condpulse`, origem observada `https://project-rhvdq.vercel.app` | Sem origem de aplicação ou runtime Vercel configurado |
-| Banco da aplicação | Baseline oficial002 e V003-V005 já aplicadas, conforme STATUS | Nenhum schema/tabela de aplicação ou histórico Flyway encontrado na conferência agregada |
-| Auth e Storage | Preparação própria existente; jornadas reais ainda não aceitas | Cadastro público e anônimo desligados, confirmação de e-mail ligada; zero usuários e buckets; jornadas não configuradas/homologadas |
+| Aplicação | Web Vercel `condpulse`, `https://project-rhvdq.vercel.app`; API/worker na Fly, gru | Sem origem de aplicação ou runtime Vercel configurado |
+| Banco da aplicação | Baseline oficial002 e SQL até V054, conferidos em 01/11; V055 mergeada, ainda não aplicada | Histórico somente até V017, conferido em 01/11 |
+| Auth e Storage | SMTP Resend já configurado; login exercitado. Anexos e recuperação completa ainda precisam de evidência própria | Cadastro público e anônimo desligados, confirmação de e-mail ligada; zero usuários e buckets; jornadas não configuradas/homologadas |
 | Transporte PostgreSQL | CA/hostname do runtime preparados, com limites em STATUS | SSL enforcement ligado pelo diálogo que solicita reinício; saúde confirmada depois; JDBC/runtime ainda não ensaiados |
-| Credenciais e jornada | Runtime JDBC e chaves BFF preparados; BFF/reservas continuam desligados | Sem credenciais runtime da aplicação, migrations ou jornada Auth configuradas |
+| Credenciais e jornada | API/worker com logins próprios; login e reserva concreta confirmados em 01/11. MFA com sessão antiga em correção | Sem logins runtime/worker ou jornada Auth configurados |
 
 O rótulo Vercel `Production` do deployment atual é o escopo de hospedagem da
 aplicação preparatória ligada a `rpnrqfrfwywglvyykgrg`. Não o confundir com o

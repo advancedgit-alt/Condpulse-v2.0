@@ -93,7 +93,8 @@ test('portaria vê quem está agora com vencidas em destaque e origem, justifica
   await asConcierge(page, api);
   const state = await installStays(page, 'stays');
   await signIn(page);
-  await page.goto(`/c/${TENANT_A}/portaria/visitas`);
+  // Só visitas está habilitado: o login já abre esta seção. Recarregá-la criaria uma segunda leitura auditada.
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/portaria/visitas$`));
   await expect(page.getByRole('heading', { name: 'Quem está no condomínio agora · 2 permanências abertas · 1 vencida' })).toBeVisible();
   const list = page.getByRole('list', { name: 'Permanências abertas' });
   const overdue = list.getByRole('listitem').filter({ hasText: 'Prestador Sintético' });

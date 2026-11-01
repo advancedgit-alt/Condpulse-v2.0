@@ -1,6 +1,6 @@
 # API de homologação na Fly.io
 
-Situação: preparado neste PR, **nada executado**. Nenhum login de banco, segredo da Fly ou máquina foi criado.
+Estado em 01/11/2026: API implantada em homologação, uma máquina em gru, tráfego /auth e /v1 encaminhado pela Vercel à Fly. Último recibo conferido: run 41269213900, commit 75c4203, readiness 200/UP. Login e segredos já existem; não recriar por causa das instruções históricas abaixo. V055 e a correção de sessão do PR #172 ainda aguardam aplicação/publicação. Estado vigente: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
 
 ## O que muda
 
@@ -16,8 +16,7 @@ fixadas por digest, perfil `api`, sem migração, preflight antes do Spring).
 - `infra/scripts/fly-api/fly-api.mjs` (orquestração) e `FlyRuntimeLogin.java` (login de banco).
 - flyctl 0.4.110, baixado do release oficial e conferido por SHA-256 no runner.
 
-**O tráfego não muda neste PR.** `vercel.json` continua mandando `/auth`, `/v1` e a readiness para o serviço `api` da
-Vercel. Se a Fly falhar, nada precisa ser desfeito.
+O tráfego já foi trocado para a Fly por entregas posteriores. O desenho original deste documento é histórico; confira as rotas em `vercel.json` e o estado vigente antes de qualquer alteração.
 
 ## Login de banco exclusivo da Fly
 

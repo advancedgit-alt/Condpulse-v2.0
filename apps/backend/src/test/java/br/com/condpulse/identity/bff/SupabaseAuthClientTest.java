@@ -304,4 +304,44 @@ class SupabaseAuthClientTest {
   assertEquals("MFA_CODE_REJECTED",error.code()); assertEquals(422,error.status());
   assertFalse(error.getMessage().contains("sensitive-provider-detail"));
  }
+
+ @Test void missingProviderSessionDuringMfaRequiresNewLoginWithoutExposingBody() {
+  for(String providerCode:new String[]{"session_not_found","session_expired"}) {
+   for(String codeField:new String[]{"error_code","code"}) {
+    var builder=RestClient.builder();
+    var server=MockRestServiceServer.bindTo(builder).build();
+    server.expect(requestTo("https://auth.example.invalid/auth/v1/factors/"+FACTOR+"/challenge"))
+     .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+      .body("{\""+codeField+"\":\""+providerCode+"\",\"msg\":\"sensitive-provider-detail\"}"));
+    var error=assertThrows(BusinessProblem.class,
+     ()->new SupabaseAuthClient(builder.build(),settings()).verifyTotp("synthetic-access",UUID.fromString(FACTOR),"123456"));
+    assertEquals("SESSION_EXPIRED",error.code()); assertEquals(401,error.status());
+    assertFalse(error.getMessage().contains("sensitive-provider-detail"));
+    server.verify();
+   }
+  }
+ }
+ @Test void missingProviderSessionWhileReadingFactorsRequiresNewLogin() {
+  var builder=RestClient.builder();
+  var server=MockRestServiceServer.bindTo(builder).build();
+  server.expect(requestTo("https://auth.example.invalid/auth/v1/user"))
+   .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+    .body("{\"error_code\":\"session_not_found\",\"msg\":\"sensitive-provider-detail\"}"));
+  var error=assertThrows(BusinessProblem.class,()->new SupabaseAuthClient(builder.build(),settings()).totpFactors("synthetic-access"));
+  assertEquals("SESSION_EXPIRED",error.code()); assertEquals(401,error.status());
+  server.verify();
+ }
+ @Test void unrelatedOrMalformedProviderForbiddenRemainsAMfaRejection() {
+  for(String body:new String[]{"{\"error_code\":\"mfa_verification_rejected\"}","{\"error_code\":\"unknown\"}","not-json"}) {
+   var builder=RestClient.builder();
+   var server=MockRestServiceServer.bindTo(builder).build();
+   server.expect(requestTo("https://auth.example.invalid/auth/v1/factors/"+FACTOR+"/challenge"))
+    .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON).body(body));
+   var error=assertThrows(BusinessProblem.class,
+    ()->new SupabaseAuthClient(builder.build(),settings()).verifyTotp("synthetic-access",UUID.fromString(FACTOR),"123456"));
+   assertEquals("MFA_OPERATION_REJECTED",error.code()); assertEquals(403,error.status());
+   server.verify();
+  }
+ }
+
 }

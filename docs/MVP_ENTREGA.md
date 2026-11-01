@@ -1,5 +1,13 @@
 # Entrega do primeiro MVP CondPulse
 
+## Estado vigente em 01/11/2026
+
+Consulte [ESTADO_ATUAL.md](ESTADO_ATUAL.md) para migrations, SMTP, worker, release e testes reais. As atualizações datadas e a tabela de fases originais abaixo são histórico de planejamento, não inventário remoto atual.
+
+O primeiro marco desta rodada é teste web restrito: sessão/MFA funcional, release rastreável, papéis e cenário sintético aprovados, gravações e negações exercitadas. Facial físico, app em aparelho, piloto operacional e Administradora mantêm gates próprios.
+
+## Plano original e histórico
+
 Estado: direção de entrega autorizada pelo responsável; detalhamento proposto
 para revisão, organizado em seis fases de trabalho remanescentes. Referência:
 PRD CondPulse v1.0, [plano de implantação](PLANO_IMPLANTACAO.md)
