@@ -8,10 +8,16 @@ import java.util.UUID;
  * de cada módulo confere de novo a cada requisição.
  */
 public record CurrentIdentity(UUID accountId,List<Membership> memberships,List<TenantModules> tenantModules,
-    List<PartnerContext> partnerContexts) {
+    List<PartnerContext> partnerContexts,List<UUID> demoTenantIds) {
  public CurrentIdentity {
   memberships=List.copyOf(memberships); tenantModules=List.copyOf(tenantModules);
   partnerContexts=partnerContexts==null?List.of():List.copyOf(partnerContexts);
+  demoTenantIds=demoTenantIds==null?List.of():List.copyOf(demoTenantIds);
+ }
+ /** demoTenantIds (V053, CPX-046): condomínios alcançados marcados como DEMO, para a indicação visual em todas as telas. */
+ public CurrentIdentity(UUID accountId,List<Membership> memberships,List<TenantModules> tenantModules,
+    List<PartnerContext> partnerContexts) {
+  this(accountId,memberships,tenantModules,partnerContexts,List.of());
  }
  public CurrentIdentity(UUID accountId,List<Membership> memberships,List<TenantModules> tenantModules) {
   this(accountId,memberships,tenantModules,List.of());

@@ -147,7 +147,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  }
  void clearPlatformFixtures() throws SQLException {
   clearBillingFixtures();
-  try(Connection connection=admin()) { deletePartners(connection); }
+  try(Connection connection=admin()) { deleteDemo(connection); deletePartners(connection); }
   adminUpdate("delete from platform.tenant_modules where tenant_id in (?,?)",tenantA,tenantB);
   adminUpdate("delete from platform.access_homologation_decisions where decided_by in (?,?,?) or homologation_id in "
    +"(select id from platform.access_homologations where requested_by in (?,?,?))",accountA,accountB,accountC,accountA,accountB,accountC);
@@ -157,6 +157,27 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   adminUpdate("delete from platform.platform_roles where account_id in (?,?,?)",accountA,accountB,accountC);
   adminUpdate("delete from platform.platform_role_events where account_id in (?,?,?)",accountA,accountB,accountC);
  }
+ /**
+  * Condomínio demo (V053) inteiro, de qualquer geração (inclusive as da suíte SQL que rodou antes no mesmo banco
+  * descartável): tudo é só acréscimo, então sai com os gatilhos desligados, na ordem das chaves estrangeiras.
+  */
+ static void deleteDemo(Connection connection) throws SQLException {
+  String tenants="(select id from platform.tenants where demo)";
+  update(connection,"set session_replication_role=replica");
+  try {
+   for(String table:new String[]{"cp.security_log","cp.security_log_heads","platform.security_log_anchors","cp.request_messages",
+     "cp.service_requests","cp.concierge_occurrences","cp.visit_permits","cp.visitors","cp.parcel_handoffs","cp.parcels",
+     "cp.announcement_reads","cp.announcements","cp.audit_log","cp.outbox","cp.operator_schedules","platform.demo_generations",
+     "platform.partner_tenant_contracts","cp.memberships","cp.amenities","cp.units","cp.blocks","platform.tenant_modules"})
+    update(connection,"delete from "+table+" where tenant_id in "+tenants);
+   update(connection,"delete from platform.platform_audit_log where details->>'demo'='true' or tenant_id in "+tenants);
+   update(connection,"delete from platform.partner_members where partner_id in (select id from platform.partners where demo)");
+   update(connection,"delete from platform.partners where demo");
+   update(connection,"delete from platform.tenants where demo");
+   update(connection,"delete from platform.accounts where synthetic");
+  } finally { update(connection,"set session_replication_role=origin"); }
+ }
+ void adminDeleteDemo() throws SQLException { try(Connection connection=admin()) { deleteDemo(connection); } }
  /** Parceiros (V049) criados pelas contas desta fixture ou ligados aos condomínios dela; ordem das chaves estrangeiras. */
  private void deletePartners(Connection connection) throws SQLException {
   String partners="(select id from platform.partners where created_by in (?,?,?))";

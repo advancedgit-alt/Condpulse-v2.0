@@ -22344,6 +22344,155 @@
         }
       }
     },
+    "/v1/platform/demo-tenant": {
+      "get": {
+        "operationId": "platformDemoTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_DEMO_ENABLED",
+        "description": "Condomínio demo (CPX-046, V053): geração ativa e as últimas aposentadas (platform.demo.manage com AAL2).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false ou CP_DEMO_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "provisionPlatformDemoTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_DEMO_ENABLED",
+        "description": "Cria (expectedTenantId null) ou reseta (expectedTenantId = demo ativo) o condomínio demo isolado, com dados 100% sintéticos: torres, unidades, áreas com regras de reserva, avisos, encomendas, visitas, ocorrências, pedidos, parceiro de segurança sintético com contrato vigente, escala e eventos de exemplo no Log de Segurança. Tudo pela função do banco platform.demo_provision (dono cp_demo), numa transação, com eventos DEMO_*/PARTNER_* na trilha da plataforma. Reset não apaga nada: aposenta a geração (condomínio suspenso, contrato encerrado, parceiro suspenso). Nenhuma conta real recebe papel. Condomínio real nunca é resetado.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{16,128}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionDemo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Geração nova criada (e a anterior aposentada, no reset)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoProvisioned"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Repetição da mesma chave e do mesmo pedido (applied=false)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoProvisioned"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "IDEMPOTENCY_KEY_INVALID, DEMO_CONFIRMATION_REQUIRED (confirmation diferente de DEMO) ou AUDIT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "DEMO_CHANGED (o demo mudou desde a leitura) ou DEMO_KEY_REUSED (mesma chave com outro pedido)"
+          },
+          "422": {
+            "description": "DEMO_RESET_REAL_TENANT: o condomínio informado não é o demo; condomínio real nunca é resetado"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false ou CP_DEMO_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      }
+    },
     "/v1/partners/{partnerId}/command/portfolio": {
       "get": {
         "operationId": "securityCommandPortfolio",
@@ -23512,6 +23661,14 @@
               "$ref": "#/components/schemas/PartnerContext"
             },
             "description": "Papéis ativos de parceiro (V049, ADR-0011) para a /entrada rotear; vazio com CP_PARTNERS_ENABLED=false. Campo novo e aditivo."
+          },
+          "demoTenantIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Condomínios alcançados (vínculo ou parceiro) marcados como DEMO (V053, CPX-046), para a indicação visual DEMO em todas as telas. Campo novo e aditivo."
           }
         }
       },
@@ -25108,13 +25265,22 @@
             "items": {
               "type": "string",
               "enum": [
+                "access_catalog.manage",
                 "billing.manage",
                 "billing.read",
+                "homologation.approve",
+                "outbox.operate",
+                "partners.manage",
+                "partners.read",
                 "platform.audit.read",
+                "platform.demo.manage",
+                "technical_grants.manage",
+                "tenant_modules.manage",
                 "tenants.manage",
                 "tenants.read"
               ]
-            }
+            },
+            "description": "Capacidades do papel com AAL2 (PlatformCapability). billing.* só com CP_PLATFORM_BILLING_ENABLED; technical_grants/access_catalog/homologation só com CP_FACIAL_ACCESS_ENABLED; partners.* só com CP_PARTNERS_ENABLED; platform.demo.manage só com CP_DEMO_ENABLED."
           },
           "mfaRequired": {
             "type": "boolean"
@@ -25227,11 +25393,12 @@
           },
           "origin": {
             "enum": [
+              "DEMO",
               "ONBOARDING",
               "PLATFORM",
               null
             ],
-            "description": "ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
+            "description": "DEMO: condomínio demo sintético (V053, CPX-046); ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
           },
           "usage": {
             "$ref": "#/components/schemas/PlatformTenantUsage",
@@ -38969,6 +39136,153 @@
             "type": "integer",
             "minimum": 0,
             "description": "Eventos CONTEXT_SWITCHED gravados nesta chamada (um por condomínio)."
+          }
+        }
+      },
+      "DemoGeneration": {
+        "type": "object",
+        "required": [
+          "generationId",
+          "generation",
+          "tenantId",
+          "tenantName",
+          "partnerId",
+          "partnerName",
+          "status",
+          "createdAt",
+          "createdBy",
+          "counts"
+        ],
+        "properties": {
+          "generationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": "string",
+            "pattern": "^\\[DEMO\\] "
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerName": {
+            "type": "string",
+            "pattern": "^\\[DEMO\\] "
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "RETIRED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retiredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Contagens do conteúdo sintético criado (torres, unidades, áreas, vínculos sintéticos, avisos, encomendas, visitas, ocorrências, pedidos, equipe do parceiro, escalas e eventos de exemplo)."
+          }
+        }
+      },
+      "DemoState": {
+        "type": "object",
+        "required": [
+          "current",
+          "retired"
+        ],
+        "properties": {
+          "current": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DemoGeneration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/DemoGeneration"
+            },
+            "description": "Últimas gerações aposentadas (condomínio suspenso, contrato encerrado, parceiro suspenso; nada apagado)."
+          }
+        }
+      },
+      "ProvisionDemo": {
+        "type": "object",
+        "required": [
+          "reason",
+          "confirmation"
+        ],
+        "properties": {
+          "expectedTenantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Demo ativo lido pela tela (null quando não havia demo). Outro valor: 409 DEMO_CHANGED; condomínio que não é demo: 422 DEMO_RESET_REAL_TENANT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "confirmation": {
+            "type": "string",
+            "const": "DEMO"
+          }
+        }
+      },
+      "DemoProvisioned": {
+        "type": "object",
+        "required": [
+          "generation",
+          "applied"
+        ],
+        "properties": {
+          "generation": {
+            "$ref": "#/components/schemas/DemoGeneration"
+          },
+          "retiredTenantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "applied": {
+            "type": "boolean",
+            "description": "false: repetição da mesma chave e do mesmo pedido; nada novo foi criado."
           }
         }
       },

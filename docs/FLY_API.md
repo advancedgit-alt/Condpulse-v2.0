@@ -33,6 +33,11 @@ Vercel. Se a Fly falhar, nada precisa ser desfeito.
     `postgres` em todas as tabelas, e compara o privilégio efetivo do login com o de `cp_api` em todas as tabelas,
     colunas, funções e schemas da aplicação (além de proibir TRUNCATE/REFERENCES/TRIGGER/MAINTAIN e repasse de grant em
     `cp_api`).
+  - Dono de função (ADR-0012, V053): os três executores de login (`FlyRuntimeLogin`, `FlyWorkerLogin`, `RuntimeConfiguration`)
+    recusavam qualquer função de `platform`/`cp` com dono diferente de `postgres` ou `SECURITY DEFINER`. Passam a aceitar,
+    só para funções, dono `cp_demo` (com `SECURITY DEFINER`) quando a role é NOLOGIN, NOSUPERUSER, NOBYPASSRLS,
+    NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem membros e sem ser membro de ninguém; tabelas e schemas
+    continuam exigindo `postgres`. Fora disso, `*_FUNCTION_OWNER_DIVERGED` como antes.
   - O login da Vercel continua existindo. Só ele (marker da Vercel) é tolerado; outra geração da Fly ou role
     `cp_runtime_*` desconhecida bloqueia.
   - **CONNECTION LIMIT 4**, não 16. Pela margem da ADR-0006 (max_connections 60, folga mínima 20), com o login da

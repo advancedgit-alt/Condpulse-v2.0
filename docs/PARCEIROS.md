@@ -127,6 +127,13 @@ cache o log dele e todos os dados do comando.
 como evidência (hoje a evidência é um evento do log anexado), permanências, turnos, desempenho, lista de bloqueio e
 políticas do §4.3.4.
 
+## Parceiro do condomínio demo (V053)
+
+- O demo da central (CPX-046, [ROTEIRO_TESTES_HML.md](ROTEIRO_TESTES_HML.md)) cria um parceiro `[DEMO]` com equipe sintética,
+  contrato vigente e escala. Parceiro demo só contrata condomínio demo (e vice-versa); conta sintética só tem papel em
+  parceiro demo. A central concede papel no parceiro demo a uma conta real pela aba "Condomínio demo" (mesma API
+  `/v1/platform/partners/{id}/members`).
+
 ## Pendências
 
 - Parceiro piloto (responsável): nenhum parceiro real cadastrado; só dados sintéticos nos testes.

@@ -69,3 +69,7 @@ h1{font-size:clamp(1.6rem,1.15rem + 1.6vw,2.4rem)}
 .data-table thead th{background:var(--cp-color-surface-alternate);color:var(--cp-color-text-primary)}
 .data-table tbody tr:hover{background:var(--cp-color-surface-alternate)}
 .data-table td{font-variant-numeric:tabular-nums}
+/* Condomínio demo (V053, CPX-046): marca visível em todas as telas do demo, sem depender só da cor (texto "DEMO"). */
+.demo-pill{background:var(--cp-color-status-warning-background);color:var(--cp-color-status-warning-foreground);border:1px solid var(--cp-color-status-warning-border);letter-spacing:.08em}
+.demo-banner{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 24px;padding:12px 16px;border-radius:12px;background:var(--cp-color-status-warning-background);color:var(--cp-color-status-warning-foreground);border:1px solid var(--cp-color-status-warning-border);font-size:.82rem}
+.demo-banner strong{letter-spacing:.12em}

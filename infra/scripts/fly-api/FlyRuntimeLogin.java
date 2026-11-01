@@ -221,7 +221,7 @@ public final class FlyRuntimeLogin {
         try (var q = query(c, "select count(*) from pg_namespace where nspname in ('platform','cp') and pg_get_userbyid(nspowner)<>'postgres'"); var r = q.executeQuery()) {
             require(r.next() && r.getLong(1) == 0, "FLY_RUNTIME_SCHEMA_OWNER_DIVERGED");
         }
-        try (var q = query(c, "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('platform','cp') and (pg_get_userbyid(p.proowner)<>'postgres' or p.prosecdef)"); var r = q.executeQuery()) {
+        try (var q = query(c, "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('platform','cp') and (pg_get_userbyid(p.proowner)<>'postgres' or p.prosecdef) and not exists(select 1 from pg_roles d where d.rolname='cp_demo' and pg_get_userbyid(p.proowner)=d.rolname and not (d.rolsuper or d.rolbypassrls or d.rolcreaterole or d.rolcreatedb or d.rolreplication or d.rolcanlogin or d.rolinherit) and not exists(select 1 from pg_auth_members m where m.roleid=d.oid or m.member=d.oid))"); var r = q.executeQuery()) {
             require(r.next() && r.getLong(1) == 0, "FLY_RUNTIME_FUNCTION_OWNER_DIVERGED");
         }
         try (var q = query(c, "select rolsuper or rolbypassrls or rolcreatedb or rolcreaterole or rolreplication or rolcanlogin,(select count(*) from pg_auth_members m where m.member=pg_roles.oid) from pg_roles where rolname='cp_api'"); var r = q.executeQuery()) {

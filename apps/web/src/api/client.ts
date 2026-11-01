@@ -461,6 +461,11 @@ const messages: Record<string, string> = {
   TENANT_UNITS_INVALID: 'Informe de 1 a 250 unidades.',
   TENANT_UNITS_DUPLICATED: 'Há unidades repetidas na lista. Cada identificação deve aparecer uma única vez.',
   TENANT_CREATION_KEY_REUSED: 'Esta criação já foi enviada com outros dados. Atualize a lista e confira antes de iniciar outra.',
+  // Condomínio demo (CPX-046, V053).
+  DEMO_RESET_REAL_TENANT: 'Somente o condomínio demo pode ser resetado. Condomínios reais nunca são resetados.',
+  DEMO_CHANGED: 'O condomínio demo mudou desde que a tela foi aberta. Atualize e confira antes de repetir.',
+  DEMO_KEY_REUSED: 'Esta operação já foi enviada com outros dados. Atualize a tela antes de repetir.',
+  DEMO_CONFIRMATION_REQUIRED: 'Digite DEMO para confirmar a operação no condomínio demo.',
   TENANT_CREATION_CONFLICT: 'Os dados conflitam com um cadastro existente. Atualize a lista e confira.',
   TENANT_SUSPENDED: 'Reative o condomínio antes de convidar o gestor.',
   TENANT_MANAGER_EXISTS: 'O condomínio já tem gestor vigente; novos vínculos seguem pela gestão local.',
@@ -776,7 +781,15 @@ function identity(value: unknown): CurrentIdentity {
   if (!record(value) || !isUUID(value.accountId) || !Array.isArray(value.memberships)) throw invalidResponse();
   return { accountId: value.accountId,
     memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null),
-    tenantModules: tenantModuleList(value.tenantModules), partnerContexts: partnerContextList(value.partnerContexts) };
+    tenantModules: tenantModuleList(value.tenantModules), partnerContexts: partnerContextList(value.partnerContexts),
+    demoTenantIds: demoTenantList(value.demoTenantIds) };
+}
+
+/** Condomínios DEMO (V053): ausente (servidor anterior) vira lista vazia; formato inválido recusa a resposta. */
+function demoTenantList(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every(isUUID)) throw invalidResponse();
+  return [...new Set(value.map((id) => id.toLowerCase()))];
 }
 
 /** Módulo desligado pela central para o condomínio (403 MODULE_DISABLED): não é perda de vínculo nem de sessão. */

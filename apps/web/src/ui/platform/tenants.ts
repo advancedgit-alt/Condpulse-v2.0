@@ -52,5 +52,5 @@ export function billingText(tenant: PlatformTenant): string | null {
 }
 
 export function originText(origin: PlatformTenant['origin']): string {
-  return origin === 'PLATFORM' ? 'Criado no painel master' : origin === 'ONBOARDING' ? 'Criado pelo onboarding operacional' : 'Origem não registrada';
+  return origin === 'DEMO' ? 'Condomínio demo (dados fictícios)' : origin === 'PLATFORM' ? 'Criado no painel master' : origin === 'ONBOARDING' ? 'Criado pelo onboarding operacional' : 'Origem não registrada';
 }

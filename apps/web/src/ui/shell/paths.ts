@@ -11,6 +11,12 @@ export const roleLabels: Record<Role, string> = { RESIDENT: 'Morador', RESPONSIB
   OWNER: 'Proprietário', CONCIERGE: 'Portaria', MAINTENANCE: 'Zeladoria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
 
 export const ENTRY_PATH = '/entrada';
+/** Condomínio demo (V053, CPX-046): marcado pelo servidor em /v1/me ou, na falta dele, pelo prefixo fixo do nome. */
+export function isDemoTenant(identity: Pick<CurrentIdentity, 'demoTenantIds'> | null | undefined, tenantId: string | undefined,
+  tenantName?: string | null): boolean {
+  if (!tenantId) return false;
+  return Boolean(identity?.demoTenantIds?.includes(tenantId.toLowerCase())) || Boolean(tenantName?.startsWith('[DEMO] '));
+}
 export const condoPath = (tenantId: string) => `/c/${tenantId}`;
 export const condoHomePath = (tenantId: string) => `/c/${tenantId}/inicio`;
 export const residentRoot = (tenantId: string) => `/c/${tenantId}/morador`;
