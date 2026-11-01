@@ -5,7 +5,7 @@ import { ApiError, CondPulseApi } from '../../api/client';
 import { contextSwitchResult, createPartnersApi } from '../../api/partners';
 import { partnerKey, securityLogKey } from '../partner/model';
 import { placeOf } from './paths';
-import { completeSwitch, contextKeyOf, contextRefOfKey, isPreviousContextData, noteContext, planSwitch, resetContextTracker, sameContext } from './contextSwitch';
+import { completeSwitch, contextKeyOf, contextRefOfKey, isPreviousContextData, noteContext, planSwitch, recordExit, resetContextTracker, sameContext } from './contextSwitch';
 
 const own = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -92,5 +92,43 @@ describe('R4.4: chamada ao servidor', () => {
     expect(contextSwitchResult({ status: 'ALREADY_RECORDED', recorded: 0 }).status).toBe('ALREADY_RECORDED');
     for (const value of [{ status: 'OK', recorded: 0 }, { status: 'NOT_REQUIRED', recorded: 1 }, { status: 'RECORDED', recorded: -1 }, null])
       expect(() => contextSwitchResult(value)).toThrow(ApiError);
+  });
+});
+
+describe('R4.4: saída de um painel de parceiro para um condomínio por vínculo ou para a central', () => {
+  it('só a saída de painel de parceiro gera registro, com chave nova e a origem do painel', () => {
+    expect(noteContext(own, { kind: 'TENANT', tenantId: tenant }, ids), 'condomínio direto, sem painel antes').toBeNull();
+    const planned = planSwitch(own, lead, ids)!;
+    completeSwitch(own, planned);
+    const exit = noteContext(own, { kind: 'TENANT', tenantId: tenant }, ids);
+    expect(exit).toMatchObject({ from: lead, to: { kind: 'TENANT', tenantId: tenant } });
+    expect(exit!.switchId).not.toBe(planned.switchId);
+    expect(noteContext(own, { kind: 'PLATFORM' }, ids), 'condomínio para central não é saída de painel').toBeNull();
+    completeSwitch(own, planSwitch(own, lead, ids)!);
+    expect(noteContext(own, { kind: 'PLATFORM' }, ids)).toMatchObject({ from: lead, to: { kind: 'PLATFORM' } });
+    // Depois da saída, a entrada seguinte no painel parte do contexto novo.
+    expect(planSwitch(own, lead, ids)!.from).toEqual({ kind: 'PLATFORM' });
+  });
+  it('envio: mesma chave nas novas tentativas só quando o servidor está indisponível', async () => {
+    completeSwitch(own, planSwitch(own, lead, ids)!);
+    const exit = noteContext(own, { kind: 'TENANT', tenantId: tenant }, ids)!;
+    const wait = vi.fn(async () => undefined);
+    const flaky = vi.fn().mockRejectedValueOnce(new ApiError(503, 'CONTEXT_SWITCH_UNAVAILABLE', 'x')).mockResolvedValueOnce({ status: 'RECORDED', recorded: 1 });
+    expect(await recordExit(exit, flaky, wait)).toBe(true);
+    expect(flaky.mock.calls.map((call) => (call[0] as { switchId: string }).switchId)).toEqual([exit.switchId, exit.switchId]);
+    const refused = vi.fn().mockRejectedValue(new ApiError(404, 'API_NOT_AVAILABLE', 'x'));
+    expect(await recordExit(exit, refused, wait)).toBe(false);
+    expect(refused).toHaveBeenCalledTimes(1);
+    const down = vi.fn().mockRejectedValue(new ApiError(503, 'CONTEXT_SWITCH_UNAVAILABLE', 'x'));
+    expect(await recordExit(exit, down, wait)).toBe(false);
+    expect(down).toHaveBeenCalledTimes(3);
+  });
+  it('corpo da saída: só identificadores, destino fechado', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input) => String(input) === '/auth/csrf'
+      ? new Response(JSON.stringify({ headerName: 'X-CSRF-Token', token: 'synthetic-csrf' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      : new Response(JSON.stringify({ status: 'RECORDED', recorded: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    await createPartnersApi(new CondPulseApi({ fetch })).exitContext(partnerId, { switchId: ids(), role: 'SECURITY_LEAD', to: { kind: 'TENANT', tenantId: tenant.toUpperCase() } });
+    const call = fetch.mock.calls.find((item) => String(item[0]).endsWith('/context-exits'))!;
+    expect(JSON.parse(String(call[1]!.body))).toMatchObject({ role: 'SECURITY_LEAD', to: { kind: 'TENANT', tenantId: tenant } });
   });
 });

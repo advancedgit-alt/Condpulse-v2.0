@@ -22344,6 +22344,1245 @@
         }
       }
     },
+    "/v1/platform/demo-tenant": {
+      "get": {
+        "operationId": "platformDemoTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_DEMO_ENABLED",
+        "description": "Condomínio demo (CPX-046, V053): geração ativa e as últimas aposentadas (platform.demo.manage com AAL2).",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false ou CP_DEMO_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      },
+      "post": {
+        "operationId": "provisionPlatformDemoTenant",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_DEMO_ENABLED",
+        "description": "Cria (expectedTenantId null) ou reseta (expectedTenantId = demo ativo) o condomínio demo isolado, com dados 100% sintéticos: torres, unidades, áreas com regras de reserva, avisos, encomendas, visitas, ocorrências, pedidos, parceiro de segurança sintético com contrato vigente, escala e eventos de exemplo no Log de Segurança. Tudo pela função do banco platform.demo_provision (dono cp_demo), numa transação, com eventos DEMO_*/PARTNER_* na trilha da plataforma. Reset não apaga nada: aposenta a geração (condomínio suspenso, contrato encerrado, parceiro suspenso). Nenhuma conta real recebe papel. Condomínio real nunca é resetado.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{16,128}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionDemo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Geração nova criada (e a anterior aposentada, no reset)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoProvisioned"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Repetição da mesma chave e do mesmo pedido (applied=false)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoProvisioned"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "IDEMPOTENCY_KEY_INVALID, DEMO_CONFIRMATION_REQUIRED (confirmation diferente de DEMO) ou AUDIT_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "DEMO_CHANGED (o demo mudou desde a leitura) ou DEMO_KEY_REUSED (mesma chave com outro pedido)"
+          },
+          "422": {
+            "description": "DEMO_RESET_REAL_TENANT: o condomínio informado não é o demo; condomínio real nunca é resetado"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PLATFORM_ACCESS_DENIED (sem papel de plataforma), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "Rota inexistente com CP_PLATFORM_ENABLED=false ou CP_DEMO_ENABLED=false"
+          },
+          "503": {
+            "description": "PLATFORM_DEPENDENCY_UNAVAILABLE: dependência indisponível"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/portfolio": {
+      "get": {
+        "operationId": "securityCommandPortfolio",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-012: visão da carteira do gestor líder. Para cada condomínio com contrato ativo do parceiro, semáforo (light RED/AMBER/GREEN, critério cpx012-v1 em docs/PARCEIROS.md) e contagens: equipamentos fora do ar ou sem informação recente (V026/V028), ocorrências de segurança abertas (V033), alertas críticos do log das últimas 24 h sem incidente, incidentes abertos, aberturas remotas sem revisão (7 dias, sem cor) e operadores com escala vigente. Portas abertas e permanências vencidas não têm fonte nesta versão (unavailableIndicators). Só contagens; não grava SENSITIVE_VIEWED. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityCommandPortfolio"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/team": {
+      "get": {
+        "operationId": "securityCommandTeam",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "Equipe do parceiro elegível como responsável de incidente (líder, supervisor e operador ativos), com nome de exibição. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityCommandTeam"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/incidents": {
+      "get": {
+        "operationId": "securityCommandIncidents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-013: incidentes dos condomínios alcançados (do próprio parceiro), mais recentes primeiro, até 200. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "CLOSED"
+              ],
+              "default": "OPEN"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "INCIDENT_STATE_INVALID"
+          }
+        }
+      },
+      "post": {
+        "operationId": "securityCommandOpenIncident",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-013: abre um incidente no condomínio (contrato ativo) com até 50 eventos do log anexados. O banco define parceiro, autoria e horários e grava INCIDENT_OPENED (correlation_id = incidente) no COMMIT. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityIncidentOpen"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "INCIDENT_TENANT_REQUIRED, INCIDENT_TITLE_INVALID, INCIDENT_SEVERITY_INVALID, INCIDENT_EVENTS_INVALID ou INCIDENT_EVENT_NOT_FOUND"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/incidents/{incidentId}": {
+      "get": {
+        "operationId": "securityCommandIncident",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-013: incidente com anexos e linha do tempo montada a partir do Log de Segurança (eventos do incidente e anexados, em ordem de seq, até 500). Grava SENSITIVE_VIEWED (INCIDENT_TIMELINE) na mesma transação. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "409": {
+            "description": "INCIDENT_TIMELINE_TOO_LARGE"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/incidents/{incidentId}/assignment": {
+      "post": {
+        "operationId": "securityCommandAssignIncident",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "Designa o responsável (líder, supervisor ou operador ativo do parceiro) pela versão lida; grava INCIDENT_ASSIGNED. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityIncidentAssign"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "INCIDENT_ASSIGNEE_REQUIRED, INCIDENT_VERSION_REQUIRED ou INCIDENT_ASSIGNEE_INVALID"
+          },
+          "409": {
+            "description": "INCIDENT_CHANGED ou INCIDENT_CLOSED"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/incidents/{incidentId}/links": {
+      "post": {
+        "operationId": "securityCommandLinkIncidentEvents",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "Anexa eventos do log do condomínio ao incidente aberto (no máximo 50 por incidente; repetido é ignorado). Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityIncidentLinks"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "INCIDENT_EVENTS_REQUIRED, INCIDENT_EVENTS_INVALID ou INCIDENT_EVENT_NOT_FOUND"
+          },
+          "409": {
+            "description": "INCIDENT_CLOSED ou INCIDENT_LINKS_LIMIT"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/incidents/{incidentId}/close": {
+      "post": {
+        "operationId": "securityCommandCloseIncident",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "Encerra (final) com desfecho e relatório pela versão lida; grava INCIDENT_CLOSED com os eventos anexados. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityIncidentClose"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "INCIDENT_OUTCOME_INVALID, INCIDENT_REPORT_REQUIRED ou INCIDENT_VERSION_REQUIRED"
+          },
+          "409": {
+            "description": "INCIDENT_CHANGED ou INCIDENT_CLOSED"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/incidents/{incidentId}/dossier": {
+      "post": {
+        "operationId": "securityCommandIncidentDossier",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-013: exporta o dossiê do incidente com manifesto (resumo cpdx1 dos eventos, docs/LOG_SEGURANCA.md). Mesmas regras da exportação do log (R5.7): só security.log.export (líder), motivo de 10 a 500 caracteres, cada evento conferido na cadeia (digest e elo anterior) e EVIDENCE_EXPORTED na mesma transação. Equipe do parceiro vê os eventos sem máscara, como na exportação do log. Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityIncidentDossierRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityIncidentDossier"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "INCIDENT_DOSSIER_REASON_REQUIRED"
+          },
+          "409": {
+            "description": "INCIDENT_DOSSIER_EMPTY, INCIDENT_TIMELINE_TOO_LARGE ou SECURITY_LOG_CHAIN_BROKEN"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/remote-opens": {
+      "get": {
+        "operationId": "securityCommandRemoteOpens",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-014: aberturas remotas (REMOTE_OPEN no log) do condomínio com operador, papel, motivo, ponto, equipamento, evidência, horários e a revisão mais recente. Só security.remote_open.review; grava SENSITIVE_VIEWED (REMOTE_OPEN_REVIEW). Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "REVIEWED",
+                "ALL"
+              ],
+              "default": "PENDING"
+            }
+          },
+          {
+            "name": "operatorId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "beforeSeq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 2
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityRemoteOpenPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "REMOTE_OPEN_FILTER_INVALID, REMOTE_OPEN_OPERATOR_INVALID, REMOTE_OPEN_CURSOR_INVALID ou REMOTE_OPEN_LIMIT_INVALID"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/command/tenants/{tenantId}/remote-opens/{eventId}/reviews": {
+      "post": {
+        "operationId": "securityCommandReviewRemoteOpen",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "x-feature-flags": [
+          "CP_PARTNERS_ENABLED",
+          "CP_SECURITY_LOG_ENABLED"
+        ],
+        "description": "CPX-014: marca a abertura como conferida (INFO) ou irregular (ATTENTION, com motivo) e grava REMOTE_OPEN_REVIEWED. Uma revisão por abertura; mudar exige correção da revisão mais recente (correctsReviewId + motivo). Ninguém revisa a própria abertura (o banco também recusa). Exige CP_PARTNERS_ENABLED e CP_SECURITY_LOG_ENABLED (rota inexistente, 404, com qualquer uma desligada).",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityRemoteOpenReview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityRemoteOpen"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel sem security.command, condomínio fora do contrato do parceiro ou alcance perdido), ACCOUNT_INACTIVE ou MFA_REQUIRED (segundo fator exigido), REMOTE_OPEN_SELF_REVIEW"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, INCIDENT_NOT_FOUND, REMOTE_OPEN_NOT_FOUND, ou rota inexistente com as flags desligadas"
+          },
+          "503": {
+            "description": "SECURITY_COMMAND_UNAVAILABLE (nada foi gravado)"
+          },
+          "400": {
+            "description": "REMOTE_OPEN_REVIEW_INVALID, REMOTE_OPEN_REVIEW_NOTE_INVALID ou REMOTE_OPEN_REVIEW_NOTE_REQUIRED"
+          },
+          "409": {
+            "description": "REMOTE_OPEN_ALREADY_REVIEWED"
+          }
+        }
+      }
+    },
+    "/v1/partners/{partnerId}/context-exits": {
+      "post": {
+        "operationId": "exitPartnerContext",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "R4.4 (PRD complementar §4.2, V052): a web chama ao sair do painel de um papel de parceiro direto para um condomínio por vínculo (TENANT) ou para a central (PLATFORM). Para papéis de segurança grava CONTEXT_SWITCHED com side=FROM em cada condomínio que o papel de origem ainda alcança (fim da visão anterior), na mesma transação. details só com origem, destino e lado. Repetição com o mesmo switchId não grava de novo (ALREADY_RECORDED). Com CP_SECURITY_LOG_ENABLED=false confere o papel e responde LOG_DISABLED sem gravar.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerContextExitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Troca conferida (e gravada quando exigido)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerContextSwitchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "CONTEXT_SWITCH_INVALID (chave, papel ou destino inválido)"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel inativo neste parceiro), ACCOUNT_INACTIVE, MFA_REQUIRED (papel de segurança exige segundo fator)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "CONTEXT_SWITCH_UNAVAILABLE (nada foi gravado; repita com o mesmo switchId)"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/stays": {
       "get": {
         "operationId": "listOpenStays",
@@ -22999,6 +24238,14 @@
               "$ref": "#/components/schemas/PartnerContext"
             },
             "description": "Papéis ativos de parceiro (V049, ADR-0011) para a /entrada rotear; vazio com CP_PARTNERS_ENABLED=false. Campo novo e aditivo."
+          },
+          "demoTenantIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Condomínios alcançados (vínculo ou parceiro) marcados como DEMO (V053, CPX-046), para a indicação visual DEMO em todas as telas. Campo novo e aditivo."
           }
         }
       },
@@ -24595,13 +25842,22 @@
             "items": {
               "type": "string",
               "enum": [
+                "access_catalog.manage",
                 "billing.manage",
                 "billing.read",
+                "homologation.approve",
+                "outbox.operate",
+                "partners.manage",
+                "partners.read",
                 "platform.audit.read",
+                "platform.demo.manage",
+                "technical_grants.manage",
+                "tenant_modules.manage",
                 "tenants.manage",
                 "tenants.read"
               ]
-            }
+            },
+            "description": "Capacidades do papel com AAL2 (PlatformCapability). billing.* só com CP_PLATFORM_BILLING_ENABLED; technical_grants/access_catalog/homologation só com CP_FACIAL_ACCESS_ENABLED; partners.* só com CP_PARTNERS_ENABLED; platform.demo.manage só com CP_DEMO_ENABLED."
           },
           "mfaRequired": {
             "type": "boolean"
@@ -24714,11 +25970,12 @@
           },
           "origin": {
             "enum": [
+              "DEMO",
               "ONBOARDING",
               "PLATFORM",
               null
             ],
-            "description": "ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
+            "description": "DEMO: condomínio demo sintético (V053, CPX-046); ONBOARDING: onboarding operacional; PLATFORM: criado no painel master; null: sem recibo."
           },
           "usage": {
             "$ref": "#/components/schemas/PlatformTenantUsage",
@@ -38470,6 +39727,1013 @@
             "type": "integer",
             "minimum": 0,
             "description": "Eventos CONTEXT_SWITCHED gravados nesta chamada (um por condomínio)."
+          }
+        }
+      },
+      "DemoGeneration": {
+        "type": "object",
+        "required": [
+          "generationId",
+          "generation",
+          "tenantId",
+          "tenantName",
+          "partnerId",
+          "partnerName",
+          "status",
+          "createdAt",
+          "createdBy",
+          "counts"
+        ],
+        "properties": {
+          "generationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": "string",
+            "pattern": "^\\[DEMO\\] "
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerName": {
+            "type": "string",
+            "pattern": "^\\[DEMO\\] "
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "RETIRED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retiredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Contagens do conteúdo sintético criado (torres, unidades, áreas, vínculos sintéticos, avisos, encomendas, visitas, ocorrências, pedidos, equipe do parceiro, escalas e eventos de exemplo)."
+          }
+        }
+      },
+      "DemoState": {
+        "type": "object",
+        "required": [
+          "current",
+          "retired"
+        ],
+        "properties": {
+          "current": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DemoGeneration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/DemoGeneration"
+            },
+            "description": "Últimas gerações aposentadas (condomínio suspenso, contrato encerrado, parceiro suspenso; nada apagado)."
+          }
+        }
+      },
+      "ProvisionDemo": {
+        "type": "object",
+        "required": [
+          "reason",
+          "confirmation"
+        ],
+        "properties": {
+          "expectedTenantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Demo ativo lido pela tela (null quando não havia demo). Outro valor: 409 DEMO_CHANGED; condomínio que não é demo: 422 DEMO_RESET_REAL_TENANT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "confirmation": {
+            "type": "string",
+            "const": "DEMO"
+          }
+        }
+      },
+      "DemoProvisioned": {
+        "type": "object",
+        "required": [
+          "generation",
+          "applied"
+        ],
+        "properties": {
+          "generation": {
+            "$ref": "#/components/schemas/DemoGeneration"
+          },
+          "retiredTenantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "applied": {
+            "type": "boolean",
+            "description": "false: repetição da mesma chave e do mesmo pedido; nada novo foi criado."
+          }
+        }
+      },
+      "PartnerContextExitRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "switchId",
+          "role",
+          "to"
+        ],
+        "properties": {
+          "switchId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Chave da troca gerada pela web."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTNER_ADMIN",
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR",
+              "TECHNICIAN"
+            ],
+            "description": "Papel do painel de origem."
+          },
+          "to": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "TENANT",
+                  "PLATFORM"
+                ]
+              },
+              "tenantId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "description": "Destino: condomínio por vínculo (com tenantId) ou central."
+          }
+        }
+      },
+      "SecurityCommandIndicators": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "devicesTotal",
+          "devicesOffline",
+          "devicesUnknown",
+          "securityOccurrencesOpen",
+          "criticalAlertsUnlinked",
+          "incidentsOpen",
+          "incidentsCriticalOpen",
+          "remoteOpensPendingReview",
+          "operatorsOnDuty"
+        ],
+        "properties": {
+          "devicesTotal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "devicesOffline": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "devicesUnknown": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "securityOccurrencesOpen": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "criticalAlertsUnlinked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "incidentsOpen": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "incidentsCriticalOpen": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "remoteOpensPendingReview": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "operatorsOnDuty": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "SecurityCommandTenant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "tenantName",
+          "timeZone",
+          "light",
+          "reasons",
+          "indicators"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "light": {
+            "type": "string",
+            "enum": [
+              "RED",
+              "AMBER",
+              "GREEN"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "CRITICAL_ALERTS_UNLINKED",
+                "CRITICAL_INCIDENTS_OPEN",
+                "DEVICES_OFFLINE",
+                "DEVICES_UNKNOWN",
+                "NO_OPERATOR_ON_DUTY",
+                "SECURITY_OCCURRENCES_OPEN",
+                "INCIDENTS_OPEN"
+              ]
+            }
+          },
+          "indicators": {
+            "$ref": "#/components/schemas/SecurityCommandIndicators"
+          }
+        }
+      },
+      "SecurityCommandPortfolio": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partnerId",
+          "generatedAt",
+          "criteria",
+          "unavailableIndicators",
+          "truncated",
+          "tenants"
+        ],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "criteria": {
+            "type": "string",
+            "const": "cpx012-v1"
+          },
+          "unavailableIndicators": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "DOORS_HELD_OPEN",
+                "STAYS_OVERDUE"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Mais de 200 condomínios: só os 200 primeiros por nome."
+          },
+          "tenants": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/SecurityCommandTenant"
+            }
+          }
+        }
+      },
+      "SecurityCommandTeamMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memberId",
+          "accountId",
+          "role",
+          "displayName"
+        ],
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
+      "SecurityCommandTeam": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partnerId",
+          "members"
+        ],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SecurityCommandTeamMember"
+            }
+          }
+        }
+      },
+      "SecurityIncident": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tenantId",
+          "tenantName",
+          "partnerId",
+          "title",
+          "severity",
+          "state",
+          "openedBy",
+          "openedAt",
+          "assigneeMemberId",
+          "assignedAt",
+          "outcome",
+          "report",
+          "closedBy",
+          "closedAt",
+          "version",
+          "linkCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "ATTENTION",
+              "CRITICAL"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "CLOSED"
+            ]
+          },
+          "openedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "assigneeMemberId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assignedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "RESOLVED",
+              "FALSE_ALARM",
+              "REFERRED",
+              null
+            ]
+          },
+          "report": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "linkCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "SecurityIncidentPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partnerId",
+          "state",
+          "truncated",
+          "incidents"
+        ],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "CLOSED"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "incidents": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/SecurityIncident"
+            }
+          }
+        }
+      },
+      "SecurityIncidentLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "linkedBy",
+          "linkedAt"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "linkedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "linkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SecurityIncidentDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incident",
+          "links",
+          "timeline"
+        ],
+        "properties": {
+          "incident": {
+            "$ref": "#/components/schemas/SecurityIncident"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SecurityIncidentLink"
+            }
+          },
+          "timeline": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/SecurityLogEvent"
+            },
+            "description": "Vazia nas respostas de mudança; preenchida na leitura do incidente."
+          }
+        }
+      },
+      "SecurityIncidentOpen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "title",
+          "severity"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "ATTENTION",
+              "CRITICAL"
+            ]
+          },
+          "eventIds": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "SecurityIncidentAssign": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memberId",
+          "expectedVersion"
+        ],
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "SecurityIncidentLinks": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventIds"
+        ],
+        "properties": {
+          "eventIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "SecurityIncidentClose": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome",
+          "report",
+          "expectedVersion"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "RESOLVED",
+              "FALSE_ALARM",
+              "REFERRED"
+            ]
+          },
+          "report": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 4000
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "SecurityIncidentDossierRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "SecurityIncidentDossierManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "incidentId",
+          "count",
+          "firstSeq",
+          "lastSeq",
+          "eventsDigest",
+          "canonicalization",
+          "exportedBy",
+          "exportedAt",
+          "reason",
+          "exportEventId"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "incidentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "firstSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventsDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "sha256(\"cpdx1|\" + tenantId + \"|\" + incidentId + (\"|\" + seq + \":\" + hash) de cada evento em ordem)."
+          },
+          "canonicalization": {
+            "type": "string",
+            "const": "cpdx1"
+          },
+          "exportedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "exportEventId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SecurityIncidentDossier": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "manifest",
+          "incident",
+          "links",
+          "events"
+        ],
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/SecurityIncidentDossierManifest"
+          },
+          "incident": {
+            "$ref": "#/components/schemas/SecurityIncident"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SecurityIncidentLink"
+            }
+          },
+          "events": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/SecurityLogEvent"
+            }
+          }
+        }
+      },
+      "SecurityRemoteOpenReviewState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewEventId",
+          "verdict",
+          "note",
+          "reviewedBy",
+          "reviewedAt"
+        ],
+        "properties": {
+          "reviewEventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "CONFERRED",
+              "IRREGULAR"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reviewedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SecurityRemoteOpen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "seq",
+          "occurredAt",
+          "recordedAt",
+          "operatorAccountId",
+          "operatorRole",
+          "reason",
+          "unitId",
+          "pointId",
+          "deviceId",
+          "evidenceRef",
+          "review"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "operatorAccountId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "operatorRole": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "pointId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "evidenceRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "review": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecurityRemoteOpenReviewState"
+              }
+            ]
+          }
+        }
+      },
+      "SecurityRemoteOpenPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "items",
+          "nextBeforeSeq"
+        ],
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/SecurityRemoteOpen"
+            }
+          },
+          "nextBeforeSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SecurityRemoteOpenReview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verdict"
+        ],
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "CONFERRED",
+              "IRREGULAR"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Obrigatória (3 a 500) para IRREGULAR e para correção."
+          },
+          "correctsReviewId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },

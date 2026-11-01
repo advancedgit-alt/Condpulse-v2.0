@@ -4,6 +4,7 @@ import { partnerRoles, type PartnerRole } from '../../api/types';
 import type { AddMemberBody, CreateScheduleBody } from '../../api/partners';
 import { EVENT_TYPE, type SecurityLogFilter, type SecuritySeverity } from '../../api/securityLog';
 import { toInstant } from '../dateTime';
+import type { CloseIncidentBody, IncidentOutcome, IncidentSeverity, Light, LightReason, OpenIncidentBody, ReviewBody, ReviewFilter, ReviewVerdict } from '../../api/securityCommand';
 
 /**
  * Regras puras dos painéis de parceiro (CPX-004/CPX-005): leitura de falhas, validação local dos formulários e chaves
@@ -50,7 +51,8 @@ export interface RefusalState { mfa: boolean; partnerDenied: unknown; deniedTena
 export const initialRefusalState = (): RefusalState => ({ mfa: false, partnerDenied: null, deniedTenants: new Map() });
 /**
  * Efeito de uma recusa: novo estado da porta e prefixos de cache a apagar. MFA e recusa do parceiro apagam todos os
- * dados do painel (parceiro e log de cada condomínio alcançado); recusa de condomínio apaga só o log dele.
+ * dados do painel (parceiro e log de cada condomínio alcançado); recusa de condomínio apaga o log dele e os dados do
+ * Comando de Segurança (que misturam condomínios).
  */
 export function applyRefusal(state: RefusalState, refusal: Refusal, scope: { accountId: string; partnerId: string; tenantIds: readonly string[] },
   error: unknown): { state: RefusalState; forget: (readonly unknown[])[] } {
@@ -58,8 +60,10 @@ export function applyRefusal(state: RefusalState, refusal: Refusal, scope: { acc
     partnerStaysKey(scope.accountId, tenantId)])];
   if (refusal.kind === 'mfa') return { state: { ...state, mfa: true }, forget: all };
   if (refusal.kind === 'partner') return { state: { ...state, partnerDenied: error }, forget: all };
+  // Dados do Comando de Segurança misturam condomínios (carteira, incidentes): saem todos e são relidos sem o recusado.
   return { state: { ...state, deniedTenants: new Map(state.deniedTenants).set(refusal.tenantId, error) },
-    forget: [securityLogKey(scope.accountId, refusal.tenantId), partnerStaysKey(scope.accountId, refusal.tenantId)] };
+    forget: [securityLogKey(scope.accountId, refusal.tenantId), partnerStaysKey(scope.accountId, refusal.tenantId),
+      partnerKey(scope.accountId, scope.partnerId, 'command')] };
 }
 
 /**
@@ -169,3 +173,51 @@ export function exportBody(draft: ExportDraft): { reason: string; fromSeq?: numb
 }
 /** Nome do arquivo exportado: condomínio e intervalo, sem dado pessoal. */
 export const exportFileName = (tenantId: string, fromSeq: number, toSeq: number) => `log-seguranca-${tenantId.slice(0, 8)}-${fromSeq}-${toSeq}.json`;
+
+// ---- Comando de Segurança (CPX-012 a CPX-014) ----
+export const commandKey = (accountId: string, partnerId: string, ...parts: unknown[]) => partnerKey(accountId, partnerId, 'command', ...parts);
+export const lightLabels: Record<Light, string> = { RED: 'Vermelho', AMBER: 'Amarelo', GREEN: 'Verde' };
+export const lightTone: Record<Light, string> = { RED: 'status-overdue', AMBER: 'status-pending', GREEN: 'status-ready' };
+export const lightReasonLabels: Record<LightReason, string> = {
+  CRITICAL_ALERTS_UNLINKED: 'alerta crítico sem incidente (24 h)', CRITICAL_INCIDENTS_OPEN: 'incidente crítico aberto',
+  DEVICES_OFFLINE: 'equipamento fora do ar', DEVICES_UNKNOWN: 'equipamento sem informação recente', NO_OPERATOR_ON_DUTY: 'central sem operador escalado agora',
+  SECURITY_OCCURRENCES_OPEN: 'ocorrência de segurança aberta', INCIDENTS_OPEN: 'incidente aberto' };
+export const unavailableLabels: Record<string, string> = { DOORS_HELD_OPEN: 'portas abertas', STAYS_OVERDUE: 'permanências vencidas' };
+export const incidentSeverityLabels: Record<IncidentSeverity, string> = { ATTENTION: 'Atenção', CRITICAL: 'Crítico' };
+export const outcomeLabels: Record<IncidentOutcome, string> = { RESOLVED: 'Resolvido', FALSE_ALARM: 'Alarme falso', REFERRED: 'Encaminhado (protocolo externo)' };
+export const verdictLabels: Record<ReviewVerdict, string> = { CONFERRED: 'Conferida', IRREGULAR: 'Irregular' };
+export const reviewFilterLabels: Record<ReviewFilter, string> = { PENDING: 'Sem revisão', REVIEWED: 'Revisadas', ALL: 'Todas' };
+
+export interface IncidentDraft { tenantId: string; title: string; severity: IncidentSeverity | ''; eventIds: readonly string[] }
+/** Corpo do incidente novo ou a mensagem do primeiro problema; o servidor confere tudo de novo. */
+export function incidentBody(draft: IncidentDraft, tenantIds: Iterable<string>): OpenIncidentBody | string {
+  if (!isUUID(draft.tenantId) || !stillReached(tenantIds, draft.tenantId)) return 'Escolha o condomínio.';
+  const title = displayText(draft.title, 120);
+  if (!title || Array.from(title).length < 3) return 'Informe o título, com 3 a 120 caracteres.';
+  if (draft.severity !== 'ATTENTION' && draft.severity !== 'CRITICAL') return 'Escolha a severidade.';
+  const eventIds = [...new Set(draft.eventIds.map((id) => id.toLowerCase()))];
+  if (eventIds.length > 50 || eventIds.some((id) => !isUUID(id))) return 'Anexe no máximo 50 eventos do log.';
+  return { tenantId: draft.tenantId.toLowerCase(), title, severity: draft.severity, eventIds };
+}
+export interface CloseDraft { outcome: IncidentOutcome | ''; report: string }
+export function closeBody(draft: CloseDraft, expectedVersion: number): CloseIncidentBody | string {
+  if (!draft.outcome) return 'Escolha o desfecho.';
+  const report = draft.report.replace(/\r\n?/g, '\n').trim();
+  if (Array.from(report).length < 10 || Array.from(report).length > 4000) return 'Escreva o relatório de encerramento, com 10 a 4.000 caracteres.';
+  return { outcome: draft.outcome, report, expectedVersion };
+}
+export interface ReviewDraft { verdict: ReviewVerdict | ''; note: string }
+/** Irregular e correção de revisão exigem motivo (3 a 500); conferida aceita observação opcional. */
+export function reviewBody(draft: ReviewDraft, correctsReviewId: string | null): ReviewBody | string {
+  if (draft.verdict !== 'CONFERRED' && draft.verdict !== 'IRREGULAR') return 'Escolha conferida ou irregular.';
+  const note = draft.note.trim() === '' ? null : displayText(draft.note, 500);
+  if (draft.note.trim() !== '' && (!note || Array.from(note).length < 3)) return 'A observação tem de 3 a 500 caracteres.';
+  if (!note && (draft.verdict === 'IRREGULAR' || correctsReviewId)) return 'Informe o motivo, com 3 a 500 caracteres.';
+  return { verdict: draft.verdict, note, correctsReviewId };
+}
+export function dossierReason(value: string): string | null {
+  const reason = displayText(value, 500);
+  return reason && Array.from(reason).length >= 10 ? reason : null;
+}
+/** Nome do arquivo do dossiê: condomínio e incidente, sem dado pessoal. */
+export const dossierFileName = (tenantId: string, incidentId: string) => `dossie-incidente-${tenantId.slice(0, 8)}-${incidentId.slice(0, 8)}.json`;

@@ -7,11 +7,12 @@ import { ApiError, CondPulseApi } from '../../api/client';
 import { createPartnersApi } from '../../api/partners';
 import { createSecurityLogApi } from '../../api/securityLog';
 import { createStaysApi } from '../../api/stays';
+import { createSecurityCommandApi } from '../../api/securityCommand';
 import type { PartnerContext } from '../../api/types';
 import { FailureState, PartnerConsole, PartnerGate, PartnerScopeProvider } from './PartnerPage';
 import { mfaStatusKey } from '../Mfa';
 import { planSwitch, resetContextTracker } from '../shell/contextSwitch';
-import { applyRefusal, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, partnerStaysKey, refusalOf,
+import { applyRefusal, commandKey, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, partnerStaysKey, refusalOf,
   reachedTenant, scheduleBody, securityLogKey, stillReached } from './model';
 
 const own = '10000000-0000-4000-8000-000000000001';
@@ -47,13 +48,13 @@ describe('casca do parceiro renderizada', () => {
     expect(html).not.toContain('>Carteira</a>');
   });
   it('líder de segurança sem condomínio alcançado vê o log sem consulta e sem exportação', () => {
-    const html = render(context('SECURITY_LEAD', 'comando', ['security.command', 'security.log.export', 'security.log.read']));
+    const html = render(context('SECURITY_LEAD', 'comando', ['security.command', 'security.log.export', 'security.log.read']), 'log');
     expect(html).toContain('Nenhum condomínio alcançado agora');
     expect(html).not.toContain('Exportar com manifesto');
   });
   it('log de um condomínio alcançado só consulta sob pedido; exportação só com a capacidade', () => {
     const tenants = [{ tenantId: tenant, tenantName: 'Condomínio Sintético', timeZone: 'America/Sao_Paulo' }];
-    const lead = render(context('SECURITY_LEAD', 'comando', ['security.log.export', 'security.log.read'], tenants));
+    const lead = render(context('SECURITY_LEAD', 'comando', ['security.log.export', 'security.log.read'], tenants), 'log');
     expect(lead).toContain('Consulta sob pedido');
     expect(lead).toContain('Exportar com manifesto');
     const admin = render(context('PARTNER_ADMIN', 'gestao', ['security.log.read'], tenants), 'log');
@@ -151,7 +152,9 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
     : new Response(JSON.stringify({ code, status }), { status, headers: { 'Content-Type': 'application/json' } }));
   // Cada pedido com o condomínio que a tela entrega ao tratador (as telas de equipe/escala/carteira não têm condomínio)
   // e as chaves de cache com os dados que a tela mostra.
-  type Client = { partners: ReturnType<typeof createPartnersApi>; log: ReturnType<typeof createSecurityLogApi>; stays: ReturnType<typeof createStaysApi> };
+  type Client = { partners: ReturnType<typeof createPartnersApi>; log: ReturnType<typeof createSecurityLogApi>; stays: ReturnType<typeof createStaysApi>;
+    command: ReturnType<typeof createSecurityCommandApi> };
+  const incidentId = '53000000-0000-4000-8000-000000000001';
   const requests: { name: string; tenantId?: string; keys: (readonly unknown[])[]; run(client: Client): Promise<unknown> }[] = [
     { name: 'equipe', keys: [partnerKey(own, partnerId, 'team')], run: (c) => c.partners.team(partnerId) },
     { name: 'adicionar papel', keys: [partnerKey(own, partnerId, 'team')],
@@ -164,6 +167,18 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
     { name: 'carteira', keys: [partnerKey(own, partnerId, 'portfolio')], run: (c) => c.partners.portfolio(partnerId) },
     { name: 'registro da troca de contexto', keys: [partnerKey(own, partnerId, 'context-switch', 'SECURITY_LEAD', memberId)],
       run: (c) => c.partners.switchContext(partnerId, { switchId: memberId, role: 'SECURITY_LEAD', from: { kind: 'ENTRY' } }) },
+    { name: 'visão da carteira', keys: [commandKey(own, partnerId, 'portfolio')], run: (c) => c.command.portfolio(partnerId) },
+    { name: 'incidentes', keys: [commandKey(own, partnerId, 'incidents', 'OPEN')], run: (c) => c.command.incidents(partnerId, 'OPEN') },
+    { name: 'abrir incidente', keys: [commandKey(own, partnerId, 'incidents', 'OPEN')],
+      run: (c) => c.command.open(partnerId, { tenantId: tenant, title: 'Porta forçada', severity: 'CRITICAL', eventIds: [] }) },
+    { name: 'linha do tempo', tenantId: tenant, keys: [commandKey(own, partnerId, 'incident', tenant, incidentId)],
+      run: (c) => c.command.detail(partnerId, tenant, incidentId) },
+    { name: 'dossiê', tenantId: tenant, keys: [commandKey(own, partnerId, 'incident', tenant, incidentId)],
+      run: (c) => c.command.dossier(partnerId, tenant, incidentId, 'Pedido formal do condomínio') },
+    { name: 'aberturas remotas', tenantId: tenant, keys: [commandKey(own, partnerId, 'remote-opens', tenant, 'PENDING', 1)],
+      run: (c) => c.command.remoteOpens(partnerId, tenant, { status: 'PENDING' }) },
+    { name: 'revisão de abertura', tenantId: tenant, keys: [commandKey(own, partnerId, 'remote-opens', tenant, 'PENDING', 1)],
+      run: (c) => c.command.review(partnerId, tenant, incidentId, { verdict: 'CONFERRED', note: null, correctsReviewId: null }) },
     { name: 'log', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.page(tenant) },
     { name: 'integridade', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.integrity(tenant) },
     { name: 'exportação', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')],
@@ -177,7 +192,8 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
   it('toda recusa vira estado de acesso negado (ou segundo fator) e apaga do cache os dados da tela', async () => {
     for (const request of requests) for (const [status, code] of refusals) {
       const client = new CondPulseApi({ fetch: respond(status, code) });
-      const error = await request.run({ partners: createPartnersApi(client), log: createSecurityLogApi(client), stays: createStaysApi(client) }).then(() => null, (failure: unknown) => failure);
+      const error = await request.run({ partners: createPartnersApi(client), log: createSecurityLogApi(client), stays: createStaysApi(client), command: createSecurityCommandApi(client) })
+        .then(() => null, (failure: unknown) => failure);
       const refusal = refusalOf(error, request.tenantId);
       expect(refusal, `${request.name} / ${code}`).not.toBeNull();
       const { state, forget } = applyRefusal(initialRefusalState(), refusal!, scope, error);
@@ -185,7 +201,8 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
       if (code === 'MFA_REQUIRED') expect(state.mfa).toBe(true);
       else if (request.tenantId && !code.startsWith('PARTNER_')) {
         expect(state.deniedTenants.get(tenant)).toBe(error);
-        expect(forget).toEqual([securityLogKey(own, tenant), partnerStaysKey(own, tenant)]);
+        // Recusa de condomínio apaga o log e as permanências dele e os dados do comando (que misturam condomínios).
+        expect(forget).toEqual([securityLogKey(own, tenant), partnerStaysKey(own, tenant), commandKey(own, partnerId)]);
       } else expect(state.partnerDenied, `${request.name} / ${code}`).toBe(error);
     }
   });
@@ -193,7 +210,7 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
     const error = await createStaysApi(new CondPulseApi({ fetch: respond(403, 'STAY_FORBIDDEN') })).open(tenant, false).then(() => null, (failure: unknown) => failure);
     const refusal = refusalOf(error, tenant);
     expect(refusal).toEqual({ kind: 'tenant', tenantId: tenant.toLowerCase() });
-    expect(applyRefusal(initialRefusalState(), refusal!, scope, error).forget).toEqual([securityLogKey(own, tenant), partnerStaysKey(own, tenant)]);
+    expect(applyRefusal(initialRefusalState(), refusal!, scope, error).forget).toEqual([securityLogKey(own, tenant), partnerStaysKey(own, tenant), commandKey(own, partnerId)]);
   });
   it('MFA e recusa do parceiro apagam o log de todos os condomínios; falha transitória ou de regra não é recusa', async () => {
     const all = applyRefusal(initialRefusalState(), { kind: 'partner' }, scope, null).forget;

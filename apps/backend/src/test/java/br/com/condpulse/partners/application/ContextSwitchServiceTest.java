@@ -147,4 +147,49 @@ class ContextSwitchServiceTest {
   assertNotEquals(ContextSwitchService.eventId(ACTOR,SWITCH,"a",T1),ContextSwitchService.eventId(UUID.randomUUID(),SWITCH,"a",T1),"Outra conta, outro id");
   assertEquals(ContextSwitchService.eventId(ACTOR,SWITCH,"a",T1),ContextSwitchService.eventId(ACTOR,SWITCH,"a",T1));
  }
+ 
+ private static ContextSwitchService.Input exit(String role,PartnerModels.ContextRef to) {
+  return ContextSwitchService.exitInput(PARTNER,new PartnerModels.ContextExitRequest(SWITCH,role,to));
+ }
+ private static final PartnerModels.ContextRef CENTRAL=new PartnerModels.ContextRef("PLATFORM",null,null,null);
+
+ @Test void leavingASecurityPanelForATenantOrTheCentralRecordsTheOriginSide() {
+  var store=store();
+  var to=new PartnerModels.ContextRef("TENANT",null,null,T3);
+  var result=service(store,true).applyExit(ACTOR,context(AssuranceLevel.AAL2,"SECURITY_LEAD"),exit("SECURITY_LEAD",to),"sessao-ficticia-2");
+  assertEquals(new PartnerModels.ContextSwitchResult("RECORDED",2),result);
+  assertEquals(List.of(T1,T2),store.written.stream().map(PartnerStore.ContextSwitchRow::tenantId).toList(),"Condomínios que a origem ainda alcança");
+  assertTrue(store.written.stream().allMatch(row->row.subjectId().equals(PARTNER) && row.details().contains("\"side\":\"FROM\"")
+   && row.details().contains("\"to\":{\"kind\":\"TENANT\",\"tenantId\":\""+T3+"\"}")));
+  // A saída para a central tem outro conteúdo: outros ids, mesmo com a mesma chave.
+  var central=store();
+  service(central,true).applyExit(ACTOR,context(AssuranceLevel.AAL2,"SECURITY_LEAD"),exit("SECURITY_LEAD",CENTRAL),null);
+  assertNotEquals(store.written.getFirst().id(),central.written.getFirst().id());
+  assertTrue(central.written.getFirst().details().contains("\"to\":{\"kind\":\"PLATFORM\"}"));
+  // Entrada e saída com a mesma chave nunca colidem.
+  var entry=store();
+  service(entry,true).apply(ACTOR,context(AssuranceLevel.AAL2,"SECURITY_LEAD"),input("SECURITY_LEAD",null,ENTRY),null);
+  assertTrue(entry.written.stream().noneMatch(row->store.written.stream().anyMatch(other->other.id().equals(row.id()))));
+ }
+
+ @Test void exitNeedsAClosedDestinationActiveRoleAndSecondFactor() {
+  java.util.function.Function<org.junit.jupiter.api.function.Executable,String> code=action->assertThrows(BusinessProblem.class,action).code();
+  assertEquals("CONTEXT_SWITCH_INVALID",code.apply(()->exit("SECURITY_LEAD",null)));
+  assertEquals("CONTEXT_SWITCH_INVALID",code.apply(()->exit("SECURITY_LEAD",ENTRY)));
+  assertEquals("CONTEXT_SWITCH_INVALID",code.apply(()->exit("SECURITY_LEAD",new PartnerModels.ContextRef("TENANT",null,null,null))));
+  assertEquals("CONTEXT_SWITCH_INVALID",code.apply(()->exit("SECURITY_LEAD",new PartnerModels.ContextRef("PARTNER",OTHER,"SECURITY_LEAD",null))));
+  assertEquals("CONTEXT_SWITCH_INVALID",code.apply(()->exit("SECURITY_LEAD",new PartnerModels.ContextRef("PLATFORM",null,null,T1))));
+  assertEquals("CONTEXT_SWITCH_INVALID",code.apply(()->exit("MANAGER",CENTRAL)));
+  var store=store();
+  assertEquals("PARTNER_ACCESS_DENIED",code.apply(()->service(store,true).applyExit(ACTOR,context(AssuranceLevel.AAL2,"REMOTE_OPERATOR"),
+   exit("SECURITY_LEAD",CENTRAL),null)));
+  assertEquals("MFA_REQUIRED",code.apply(()->service(store,true).applyExit(ACTOR,context(AssuranceLevel.AAL1,"SECURITY_LEAD"),
+   exit("SECURITY_LEAD",CENTRAL),null)));
+  assertEquals(0,store.reads,"Sem papel ou sem AAL2 nenhuma consulta de alcance");
+  assertEquals("NOT_REQUIRED",service(store,true).applyExit(ACTOR,context(AssuranceLevel.AAL1,"TECHNICIAN"),exit("TECHNICIAN",CENTRAL),null).status());
+  assertEquals("LOG_DISABLED",service(store,false).applyExit(ACTOR,context(AssuranceLevel.AAL2,"SECURITY_LEAD"),exit("SECURITY_LEAD",CENTRAL),null).status());
+  assertEquals("NO_TENANT_REACHED",service(new FakeStore(Map.of()),true).applyExit(ACTOR,context(AssuranceLevel.AAL2,"REMOTE_OPERATOR"),
+   exit("REMOTE_OPERATOR",CENTRAL),null).status());
+  assertTrue(store.written.isEmpty());
+ }
 }

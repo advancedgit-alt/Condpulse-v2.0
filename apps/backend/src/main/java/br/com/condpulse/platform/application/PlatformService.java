@@ -28,6 +28,7 @@ public class PlatformService {
  private final boolean billingEnabled;
  private final boolean facialAccessEnabled;
  private final boolean partnersEnabled;
+ private final boolean demoEnabled;
  /**
   * Financeiro desligado (padrão): billing.* não aparece na sessão, para a tela não oferecer a área sem API. O mesmo vale
   * para technical_grants.* com o acesso facial desligado (CP_FACIAL_ACCESS_ENABLED) e partners.* com a hierarquia de
@@ -37,9 +38,14 @@ public class PlatformService {
  public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store,
    @Value("${condpulse.platform.billing-enabled:false}") boolean billingEnabled,
    @Value("${condpulse.facial-access.enabled:false}") boolean facialAccessEnabled,
-   @Value("${condpulse.partners.enabled:false}") boolean partnersEnabled) {
+   @Value("${condpulse.partners.enabled:false}") boolean partnersEnabled,
+   @Value("${condpulse.demo.enabled:false}") boolean demoEnabled) {
   this.transactions=transactions; this.store=store; this.billingEnabled=billingEnabled; this.facialAccessEnabled=facialAccessEnabled;
-  this.partnersEnabled=partnersEnabled;
+  this.partnersEnabled=partnersEnabled; this.demoEnabled=demoEnabled;
+ }
+ public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store,boolean billingEnabled,boolean facialAccessEnabled,
+   boolean partnersEnabled) {
+  this(transactions,store,billingEnabled,facialAccessEnabled,partnersEnabled,false);
  }
  public PlatformService(PlatformTransactionExecutor transactions,PlatformStore store,boolean billingEnabled,boolean facialAccessEnabled) {
   this(transactions,store,billingEnabled,facialAccessEnabled,false);
@@ -55,6 +61,7 @@ public class PlatformService {
    context.effectiveCapabilities().stream().filter(capability->billingEnabled || !capability.key().startsWith("billing."))
     .filter(capability->facialAccessEnabled || !capability.facialAccess())
     .filter(capability->partnersEnabled || !capability.partners())
+    .filter(capability->demoEnabled || !capability.demo())
     .map(PlatformCapability::key).sorted().toList(),
    assurance!=AssuranceLevel.AAL2));
  }

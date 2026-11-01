@@ -461,6 +461,11 @@ const messages: Record<string, string> = {
   TENANT_UNITS_INVALID: 'Informe de 1 a 250 unidades.',
   TENANT_UNITS_DUPLICATED: 'Há unidades repetidas na lista. Cada identificação deve aparecer uma única vez.',
   TENANT_CREATION_KEY_REUSED: 'Esta criação já foi enviada com outros dados. Atualize a lista e confira antes de iniciar outra.',
+  // Condomínio demo (CPX-046, V053).
+  DEMO_RESET_REAL_TENANT: 'Somente o condomínio demo pode ser resetado. Condomínios reais nunca são resetados.',
+  DEMO_CHANGED: 'O condomínio demo mudou desde que a tela foi aberta. Atualize e confira antes de repetir.',
+  DEMO_KEY_REUSED: 'Esta operação já foi enviada com outros dados. Atualize a tela antes de repetir.',
+  DEMO_CONFIRMATION_REQUIRED: 'Digite DEMO para confirmar a operação no condomínio demo.',
   TENANT_CREATION_CONFLICT: 'Os dados conflitam com um cadastro existente. Atualize a lista e confira.',
   TENANT_SUSPENDED: 'Reative o condomínio antes de convidar o gestor.',
   TENANT_MANAGER_EXISTS: 'O condomínio já tem gestor vigente; novos vínculos seguem pela gestão local.',
@@ -600,6 +605,21 @@ const messages: Record<string, string> = {
   STAY_RULE_INVALID: 'Regra de tempo inválida: confira os minutos de cada nível.',
   STAY_RULE_VERSION_CONFLICT: 'A regra mudou desde a leitura. Atualize antes de salvar.',
   STAY_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação agora. Atualize e confira antes de repetir.',
+  // Comando de Segurança (CPX-012 a CPX-014, V054).
+  SECURITY_COMMAND_UNAVAILABLE: 'Não foi possível concluir no Comando de Segurança agora. Nada foi gravado; tente novamente.',
+  INCIDENT_NOT_FOUND: 'Incidente não encontrado.',
+  INCIDENT_CHANGED: 'O incidente mudou desde a leitura. Atualize e tente de novo.',
+  INCIDENT_CLOSED: 'O incidente já foi encerrado.',
+  INCIDENT_ASSIGNEE_INVALID: 'O responsável precisa ser líder, supervisor ou operador ativo do parceiro.',
+  INCIDENT_EVENT_NOT_FOUND: 'Evento do log não encontrado neste condomínio.',
+  INCIDENT_LINKS_LIMIT: 'O incidente aceita no máximo 50 eventos anexados.',
+  INCIDENT_DOSSIER_EMPTY: 'O incidente ainda não tem eventos no log.',
+  INCIDENT_TIMELINE_TOO_LARGE: 'A linha do tempo passa de 500 eventos; consulte o log por período.',
+  INCIDENT_DOSSIER_REASON_REQUIRED: 'Informe o motivo da exportação, com 10 a 500 caracteres.',
+  REMOTE_OPEN_NOT_FOUND: 'Abertura remota não encontrada.',
+  REMOTE_OPEN_ALREADY_REVIEWED: 'Esta abertura já foi revisada. Atualize a lista e corrija a revisão mais recente.',
+  REMOTE_OPEN_SELF_REVIEW: 'Ninguém revisa a própria abertura remota.',
+  REMOTE_OPEN_REVIEW_INVALID: 'Revisão inválida para esta abertura.',
 };
 
 export class ApiError extends Error {
@@ -775,7 +795,15 @@ function identity(value: unknown): CurrentIdentity {
   if (!record(value) || !isUUID(value.accountId) || !Array.isArray(value.memberships)) throw invalidResponse();
   return { accountId: value.accountId,
     memberships: value.memberships.map(membership).filter((item): item is Membership => item !== null),
-    tenantModules: tenantModuleList(value.tenantModules), partnerContexts: partnerContextList(value.partnerContexts) };
+    tenantModules: tenantModuleList(value.tenantModules), partnerContexts: partnerContextList(value.partnerContexts),
+    demoTenantIds: demoTenantList(value.demoTenantIds) };
+}
+
+/** Condomínios DEMO (V053): ausente (servidor anterior) vira lista vazia; formato inválido recusa a resposta. */
+function demoTenantList(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every(isUUID)) throw invalidResponse();
+  return [...new Set(value.map((id) => id.toLowerCase()))];
 }
 
 /** Módulo desligado pela central para o condomínio (403 MODULE_DISABLED): não é perda de vínculo nem de sessão. */

@@ -164,7 +164,7 @@ jobs:
             }
             private static void owners(Connection c) throws Exception {
               require(count(c, "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('platform','cp') and c.relkind in ('r','p','S') and pg_get_userbyid(c.relowner)<>'postgres'") == 0);
-              require(count(c, "select (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('platform','cp') and pg_get_userbyid(p.proowner)<>'postgres') + (select count(*) from pg_namespace where nspname in ('platform','cp') and pg_get_userbyid(nspowner)<>'postgres')") == 0);
+              require(count(c, "select (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('platform','cp') and (pg_get_userbyid(p.proowner)<>'postgres' or p.prosecdef) and not exists(select 1 from pg_roles d where d.rolname='cp_demo' and pg_get_userbyid(p.proowner)=d.rolname and not (d.rolsuper or d.rolbypassrls or d.rolcreaterole or d.rolcreatedb or d.rolreplication or d.rolcanlogin or d.rolinherit) and not exists(select 1 from pg_auth_members m where m.roleid=d.oid or m.member=d.oid))) + (select count(*) from pg_namespace where nspname in ('platform','cp') and pg_get_userbyid(nspowner)<>'postgres')") == 0);
             }
             /** Somente leitura: ator, TLS, schemas, historico e ownership agregados. */
             static String inspect(Connection c) throws Exception {

@@ -22,6 +22,7 @@ export interface OperatorSchedule {
 export type ContextSwitchFrom =
   | { kind: 'ENTRY' } | { kind: 'PLATFORM' } | { kind: 'TENANT'; tenantId: UUID } | { kind: 'PARTNER'; partnerId: UUID; role: PartnerRole };
 export interface ContextSwitchBody { switchId: UUID; role: PartnerRole; from: ContextSwitchFrom }
+export interface ContextExitBody { switchId: UUID; role: PartnerRole; to: { kind: 'TENANT'; tenantId: UUID } | { kind: 'PLATFORM' } }
 export const contextSwitchStatuses = ['RECORDED', 'ALREADY_RECORDED', 'NOT_REQUIRED', 'NO_TENANT_REACHED', 'LOG_DISABLED'] as const;
 export interface ContextSwitchResult { status: typeof contextSwitchStatuses[number]; recorded: number }
 export function contextSwitchResult(value: unknown): ContextSwitchResult {
@@ -84,6 +85,15 @@ export function createPartnersApi(client: CondPulseApi = api) {
       if (!same(member.accountId, body.accountId) || member.role !== body.role || member.status !== 'ACTIVE') throw invalidResponse(true);
       return member;
     }, { method: 'POST', body: { ...body, accountId: identifier(body.accountId) } }),
+    /**
+     * Central (partners.manage, AAL2): concede papel no parceiro a uma conta existente. Usado para vincular, de forma
+     * explícita e separada, uma pessoa real ao parceiro do condomínio demo (CPX-046).
+     */
+    platformAddMember: async (partnerId: string, body: AddMemberBody) => client.call(`/v1/platform/partners/${identifier(partnerId)}/members`, (value) => {
+      const member = partnerMember(value, partnerId, true);
+      if (!same(member.accountId, body.accountId) || member.role !== body.role || member.status !== 'ACTIVE') throw invalidResponse(true);
+      return member;
+    }, { method: 'POST', body: { ...body, accountId: identifier(body.accountId) } }),
     revokeMember: async (partnerId: string, memberId: string, reason: string) => client.call(`${base(partnerId)}/team/${identifier(memberId)}/revoke`, (value) => {
       const member = partnerMember(value, partnerId, true);
       if (!same(member.id, memberId) || member.status !== 'REVOKED') throw invalidResponse(true);
@@ -106,6 +116,10 @@ export function createPartnersApi(client: CondPulseApi = api) {
       { method: 'POST', body: { switchId: identifier(body.switchId), role: body.role, from: body.from.kind === 'TENANT'
         ? { kind: 'TENANT', tenantId: identifier(body.from.tenantId) } : body.from.kind === 'PARTNER'
           ? { kind: 'PARTNER', partnerId: identifier(body.from.partnerId), role: body.from.role } : { kind: body.from.kind } } }),
+    /** R4.4: saída do painel do papel role para um condomínio por vínculo ou para a central (lado da origem). */
+    exitContext: async (partnerId: string, body: ContextExitBody) => client.call(`${base(partnerId)}/context-exits`, contextSwitchResult,
+      { method: 'POST', body: { switchId: identifier(body.switchId), role: body.role,
+        to: body.to.kind === 'TENANT' ? { kind: 'TENANT', tenantId: identifier(body.to.tenantId) } : { kind: 'PLATFORM' } } }),
     portfolio: async (partnerId: string, signal?: AbortSignal) => client.call(`${base(partnerId)}/portfolio`,
       (value) => page(value, partnerId, 'contracts', (item) => partnerContract(item, partnerId)), signal ? { signal } : {}),
   };

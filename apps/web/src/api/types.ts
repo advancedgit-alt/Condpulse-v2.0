@@ -33,6 +33,11 @@ export interface CurrentIdentity {
    * CP_PARTNERS_ENABLED=false. Só decide o que aparece: a API e o banco conferem papel, contrato, escala e AAL2 de novo.
    */
   partnerContexts: PartnerContext[];
+  /**
+   * Condomínios alcançados marcados como DEMO (V053, CPX-046): dados sintéticos, só para teste. Usado para a indicação
+   * visual "DEMO" em todas as telas do condomínio. Vazio quando o servidor não informa.
+   */
+  demoTenantIds: string[];
 }
 
 /** Papéis de parceiro (PRD complementar §4.1) e o painel de cada um em /p/{parceiro}/{painel}. */

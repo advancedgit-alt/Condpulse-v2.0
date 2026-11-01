@@ -15,6 +15,7 @@ import { applyRefusal, failureKind, initialRefusalState, partnerKey, refusalOf, 
 import { MemberSection, PortfolioSection, ScheduleSection } from './PartnerTeam';
 import { SecurityLogSection } from './SecurityLog';
 import { PartnerStaysSection } from './Stays';
+import { CommandPortfolioSection, IncidentsSection, RemoteOpenSection } from './SecurityCommand';
 
 /**
  * Casca /p/{parceiro}/{painel} (CPX-005, PRD complementar §4.1 e R4.5). O papel vem de /v1/me (partnerContexts); as
@@ -155,6 +156,9 @@ function SectionBody({ section }: { section: string }): ReactNode {
   if (section === 'carteira') return <PortfolioSection />;
   if (section === 'log') return <SecurityLogSection />;
   if (section === 'permanencias') return <PartnerStaysSection />;
+  if (section === 'carteira-seguranca') return <CommandPortfolioSection />;
+  if (section === 'incidentes') return <IncidentsSection />;
+  if (section === 'aberturas') return <RemoteOpenSection />;
   return null;
 }
 

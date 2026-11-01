@@ -41,6 +41,8 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
   // Gateway (V048): identidade, entrega e relatório nunca apagados; relatório nunca muda; identidade, tentativa, prazos e
   // horários vêm do banco. Áreas e pontos (V041): nunca apagados; código, condomínio, autoria inicial e horários fixos. Outbox (V032): a operação da plataforma só devolve
   // tarefa para a fila; conteúdo, condomínio e evento da tarefa nunca mudam por nenhum login de runtime.
+  // Demo (V053, conferida por pg_attribute/pg_roles: banco anterior à V053 não falha aqui): a runtime não é membro de cp_demo, não grava gerações nem as marcas demo/sintética, e toda função
+  // SECURITY DEFINER de cp/platform pertence a cp_demo (sem SUPERUSER/BYPASSRLS).
   // INSERT/UPDATE por has_any_column_privilege/has_column_privilege (inclui grant por coluna); DELETE/TRUNCATE só
   // existem na tabela. Antes da V015 (banco remoto ainda na V005) a API tem INSERT de tabela no outbox, como sempre
   // teve: a conferência por coluna do outbox só vale com a V015 aplicada (marcada pela caixa interna).
@@ -350,6 +352,25 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
        where c.attrelid=to_regclass('cp.stay_rules') and c.attname in ('tenant_id','kind','updated_at')),false)
      or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
        where c.attrelid=to_regclass('cp.stay_rules') and c.attname in ('version','updated_at')),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.incidents'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.incident_links'),'DELETE,TRUNCATE'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('cp.incident_links'),'UPDATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.incidents') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('assignee_member_id','state','outcome','report','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.incidents') and c.attname in ('partner_id','opened_by','opened_at','assigned_by','assigned_at',
+        'closed_by','closed_at')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.incident_links') and c.attname in ('linked_by','linked_at')),false)
+     or coalesce((select pg_has_role(current_user,r.oid,'MEMBER') from pg_roles r where r.rolname='cp_demo'),false)
+     or coalesce(has_any_column_privilege(current_user,to_regclass('platform.demo_generations'),'INSERT,UPDATE'),false)
+     or coalesce(has_table_privilege(current_user,to_regclass('platform.demo_generations'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT') or has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE'))
+       from pg_attribute c where c.attnum>0 and not c.attisdropped and ((c.attrelid=to_regclass('platform.tenants') and c.attname='demo')
+        or (c.attrelid=to_regclass('platform.partners') and c.attname='demo') or (c.attrelid=to_regclass('platform.accounts') and c.attname='synthetic'))),false)
+     or exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace join pg_roles o on o.oid=p.proowner
+       where p.prosecdef and n.nspname in ('cp','platform') and (o.rolsuper or o.rolbypassrls or o.rolname<>'cp_demo'))
     from pg_roles where rolname=current_user
     """,Boolean.class);
   if(!Boolean.FALSE.equals(unsafe))
@@ -362,7 +383,7 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
       to_regclass('platform.billing_subscriptions'),to_regclass('platform.billing_charges'),to_regclass('platform.billing_payments'),
       to_regclass('platform.access_model_profiles'),to_regclass('platform.access_homologations'),to_regclass('platform.access_homologation_decisions'),
       to_regclass('platform.partners'),to_regclass('platform.partner_members'),to_regclass('platform.partner_tenant_contracts'),
-      to_regclass('platform.security_log_anchors')))
+      to_regclass('platform.security_log_anchors'),to_regclass('platform.demo_generations')))
     """,Integer.class);
   if(unprotected==null || unprotected>0)
    throw new IllegalStateException("Schema de negócio sem proteção RLS completa.");

@@ -47,6 +47,8 @@ export const COPIED=Object.freeze({
  CP_REALTIME_ENABLED:BOOL,CP_SECURITY_LOG_ENABLED:BOOL,
  // Hierarquia de parceiro (V049, ADR-0011): sem ela a API da Fly fica com o padrão false da imagem.
  CP_PARTNERS_ENABLED:BOOL,
+ // Condomínio demo (V053, CPX-046): criar/resetar pela central; sem ela a API da Fly fica com o padrão false da imagem.
+ CP_DEMO_ENABLED:BOOL,
  // Anexos dependem de CP_STORAGE_SERVICE_KEY, que não é copiada da Vercel: daqui só "false" vai para a Fly.
  // "true" só sai do apply com a chave vinda do secret do GitHub (STORAGE).
  CP_FILES_ENABLED:/^false$/,

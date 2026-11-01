@@ -11,6 +11,12 @@ export const roleLabels: Record<Role, string> = { RESIDENT: 'Morador', RESPONSIB
   OWNER: 'Proprietário', CONCIERGE: 'Portaria', MAINTENANCE: 'Zeladoria', MANAGER: 'Gestão', SUPPORT: 'Suporte' };
 
 export const ENTRY_PATH = '/entrada';
+/** Condomínio demo (V053, CPX-046): marcado pelo servidor em /v1/me ou, na falta dele, pelo prefixo fixo do nome. */
+export function isDemoTenant(identity: Pick<CurrentIdentity, 'demoTenantIds'> | null | undefined, tenantId: string | undefined,
+  tenantName?: string | null): boolean {
+  if (!tenantId) return false;
+  return Boolean(identity?.demoTenantIds?.includes(tenantId.toLowerCase())) || Boolean(tenantName?.startsWith('[DEMO] '));
+}
 export const condoPath = (tenantId: string) => `/c/${tenantId}`;
 export const condoHomePath = (tenantId: string) => `/c/${tenantId}/inicio`;
 export const residentRoot = (tenantId: string) => `/c/${tenantId}/morador`;
@@ -208,7 +214,7 @@ export function partnerContextOf(contexts: readonly PartnerContext[], partnerId:
  * menu, e a API recusa de qualquer forma. ready=false marca seção sem backend nesta versão: aparece "em breve", sem
  * rota nem dado.
  */
-export type PartnerSectionId = 'equipe' | 'escala' | 'carteira' | 'log' | 'carteira-seguranca' | 'aberturas' | 'politicas' | 'bloqueio'
+export type PartnerSectionId = 'equipe' | 'escala' | 'carteira' | 'log' | 'carteira-seguranca' | 'incidentes' | 'aberturas' | 'politicas' | 'bloqueio'
   | 'turno' | 'log-turno' | 'fila' | 'equipamentos' | 'permanencias';
 export interface PartnerSection { id: PartnerSectionId; label: string; capability: PartnerCapability; ready: boolean }
 const partnerSectionCatalog: Record<PartnerPanel, readonly PartnerSection[]> = {
@@ -216,10 +222,11 @@ const partnerSectionCatalog: Record<PartnerPanel, readonly PartnerSection[]> = {
     { id: 'escala', label: 'Escala', capability: 'partner.team.manage', ready: true },
     { id: 'carteira', label: 'Carteira', capability: 'partner.manage', ready: true },
     { id: 'log', label: 'Log de Segurança', capability: 'security.log.read', ready: true }],
-  comando: [{ id: 'carteira-seguranca', label: 'Visão da carteira', capability: 'security.command', ready: false },
+  comando: [{ id: 'carteira-seguranca', label: 'Visão da carteira', capability: 'security.command', ready: true },
+    { id: 'incidentes', label: 'Incidentes', capability: 'security.command', ready: true },
+    { id: 'aberturas', label: 'Revisão de aberturas', capability: 'security.remote_open.review', ready: true },
     { id: 'log', label: 'Log de Segurança', capability: 'security.log.read', ready: true },
     { id: 'permanencias', label: 'Permanências', capability: 'security.command', ready: true },
-    { id: 'aberturas', label: 'Revisão de aberturas', capability: 'security.remote_open.review', ready: false },
     { id: 'politicas', label: 'Políticas de segurança', capability: 'security.policy.publish', ready: false },
     { id: 'bloqueio', label: 'Lista de bloqueio', capability: 'security.blocklist.approve', ready: false }],
   // O servidor ainda recusa a leitura de turno (security.log.read.shift) no log: fica em breve.

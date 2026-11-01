@@ -45,6 +45,10 @@ gravados por `flyctl secrets import --stage` (valores só no stdin) e conferidos
 - Conferências do grupo: `cp_worker` sem login/atributo privilegiado, sem herdar outro grupo, sem DDL/posse e sem
   TRUNCATE/REFERENCES/TRIGGER/MAINTAIN ou repasse de grant. Histórico BASELINE 002 + SQL contíguas até pelo menos a
   V023, nada pendente no JAR revisado.
+- Dono de função (ADR-0012, V053): como no login da API, aceita função de `platform`/`cp` com dono `cp_demo`
+  (SECURITY DEFINER) só quando a role é NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION,
+  NOINHERIT, sem membros e sem ser membro de ninguém; demais funções seguem exigindo dono `postgres`
+  (`FLY_WORKER_FUNCTION_OWNER_DIVERGED`).
 - Outro login `cp_worker_*` (inclusive um criado por `infra/operations/worker-login.sql`) ou qualquer outro membro de
   `cp_worker` bloqueia. Roles `cp_runtime_*` só são aceitas com marker da Vercel ou da API na Fly e teto finito.
 - **CONNECTION LIMIT 2, pool Hikari 1.** O agendador do Spring roda uma passada por vez e cada transação do worker abre

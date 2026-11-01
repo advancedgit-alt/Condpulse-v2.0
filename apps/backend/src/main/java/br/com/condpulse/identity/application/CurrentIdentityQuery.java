@@ -53,7 +53,16 @@ public class CurrentIdentityQuery {
   var reached=new LinkedHashSet<UUID>();
   for(var membership:memberships) reached.add(membership.tenantId());
   for(var context:partners) for(var tenant:context.tenants()) reached.add(tenant.tenantId());
-  return new CurrentIdentity(accountId,memberships,modules(reached),partners);
+  return new CurrentIdentity(accountId,memberships,modules(reached),partners,demoTenants(reached));
+ }
+
+ /** Condomínios alcançados marcados como DEMO (V053); a linha é visível pelas mesmas políticas de vínculo e alcance. */
+ private List<UUID> demoTenants(java.util.Set<UUID> tenants) {
+  var result=new ArrayList<UUID>();
+  for(UUID tenant:tenants)
+   if(Boolean.TRUE.equals(jdbc.queryForObject("select coalesce(bool_or(demo),false) from platform.tenants where id=?",Boolean.class,tenant)))
+    result.add(tenant);
+  return result;
  }
 
  /**
