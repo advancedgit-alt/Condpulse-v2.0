@@ -40,19 +40,35 @@ horários e estados vêm do banco; a API não grava `created_by` de outra conta,
    pela ação da central. O segundo projeto Supabase (produção) não recebe a V053 sem OK do responsável.
 
 7. **Guards de dono de função.** Os cinco executores que conferem posse em `platform`/`cp` (migrate de homologação
-   e de produção, `FlyRuntimeLogin`, `FlyWorkerLogin`, `RuntimeConfiguration`) exigiam dono `postgres` (os três últimos
-   recusavam também qualquer `SECURITY DEFINER`; os dois de migrate passam a recusar também). Passam a aceitar, **só para funções**, dono exatamente `cp_demo` quando
-   a role cumpre os invariantes: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT,
-   sem membros e sem ser membro de ninguém. Qualquer outro dono, `SECURITY DEFINER` fora de `cp_demo` ou `cp_demo` fora
-   dos invariantes continua bloqueando. Tabelas, sequências e schemas seguem exigindo `postgres`. Coberto no cenário
-   `owners` dos harnesses `DatabaseOperationsHarness` e `ProductionOperationsHarness` (aceite com `cp_demo` íntegra;
-   recusa com LOGIN, com membro, como membro, função de outro dono e definer fora de `cp_demo`).
+   e de produção, `FlyRuntimeLogin`, `FlyWorkerLogin`, `RuntimeConfiguration`) exigiam dono `postgres` e recusavam
+   qualquer `SECURITY DEFINER`. Passam a aceitar, **só para funções**, dono exatamente `cp_demo` quando a role cumpre os
+   invariantes: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT; `cp_demo` não é
+   membro de ninguém; e todo vínculo em `cp_demo` (`pg_auth_members`) tem `inherit_option=false` e `set_option=false`
+   (`admin_option` livre: é o vínculo que quem cria a role com CREATEROLE recebe, caso do `postgres` do Supabase) e
+   o membro não é `cp_api`, `cp_worker`, `cp_onboarding` nem `cp_runtime_*`/`cp_worker_*`/`cp_onboarding_*`. Qualquer
+   outro dono, `SECURITY DEFINER` fora de `cp_demo` ou `cp_demo` fora dos invariantes continua bloqueando. Tabelas,
+   sequências e schemas seguem exigindo `postgres`. Coberto no cenário `owners` dos harnesses `DatabaseOperationsHarness`
+   e `ProductionOperationsHarness` (aceite com `cp_demo` íntegra e com vínculo só de administração; recusa com LOGIN,
+   como membro, com membro INHERIT ou SET, com membro de runtime, função de outro dono e definer fora de `cp_demo`).
+8. **Quem migra sem ser superusuário (postgres do Supabase).** `postgres` não é superusuário ali: tem CREATEROLE e
+   BYPASSRLS, e todo role que cria recebe vínculo `ADMIN OPTION` (INHERIT FALSE, SET FALSE, grantor `supabase_admin`).
+   A V053: (a) revoga de PUBLIC e concede EXECUTE **antes** de transferir a posse (depois, sem INHERIT, GRANT/REVOKE
+   de quem migrou viram "no privileges were granted" silenciosos); (b) concede SET a si mesma só durante a
+   transferência e, no fim, revoga **apenas a opção SET** do vínculo que concedeu (`REVOKE SET OPTION FOR ... GRANTED
+   BY`), removendo o vínculo só se não sobrar nenhuma opção; o ADMIN original fica. Superusuário (CI, local) já tem
+   SET e nada é concedido nem revogado. O bloco termina conferindo o invariante do item 7 e que quem migrou continua
+   com ADMIN (ou é superusuário). Coberto em `tests/database/run.py` (`demo_nonsuperuser_checks`: V001–V053 aplicadas
+   por role CREATEROLE+BYPASSRLS sem superusuário).
+   **Recuperação / manutenção futura da função** (quem migrou, com ADMIN em `cp_demo`): `GRANT cp_demo TO <eu> WITH SET
+   TRUE; GRANT CREATE ON SCHEMA platform TO cp_demo; SET ROLE cp_demo; CREATE OR REPLACE FUNCTION ...; RESET ROLE;
+   REVOKE CREATE ON SCHEMA platform FROM cp_demo; REVOKE SET OPTION FOR cp_demo FROM <eu> GRANTED BY <eu>; REVOKE
+   cp_demo FROM <eu> GRANTED BY <eu>` — exercitado no mesmo teste. Uma V05x futura que precise alterar a função deve
+   seguir esse padrão (conceder SET, agir, revogar só a opção SET).
 
 ## Consequências
 
-- A transferência de posse exige que quem roda a migration possa assumir `cp_demo` (PostgreSQL 16+: `GRANT ... WITH SET
-  TRUE` temporário, revogado no fim, e `CREATE` no schema só durante a transferência). Em CI roda como superusuário;
-  na homologação (Supabase, `postgres` com `CREATEROLE`) o caminho é o mesmo, ainda não exercitado remotamente.
+- A transferência de posse exige que quem roda a migration possa assumir `cp_demo` (item 8). O caminho sem superusuário
+  é exercitado no harness; na homologação ainda não foi aplicado.
 - Gerações aposentadas acumulam (condomínio suspenso, parceiro suspenso). Sem expurgo, como o Log de Segurança.
 - Reset tira o acesso das contas reais vinculadas à geração anterior; os vínculos precisam ser refeitos.
 - Contas sintéticas não têm usuário no Auth: ninguém entra com elas.
