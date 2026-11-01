@@ -1,7 +1,6 @@
 # Worker contínuo de homologação na Fly.io
 
-Situação: preparado neste PR, **nada executado**. Nenhum app, login de banco, segredo ou máquina do worker foi criado e
-nenhum teto de conexão foi alterado.
+Estado em 01/11/2026: worker implantado em `condpulse-v2-0-worker`, gru, com login próprio. Outbox ligado desde PR #119; fila de espera desligada. Recibo 41269486261, commit 75c4203: seis verificações started e zero exits. Teste concreto de reserva em 01/11 gerou RESERVATION_CREATED, consumido uma vez e encerrado SKIPPED (tipo sem efeito de notificação implementado); não equivale a e-mail enviado. Estado vigente: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
 
 ## O que muda
 
@@ -13,7 +12,7 @@ pela API (FLY_API.md).
 - `fly.worker.toml`: sem serviço HTTP nem checagem (o perfil `worker` não abre porta), `[[restart]] on-failure`
   (até 10), VM `shared-cpu-1x` 1 GB, `kill_timeout` 35 s (a passada em curso tem até 15 s). Configuração pública em
   `[env]`, revisada por PR: `SPRING_PROFILES_ACTIVE=worker`, `DATABASE_URL` (pooler São Paulo, `verify-full`),
-  `DB_POOL_SIZE=1`, `CP_WORKER_OUTBOX_ENABLED=false`, `CP_WORKER_POLL_MILLIS=2000`, `CP_WORKER_WAITLIST_ENABLED=false`,
+  `DB_POOL_SIZE=1`, `CP_WORKER_OUTBOX_ENABLED=true`, `CP_WORKER_POLL_MILLIS=2000`, `CP_WORKER_WAITLIST_ENABLED=false`,
   `CP_WORKER_WAITLIST_MILLIS=60000`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`, `CP_WORKER_STAYS_ENABLED=false` e
   `CP_WORKER_STAYS_MILLIS=60000` (alertas de permanência, V055; o launcher aceita 10 s a 10 min).
 - `infra/fly-worker/Dockerfile`: mesmas bases fixadas por digest da API, JAR do backend, usuário 10001, sem `EXPOSE`.

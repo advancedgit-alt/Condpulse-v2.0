@@ -1,13 +1,13 @@
-# Implantação do worker contínuo — preparação (não executada)
+# Implantação do worker contínuo
 
-O worker (perfil `worker`, mesma imagem da API) processa o outbox (caixa interna, CP-034/CP-035). Hoje **nenhum worker
-está implantado** em homologação ou produção; as passadas ficam desligadas por padrão (`CP_WORKER_OUTBOX_ENABLED=false`, `CP_WORKER_WAITLIST_ENABLED=false` e `CP_WORKER_ACCESS_SYNC_ENABLED=false`).
-A passada da fila de espera (CP-040, flag própria) entra neste manifesto quando aquele código estiver na base.
+Estado em 01/11/2026: worker contínuo já implantado na Fly em homologação; outbox ligado, fila de espera desligada. Login próprio e configuração existem. Último deploy conferido: run 41269486261, commit 75c4203, seis leituras started e zero exits. Não repetir a preparação como se ainda faltasse hospedagem. Consulte [ESTADO_ATUAL.md](ESTADO_ATUAL.md) e [FLY_WORKER.md](FLY_WORKER.md).
+
+O perfil `worker` processa a caixa interna; chamadas externas de e-mail/push/SMS não estão implementadas no OutboxEffect e não podem ser feitas dentro da transação de negócio. O SMTP do Supabase Auth, já configurado com Resend, atende outro fluxo. O procedimento Compose abaixo permanece como alternativa histórica; ele não descreve a configuração efetiva da Fly.
 
 ## O que já existe no repositório
 
 - Hospedagem preparada na Fly.io (app `condpulse-v2-0-worker`, login `cp_worker_*` próprio, teto 2): ver `docs/FLY_WORKER.md`.
-  Nada executado.
+  Já implantado; recibos no estado vigente.
 
 - `infra/compose.worker.yaml`: serviço único `worker`, sem porta nem HTTP (healthcheck desligado de forma explícita),
   usuário não root, sistema de arquivos somente leitura, 1 GiB/1 CPU, pool 4, CA PostgreSQL montada somente leitura e

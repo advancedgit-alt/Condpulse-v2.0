@@ -24,13 +24,18 @@ Antes de repetir uma operação, confira o estado remoto e a evidência abaixo. 
 ## Correções e testes em andamento
 - PR #172: `session_not_found`/`session_expired` do provedor deve encerrar a sessão local e exigir login novo; não tratar como código TOTP errado. O erro foi observado no endpoint challenge antes da verificação do código.
 - Regressão primeiro: commit `34768b05e9a88d848c0d37f0b782532142c7082d`, run [41318979255](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41318979255), falha esperada dos testes novos. Resultado da correção deve ser registrado depois do CI.
-- CI: `SecurityLogJdbcTest`, `SecurityCommandJdbcTest` e `StayJdbcTest` precisam entrar na execução JDBC habilitada. Os dois primeiros estavam ignorados no verify da base auditada.
+- CI: `SecurityLogJdbcTest`, `SecurityCommandJdbcTest` e `StayJdbcTest` incluídos na execução JDBC habilitada no PR #172. A primeira execução expôs fixtures antigas; o teste agora exige papel/contrato real e verifica falha fechada quando a leitura não pode ser auditada.
+- Backend real: etapa JDBC de 41320514980 concluída com sucesso, incluindo os três testes ativados. A fundação continua nas checagens de imagens; não declarar o workflow inteiro aprovado antes de terminar.
+- Ensaio web 41320514980: 224 jornadas passaram; uma falhou porque o próprio teste recarregava a seção já aberta pelo login e contava duas consultas. Correção mantém a exigência de uma leitura, removendo a navegação duplicada do teste. Resultado final ainda depende do novo CI.
+- Carga concreta pela interface HML em 01/11: reserva `3446ff02-529f-4849-b254-338cb98a76fa`, unidade `e66c13d1-f21f-47f1-9610-5c2c3cea85dc`, salão em 03/11 das 10h às 11h America/Sao_Paulo, CONFIRMED; banco confirmou UTC 13h–14h e limpeza até 14h30 UTC. Convidado TESTE HML 20261101 Convidado Sintético salvo e visível em Acessos. Preservados.
+- Visita concreta: convite `4c264ef2-66bc-4448-98be-4e53d0525403`, visitante TESTE HML 20261101 Visitante Sintético, 02/11 10h–12h local (UTC 13h–15h), ACTIVE no banco e Agendado na interface. Convite de convidado da reserva `de6a0a54-a7f6-49c4-877c-bbff17e41c17` vinculado à reserva, UTC 12h–14h (uma hora antes), também conferido.
+- Worker concreto: RESERVATION_CREATED dessa reserva processado em 01/11 15:20:04 UTC, attempts=1, state=SKIPPED, sem erro. Esse tipo não tem efeito implementado em InboxEffect; consumo de fila comprovado, envio de mensagem não. SMTP do Auth não é canal de eventos de negócio.
 - Dados em 01/11 antes da carga: dois tenants; zero demo, zero parceiros, zero eventos no Log de Segurança e outbox vazio. Não dizer que o demo está provisionado só porque a V053 existe.
 - A autorização do responsável nesta sessão permite correções, testes completos, atualizações documentais e carga de dados sintéticos identificados na HML. Preservar os dados de teste para revisão; não apagar sem pedido posterior.
 
 ## Pendências reais
 1. Nova sessão autenticada com AAL2 e ensaio das áreas administrativas após a correção.
-2. Confirmar a V055 aplicada/repetida e republicar API/worker no commit correspondente.
+2. Conferir backup compatível, aplicar/repetir V055 e republicar API/worker no commit correspondente. A consulta de backup pelo painel está bloqueada por CAPTCHA após login seguro; não confirmar a caixa de backup no workflow sem evidência. O inspect 41319118946 atesta somente bootstrap anterior ao baseline; ATTESTATION_FAILED depois do baseline é esperado por desenho (EXECUTOR_BANCO.md), não é evidência de corrupção.
 3. Conferir `CP_DEMO_ENABLED` na configuração e na API; provisionar demo e vínculos de teste autorizados.
 4. Exercitar gravações reais de reserva, pedido/conversa, anexos, avisos, encomendas, visitas, ocorrências e permanências; conferir efeitos, replay e negações.
 5. Provar processamento do outbox. Worker da fila de espera segue false; não confundir com outbox.

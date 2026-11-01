@@ -1,6 +1,6 @@
 # Homologacao CondPulse na Vercel
 
-Atualizado: 28/10/2026, America/Sao_Paulo. Decisao: ADR-0005.
+Estado em 01/11/2026: web permanece na Vercel; /auth, /v1 e readiness encaminham à Fly conforme `vercel.json`. O serviço Container Runtime da Vercel permanece declarado como alternativa, mas não recebe essas rotas. SMTP e worker já configurados; recibos em [ESTADO_ATUAL.md](ESTADO_ATUAL.md). O registro técnico iniciado em 28/10 abaixo é histórico. Decisao: ADR-0005.
 Projeto: https://vercel.com/sindicoadvanced/condpulse
 
 ## Configuracao revisavel
@@ -11,7 +11,7 @@ Vite em apps/web e API Java pelo Dockerfile.vercel. Nao importar apenas apps/web
 para tentar publicar o backend. Regiao de execucao configurada: gru1.
 
 As rotas /auth e /v1 e o caminho exato /actuator/health/readiness preservam o caminho
-e chegam à API antes do fallback da SPA.
+e chegam à API da Fly antes do fallback da SPA.
 Nao criar URL publica distinta da API para contornar cookies ou CSRF. O worker,
 Flyway e cadastro operacional nao sao servicos HTTP desta configuracao.
 
@@ -20,7 +20,7 @@ migracao automatica. O preflight recusa outro banco/projeto/porta, credencial
 privilegiada e divergencia de issuer/JWKS, antes de iniciar Spring. A CA publica e
 preparada em /tmp; somente JDBC verify-full e permitido.
 
-## Estado observado
+## Histórico observado em 28/10
 
 Registro atual de 28/10: a identidade runtime e a configuração JDBC/CA foram
 aplicadas em Production pelo executor revisado no source `2f1abf3547736c247fc082b2cc6ed76c18f2d38b`,
