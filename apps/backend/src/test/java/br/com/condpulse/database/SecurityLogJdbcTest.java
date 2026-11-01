@@ -64,6 +64,16 @@ class SecurityLogJdbcTest {
    db.close();
   }
  }
+ private static UUID createSecurityLead(UUID tenant) throws Exception {
+  UUID lead=UUID.randomUUID(),partner=UUID.randomUUID(); db.extraAccounts.add(lead);
+  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",lead);
+  db.adminUpdateWithoutTriggers("insert into platform.partners(id,name,created_by,updated_by) values(?,?,?,?)",partner,"PARCEIRO LOG JDBC "+partner,db.accountA,db.accountA);
+  db.adminUpdateWithoutTriggers("insert into platform.partner_members(id,partner_id,account_id,role,display_name,created_by) values(?,?,?,'SECURITY_LEAD','LIDER LOG JDBC',?)",
+   UUID.randomUUID(),partner,lead,db.accountA);
+  db.adminUpdateWithoutTriggers("insert into platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) "
+   +"values(?,?,?,'SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio do log',?)",UUID.randomUUID(),partner,tenant,db.accountA);
+  return lead;
+ }
  private static long count(UUID tenant,String type) throws Exception {
   return Long.parseLong(db.adminString("select count(*) from cp.security_log where tenant_id=? and event_type=?",tenant,type));
  }
@@ -89,7 +99,7 @@ class SecurityLogJdbcTest {
   var older=log.page(manager,db.tenantA,AAL2,SecurityLogModels.Filter.of("SENSITIVE_VIEWED",null,manager,null,null,viewed.nextBeforeSeq(),1));
   assertTrue(older.events().getFirst().seq()<viewed.events().getFirst().seq());
   assertTrue(log.page(manager,db.tenantA,AAL2,SecurityLogModels.Filter.of(null,"CRITICAL",null,null,null,null,10)).events().isEmpty());
-  assertTrue(log.page(manager,db.tenantA,AAL2,SecurityLogModels.Filter.of(null,null,concierge,null,null,null,10)).events().isEmpty());
+  assertTrue(log.page(manager,db.tenantA,AAL2,SecurityLogModels.Filter.of(null,null,managerB,null,null,null,10)).events().isEmpty(),"Autor de outro condomínio não aparece");
   assertTrue(log.page(manager,db.tenantA,AAL2,SecurityLogModels.Filter.of(null,null,null,Instant.parse("2001-01-01T00:00:00Z"),
    Instant.parse("2001-01-02T00:00:00Z"),null,10)).events().isEmpty());
   // Isolamento: os eventos do condomínio B não aparecem para a gestão do A.
@@ -100,6 +110,7 @@ class SecurityLogJdbcTest {
 
  @Test void onlyStaffWithCapabilityAndSecondFactorReads() throws Exception {
   long before=count(db.tenantA,"SENSITIVE_VIEWED");
+  long exportedBefore=count(db.tenantA,"LOG_EXPORTED");
   assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->log.page(manager,db.tenantA,AssuranceLevel.AAL1,all())).code());
   assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->log.page(concierge,db.tenantA,AAL2,all())).code());
   assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->log.page(db.accountA,db.tenantA,AAL2,all())).code(),"Morador não lê o log");
@@ -111,31 +122,32 @@ class SecurityLogJdbcTest {
    ()->log.export(manager,db.tenantA,AAL2,new SecurityLogModels.ExportRequest("Pedido da autoridade policial ficticio",null,null))).code());
   assertEquals("SECURITY_LOG_EXPORT_REASON_REQUIRED",assertThrows(BusinessProblem.class,
    ()->log.export(manager,db.tenantA,AAL2,new SecurityLogModels.ExportRequest("curto",null,null))).code());
-  assertEquals(0,count(db.tenantA,"LOG_EXPORTED"));
+  assertEquals(exportedBefore,count(db.tenantA,"LOG_EXPORTED"));
  }
 
  @Test void exportWithCapabilityRecordsManifestEventAndRefusesMissingReason() throws Exception {
-  // A capacidade de exportação ainda não é publicada pela API; aqui é colocada direto no contexto da transação (só no teste).
-  var range=db.context(manager,db.tenantA,null,()->{
+  db.context(manager,db.tenantA,null,()->{
    db.jdbc.queryForObject("select set_config('app.capabilities','security.log.export',true)",String.class);
-   long last=store.lastSeq(db.tenantA);
-   var events=store.range(db.tenantA,1,last);
-   assertTrue(SecurityLogModels.linked(events,1,last),"Intervalo contíguo e encadeado");
-   store.recordExport(db.tenantA,UUID.randomUUID(),"Auditoria interna ficticia do condominio",
-    Map.of("fromSeq",1,"toSeq",last,"count",events.size(),"firstHash",events.getFirst().hash(),"lastHash",events.getLast().hash()));
-   return events;
+   assertEquals(0,store.lastSeq(db.tenantA),"Capacidade publicada sem papel de parceiro é recusada pelo RLS");
+   return null;
   });
+  UUID lead=createSecurityLead(db.tenantA);
+  long before=count(db.tenantA,"LOG_EXPORTED");
+  var exported=log.export(lead,db.tenantA,AAL2,
+   new SecurityLogModels.ExportRequest("Auditoria interna ficticia do condominio",null,null));
+  var range=exported.events();
   assertFalse(range.isEmpty());
-  assertEquals(1,count(db.tenantA,"LOG_EXPORTED"));
-  assertEquals("Auditoria interna ficticia do condominio",db.adminString("select reason from cp.security_log where tenant_id=? and event_type='LOG_EXPORTED'",db.tenantA));
-  assertEquals(range.getLast().hash(),db.adminString("select details->>'lastHash' from cp.security_log where tenant_id=? and event_type='LOG_EXPORTED'",db.tenantA));
-  // Sem motivo o banco recusa (R5.7) e nada é gravado.
-  assertThrows(DataAccessException.class,()->db.context(manager,db.tenantA,null,()->{
-   db.jdbc.queryForObject("select set_config('app.capabilities','security.log.export',true)",String.class);
-   db.jdbc.update("insert into cp.security_log(tenant_id,event_type,severity,source) values(?,'LOG_EXPORTED','INFO','MANAGEMENT')",db.tenantA);
+  assertTrue(SecurityLogModels.linked(range,exported.manifest().fromSeq(),exported.manifest().toSeq()),"Intervalo contíguo e encadeado");
+  assertEquals(before+1,count(db.tenantA,"LOG_EXPORTED"));
+  assertEquals("Auditoria interna ficticia do condominio",db.adminString("select reason from cp.security_log where tenant_id=? and id=?",db.tenantA,exported.manifest().exportEventId()));
+  assertEquals(range.getLast().hash(),db.adminString("select details->>'lastHash' from cp.security_log where tenant_id=? and id=?",db.tenantA,exported.manifest().exportEventId()));
+  // Contexto real do líder (V049): publicar a capacidade sem papel e contrato não basta.
+  // Sem motivo o banco recusa (R5.7) e nada é gravado, mesmo com capacidade válida.
+  assertThrows(DataAccessException.class,()->transactions.execute(lead,db.tenantA,AAL2,context->{
+   store.recordExport(db.tenantA,UUID.randomUUID(),null,Map.of());
    return null;
   }));
-  assertEquals(1,count(db.tenantA,"LOG_EXPORTED"));
+  assertEquals(before+1,count(db.tenantA,"LOG_EXPORTED"));
  }
 
  @Test void staffSensitiveReadsAreRecordedOnlyWithTheFlag() throws Exception {
@@ -168,19 +180,19 @@ class SecurityLogJdbcTest {
   UUID failed=UUID.randomUUID();
   assertThrows(BusinessProblem.class,()->occurrences.create(conciergeB,db.tenantB,AAL2,new OccurrenceModels.Create(failed,"SECURITY","Portão aberto","Outra vez.",null)));
   assertEquals("0",db.adminString("select count(*) from cp.concierge_occurrences where tenant_id=? and id=?",db.tenantB,failed),"Falha do log desfaz a operação");
-  var head=log.integrity(managerB,db.tenantB,AAL2);
+  long viewedBefore=count(db.tenantB,"SENSITIVE_VIEWED");
+  var unavailable=assertThrows(BusinessProblem.class,()->log.integrity(managerB,db.tenantB,AAL2));
+  assertEquals("SECURITY_LOG_DEPENDENCY_UNAVAILABLE",unavailable.code(),"Sem conseguir auditar a leitura, a API recusa");
+  assertEquals(viewedBefore,count(db.tenantB,"SENSITIVE_VIEWED"),"Leitura e auditoria falham juntas");
+  // Diagnóstico direto do verificador, com contexto autorizado, sem tentar acrescentar na cabeça adulterada.
+  var head=transactions.execute(managerB,db.tenantB,AAL2,context->store.verify(db.tenantB));
   assertFalse(head.intact()); assertEquals("HEAD_MISMATCH",head.problem());
   // Alteração manual de um campo (gatilhos desligados) é detectada no evento exato.
   db.adminUpdateWithoutTriggers("update cp.security_log_heads set last_seq=last_seq+1 where tenant_id=?",db.tenantB);
   assertTrue(log.integrity(managerB,db.tenantB,AAL2).intact(),"Cabeça restaurada");
   // Líder de segurança do parceiro com contrato ativo no condomínio B (V049): lê sem máscara e exporta com manifesto.
-  UUID lead=UUID.randomUUID(),partner=UUID.randomUUID(); db.extraAccounts.add(lead);
-  db.adminUpdate("insert into platform.accounts(id,status) values(?,'ACTIVE')",lead);
-  db.adminUpdateWithoutTriggers("insert into platform.partners(id,name,created_by,updated_by) values(?,'PARCEIRO LOG JDBC',?,?)",partner,db.accountA,db.accountA);
-  db.adminUpdateWithoutTriggers("insert into platform.partner_members(id,partner_id,account_id,role,display_name,created_by) values(?,?,?,'SECURITY_LEAD','LIDER LOG JDBC',?)",
-   UUID.randomUUID(),partner,lead,db.accountA);
-  db.adminUpdateWithoutTriggers("insert into platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by) "
-   +"values(?,?,?,'SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio do log',?)",UUID.randomUUID(),partner,db.tenantB,db.accountA);
+  UUID lead=createSecurityLead(db.tenantB);
+  UUID partner=UUID.fromString(db.adminString("select partner_id::text from platform.partner_members where account_id=?",lead));
   log.page(lead,db.tenantB,AAL2,SecurityLogModels.Filter.of(null,null,lead,null,null,null,5));
   // R5.6: a gestão local vê o papel do líder, sem a conta, nem no actorId registrado nos detalhes da consulta dele.
   var seenByManager=log.page(managerB,db.tenantB,AAL2,SecurityLogModels.Filter.of("SENSITIVE_VIEWED",null,null,null,null,null,50)).events().stream()
