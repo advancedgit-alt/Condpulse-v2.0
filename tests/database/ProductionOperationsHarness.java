@@ -116,7 +116,7 @@ public final class ProductionOperationsHarness {
     }
     /**
      * Dono de funcao (ADR-0012): depois da migracao completa, platform.demo_provision pertence a cp_demo e a repeticao e aceita;
-     * cp_demo com LOGIN, com membro, membro de outra role, funcao de outro dono ou SECURITY DEFINER fora de cp_demo sao recusados.
+     * vinculo so de administracao em cp_demo (postgres do Supabase) e aceito; cp_demo com LOGIN, como membro de outra role, com membro INHERIT ou SET, com membro de runtime, funcao de outro dono ou SECURITY DEFINER fora de cp_demo sao recusados.
      * As alteracoes de role sao do cluster: cada negativo e desfeito antes do seguinte.
      */
     private static void owners(String database) throws Exception {
@@ -128,10 +128,16 @@ public final class ProductionOperationsHarness {
             try (var s = c.createStatement(); var rows = s.executeQuery("select pg_get_userbyid(proowner),prosecdef from pg_proc where proname='demo_provision'")) {
                 require(rows.next() && "cp_demo".equals(rows.getString(1)) && rows.getBoolean(2));
             }
+            // Positivo: vínculo só de administração (o que o postgres do Supabase recebe ao criar cp_demo) é aceito.
+            sql(c, "create role cp_demo_fixture nologin createrole; grant cp_demo to cp_demo_fixture with admin true, inherit false, set false");
+            try { require(migrate(database, flyway, 1, latest) == 0); } finally { sql(c, "revoke cp_demo from cp_demo_fixture; drop role cp_demo_fixture"); }
             for (String[] negative : new String[][] {
                     {"alter role cp_demo login", "alter role cp_demo nologin"},
                     {"create role cp_demo_fixture nologin; grant cp_demo_fixture to cp_demo", "revoke cp_demo_fixture from cp_demo; drop role cp_demo_fixture"},
-                    {"create role cp_demo_fixture nologin; grant cp_demo to cp_demo_fixture", "revoke cp_demo from cp_demo_fixture; drop role cp_demo_fixture"},
+                    {"create role cp_demo_fixture nologin; grant cp_demo to cp_demo_fixture with inherit true", "revoke cp_demo from cp_demo_fixture; drop role cp_demo_fixture"},
+                    {"create role cp_demo_fixture nologin; grant cp_demo to cp_demo_fixture with set true", "revoke cp_demo from cp_demo_fixture; drop role cp_demo_fixture"},
+                    {"grant cp_demo to cp_api with inherit false, set false", "revoke cp_demo from cp_api"},
+                    {"create role cp_runtime_fixture nologin; grant cp_demo to cp_runtime_fixture with inherit false, set false", "revoke cp_demo from cp_runtime_fixture; drop role cp_runtime_fixture"},
                     {"create role cp_demo_fixture nologin; grant usage on schema platform to cp_demo_fixture; alter function platform.tenant_is_demo(uuid) owner to cp_demo_fixture",
                      "alter function platform.tenant_is_demo(uuid) owner to cp_demo; revoke usage on schema platform from cp_demo_fixture; drop role cp_demo_fixture"},
                     {"create function platform.synthetic_definer() returns int language sql security definer as 'select 1'", "drop function platform.synthetic_definer()"}}) {

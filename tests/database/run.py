@@ -5644,6 +5644,62 @@ def demo_checks():
     expect(value("select count(*) from platform.tenants where not demo") == real_before and
            value("select count(*) from cp.security_log s join platform.tenants t on t.id=s.tenant_id where not t.demo") == real_log,
            "nenhum condominio real nem Log de Seguranca real tocado pelo demo")
+    demo_nonsuperuser_checks()
+
+def demo_nonsuperuser_checks():
+    """V053 aplicada por quem nao e superusuario (postgres do Supabase: CREATEROLE + BYPASSRLS, membro de cp_demo so com
+    ADMIN OPTION, sem INHERIT/SET): a transferencia de posse conserva o ADMIN, as funcoes ficam com cp_demo, cp_api executa,
+    PUBLIC nao, e quem migrou ainda consegue reassumir cp_demo para substituir a funcao (ADR-0012)."""
+    migrator, database, password = "cp_demo_migrator", "cp_test_demo_nonsuper", "synthetic_ci_only"
+    def admin(*statements):
+        # DROP/CREATE DATABASE nao aceitam bloco de transacao: uma instrucao por chamada do psql.
+        for statement in statements:
+            query(statement)
+    def as_migrator(statement, check=True):
+        env = dict(os.environ, PGUSER=migrator, PGPASSWORD=password, PGDATABASE=database)
+        result = subprocess.run(["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", statement],
+                                text=True, capture_output=True, timeout=60, env=env)
+        if check and result.returncode:
+            raise AssertionError(result.stderr)
+        return result
+    def membership():
+        return value(f"select coalesce(string_agg(admin_option||'|'||inherit_option||'|'||set_option,','),'-') from pg_auth_members a "
+                     f"join pg_roles r on r.oid=a.roleid join pg_roles m on m.oid=a.member where r.rolname='cp_demo' and m.rolname='{migrator}'")
+    admin(f"DROP DATABASE IF EXISTS {database}", f"DROP ROLE IF EXISTS {migrator}")
+    admin(f"CREATE ROLE {migrator} LOGIN CREATEROLE BYPASSRLS NOSUPERUSER PASSWORD '{password}'", f"CREATE DATABASE {database} OWNER {migrator}")
+    # cp_demo ja existe no cluster (criada pela suite); simula o vinculo que o criador CREATEROLE recebe ao criar a role.
+    admin(f"GRANT cp_demo TO {migrator} WITH ADMIN TRUE, INHERIT FALSE, SET FALSE")
+    try:
+        env = dict(os.environ, PGUSER=migrator, PGPASSWORD=password, PGDATABASE=database)
+        for migration in sorted((ROOT / "db/migrations").glob("V*.sql")):
+            result = subprocess.run(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", str(migration)], text=True, capture_output=True,
+                                    timeout=120, env=env)
+            expect(result.returncode == 0 and "no privileges were granted" not in result.stderr,
+                   f"migration {migration.name} aplicada por CREATEROLE sem superusuario sem grant silencioso: {result.stderr[-300:]}")
+        expect(membership() == "true|false|false", "quem migrou conserva ADMIN em cp_demo, sem INHERIT nem SET")
+        expect(as_migrator("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='platform' and p.proname in "
+                           "('demo_provision','tenant_is_demo','partner_is_demo','account_is_synthetic') and pg_get_userbyid(p.proowner)='cp_demo' and p.prosecdef")
+               .stdout.strip() == "4", "funcoes do demo com dono cp_demo e SECURITY DEFINER no banco migrado sem superusuario")
+        expect(as_migrator("select has_function_privilege('cp_api','platform.demo_provision(uuid,text,text)','EXECUTE')||'|'||"
+                           "has_function_privilege('public','platform.demo_provision(uuid,text,text)','EXECUTE')||'|'||"
+                           "has_function_privilege('cp_worker','platform.tenant_is_demo(uuid)','EXECUTE')||'|'||"
+                           "has_function_privilege('public','platform.tenant_is_demo(uuid)','EXECUTE')").stdout.strip() == "true|false|true|false",
+               "grants de execucao valeram antes da transferencia de posse (cp_api/cp_worker sim, PUBLIC nao)")
+        expect(as_migrator("set role cp_demo", check=False).returncode != 0, "sem SET, quem migrou nao assume cp_demo (so pelo ADMIN)")
+        # Recuperacao prevista na ADR-0012: reassumir cp_demo pelo ADMIN, substituir a funcao e devolver o vinculo ao estado de administracao.
+        as_migrator(f"GRANT cp_demo TO {migrator} WITH SET TRUE; GRANT CREATE ON SCHEMA platform TO cp_demo; SET ROLE cp_demo; "
+                    "CREATE OR REPLACE FUNCTION platform.tenant_is_demo(target uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER "
+                    "SET search_path=pg_catalog AS $f$ SELECT coalesce((SELECT t.demo FROM platform.tenants t WHERE t.id=target),false) $f$; "
+                    f"RESET ROLE; REVOKE CREATE ON SCHEMA platform FROM cp_demo; REVOKE SET OPTION FOR cp_demo FROM {migrator} GRANTED BY {migrator}; "
+                    f"REVOKE cp_demo FROM {migrator} GRANTED BY {migrator}")
+        expect(membership() == "true|false|false", "depois da recuperacao o vinculo volta a ser so de administracao")
+        expect(as_migrator("select pg_get_userbyid(proowner)||'|'||prosecdef||'|'||has_function_privilege('public',oid,'EXECUTE') from pg_proc where proname='tenant_is_demo'")
+               .stdout.strip() == "cp_demo|true|false", "funcao substituida continua de cp_demo, definer e sem PUBLIC")
+        expect(value("select count(*) from pg_auth_members a join pg_roles r on r.oid=a.roleid where r.rolname='cp_demo' and (a.inherit_option or a.set_option)") == "0",
+               "cp_demo sem vinculo com INHERIT ou SET (invariante dos guards)")
+    finally:
+        admin(f"DROP DATABASE IF EXISTS {database}", f"DROP ROLE IF EXISTS {migrator}")
+
 def stays_checks():
     """V055 (CPX-015 a CPX-019): toda entrada manual abre permanencia derivada pelo banco; saida fecha, correcao anula ou
     reabre; morador adulto da unidade confirma a saida; justificativa uma vez; alertas N1/N2 do worker no horario e

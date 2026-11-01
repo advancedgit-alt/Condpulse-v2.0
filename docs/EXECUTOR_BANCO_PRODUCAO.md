@@ -30,10 +30,10 @@ flags e não cadastra condomínio.
 
 Dono de função (ADR-0012, V053): toda tabela, sequencia e schema de `platform`/`cp` continua com dono `postgres`. Para
 funcoes, o guard aceita dono `postgres` ou, somente, dono `cp_demo` quando a role cumpre os invariantes: NOLOGIN,
-NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem membros e sem ser membro de ninguém
+NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem ser membro de ninguém e com vínculos só de administração (toda linha de `pg_auth_members` com inherit=false e set=false, sem membro de runtime; ADR-0012, itens 7 e 8)
 (`pg_auth_members` vazio nos dois sentidos). Qualquer outro dono, qualquer SECURITY DEFINER fora de `cp_demo` (antes nao conferido pelo migrate) ou `cp_demo` fora
-desses invariantes bloqueia o migrate antes de escrever. Cenário coberto no harness (`owners`): aceite com `cp_demo` íntegra e recusa com LOGIN, com membro, como
-membro, função de outro dono e SECURITY DEFINER fora de `cp_demo`.
+desses invariantes bloqueia o migrate antes de escrever. Cenário coberto no harness (`owners`): aceite com `cp_demo` íntegra (inclusive com vínculo só de administração) e recusa com LOGIN, como
+membro, com membro INHERIT/SET ou de runtime, função de outro dono e SECURITY DEFINER fora de `cp_demo`.
 
 O ensaio JDBC descartável do CI cobre banco novo do V001 até a última versão, repetição com zero, faixa curta,
 lacuna, histórico com baseline legado, checksum divergente e histórico acima do JAR.
