@@ -6,12 +6,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { ApiError, CondPulseApi } from '../../api/client';
 import { createPartnersApi } from '../../api/partners';
 import { createSecurityLogApi } from '../../api/securityLog';
+import { createStaysApi } from '../../api/stays';
 import { createSecurityCommandApi } from '../../api/securityCommand';
 import type { PartnerContext } from '../../api/types';
 import { FailureState, PartnerConsole, PartnerGate, PartnerScopeProvider } from './PartnerPage';
 import { mfaStatusKey } from '../Mfa';
 import { planSwitch, resetContextTracker } from '../shell/contextSwitch';
-import { applyRefusal, commandKey, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, refusalOf,
+import { applyRefusal, commandKey, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, partnerStaysKey, refusalOf,
   reachedTenant, scheduleBody, securityLogKey, stillReached } from './model';
 
 const own = '10000000-0000-4000-8000-000000000001';
@@ -151,7 +152,8 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
     : new Response(JSON.stringify({ code, status }), { status, headers: { 'Content-Type': 'application/json' } }));
   // Cada pedido com o condomínio que a tela entrega ao tratador (as telas de equipe/escala/carteira não têm condomínio)
   // e as chaves de cache com os dados que a tela mostra.
-  type Client = { partners: ReturnType<typeof createPartnersApi>; log: ReturnType<typeof createSecurityLogApi>; command: ReturnType<typeof createSecurityCommandApi> };
+  type Client = { partners: ReturnType<typeof createPartnersApi>; log: ReturnType<typeof createSecurityLogApi>; stays: ReturnType<typeof createStaysApi>;
+    command: ReturnType<typeof createSecurityCommandApi> };
   const incidentId = '53000000-0000-4000-8000-000000000001';
   const requests: { name: string; tenantId?: string; keys: (readonly unknown[])[]; run(client: Client): Promise<unknown> }[] = [
     { name: 'equipe', keys: [partnerKey(own, partnerId, 'team')], run: (c) => c.partners.team(partnerId) },
@@ -181,6 +183,7 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
     { name: 'integridade', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.integrity(tenant) },
     { name: 'exportação', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')],
       run: (c) => c.log.export(tenant, { reason: 'Pedido formal do condomínio' }) },
+    { name: 'permanências', tenantId: tenant, keys: [partnerStaysKey(own, tenant, 'open', false)], run: (c) => c.stays.open(tenant, false) },
   ];
   const refusals: [number, string][] = [[403, 'MFA_REQUIRED'], [403, 'PARTNER_ACCESS_DENIED'], [404, 'PARTNER_NOT_FOUND'], [403, 'PARTNER_FORBIDDEN'],
     [404, 'TENANT_ACCESS_DENIED'], [403, 'STAFF_ACCESS_DENIED']];
@@ -189,7 +192,7 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
   it('toda recusa vira estado de acesso negado (ou segundo fator) e apaga do cache os dados da tela', async () => {
     for (const request of requests) for (const [status, code] of refusals) {
       const client = new CondPulseApi({ fetch: respond(status, code) });
-      const error = await request.run({ partners: createPartnersApi(client), log: createSecurityLogApi(client), command: createSecurityCommandApi(client) })
+      const error = await request.run({ partners: createPartnersApi(client), log: createSecurityLogApi(client), stays: createStaysApi(client), command: createSecurityCommandApi(client) })
         .then(() => null, (failure: unknown) => failure);
       const refusal = refusalOf(error, request.tenantId);
       expect(refusal, `${request.name} / ${code}`).not.toBeNull();
@@ -198,14 +201,20 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
       if (code === 'MFA_REQUIRED') expect(state.mfa).toBe(true);
       else if (request.tenantId && !code.startsWith('PARTNER_')) {
         expect(state.deniedTenants.get(tenant)).toBe(error);
-        // Recusa de condomínio apaga o log dele e os dados do comando (que misturam condomínios).
-        expect(forget).toEqual([securityLogKey(own, tenant), commandKey(own, partnerId)]);
+        // Recusa de condomínio apaga o log e as permanências dele e os dados do comando (que misturam condomínios).
+        expect(forget).toEqual([securityLogKey(own, tenant), partnerStaysKey(own, tenant), commandKey(own, partnerId)]);
       } else expect(state.partnerDenied, `${request.name} / ${code}`).toBe(error);
     }
   });
+  it('recusa do banco nas permanências (STAY_FORBIDDEN) derruba só o condomínio e apaga as permanências dele', async () => {
+    const error = await createStaysApi(new CondPulseApi({ fetch: respond(403, 'STAY_FORBIDDEN') })).open(tenant, false).then(() => null, (failure: unknown) => failure);
+    const refusal = refusalOf(error, tenant);
+    expect(refusal).toEqual({ kind: 'tenant', tenantId: tenant.toLowerCase() });
+    expect(applyRefusal(initialRefusalState(), refusal!, scope, error).forget).toEqual([securityLogKey(own, tenant), partnerStaysKey(own, tenant), commandKey(own, partnerId)]);
+  });
   it('MFA e recusa do parceiro apagam o log de todos os condomínios; falha transitória ou de regra não é recusa', async () => {
     const all = applyRefusal(initialRefusalState(), { kind: 'partner' }, scope, null).forget;
-    for (const tenantId of scope.tenantIds) expect(covered(securityLogKey(own, tenantId, 'integrity'), all)).toBe(true);
+    for (const tenantId of scope.tenantIds) expect(covered(securityLogKey(own, tenantId, 'integrity'), all) && covered(partnerStaysKey(own, tenantId, 'open', true), all)).toBe(true);
     for (const [status, code] of [[503, 'PARTNER_UNAVAILABLE'], [503, 'SECURITY_LOG_DEPENDENCY_UNAVAILABLE'], [403, 'PARTNER_SELF_CHANGE_DENIED'],
       [404, 'NOT_FOUND']] as [number, string][]) {
       const error = await createPartnersApi(new CondPulseApi({ fetch: respond(status, code) })).team(partnerId).then(() => null, (failure: unknown) => failure);

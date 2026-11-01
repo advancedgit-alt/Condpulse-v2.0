@@ -22,6 +22,10 @@ kill_timeout = "35s"
   CP_WORKER_WAITLIST_MILLIS = "60000"
   # Reconciliação de credenciais só com o adaptador do parceiro físico (CP-044); o launcher recusa "true".
   CP_WORKER_ACCESS_SYNC_ENABLED = "false"
+  # Alertas de permanência N1/N2 (V055, CPX-016). Desligada até a V055 estar aplicada e o responsável ligar por PR.
+  # O intervalo (10 s a 10 min) é a tolerância máxima entre o horário do nível e a gravação.
+  CP_WORKER_STAYS_ENABLED = "false"
+  CP_WORKER_STAYS_MILLIS = "60000"
   # Âncora diária do Log de Segurança (V050, CPX-008). O worker NÃO copia nada da Vercel (FLY_WORKER.md): ligar a flag
   # na Vercel liga só a API (via fly-api). Ligada em 01/11/2026 junto com a API, após o responsável ligar o log na Vercel.
   CP_SECURITY_LOG_ENABLED = "true"

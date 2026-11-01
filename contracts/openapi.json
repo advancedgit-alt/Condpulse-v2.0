@@ -6033,7 +6033,7 @@
             }
           },
           "400": {
-            "description": "ACCESS_BASIS_REQUIRED, ACCESS_EVIDENCE_INVALID, ACCESS_NOTE_INVALID ou IDEMPOTENCY_KEY_INVALID"
+            "description": "ACCESS_BASIS_REQUIRED, ACCESS_EVIDENCE_INVALID, ACCESS_NOTE_INVALID, STAY_KIND_INVALID ou IDEMPOTENCY_KEY_INVALID"
           },
           "401": {
             "description": "Autenticação necessária"
@@ -23582,6 +23582,583 @@
           }
         }
       }
+    },
+    "/v1/tenants/{tenantId}/stays": {
+      "get": {
+        "operationId": "listOpenStays",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "overdue"
+              ]
+            }
+          }
+        ],
+        "description": "CPX-017: quem está no condomínio agora (permanências abertas), vencidas primeiro. Portaria (concierge.operate) ou parceiro com alcance (security.command, ops.shift.supervise, ops.remote.operate), sempre AAL2; grava SENSITIVE_VIEWED.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "STAY_VIEW_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED, STAY_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "STAY_STATE_CHANGED"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/stays/day-close": {
+      "get": {
+        "operationId": "stayDayClose",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Dia no fuso do condomínio; hoje por padrão; até 31 dias atrás."
+          }
+        ],
+        "description": "CPX-019: relatório de fechamento do dia (entradas sem saída). Portaria (concierge.operate) ou parceiro com alcance (security.command, ops.shift.supervise, ops.remote.operate), sempre AAL2; grava SENSITIVE_VIEWED.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayDayClose"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "STAY_DAY_CLOSE_DATE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED, STAY_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "STAY_STATE_CHANGED"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/stays/{stayId}/justification": {
+      "post": {
+        "operationId": "justifyStay",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "stayId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Justificativa com motivo (STAY_JUSTIFIED): encerra a escalada de alertas; a permanência continua aberta até a saída. Mesmos papéis da leitura, AAL2. Repetir o mesmo motivo devolve Idempotency-Replayed=true.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StayJustification"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stay"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "STAY_JUSTIFICATION_REQUIRED"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED, STAY_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "STAY_NOT_FOUND"
+          },
+          "409": {
+            "description": "STAY_ALREADY_JUSTIFIED, STAY_NOT_OPEN ou STAY_STATE_CHANGED"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/stays": {
+      "get": {
+        "operationId": "listUnitOpenStays",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Permanências abertas da unidade (adulto ou dependente com permissão de decidir visitas), sem anotações da equipe.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "UNIT_ACCESS_DENIED"
+          },
+          "409": {
+            "description": "STAY_STATE_CHANGED"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/units/{unitId}/stays/{stayId}/exit-confirmation": {
+      "post": {
+        "operationId": "confirmStayExit",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "stayId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "CPX-018: o morador ou responsável da unidade confirma a saída (STAY_CLOSED, origem RESIDENT_APP). Repetir devolve Idempotency-Replayed=true.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stay"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAY_CONFIRMATION_DENIED ou STAY_FORBIDDEN; MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "STAY_NOT_FOUND"
+          },
+          "409": {
+            "description": "STAY_NOT_OPEN ou STAY_STATE_CHANGED"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/stay-rules": {
+      "get": {
+        "operationId": "listStayRules",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Regras de tempo efetivas por tipo (condomínio ou padrão provisório da plataforma). Gestão (policy.edit), AAL2.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayRules"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED, STAY_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "STAY_STATE_CHANGED"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/stay-rules/{kind}": {
+      "put": {
+        "operationId": "changeStayRule",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "VISITOR",
+                "SERVICE_PROVIDER",
+                "DELIVERY",
+                "CONSTRUCTION"
+              ]
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Cria ou atualiza (pela versão) a regra de tempo do tipo no condomínio; RULE_CHANGED no Log de Segurança. Gestão (policy.edit), AAL2.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StayRuleChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayRules"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "STAY_KIND_INVALID ou STAY_RULE_INVALID"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "STAFF_ACCESS_DENIED, STAY_FORBIDDEN ou MFA_REQUIRED (segundo fator exigido); MODULE_DISABLED (módulo suspenso pela central para o condomínio)"
+          },
+          "404": {
+            "description": "Recurso não disponível ao ator"
+          },
+          "409": {
+            "description": "STAY_RULE_VERSION_CONFLICT"
+          },
+          "503": {
+            "description": "STAY_DEPENDENCY_UNAVAILABLE"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -27097,7 +27674,7 @@
         "required": [
           "evidence"
         ],
-        "description": "Exatamente uma base: chegada autorizada pela unidade nas últimas 24 horas (arrivalId) ou convite em vigor agora (permitId).",
+        "description": "Exatamente uma base: chegada autorizada pela unidade nas últimas 24 horas (arrivalId) ou convite em vigor agora (permitId). A entrada abre uma permanência (V055).",
         "properties": {
           "arrivalId": {
             "type": [
@@ -27126,6 +27703,20 @@
               "null"
             ],
             "maxLength": 300
+          },
+          "stayKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "VISITOR",
+              "SERVICE_PROVIDER",
+              "DELIVERY",
+              "CONSTRUCTION",
+              null
+            ],
+            "description": "Tipo da permanência aberta pela entrada (V055). Sem valor: VISITOR. Janela de prestador recorrente é sempre SERVICE_PROVIDER."
           }
         }
       },
@@ -40143,6 +40734,381 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "Stay": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stayId",
+          "unitId",
+          "unitLabel",
+          "blockName",
+          "visitorName",
+          "documentLast4",
+          "kind",
+          "origin",
+          "basis",
+          "enteredAt",
+          "expectedExitAt",
+          "expectedSource",
+          "state",
+          "closure",
+          "closedAt",
+          "level",
+          "recordedLevel",
+          "overdue",
+          "justified",
+          "justification",
+          "justifiedAt",
+          "entryEventId",
+          "exitEventId"
+        ],
+        "description": "Permanência (V055): aberta pela entrada registrada, fechada pela saída. Aberta = sem registro de saída, não prova de presença (R5.10); origin e basis mostram de onde vem o dado. level: nível pelo horário agora; recordedLevel: último nível gravado pelo worker. justification é anotação da equipe (null para a unidade).",
+        "properties": {
+          "stayId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitLabel": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visitorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "documentLast4": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "VISITOR",
+              "SERVICE_PROVIDER",
+              "DELIVERY",
+              "CONSTRUCTION"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "MANUAL",
+              "FACIAL",
+              "QR",
+              "LINK"
+            ]
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "ARRIVAL",
+              "PERMIT",
+              "RULE"
+            ]
+          },
+          "enteredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expectedExitAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expectedSource": {
+            "type": "string",
+            "enum": [
+              "PERMIT",
+              "RULE",
+              "TENANT_RULE",
+              "PLATFORM_DEFAULT"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "CLOSED",
+              "VOIDED"
+            ]
+          },
+          "closure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "EXIT_RECORDED",
+              "RESIDENT_CONFIRMED",
+              "ENTRY_CORRECTED",
+              null
+            ]
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "DUE",
+              "L1",
+              "L2"
+            ]
+          },
+          "recordedLevel": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "DUE",
+              "L1",
+              "L2"
+            ]
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "justified": {
+            "type": "boolean"
+          },
+          "justification": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "justifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "entryEventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "exitEventId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "StayPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stays",
+          "truncated",
+          "generatedAt"
+        ],
+        "properties": {
+          "stays": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/Stay"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "StayDayClose": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "timeZone",
+          "from",
+          "until",
+          "generatedAt",
+          "entries",
+          "truncated",
+          "stillOpen",
+          "listHash"
+        ],
+        "description": "Fechamento do dia (CPX-019): entradas do dia no fuso do condomínio sem saída registrada até o fim do dia. listHash (SHA-256 do dia e dos ids na ordem) fica no Log de Segurança (SENSITIVE_VIEWED).",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entries": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/Stay"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "stillOpen": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "listHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "StayJustification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "StayRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "maxMinutes",
+          "l1AfterMinutes",
+          "l2AfterMinutes",
+          "source",
+          "version"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "VISITOR",
+              "SERVICE_PROVIDER",
+              "DELIVERY",
+              "CONSTRUCTION"
+            ]
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440
+          },
+          "l1AfterMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "l2AfterMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "TENANT_RULE",
+              "PLATFORM_DEFAULT"
+            ]
+          },
+          "version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      },
+      "StayRules": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rules"
+        ],
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StayRule"
+            }
+          }
+        }
+      },
+      "StayRuleChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "maxMinutes",
+          "l1AfterMinutes",
+          "l2AfterMinutes"
+        ],
+        "description": "version ausente cria a regra do tipo; com versão, atualiza só se ainda for a mesma (RULE_CHANGED no log).",
+        "properties": {
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440
+          },
+          "l1AfterMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "l2AfterMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
           }
         }
       }

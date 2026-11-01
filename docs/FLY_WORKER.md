@@ -14,7 +14,8 @@ pela API (FLY_API.md).
   (até 10), VM `shared-cpu-1x` 1 GB, `kill_timeout` 35 s (a passada em curso tem até 15 s). Configuração pública em
   `[env]`, revisada por PR: `SPRING_PROFILES_ACTIVE=worker`, `DATABASE_URL` (pooler São Paulo, `verify-full`),
   `DB_POOL_SIZE=1`, `CP_WORKER_OUTBOX_ENABLED=false`, `CP_WORKER_POLL_MILLIS=2000`, `CP_WORKER_WAITLIST_ENABLED=false`,
-  `CP_WORKER_WAITLIST_MILLIS=60000`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`.
+  `CP_WORKER_WAITLIST_MILLIS=60000`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`, `CP_WORKER_STAYS_ENABLED=false` e
+  `CP_WORKER_STAYS_MILLIS=60000` (alertas de permanência, V055; o launcher aceita 10 s a 10 min).
 - `infra/fly-worker/Dockerfile`: mesmas bases fixadas por digest da API, JAR do backend, usuário 10001, sem `EXPOSE`.
 - `infra/fly-worker/start-worker.sh`: launcher que falha fechado (código sem valor) se o perfil não for `worker`, a URL
   JDBC não for exatamente a revisada, o login não for `cp_worker_<32 hex>.rpnrqfrfwywglvyykgrg`, o pool não for 1-2,

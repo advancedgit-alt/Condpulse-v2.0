@@ -1043,7 +1043,9 @@ def access_checks():
     expect(as_concierge(access_trail(CONC, ROLL), "42501"), "trilha de acesso so de registro existente")
     expect(error(access_trail(AA, E[0]), "42501", tenant=TA, actor=AA, role="cp_api"), "unidade nao grava trilha de acesso")
     as_concierge(access_trail(CONC, E[0]))
-    query(f"DELETE FROM cp.outbox WHERE event_type LIKE 'ACCESS%'; DELETE FROM cp.audit_log WHERE action LIKE 'ACCESS%'; "
+    # V055: cada entrada abriu uma permanencia (nunca apagada pela aplicacao); a limpeza da fixture desliga os gatilhos.
+    query(f"SET session_replication_role=replica; DELETE FROM cp.stays WHERE tenant_id='{TA}'; SET session_replication_role=origin; "
+          f"DELETE FROM cp.outbox WHERE event_type LIKE 'ACCESS%'; DELETE FROM cp.audit_log WHERE action LIKE 'ACCESS%'; "
           f"DELETE FROM cp.access_events WHERE tenant_id='{TA}'; DELETE FROM cp.arrival_requests WHERE id in ('{A_OK}','{A_WAIT}','{A_DENIED}','{A_OLD}'); "
           f"DELETE FROM cp.visit_permits WHERE id in ('{P_NOW}','{P_LATER}','{P_REVOKED}','{P_OTHER}'); "
           f"DELETE FROM cp.visitors WHERE id in ('{"','".join(V)}'); "
@@ -5698,6 +5700,215 @@ def demo_nonsuperuser_checks():
     finally:
         admin(f"DROP DATABASE IF EXISTS {database}", f"DROP ROLE IF EXISTS {migrator}")
 
+def stays_checks():
+    """V055 (CPX-015 a CPX-019): toda entrada manual abre permanencia derivada pelo banco; saida fecha, correcao anula ou
+    reabre; morador adulto da unidade confirma a saida; justificativa uma vez; alertas N1/N2 do worker no horario e
+    idempotentes; leitura pela portaria, pela unidade e pelo parceiro com alcance; tudo no Log de Seguranca."""
+    CONC, DEP, RES2, MGR, UA2 = ("10000000-0000-4000-8000-0000000054a1", "10000000-0000-4000-8000-0000000054a2",
+                                 "10000000-0000-4000-8000-0000000054a3", "10000000-0000-4000-8000-0000000054a4",
+                                 "20000000-0000-4000-8000-0000000054a5")
+    LD, OUT = "10000000-0000-4000-8000-0000000054b1", "10000000-0000-4000-8000-0000000054b2"
+    PX, MLD = "49000000-0000-4000-8000-0000000054c1", "49000000-0000-4000-8000-0000000054c2"
+    V = [f"73000000-0000-4000-8000-0000000054{n:02d}" for n in range(10, 20)]
+    P1, P2, PW = (f"74000000-0000-4000-8000-0000000054{n}" for n in (10, 11, 12))
+    A1, A2 = "75000000-0000-4000-8000-000000005410", "75000000-0000-4000-8000-000000005411"
+    RULE = "77000000-0000-4000-8000-000000005410"
+    E = [f"76000000-0000-4000-8000-0000000054{n:02d}" for n in range(10, 40)]
+    query(f"""
+        INSERT INTO platform.accounts(id,status) VALUES('{CONC}','ACTIVE'),('{DEP}','ACTIVE'),('{RES2}','ACTIVE'),('{MGR}','ACTIVE'),
+          ('{LD}','ACTIVE'),('{OUT}','ACTIVE');
+        INSERT INTO cp.units(id,tenant_id,label) VALUES('{UA2}','{TA}','FICTICIA 154');
+        INSERT INTO cp.memberships(tenant_id,account_id,unit_id,display_name,role,status)
+          VALUES('{TA}','{CONC}',NULL,'PORTARIA PERMANENCIA','CONCIERGE','ACTIVE'),
+                ('{TA}','{DEP}','{UA}','DEPENDENTE PERMANENCIA','DEPENDENT','ACTIVE'),
+                ('{TA}','{RES2}','{UA2}','MORADOR 154','RESIDENT','ACTIVE'),
+                ('{TA}','{MGR}',NULL,'GESTAO PERMANENCIA','MANAGER','ACTIVE');
+        INSERT INTO cp.visitors(id,tenant_id,full_name,created_by)
+          SELECT v,'{TA}','VISITANTE PERMANENCIA','{AA}' FROM unnest(ARRAY['{"','".join(V)}']::uuid[]) v;
+        SET session_replication_role=replica;
+        INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until)
+          VALUES('{P1}','{TA}','{V[0]}','{UA}','{AA}',clock_timestamp()-interval '5 minutes',clock_timestamp()+interval '2 hours'),
+                ('{P2}','{TA}','{V[1]}','{UA}','{AA}',clock_timestamp()-interval '5 minutes',clock_timestamp()+interval '3 hours');
+        INSERT INTO cp.visit_rules(id,tenant_id,unit_id,visitor_id,week_days,starts_local,ends_local,valid_from,valid_until,created_by)
+          VALUES('{RULE}','{TA}','{UA}','{V[2]}',ARRAY[1,2,3,4,5,6,7]::smallint[],'00:00','23:59',current_date,current_date+30,'{AA}');
+        INSERT INTO cp.visit_permits(id,tenant_id,visitor_id,unit_id,created_by,valid_from,valid_until,rule_id,window_date)
+          VALUES('{PW}','{TA}','{V[2]}','{UA}','{AA}',clock_timestamp()-interval '5 minutes',clock_timestamp()+interval '4 hours','{RULE}',current_date);
+        INSERT INTO cp.arrival_requests(id,tenant_id,unit_id,visitor_id,created_by,state,decided_by,decided_at,decision_source,version)
+          VALUES('{A1}','{TA}','{UA}','{V[3]}','{CONC}','APPROVED','{AA}',clock_timestamp(),'APP',1),
+                ('{A2}','{TA}','{UA2}','{V[4]}','{CONC}','APPROVED','{RES2}',clock_timestamp(),'APP',1);
+        INSERT INTO platform.partners(id,name,created_by,updated_by) VALUES('{PX}','PARCEIRO PERMANENCIA FICTICIO','{LD}','{LD}');
+        INSERT INTO platform.partner_members(id,partner_id,account_id,role,display_name,created_by)
+          VALUES('{MLD}','{PX}','{LD}','SECURITY_LEAD','LIDER PERMANENCIA','{LD}');
+    """)
+    concierge = "SET LOCAL app.capabilities='concierge.operate'; "
+    ref = lambda v: f"'{v}'" if v else "NULL"
+    def event(identifier, kind="MANUAL_IN", arrival=None, permit=None, entry=None, corrects=None, evidence="DOCUMENT_CHECKED",
+              note="NULL", stay_kind=None):
+        return (f"INSERT INTO cp.access_events(id,tenant_id,arrival_id,permit_id,event_type,entry_event_id,corrects_event_id,evidence,note,"
+                f"recorded_by,stay_kind) VALUES('{identifier}','{TA}',{ref(arrival)},{ref(permit)},'{kind}',{ref(entry)},{ref(corrects)},"
+                f"'{evidence}',{note},'{CONC}',{ref(stay_kind)})")
+    def as_concierge(statement, state=None):
+        if state:
+            return error(concierge + statement, state, tenant=TA, actor=CONC, role="cp_api")
+        return query(concierge + statement, tenant=TA, actor=CONC, role="cp_api")
+    stay = lambda entry, cols="state": value(f"select {cols} from cp.stays where entry_event_id='{entry}'")
+    sid = lambda entry: stay(entry, "id")
+    logged = lambda s, kind: value(f"select count(*) from cp.security_log where subject_type='STAY' and subject_id='{s}' and event_type='{kind}'")
+
+    # Abertura (CPX-015): convite, chegada e janela de prestador; tudo derivado pelo banco.
+    as_concierge(event(E[0], permit=P1))
+    expect(stay(E[0], "unit_id||':'||visitor_id||':'||kind||':'||origin||':'||basis||':'||authorized_by||':'||expected_source||':'||state")
+           == f"{UA}:{V[0]}:VISITOR:MANUAL:PERMIT:{AA}:PERMIT:OPEN", "entrada pelo convite abre permanencia derivada do convite")
+    expect(value(f"select s.expected_exit_at=p.valid_until and s.entered_at=x.occurred_at and s.l1_at=s.expected_exit_at+interval '15 minutes' "
+                 f"and s.l2_at=s.expected_exit_at+interval '60 minutes' from cp.stays s join cp.visit_permits p on p.id=s.permit_id "
+                 f"join cp.access_events x on x.id=s.entry_event_id where s.entry_event_id='{E[0]}'") == "t",
+           "saida prevista = fim do convite; tolerancias N1/N2 do padrao fixadas na abertura")
+    as_concierge(event(E[1], arrival=A1, stay_kind="DELIVERY"))
+    expect(value(f"select kind||':'||basis||':'||expected_source||':'||(expected_exit_at=entered_at+interval '30 minutes')||':'||authorized_by "
+                 f"from cp.stays where entry_event_id='{E[1]}'") == f"DELIVERY:ARRIVAL:PLATFORM_DEFAULT:true:{AA}",
+           "chegada sem convite usa o tempo do tipo (padrao provisorio) e quem decidiu a chegada")
+    expect(as_concierge(event(E[2], permit=PW, stay_kind="VISITOR"), "23514"), "janela de prestador recorrente nao vira visitante")
+    as_concierge(event(E[2], permit=PW))
+    expect(stay(E[2], "kind||':'||basis||':'||expected_source||':'||(rule_id='" + RULE + "')") == "SERVICE_PROVIDER:RULE:RULE:true",
+           "janela de prestador abre permanencia de prestador com saida prevista no fim da janela")
+    expect(as_concierge(event(E[3], kind="MANUAL_OUT", entry=E[0], evidence="EXIT_OBSERVED", stay_kind="VISITOR"), "23514"),
+           "tipo de permanencia so na entrada")
+    expect(as_concierge(event(E[3], permit=P2, stay_kind="FICTICIO"), "23514"), "tipo de permanencia do catalogo")
+    expect(as_concierge(f"INSERT INTO cp.stays(tenant_id,entry_event_id) VALUES('{TA}','{E[0]}')", "23514"),
+           "permanencia nao nasce de entrada antiga (so na mesma transacao)")
+    expect(as_concierge(f"INSERT INTO cp.stays(tenant_id,entry_event_id,kind) VALUES('{TA}','{E[0]}','DELIVERY')", "42501"),
+           "aplicacao nao escolhe os dados da permanencia")
+    expect(error(f"INSERT INTO cp.stays(tenant_id,entry_event_id) VALUES('{TA}','{E[0]}')", "23514", tenant=TA, role="cp_api"),
+           "morador nao abre permanencia (so a entrada da portaria na mesma transacao abre)")
+    expect(value(f"select count(*) from cp.stays where tenant_id='{TA}'") == "3", "uma permanencia por entrada")
+    # Regra de tempo do condominio (gestao, policy.edit): RULE_CHANGED e uso na abertura seguinte.
+    rule_sql = (f"INSERT INTO cp.stay_rules(tenant_id,kind,max_minutes,l1_after_minutes,l2_after_minutes,updated_by) "
+                f"VALUES('{TA}','VISITOR',90,10,30,'{{actor}}')")
+    expect(error(rule_sql.replace("{actor}", AA), "42501", tenant=TA, role="cp_api"), "morador nao altera regra de tempo")
+    expect(error("SET LOCAL app.capabilities='policy.edit'; " + rule_sql.replace("{actor}", AA), "42501", tenant=TA, actor=MGR, role="cp_api"),
+           "regra so em nome da propria conta")
+    expect(error("SET LOCAL app.capabilities='policy.edit'; " + rule_sql.replace("{actor}", MGR).replace(",10,30,", ",30,10,"), "23514",
+                 tenant=TA, actor=MGR, role="cp_api"), "N2 depois de N1")
+    query("SET LOCAL app.capabilities='policy.edit'; " + rule_sql.replace("{actor}", MGR), tenant=TA, actor=MGR, role="cp_api")
+    expect(value(f"select count(*) from cp.security_log where tenant_id='{TA}' and event_type='RULE_CHANGED' and details->>'kind'='VISITOR' "
+                 f"and actor_account_id='{MGR}'") == "1", "regra de tempo grava RULE_CHANGED")
+    expect(error(f"SET LOCAL app.capabilities='policy.edit'; UPDATE cp.stay_rules SET max_minutes=120,updated_by='{MGR}' WHERE tenant_id='{TA}'",
+                 "23514", tenant=TA, actor=MGR, role="cp_api"), "regra muda so pela versao")
+    as_concierge(event(E[3], permit=P2))
+    as_concierge(f"SET LOCAL app.capabilities='concierge.operate'; {event(E[4], arrival=A2)}")
+    expect(value(f"select expected_source||':'||(expected_exit_at=entered_at+interval '90 minutes')||':'||(l2_at=expected_exit_at+interval '30 minutes') "
+                 f"from cp.stays where entry_event_id='{E[4]}'") == "TENANT_RULE:true:true", "chegada usa a regra do condominio")
+    expect(stay(E[3], "expected_source||':'||rule_source") == "PERMIT:TENANT_RULE", "convite mantem o fim do convite e usa as tolerancias da regra")
+
+    # Saida fecha, correcao da saida reabre, correcao da entrada anula (V014).
+    as_concierge(event(E[5], kind="MANUAL_OUT", entry=E[0], evidence="EXIT_OBSERVED"))
+    expect(stay(E[0], "state||':'||closure||':'||exit_event_id||':'||closed_by") == f"CLOSED:EXIT_RECORDED:{E[5]}:{CONC}",
+           "saida manual fecha a permanencia")
+    s0 = sid(E[0])
+    as_concierge(event(E[6], kind="CORRECTION", corrects=E[5], evidence="OPERATOR_CORRECTION", note="'Saida de outra pessoa'"))
+    expect(stay(E[0], "state||':'||coalesce(closure,'-')||':'||coalesce(exit_event_id::text,'-')") == "OPEN:-:-", "correcao da saida reabre")
+    expect(value(f"select count(*) from cp.security_log where subject_id='{s0}' and event_type='STAY_OPENED' and details->>'reopened'='true'") == "1",
+           "reabertura registrada no log")
+    as_concierge(event(E[7], kind="MANUAL_OUT", entry=E[0], evidence="EXIT_OBSERVED"))
+    expect(stay(E[0], "state||':'||exit_event_id") == f"CLOSED:{E[7]}", "nova saida valida fecha de novo")
+    as_concierge(event(E[8], kind="CORRECTION", corrects=E[3], evidence="OPERATOR_CORRECTION", note="'Pessoa nao entrou'"))
+    expect(stay(E[3], "state||':'||closure") == "VOIDED:ENTRY_CORRECTED", "correcao da entrada anula a permanencia")
+    expect(as_concierge(f"UPDATE cp.stays SET state='CLOSED',closure='EXIT_RECORDED',exit_event_id='{E[7]}',closed_by='{CONC}' "
+                        f"WHERE entry_event_id='{E[1]}'", "23514"), "fechamento so com saida valida da propria entrada")
+    expect(as_concierge(f"UPDATE cp.stays SET expected_exit_at=now() WHERE entry_event_id='{E[1]}'", "42501"),
+           "saida prevista nao muda depois da abertura")
+
+    # CPX-018: confirmacao de saida so pelo morador adulto da unidade.
+    s1 = sid(E[1])
+    confirm = lambda actor: f"UPDATE cp.stays SET state='CLOSED',closure='RESIDENT_CONFIRMED',closed_by='{actor}' WHERE id='{s1}' RETURNING id"
+    expect(value(f"WITH u AS ({confirm(RES2)}) SELECT count(*) FROM u", tenant=TA, actor=RES2, role="cp_api") == "0",
+           "morador de outra unidade nao confirma saida")
+    query(f"UPDATE cp.memberships SET permissions='{{\"visits\":{{\"decide\":true}}}}' WHERE account_id='{DEP}'")
+    expect(value(f"select count(*) from cp.stays where id='{s1}'", tenant=TA, actor=DEP, role="cp_api") == "1",
+           "dependente com permissao de decidir ve a permanencia da unidade")
+    expect(value(f"WITH u AS ({confirm(DEP)}) SELECT count(*) FROM u", tenant=TA, actor=DEP, role="cp_api") == "0",
+           "dependente nao confirma saida (so morador adulto)")
+    expect(as_concierge(confirm(CONC), "42501"), "portaria nao confirma saida em nome do morador")
+    expect(error(confirm(RES2), "42501", tenant=TA, actor=AA, role="cp_api"), "confirmacao so em nome da propria conta")
+    query(confirm(AA), tenant=TA, role="cp_api")
+    expect(stay(E[1], "state||':'||closure||':'||closed_by||':'||(exit_event_id is null)") == f"CLOSED:RESIDENT_CONFIRMED:{AA}:true",
+           "morador da unidade confirma a saida")
+    expect(value(f"select source||':'||actor_account_id||':'||(details->>'closure') from cp.security_log where subject_id='{s1}' "
+                 f"and event_type='STAY_CLOSED'") == f"RESIDENT_APP:{AA}:RESIDENT_CONFIRMED", "confirmacao gera STAY_CLOSED do app do morador")
+    expect(value(f"WITH u AS ({confirm(AA)}) SELECT count(*) FROM u".replace("RETURNING id", "AND state='OPEN' RETURNING id"),
+                 tenant=TA, role="cp_api") == "0", "confirmacao repetida nao muda nada")
+
+    # Justificativa: uma vez, com motivo, pela portaria (ou parceiro com alcance); morador nao justifica.
+    s2 = sid(E[2])
+    justify = lambda actor, reason="'Prestador autorizado ate 20h pela unidade'": (
+        f"UPDATE cp.stays SET justification={reason},justified_by='{actor}' WHERE id='{s2}'")
+    expect(error(justify(AA), "42501", tenant=TA, role="cp_api"), "morador nao justifica permanencia")
+    expect(as_concierge(justify(CONC, "'x'"), "23514"), "justificativa exige motivo")
+    as_concierge(justify(CONC))
+    expect(stay(E[2], "(justified_at is not null)||':'||justified_by") == f"true:{CONC}", "portaria justifica a permanencia")
+    expect(value(f"select source||':'||reason from cp.security_log where subject_id='{s2}' and event_type='STAY_JUSTIFIED'")
+           == "CONCIERGE:Prestador autorizado ate 20h pela unidade", "justificativa gera STAY_JUSTIFIED com motivo")
+    expect(as_concierge(justify(CONC, "'Outra justificativa valida'"), "42501"), "justificativa uma vez")
+
+    # CPX-016: alertas do worker no horario, idempotentes; nunca antes; justificada e fechada nao alertam.
+    s4 = sid(E[4])
+    query(f"SET session_replication_role=replica; UPDATE cp.stays SET expected_exit_at=now()-interval '20 minutes',l1_at=now()-interval '10 minutes',"
+          f"l2_at=now()+interval '1 hour',entered_at=now()-interval '2 hours' WHERE id in ('{s4}','{s2}')")
+    expect(error(f"UPDATE cp.stays SET l2_alerted_at=now(),l1_alerted_at=now(),due_alerted_at=now() WHERE id='{s4}'", "23514",
+                 tenant=TA, actor=None, role="cp_worker"), "worker nao antecipa o N2")
+    expect(error(f"UPDATE cp.stays SET state='CLOSED' WHERE id='{s4}'", "42501", tenant=TA, actor=None, role="cp_worker"),
+           "worker so marca alertas")
+    expect(error(f"select visitor_id from cp.stays", "42501", tenant=TA, actor=None, role="cp_worker"), "worker nao le a pessoa da permanencia")
+    def alert_pass(_=None):
+        return query("select cp.stay_alert_pass()", tenant=TA, actor=None, role="cp_worker", check=False)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        passes = list(pool.map(alert_pass, range(4)))
+    expect(all(r.returncode == 0 for r in passes) and sorted(int(r.stdout.strip().splitlines()[-1]) for r in passes) == [0, 0, 0, 1],
+           "4 passadas concorrentes: uma grava os alertas, as demais nada")
+    expect(logged(s4, "STAY_DUE") == "1" and logged(s4, "STAY_OVERDUE_L1") == "1" and logged(s4, "STAY_OVERDUE_L2") == "0",
+           "STAY_DUE e N1 vencidos gravados uma vez; N2 ainda no futuro")
+    expect(value(f"select severity||':'||source||':'||((details->>'delayMs')::bigint>=0) from cp.security_log where subject_id='{s4}' "
+                 f"and event_type='STAY_OVERDUE_L1'") == "ATTENTION:SYSTEM:true", "N1 com atencao, do sistema, com o atraso medido")
+    expect(logged(s2, "STAY_DUE") == "0", "permanencia justificada nao alerta")
+    expect(value("select cp.stay_alert_pass()", tenant=TA, actor=None, role="cp_worker") == "0", "passada repetida nao grava nada")
+    query(f"SET session_replication_role=replica; UPDATE cp.stays SET l2_at=now()-interval '1 minute' WHERE id='{s4}'")
+    expect(value("select cp.stay_alert_pass()", tenant=TA, actor=None, role="cp_worker") == "1" and logged(s4, "STAY_OVERDUE_L2") == "1",
+           "N2 gravado quando vence")
+    expect(error(f"UPDATE cp.stays SET due_alerted_at=now() WHERE id='{s4}'", "23514", tenant=TA, actor=None, role="cp_worker"),
+           "alerta ja gravado nao se repete")
+    expect(error("select cp.stay_alert_pass()", "42501", actor=None, role="cp_worker"), "passada exige condominio no contexto")
+
+    # Leitura: portaria com capacidade, unidade, parceiro com alcance (lider) e nada para outros.
+    expect(value(f"select count(*) from cp.stays", tenant=TA, actor=CONC, role="cp_api") == "0", "portaria sem capacidade nao ve permanencias")
+    expect(value(concierge + "select count(*) from cp.stays", tenant=TA, actor=CONC, role="cp_api") == "5", "portaria ve as permanencias")
+    expect(value(f"select count(*) from cp.stays", tenant=TA, actor=RES2, role="cp_api") == "1", "unidade ve so as proprias permanencias")
+    lead = "SET LOCAL app.capabilities='security.command'; "
+    expect(value(lead + "select count(*) from cp.stays", tenant=TA, actor=LD, role="cp_api") == "0", "lider sem contrato nao ve permanencias")
+    query(f"""SET session_replication_role=replica; INSERT INTO platform.partner_tenant_contracts(id,partner_id,tenant_id,service,starts_at,reason,created_by)
+        VALUES(gen_random_uuid(),'{PX}','{TA}','SECURITY_OPERATOR',now()-interval '1 day','Contrato ficticio','{LD}')""")
+    expect(value(lead + "select count(*) from cp.stays", tenant=TA, actor=LD, role="cp_api") == "5", "lider com contrato ativo ve as permanencias")
+    expect(value(lead + f"select count(*) from cp.visitors v join cp.stays s on s.visitor_id=v.id", tenant=TA, actor=LD, role="cp_api") == "5",
+           "lider ve o nome de quem esta no condominio (painel quem esta agora)")
+    expect(value(f"select count(*) from cp.stays", tenant=TA, actor=OUT, role="cp_api") == "0", "conta sem vinculo nem alcance nao ve nada")
+    expect(value(f"select count(*) from cp.stays", tenant=TA, actor=AA, role="cp_api", ) == "4", "morador ve as permanencias da propria unidade")
+    # Nada e apagado; cadeia integra.
+    expect(as_concierge(f"DELETE FROM cp.stays WHERE id='{s4}'", "42501"), "permanencia nao e apagada pela aplicacao")
+    expect(error(f"DELETE FROM cp.stays WHERE id='{s4}'", "42501"), "permanencia nao e apagada nem pelo dono")
+    expect(value("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='cp' "
+                 "and c.relname in ('stays','stay_rules') and c.relrowsecurity and c.relforcerowsecurity") == "2", "permanencias e regras com RLS FORCE")
+    expect(value(f"select count(*) from cp.security_log l join cp.stays s on s.id=l.subject_id where l.tenant_id='{TA}' and l.event_type='STAY_OPENED' "
+                 f"and l.details->>'reopened' is null") == "5",
+           "cada entrada grava STAY_OPENED")
+    expect(value(f"select intact from cp.security_log_verify('{TA}')") == "t", "cadeia do log integra depois das permanencias")
+    query(f"SET session_replication_role=replica; DELETE FROM cp.stays WHERE tenant_id='{TA}'; DELETE FROM cp.stay_rules WHERE tenant_id='{TA}'; "
+          f"DELETE FROM cp.access_events WHERE tenant_id='{TA}'; DELETE FROM cp.arrival_requests WHERE id in ('{A1}','{A2}'); "
+          f"DELETE FROM cp.visit_permits WHERE id in ('{P1}','{P2}','{PW}'); DELETE FROM cp.visit_rules WHERE id='{RULE}'; "
+          f"DELETE FROM cp.visitors WHERE id in ('{"','".join(V)}'); "
+          f"DELETE FROM platform.partner_tenant_contracts WHERE partner_id='{PX}'; DELETE FROM platform.partner_members WHERE partner_id='{PX}'; "
+          f"DELETE FROM platform.partners WHERE id='{PX}'; "
+          f"DELETE FROM cp.memberships WHERE account_id in ('{CONC}','{DEP}','{RES2}','{MGR}'); DELETE FROM cp.units WHERE id='{UA2}'")
+
+
 def main():
     guard()
     if os.environ.get("CP_SCHEMA_ALREADY_MIGRATED") != "true":
@@ -5839,6 +6050,7 @@ def main():
     context_switch_checks()
     security_command_checks()
     demo_checks()
+    stays_checks()
     rollback = reservation(start="18:00",end="19:00",identifier=ROLL).replace(" RETURNING id","")
     query(f"BEGIN; SET LOCAL ROLE cp_api; SET LOCAL app.tenant_id='{TA}'; SET LOCAL app.actor_id='{AA}'; {rollback}; INSERT INTO cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) VALUES('{TA}','TEST','{ROLL}',0,'{{}}'); ROLLBACK")
     expect(value(f"select (select count(*) from cp.reservations where id='{ROLL}')+(select count(*) from cp.outbox where aggregate_id='{ROLL}')")=="0",

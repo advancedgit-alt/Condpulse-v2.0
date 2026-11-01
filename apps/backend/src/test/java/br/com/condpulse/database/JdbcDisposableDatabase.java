@@ -208,6 +208,14 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   update(connection,"delete from platform.billing_subscriptions where tenant_id in (?,?)",tenantA,tenantB);
   update(connection,"delete from platform.billing_plans where created_by in (?,?,?)",accountA,accountB,accountC);
  }
+ /** V055: permanências e regras de tempo nunca são apagadas pela aplicação (gatilho); a fixture apaga com os gatilhos desligados. */
+ private void deleteStays(Connection connection) throws SQLException {
+  update(connection,"set session_replication_role=replica");
+  try {
+   update(connection,"delete from cp.stays where tenant_id in (?,?)",tenantA,tenantB);
+   update(connection,"delete from cp.stay_rules where tenant_id in (?,?)",tenantA,tenantB);
+  } finally { update(connection,"set session_replication_role=origin"); }
+ }
  void clearReservationFixtures() throws SQLException {
   try(Connection connection=admin()) {
    connection.setAutoCommit(false);
@@ -216,6 +224,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    for(String table:new String[]{"edge_reports","edge_leases","edge_agents"}) update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"with publications as (delete from cp.rights_publications where tenant_id in (?,?)),grants as (delete from cp.access_grants where tenant_id in (?,?)) delete from cp.revocation_markers where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB,tenantA,tenantB);
    update(connection,"with validations as (delete from cp.access_policy_validations where tenant_id in (?,?)) delete from cp.access_policy_versions where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB);
+   deleteStays(connection);
    for(String table:new String[]{"access_policies","point_bindings","installation_acceptances","device_channels","access_points","access_areas","technical_grants","facial_access_settings","finance_webhook_events","finance_charges","finance_recurring_fees","finance_payers","concierge_occurrences","device_events","device_event_cursors","access_device_health","access_connector_health","credential_syncs","access_credentials","age_evidence","subject_contexts","access_subjects","access_devices","access_connectors","import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","move_requests","move_rules","reservation_waitlist","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    connection.commit();
@@ -271,6 +280,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
    for(String table:new String[]{"edge_reports","edge_leases","edge_agents"}) update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"with publications as (delete from cp.rights_publications where tenant_id in (?,?)),grants as (delete from cp.access_grants where tenant_id in (?,?)) delete from cp.revocation_markers where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB,tenantA,tenantB);
    update(connection,"with validations as (delete from cp.access_policy_validations where tenant_id in (?,?)) delete from cp.access_policy_versions where tenant_id in (?,?)",tenantA,tenantB,tenantA,tenantB);
+   deleteStays(connection);
    for(String table:new String[]{"access_policies","point_bindings","installation_acceptances","device_channels","access_points","access_areas","technical_grants","facial_access_settings","finance_webhook_events","finance_charges","finance_recurring_fees","finance_payers","concierge_occurrences","device_events","device_event_cursors","access_device_health","access_connector_health","credential_syncs","access_credentials","age_evidence","subject_contexts","access_subjects","access_devices","access_connectors","import_rows","import_batches","attachments","request_messages","service_requests","notifications","announcement_reads","announcements","parcel_handoffs","parcel_delegations","parcels","access_events","arrival_requests","permit_links","visit_permits","visit_rules","visitors","outbox","audit_log","idempotency_keys","move_requests","move_rules","reservation_waitlist","reservations","amenities"})
     update(connection,"delete from cp."+table+" where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.unit_rentals where tenant_id in (?,?)",tenantA,tenantB);

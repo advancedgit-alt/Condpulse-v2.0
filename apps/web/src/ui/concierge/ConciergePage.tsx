@@ -12,6 +12,7 @@ import { ActionFeedback, ManagementProvider, useAccessGuard, useAction, useManag
 import { codeOf, conciergeKey, repeatFailure, settleFailure, unitName, useIntent } from './shared';
 import { ArrivalDesk } from './Arrivals';
 import { OccurrenceSection } from './Occurrences';
+import { ConciergeStays } from './Stays';
 import { ConciergeMoves } from '../Moves';
 import { AccessHealthSection, ConciergeDeviceEvents, ConciergePendingRevocations } from '../AccessCredentials';
 import { ENTRY_PATH, conciergePath, condoOf, panelEnabled, sectionEnabled } from '../shell/paths';
@@ -73,6 +74,7 @@ function ConciergeGate({ scope, section }: { scope: ManagementScope; section: Co
     {section === 'ocorrencias' ? <OccurrenceSection canPickUnit /> : section === 'visitas' ? <>
       {/* Cada painel segue o próprio módulo: chegadas (visitas), credenciais e equipamentos, mudanças (pedidos). */}
       {panelEnabled(condo, 'portaria.visitas.chegadas') ? <ArrivalDesk /> : null}
+      {panelEnabled(condo, 'portaria.visitas.permanencias') ? <ConciergeStays /> : null}
       {panelEnabled(condo, 'portaria.visitas.revogacoes') ? <ConciergePendingRevocations /> : null}
       {panelEnabled(condo, 'portaria.visitas.saude') ? <AccessHealthSection /> : null}
       {panelEnabled(condo, 'portaria.visitas.eventos') ? <ConciergeDeviceEvents /> : null}

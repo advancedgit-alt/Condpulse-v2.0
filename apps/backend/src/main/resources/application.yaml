@@ -98,6 +98,9 @@ condpulse:
     waitlist-millis: ${CP_WORKER_WAITLIST_MILLIS:60000}
     access-sync-enabled: ${CP_WORKER_ACCESS_SYNC_ENABLED:false}
     access-sync-millis: ${CP_WORKER_ACCESS_SYNC_MILLIS:15000}
+    # Alertas de permanência N1/N2 (CPX-016, V055). O intervalo é a tolerância máxima do alerta.
+    stays-enabled: ${CP_WORKER_STAYS_ENABLED:false}
+    stays-millis: ${CP_WORKER_STAYS_MILLIS:60000}
   bff:
     enabled: ${CP_BFF_ENABLED:false}
     origin: ${CP_BFF_ORIGIN:}

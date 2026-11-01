@@ -33,6 +33,8 @@ import org.springframework.transaction.TransactionException;
 public class AccessService {
  static final Set<String> ENTRY_EVIDENCE=Set.of("DOCUMENT_CHECKED","RECOGNIZED_BY_UNIT");
  static final Duration ARRIVAL_WINDOW=Duration.ofHours(24);
+ /** Tipos de permanência (V055, cp.stay_kinds). */
+ static final Set<String> STAY_KINDS=Set.of("VISITOR","SERVICE_PROVIDER","DELIVERY","CONSTRUCTION");
  private final TenantTransactionExecutor transactions;
  private final VisitStore visits;
  private final AccessStore store;
@@ -71,7 +73,9 @@ public class AccessService {
   if(request.evidence()==null || !ENTRY_EVIDENCE.contains(request.evidence()))
    throw invalid("ACCESS_EVIDENCE_INVALID","Informe como a pessoa foi conferida.");
   String note=optionalNote(request.note());
-  String hash=VisitRequestHash.entry(request.arrivalId(),request.permitId(),request.evidence(),note);
+  if(request.stayKind()!=null && !STAY_KINDS.contains(request.stayKind()))
+   throw invalid("STAY_KIND_INVALID","Tipo de permanência inválido: use visitante, prestador, entregador ou obra.");
+  String hash=VisitRequestHash.entry(request.arrivalId(),request.permitId(),request.evidence(),note,request.stayKind());
   String route="/v1/tenants/"+tenant+"/access-events/entries";
   return execute(actor,tenant,assurance,Map.of("23505",AccessService::entryRecorded,"23514",AccessService::stateChanged),context->{
    context.requireCapability(StaffCapability.OPERATE_CONCIERGE);
@@ -93,9 +97,12 @@ public class AccessService {
     if(permit==null) throw new BusinessProblem("VISIT_PERMIT_NOT_FOUND",404,"Convite não encontrado.");
     if(!"ACTIVE".equals(permit.state()) || !visits.issuerActive(tenant,permit.permitId()))
      throw new BusinessProblem("ACCESS_PERMIT_NOT_CURRENT",409,"O convite não vale agora (antes do início, vencido, revogado ou de quem perdeu o vínculo).");
+    // Janela de prestador recorrente abre sempre permanência de prestador (V055).
+    if(permit.ruleId()!=null && request.stayKind()!=null && !"SERVICE_PROVIDER".equals(request.stayKind()))
+     throw invalid("STAY_KIND_INVALID","Janela de prestador recorrente é sempre de prestador.");
    }
    UUID id=UUID.randomUUID();
-   store.insert(id,tenant,request.arrivalId(),request.permitId(),"MANUAL_IN",null,null,request.evidence(),note,actor);
+   store.insert(id,tenant,request.arrivalId(),request.permitId(),"MANUAL_IN",null,null,request.evidence(),note,actor,request.stayKind());
    var record=require(store.record(tenant,id));
    audit.record(tenant,actor,"ACCESS_ENTRY_RECORDED","ACCESS_EVENT",id,null);
    store.event(tenant,"ACCESS_ENTRY_RECORDED",id,record.unitId(),"MANUAL_IN");

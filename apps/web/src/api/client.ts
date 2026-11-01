@@ -591,6 +591,20 @@ const messages: Record<string, string> = {
   // Troca de contexto (R4.4, V052).
   CONTEXT_SWITCH_INVALID: 'Não foi possível identificar o acesso escolhido. Volte para meus acessos e escolha de novo.',
   CONTEXT_SWITCH_UNAVAILABLE: 'Não foi possível registrar a entrada neste painel. Tente novamente.',
+  // Permanências (V055, CPX-015 a CPX-019).
+  STAY_FORBIDDEN: 'Esta ação não está disponível para o seu vínculo.',
+  STAY_NOT_FOUND: 'Permanência não encontrada. Atualize a lista.',
+  STAY_NOT_OPEN: 'Esta permanência não está mais aberta. Atualize a lista.',
+  STAY_ALREADY_JUSTIFIED: 'Esta permanência já foi justificada. Atualize a lista.',
+  STAY_STATE_CHANGED: 'A permanência mudou. Atualize a lista antes de repetir.',
+  STAY_JUSTIFICATION_REQUIRED: 'Informe o motivo da justificativa, com 3 a 500 caracteres.',
+  STAY_CONFIRMATION_DENIED: 'Só o morador ou responsável da unidade confirma a saída.',
+  STAY_DAY_CLOSE_DATE_INVALID: 'Escolha hoje ou um dia dos últimos 31 dias.',
+  STAY_VIEW_INVALID: 'Filtro de permanências inválido.',
+  STAY_KIND_INVALID: 'Tipo de permanência inválido.',
+  STAY_RULE_INVALID: 'Regra de tempo inválida: confira os minutos de cada nível.',
+  STAY_RULE_VERSION_CONFLICT: 'A regra mudou desde a leitura. Atualize antes de salvar.',
+  STAY_DEPENDENCY_UNAVAILABLE: 'Não foi possível concluir a operação agora. Atualize e confira antes de repetir.',
   // Comando de Segurança (CPX-012 a CPX-014, V054).
   SECURITY_COMMAND_UNAVAILABLE: 'Não foi possível concluir no Comando de Segurança agora. Nada foi gravado; tente novamente.',
   INCIDENT_NOT_FOUND: 'Incidente não encontrado.',

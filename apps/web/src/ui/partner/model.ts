@@ -12,6 +12,8 @@ import type { CloseIncidentBody, IncidentOutcome, IncidentSeverity, Light, Light
  */
 export const partnerKey = (accountId: string, partnerId: string, ...parts: unknown[]) => ['private', accountId, 'partner', partnerId.toLowerCase(), ...parts] as const;
 export const securityLogKey = (accountId: string, tenantId: string, ...parts: unknown[]) => ['private', accountId, 'security-log', tenantId.toLowerCase(), ...parts] as const;
+/** Permanências de um condomínio alcançado (CPX-017), apagadas junto com o log na recusa do condomínio ou do parceiro. */
+export const partnerStaysKey = (accountId: string, tenantId: string, ...parts: unknown[]) => ['private', accountId, 'stays', tenantId.toLowerCase(), ...parts] as const;
 
 export type FailureKind = 'off' | 'mfa' | 'denied' | 'unavailable' | 'other';
 /**
@@ -23,7 +25,7 @@ export function failureKind(error: unknown): FailureKind {
   if (!(error instanceof ApiError)) return 'other';
   if (error.code === 'API_NOT_AVAILABLE') return 'off';
   if (error.code === 'MFA_REQUIRED') return 'mfa';
-  if (['PARTNER_ACCESS_DENIED', 'PARTNER_NOT_FOUND', 'PARTNER_FORBIDDEN', 'TENANT_ACCESS_DENIED', 'STAFF_ACCESS_DENIED'].includes(error.code)) return 'denied';
+  if (['PARTNER_ACCESS_DENIED', 'PARTNER_NOT_FOUND', 'PARTNER_FORBIDDEN', 'TENANT_ACCESS_DENIED', 'STAFF_ACCESS_DENIED', 'STAY_FORBIDDEN'].includes(error.code)) return 'denied';
   if (error.status >= 500 || error.status === 0) return 'unavailable';
   return 'other';
 }
@@ -54,12 +56,14 @@ export const initialRefusalState = (): RefusalState => ({ mfa: false, partnerDen
  */
 export function applyRefusal(state: RefusalState, refusal: Refusal, scope: { accountId: string; partnerId: string; tenantIds: readonly string[] },
   error: unknown): { state: RefusalState; forget: (readonly unknown[])[] } {
-  const all = [partnerKey(scope.accountId, scope.partnerId), ...scope.tenantIds.map((tenantId) => securityLogKey(scope.accountId, tenantId))];
+  const all = [partnerKey(scope.accountId, scope.partnerId), ...scope.tenantIds.flatMap((tenantId) => [securityLogKey(scope.accountId, tenantId),
+    partnerStaysKey(scope.accountId, tenantId)])];
   if (refusal.kind === 'mfa') return { state: { ...state, mfa: true }, forget: all };
   if (refusal.kind === 'partner') return { state: { ...state, partnerDenied: error }, forget: all };
   // Dados do Comando de Segurança misturam condomínios (carteira, incidentes): saem todos e são relidos sem o recusado.
   return { state: { ...state, deniedTenants: new Map(state.deniedTenants).set(refusal.tenantId, error) },
-    forget: [securityLogKey(scope.accountId, refusal.tenantId), partnerKey(scope.accountId, scope.partnerId, 'command')] };
+    forget: [securityLogKey(scope.accountId, refusal.tenantId), partnerStaysKey(scope.accountId, refusal.tenantId),
+      partnerKey(scope.accountId, scope.partnerId, 'command')] };
 }
 
 /**

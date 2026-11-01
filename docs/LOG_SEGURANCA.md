@@ -40,10 +40,11 @@ Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na V
 | API, troca de contexto (V052, R4.4) | `CONTEXT_SWITCHED` (ver abaixo) |
 | V054 incidentes (CPX-013) | `INCIDENT_OPENED` (severidade do incidente), `INCIDENT_ASSIGNED`, `INCIDENT_CLOSED`, com `correlation_id` = incidente; `EVIDENCE_EXPORTED` no dossiê |
 | API, revisão de abertura remota (V054, CPX-014) | `REMOTE_OPEN_REVIEWED` (conferida = INFO, irregular = ATTENTION) |
+| V055 permanências (E1, [PERMANENCIAS.md](PERMANENCIAS.md)) | `STAY_OPENED`, `STAY_CLOSED`, `STAY_DUE`, `STAY_OVERDUE_L1`, `STAY_OVERDUE_L2` (worker), `STAY_JUSTIFIED`, `RULE_CHANGED` (regra de tempo) |
 
 Os tipos fora do catálogo inicial do PRD (5.2) são acréscimos para as fontes existentes, sem inferir passagem
 (R5.10). Ainda sem gravação: políticas (V043, `POLICY_PUBLISHED`), login/MFA, conector fora do ar, abertura remota
-(`REMOTE_OPEN`, CPX-027) e os épicos novos (permanência, bloqueio, escala), que gravam ao nascer.
+(`REMOTE_OPEN`, CPX-027) e os épicos novos (bloqueio, escala), que gravam ao nascer. Permanências gravam pela V055.
 
 ## Troca de contexto (`CONTEXT_SWITCHED`, R4.4, V052)
 

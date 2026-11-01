@@ -14,6 +14,7 @@ import { completeSwitch, planSwitch, type ContextRef } from '../shell/contextSwi
 import { applyRefusal, failureKind, initialRefusalState, partnerKey, refusalOf, type RefusalState } from './model';
 import { MemberSection, PortfolioSection, ScheduleSection } from './PartnerTeam';
 import { SecurityLogSection } from './SecurityLog';
+import { PartnerStaysSection } from './Stays';
 import { CommandPortfolioSection, IncidentsSection, RemoteOpenSection } from './SecurityCommand';
 
 /**
@@ -154,6 +155,7 @@ function SectionBody({ section }: { section: string }): ReactNode {
   if (section === 'escala') return <ScheduleSection />;
   if (section === 'carteira') return <PortfolioSection />;
   if (section === 'log') return <SecurityLogSection />;
+  if (section === 'permanencias') return <PartnerStaysSection />;
   if (section === 'carteira-seguranca') return <CommandPortfolioSection />;
   if (section === 'incidentes') return <IncidentsSection />;
   if (section === 'aberturas') return <RemoteOpenSection />;

@@ -1,3 +1,4 @@
+import type { StayKind } from './stays';
 import { api, CondPulseApi, identifier, invalidResponse, isDate, isInteger, isString, isUUID, oneOf, record } from './client';
 import { codePoints } from './text';
 import type { ISODateTime, UUID } from './types';
@@ -61,7 +62,7 @@ export interface AccessRecord {
 }
 export interface AccessRecordPage { records: AccessRecord[]; truncated: boolean }
 export interface AccessMutation { record: AccessRecord; replayed: boolean }
-export interface AccessEntryBody { arrivalId: string | null; permitId: string | null; evidence: AccessEvidence; note: string | null }
+export interface AccessEntryBody { arrivalId: string | null; permitId: string | null; evidence: AccessEvidence; note: string | null; stayKind?: StayKind }
 export interface ArrivalMutation { arrival: Arrival; replayed: boolean }
 export interface CreatePermitBody { visitorName: string; documentLast4: string | null; purpose: string | null; validFrom: string; validUntil: string }
 export interface RegisterArrivalBody { unitId: string; visitorName: string; documentLast4: string | null; permitId: string | null }

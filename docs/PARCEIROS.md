@@ -139,7 +139,9 @@ políticas do §4.3.4.
 - Parceiro piloto (responsável): nenhum parceiro real cadastrado; só dados sintéticos nos testes.
 - Convite de equipe por e-mail: hoje o papel é concedido a uma conta existente pelo identificador.
 - Capacidades de condomínio para operador remoto (portaria, entrada/saída manual) ficam para E2; nesta fatia a equipe
-  do parceiro não ganha nenhuma capacidade de equipe do condomínio.
+  do parceiro não ganha nenhuma capacidade de equipe do condomínio. Exceção de leitura (V055): permanências do
+  condomínio alcançado com `security.command`, `ops.shift.supervise` ou `ops.remote.operate` (seção "Permanências" do
+  comando, turno e console; [PERMANENCIAS.md](PERMANENCIAS.md)).
 - Os eventos de parceiro (equipe, contrato, escala) vão para a trilha da plataforma; o Log de Segurança por condomínio
   está em [LOG_SEGURANCA.md](LOG_SEGURANCA.md).
 - Web: painéis de turno, console e técnico dependem do backend de E2/E11; homologação visual com dados reais (inclusive do

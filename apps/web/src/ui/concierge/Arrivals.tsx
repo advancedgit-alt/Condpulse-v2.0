@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parcels } from '../../api/parcels';
+import { stayKindLabels, stayKinds, type StayKind } from '../../api/stays';
 import { collapseText, displayText } from '../../api/text';
 import { visits, type AccessEntryBody, type AccessEvidence, type AccessMutation, type AccessRecord, type Arrival, type ArrivalMutation,
   type ArrivalState, type RegisterArrivalBody, type VisitPermit } from '../../api/visits';
@@ -471,13 +472,15 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
   const pending = lockedBody as AccessEntryBody | null;
   const [evidence, setEvidence] = useState<AccessEvidence | ''>(pending?.evidence ?? '');
   const [note, setNote] = useState(pending?.note ?? '');
+  // Tipo da permanência aberta pela entrada (V055): sem escolha, o servidor usa visitante (prestador recorrente fica prestador).
+  const [stayKind, setStayKind] = useState<StayKind | ''>(pending?.stayKind ?? '');
   const normalizedNote = collapseText(note) ? displayText(note, 300) : '';
   const valid = evidence !== '' && normalizedNote !== null;
   const id = `entry-${basis.arrivalId ?? basis.permitId}`;
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid) return;
-    const body: AccessEntryBody = { ...basis, evidence, note: normalizedNote || null };
+    const body: AccessEntryBody = { ...basis, evidence, note: normalizedNote || null, ...(stayKind ? { stayKind } : {}) };
     await run(body, (key) => visits.recordEntry(scope.tenantId, key, body), (done) =>
       done.record.arrivalId === basis.arrivalId && done.record.permitId === basis.permitId && done.record.correction === null
         ? { tone: done.replayed ? 'info' : 'success', text: `${done.replayed ? 'Esta entrada já estava registrada' : 'Entrada registrada'}: ${done.record.visitorName} em ${unitName(done.record)}, às ${formatWhen(done.record.enteredAt, scope.timeZone)}, pela portaria (${evidenceText[done.record.evidence]}).` }
@@ -492,6 +495,12 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
       <label className="weekday-option"><input type="radio" name={`${id}-evidence`} value="RECOGNIZED_BY_UNIT" checked={evidence === 'RECOGNIZED_BY_UNIT'}
         onChange={() => setEvidence('RECOGNIZED_BY_UNIT')} disabled={busy} />Reconhecida por quem autorizou, na portaria</label>
     </fieldset>
+    <label htmlFor={`${id}-kind`}>Tipo de permanência</label>
+    <select id={`${id}-kind`} value={stayKind} onChange={(event) => setStayKind(event.target.value as StayKind | '')} disabled={busy} aria-describedby={`${id}-kind-help`}>
+      <option value="">Padrão (visitante; prestador recorrente fica como prestador)</option>
+      {stayKinds.map((kind) => <option key={kind} value={kind}>{stayKindLabels[kind]}</option>)}
+    </select>
+    <span className="field-help" id={`${id}-kind-help`}>A entrada abre a permanência: a saída prevista vem do convite, da janela do prestador ou do tempo do tipo no condomínio.</span>
     <label htmlFor={`${id}-note`}>Observação interna (opcional)</label>
     <input id={`${id}-note`} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} disabled={busy} autoComplete="off"
       aria-describedby={`${id}-note-help`} />

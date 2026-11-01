@@ -25,6 +25,7 @@ services:
       CP_WORKER_OUTBOX_ENABLED: "false"
       CP_WORKER_WAITLIST_ENABLED: "false"
       CP_WORKER_ACCESS_SYNC_ENABLED: "false"
+      CP_WORKER_STAYS_ENABLED: "false"
     # Sem servidor HTTP no perfil worker: a saude e o log da passada e a fila do outbox (docs/WORKER_IMPLANTACAO.md).
     healthcheck:
       disable: true
