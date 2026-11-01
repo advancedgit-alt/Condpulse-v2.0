@@ -41,7 +41,7 @@ horários e estados vêm do banco; a API não grava `created_by` de outra conta,
 
 7. **Guards de dono de função.** Os cinco executores que conferem posse em `platform`/`cp` (migrate de homologação
    e de produção, `FlyRuntimeLogin`, `FlyWorkerLogin`, `RuntimeConfiguration`) exigiam dono `postgres` (os três últimos
-   recusavam também qualquer `SECURITY DEFINER`). Passam a aceitar, **só para funções**, dono exatamente `cp_demo` quando
+   recusavam também qualquer `SECURITY DEFINER`; os dois de migrate passam a recusar também). Passam a aceitar, **só para funções**, dono exatamente `cp_demo` quando
    a role cumpre os invariantes: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT,
    sem membros e sem ser membro de ninguém. Qualquer outro dono, `SECURITY DEFINER` fora de `cp_demo` ou `cp_demo` fora
    dos invariantes continua bloqueando. Tabelas, sequências e schemas seguem exigindo `postgres`. Coberto no cenário
