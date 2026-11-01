@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ApiError, newOperationKey } from '../../api/client';
 import { partners, type PartnerMember } from '../../api/partners';
-import { platform, type DemoGeneration, type DemoProvisioned } from '../../api/platform';
+import { platform, type DemoGeneration, type DemoProvisioned, type ProvisionDemoInput } from '../../api/platform';
 import { displayText } from '../../api/text';
 import { partnerRoles, type PartnerRole } from '../../api/types';
 import { formatWhen } from '../dateTime';
@@ -37,6 +37,14 @@ export function demoErrorText(error: unknown): string {
   if (error instanceof ApiError && error.code === 'DEMO_CHANGED') return 'O condomínio demo mudou desde que a tela foi aberta. Atualize e confira antes de repetir.';
   if (error instanceof ApiError && error.code === 'DEMO_RESET_REAL_TENANT') return 'Somente o condomínio demo pode ser resetado. Condomínios reais nunca são resetados.';
   return errorMessage(error);
+}
+
+/**
+ * Pedido a reenviar depois de um resultado incerto: exatamente o enviado (mesma chave, mesmo demo lido, mesmo motivo);
+ * nunca o demo relido depois, que mudaria o hash e viraria DEMO_KEY_REUSED. Sem pedido pendente, o pedido parte do demo atual.
+ */
+export function provisionRequest(sent: ProvisionDemoInput | null, current: Pick<DemoGeneration, 'tenantId'> | null, reason: string): ProvisionDemoInput {
+  return sent ?? { expectedTenantId: current?.tenantId ?? null, reason, confirmation: 'DEMO' };
 }
 
 /** Central: condomínio demo isolado, com dados sintéticos (CPX-046). Criar e resetar exigem confirmação e motivo. */
@@ -99,33 +107,41 @@ function ProvisionForm({ current, close }: { current: DemoGeneration | null; clo
   const scope = usePlatform();
   const queries = useQueryClient();
   const [key, setKey] = useState(newOperationKey);
+  // Demo lido ao abrir o formulário (como a versão lida em TenantEditor/Modules): a lista atualizada não troca o alvo.
+  const [read] = useState(current);
   const [reason, setReason] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
+  // Pedido enviado com a chave atual: reenviado exatamente igual enquanto o resultado estiver incerto.
+  const [sent, setSent] = useState<ProvisionDemoInput | null>(null);
   const uncertain = failure !== null && isUncertain(failure);
   const locked = pending || uncertain;
+  const stale = (current?.tenantId ?? null) !== (read?.tenantId ?? null);
   const normalizedReason = displayText(reason, 500);
   const valid = normalizedReason !== null && normalizedReason.length >= 3 && confirmation === 'DEMO';
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!valid || pending) return;
-    setPending(true); setFailure(null);
+    if (!valid || pending || (stale && !uncertain)) return;
+    const request = provisionRequest(sent, read, normalizedReason!);
+    setSent(request); setPending(true); setFailure(null);
     try {
-      const result = await platform.provisionDemo({ expectedTenantId: current?.tenantId ?? null, reason: normalizedReason!, confirmation: 'DEMO' }, key);
+      const result = await platform.provisionDemo(request, key);
       await queries.invalidateQueries({ queryKey: platformKey(scope.accountId) });
       await queries.invalidateQueries({ queryKey: ['identity'] });
       close(demoOutcome(result));
     } catch (error) {
       react(error, scope);
       setFailure(error);
+      if (!isUncertain(error)) setSent(null);
       if (error instanceof ApiError && error.code === 'DEMO_CHANGED') void queries.invalidateQueries({ queryKey: demoKey(scope.accountId) });
     } finally { setPending(false); }
   }
-  function discard() { setFailure(null); setKey(newOperationKey()); close(null); }
-  return <form className="panel management-form stack-form" onSubmit={(event) => void submit(event)} aria-label={current ? 'Resetar condomínio demo' : 'Criar condomínio demo'}>
-    <h3>{current ? 'Resetar condomínio demo' : 'Criar condomínio demo'}</h3>
-    {current ? <Notice tone="warning">A geração atual (<bdi>{current.tenantName}</bdi>) fica suspensa: contrato do parceiro encerrado, parceiro suspenso e pessoas
+  function discard() { setFailure(null); setSent(null); setKey(newOperationKey()); close(null); }
+  return <form className="panel management-form stack-form" onSubmit={(event) => void submit(event)} aria-label={read ? 'Resetar condomínio demo' : 'Criar condomínio demo'}>
+    <h3>{read ? 'Resetar condomínio demo' : 'Criar condomínio demo'}</h3>
+    {stale && !uncertain ? <Notice tone="warning">O condomínio demo mudou depois que você abriu o formulário. Volte e abra de novo para decidir sobre o demo atual.</Notice> : null}
+    {read ? <Notice tone="warning">A geração atual (<bdi>{read.tenantName}</bdi>) fica suspensa: contrato do parceiro encerrado, parceiro suspenso e pessoas
       reais vinculadas perdem o acesso a ela. Nada é apagado. Uma geração nova é criada com dados fictícios e precisa de novos vínculos.</Notice>
       : <Notice tone="info">Cria um condomínio marcado como DEMO com torres, unidades, áreas, avisos, encomendas, visitas, ocorrências, pedidos e um
         parceiro de segurança fictício com contrato, escala e eventos de exemplo. Nenhuma conta real recebe papel.</Notice>}
@@ -137,8 +153,8 @@ function ProvisionForm({ current, close }: { current: DemoGeneration | null; clo
     {failure ? <Notice tone={uncertain ? 'warning' : 'error'}>{demoErrorText(failure)}{uncertain
       ? ' A operação pode ter sido concluída. Reenvie sem alterar (a mesma operação não cria outra geração) ou descarte e atualize a tela.' : ''}</Notice> : null}
     <div className="button-row">
-      <button className={`button${current ? ' button-danger' : ''}`} type="submit" disabled={!valid || pending}>{pending ? 'Processando…'
-        : uncertain ? 'Reenviar a mesma operação' : current ? 'Resetar demo' : 'Criar demo'}</button>
+      <button className={`button${read ? ' button-danger' : ''}`} type="submit" disabled={!valid || pending || (stale && !uncertain)}>{pending ? 'Processando…'
+        : uncertain ? 'Reenviar a mesma operação' : read ? 'Resetar demo' : 'Criar demo'}</button>
       <button className="button button-secondary" type="button" onClick={discard} disabled={pending}>Voltar</button>
     </div>
   </form>;

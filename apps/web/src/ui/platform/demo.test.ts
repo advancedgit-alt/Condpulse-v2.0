@@ -49,3 +49,14 @@ describe('condomínio demo (CPX-046)', () => {
     expect(isDemoTenant(null, undefined)).toBe(false);
   });
 });
+
+describe('reenvio de operação incerta do demo', () => {
+  it('repete exatamente o pedido enviado, não o demo relido', async () => {
+    const { provisionRequest } = await import('./Demo');
+    const first = provisionRequest(null, { tenantId: tenant }, 'Motivo original');
+    expect(first).toEqual({ expectedTenantId: tenant, reason: 'Motivo original', confirmation: 'DEMO' });
+    const relido = { tenantId: '20000000-0000-4000-8000-000000000009' };
+    expect(provisionRequest(first, relido, 'Outro motivo')).toBe(first);
+    expect(provisionRequest(null, null, 'Primeiro demo')).toEqual({ expectedTenantId: null, reason: 'Primeiro demo', confirmation: 'DEMO' });
+  });
+});

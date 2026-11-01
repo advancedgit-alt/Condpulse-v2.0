@@ -22,6 +22,7 @@ test('central cria e reseta o demo com confirmação, motivo e chave de operaç�
   const state = { current: null as ReturnType<typeof generation> | null, retired: [] as ReturnType<typeof generation>[] };
   const posts: { key: string | undefined; body: { expectedTenantId: string | null; reason: string; confirmation: string } }[] = [];
   const members: unknown[] = [];
+  let loseNextPost = false;
   await page.route('**/v1/**', async (route) => {
     if (!api.authenticated) { await route.fallback(); return; }
     const request = route.request();
@@ -38,8 +39,25 @@ test('central cria e reseta o demo com confirmação, motivo e chave de operaç�
       const body = request.postDataJSON() as (typeof posts)[number]['body'];
       posts.push({ key: request.headers()['idempotency-key'], body });
       const previous = state.current;
+      // Mesma chave e mesmo pedido já aplicados: repetição (applied=false); mesma chave com outro pedido: recusa.
+      const earlier = posts.slice(0, -1).find((item) => item.key === posts.at(-1)!.key);
+      if (earlier) {
+        if (JSON.stringify(earlier.body) !== JSON.stringify(body)) {
+          await json(route, 409, { type: 'urn:condpulse:problem:DEMO_KEY_REUSED', status: 409, code: 'DEMO_KEY_REUSED', detail: 'x', traceId: '60000000-0000-4000-8000-000000000001' });
+          return;
+        }
+        await json(route, 200, { generation: state.current, retiredTenantId: null, applied: false });
+        return;
+      }
+      if (body.expectedTenantId !== (previous?.tenantId ?? null)) {
+        await json(route, 409, { type: 'urn:condpulse:problem:DEMO_CHANGED', status: 409, code: 'DEMO_CHANGED', detail: 'x', traceId: '60000000-0000-4000-8000-000000000001' });
+        return;
+      }
       if (previous) state.retired = [{ ...previous, status: 'RETIRED', retiredAt: '2030-01-02T12:00:00.000Z' }];
-      state.current = generation(previous ? 2 : 1, previous ? DEMO_2 : DEMO_1);
+      const next = previous ? previous.generation + 1 : 1;
+      state.current = generation(next, next === 1 ? DEMO_1 : next === 2 ? DEMO_2 : `00000000-0000-4000-8000-0000000000d${next}`);
+      // Resposta perdida depois de o banco aplicar: a tela fica incerta e só pode reenviar o mesmo pedido com a mesma chave.
+      if (loseNextPost) { loseNextPost = false; await route.abort('connectionreset'); return; }
       await json(route, 201, { generation: state.current, retiredTenantId: previous?.tenantId ?? null, applied: true });
       return;
     }
@@ -91,6 +109,25 @@ test('central cria e reseta o demo com confirmação, motivo e chave de operaç�
     { expectedTenantId: DEMO_1, reason: 'Recomeçar do zero', confirmation: 'DEMO' }]);
   expect(posts.every((item) => /^web:[0-9a-f-]{36}$/.test(item.key ?? ''))).toBe(true);
   expect(posts[0]!.key).not.toBe(posts[1]!.key);
+
+  // Resultado incerto: o banco aplicou a geração 3, a resposta se perdeu e "Atualizar" relê o demo (agora a geração 3).
+  // Reenviar precisa repetir exatamente o pedido original (demo lido = geração 2, mesma chave), não o demo relido.
+  loseNextPost = true;
+  await page.getByRole('button', { name: 'Resetar condomínio demo' }).click();
+  const again = page.getByRole('form', { name: 'Resetar condomínio demo' });
+  await again.getByLabel(/Motivo/).fill('Reset com resposta perdida');
+  await again.getByLabel('Para confirmar, digite DEMO').fill('DEMO');
+  await again.getByRole('button', { name: 'Resetar demo' }).click();
+  await expect(again.getByText(/A operação pode ter sido concluída/)).toBeVisible();
+  await expect(again.getByLabel(/Motivo/)).toBeDisabled();
+  await page.getByRole('button', { name: 'Atualizar' }).click();
+  await expect(page.getByText('[DEMO] Residencial Jardim Fictício (geração 3)')).toBeVisible();
+  await again.getByRole('button', { name: 'Reenviar a mesma operação' }).click();
+  await expect(page.getByText(/Esta operação já tinha sido feita: o demo atual é a geração 3/)).toBeVisible();
+  expect(posts.slice(2).map((item) => item.body)).toEqual([
+    { expectedTenantId: DEMO_2, reason: 'Reset com resposta perdida', confirmation: 'DEMO' },
+    { expectedTenantId: DEMO_2, reason: 'Reset com resposta perdida', confirmation: 'DEMO' }]);
+  expect(posts[2]!.key).toBe(posts[3]!.key);
 });
 
 test('reset recusado para condomínio que não é o demo mostra a mensagem própria e nada muda', async ({ page }) => {
