@@ -8,7 +8,7 @@ const tenant = '20000000-0000-4000-8000-000000000001';
 const unit = '30000000-0000-4000-8000-000000000001';
 const amenity = '40000000-0000-4000-8000-000000000001';
 const session: Session = { accountId: account, expiresAt: '2030-01-01T20:00:00Z' };
-const identity: CurrentIdentity = { accountId: account, memberships: [], tenantModules: [], partnerContexts: [] };
+const identity: CurrentIdentity = { accountId: account, memberships: [], tenantModules: [], partnerContexts: [], demoTenantIds: [] };
 const create: CreateReservation = { unitId: unit, amenityId: amenity, startsAt: '2030-01-01T15:00:00Z',
   endsAt: '2030-01-01T16:00:00Z', acceptedPolicyVersion: 1 };
 const reservation: Reservation = { reservationId: '50000000-0000-4000-8000-000000000001', unitId: unit,
@@ -104,6 +104,18 @@ describe('cliente BFF same-origin', () => {
     for (const tenantModules of [{}, [{ tenantId: tenant, enabled: 'requests' }], [{ tenantId: 'x', enabled: [] }],
       [{ tenantId: tenant, enabled: [] }, { tenantId: tenant.toUpperCase(), enabled: [] }], [{ tenantId: tenant, enabled: ['Requests!'] }]]) {
       fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], tenantModules }));
+      await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
+    }
+  });
+
+  it('condomínios DEMO em /v1/me: ausente vira lista vazia, ids normalizados, formato inválido derruba', async () => {
+    const fetcher = mockFetch();
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [] }));
+    expect((await new CondPulseApi({ fetch: fetcher }).currentIdentity()).demoTenantIds).toEqual([]);
+    fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], demoTenantIds: [tenant.toUpperCase(), tenant] }));
+    expect((await new CondPulseApi({ fetch: fetcher }).currentIdentity()).demoTenantIds).toEqual([tenant]);
+    for (const demoTenantIds of [{}, ['x'], [1], null]) {
+      fetcher.mockImplementation(async () => json({ accountId: account, memberships: [], demoTenantIds }));
       await expect(new CondPulseApi({ fetch: fetcher }).currentIdentity()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
     }
   });

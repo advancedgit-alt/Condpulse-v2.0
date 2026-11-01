@@ -31,10 +31,12 @@ CP_REALTIME_MAX_STREAMS (40 por instancia) e CP_REALTIME_MAX_PER_ACCOUNT (3). Ve
 Log de Seguranca (V050, CPX-006 a CPX-011): CP_SECURITY_LOG_ENABLED=false por padrao (API: busca, integridade,
 exportacao e SENSITIVE_VIEWED; worker: ancora diaria). A gravacao pelas fontes e do banco. Ver docs/LOG_SEGURANCA.md.
 Parceiros (V049, ADR-0011): CP_PARTNERS_ENABLED=false por padrao (hierarquia de parceiro na API).
+Condominio demo (V055, CPX-046, ADR-0012): CP_DEMO_ENABLED=false por padrao (criar/resetar o demo sintetico pela central;
+exige tambem CP_PLATFORM_ENABLED). Ligar so na homologacao, com OK do responsavel. Ver docs/ROTEIRO_TESTES_HML.md.
 
 Flags na Fly (homologacao):
 - API (condpulse-v2-0): recebe as flags da Vercel Production pelo executor fly-api (docs/FLY_API.md), so as chaves de
-  COPIED em infra/scripts/fly-api/fly-api.mjs, inclusive CP_SECURITY_LOG_ENABLED e CP_PARTNERS_ENABLED. Ligar na
+  COPIED em infra/scripts/fly-api/fly-api.mjs, inclusive CP_SECURITY_LOG_ENABLED, CP_PARTNERS_ENABLED e CP_DEMO_ENABLED. Ligar na
   Vercel nao basta: e preciso rodar fly-api inspect -> apply -> deploy. Com o login READY, o apply regrava todas as
   flags copiadas (a Fly so devolve nomes; um valor trocado na Vercel so chega assim). Flag cadastrada como
   sensitive/secret na Vercel aborta com FLY_VERCEL_FLAG_TYPE_INVALID: cadastrar como Plain ou Encrypted.

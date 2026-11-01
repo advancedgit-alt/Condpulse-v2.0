@@ -103,6 +103,13 @@ novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
 `device_id`, `reason`, `evidence_ref`, `correlation_id`, `trace_id`, `corrects_id`, `details`. O harness PostgreSQL
 recalcula um hash fora do banco com essa regra.
 
+## Condomínio demo (V055)
+
+- Criar o demo grava no log do demo `ROLE_GRANTED` (vínculos sintéticos), `OCCURRENCE_*`, `PARTNER_CONTRACT_CHANGED`,
+  `SCHEDULE_ASSIGNED` e eventos de exemplo (`SHIFT_STARTED`, `CHECKLIST_DONE`, `PATROL_CHECKPOINT`, `INCIDENT_OPENED` pelo
+  operador sintético em escala; `DOOR_HELD_OPEN`, `DEVICE_OFFLINE`, `DEVICE_ONLINE` sem ator), com a mesma cadeia e autoria
+  do banco. O reset grava `PARTNER_CONTRACT_CHANGED` (encerramento) no log da geração aposentada. Nenhum log real é tocado.
+
 ## Limites e pendências
 
 - Retenção indefinida até decisão do responsável (DECISOES_COMPLEMENTAR.md): nenhuma rotina de expurgo.

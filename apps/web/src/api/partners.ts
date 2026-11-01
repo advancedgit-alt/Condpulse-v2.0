@@ -84,6 +84,15 @@ export function createPartnersApi(client: CondPulseApi = api) {
       if (!same(member.accountId, body.accountId) || member.role !== body.role || member.status !== 'ACTIVE') throw invalidResponse(true);
       return member;
     }, { method: 'POST', body: { ...body, accountId: identifier(body.accountId) } }),
+    /**
+     * Central (partners.manage, AAL2): concede papel no parceiro a uma conta existente. Usado para vincular, de forma
+     * explícita e separada, uma pessoa real ao parceiro do condomínio demo (CPX-046).
+     */
+    platformAddMember: async (partnerId: string, body: AddMemberBody) => client.call(`/v1/platform/partners/${identifier(partnerId)}/members`, (value) => {
+      const member = partnerMember(value, partnerId, true);
+      if (!same(member.accountId, body.accountId) || member.role !== body.role || member.status !== 'ACTIVE') throw invalidResponse(true);
+      return member;
+    }, { method: 'POST', body: { ...body, accountId: identifier(body.accountId) } }),
     revokeMember: async (partnerId: string, memberId: string, reason: string) => client.call(`${base(partnerId)}/team/${identifier(memberId)}/revoke`, (value) => {
       const member = partnerMember(value, partnerId, true);
       if (!same(member.id, memberId) || member.status !== 'REVOKED') throw invalidResponse(true);

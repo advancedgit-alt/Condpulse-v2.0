@@ -230,6 +230,9 @@ public class SecurityConfiguration {
       "/v1/platform/billing/charges/*/cancel","/v1/platform/billing/charges/*/payments",
       "/v1/platform/billing/payments/*/void").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/platform/billing/plans/*").authenticated()
+    // Condomínio demo (CPX-046, V055): autenticação aqui; papel de plataforma, platform.demo.manage e AAL2 no serviço e no banco.
+    .requestMatchers(HttpMethod.GET,"/v1/platform/demo-tenant").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/platform/demo-tenant").authenticated()
     // Hierarquia de parceiro (V049, ADR-0011): autenticação aqui; papel de plataforma ou de parceiro vigente, AAL2,
     // contrato e escala conferidos no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/platform/partners","/v1/platform/partners/*","/v1/platform/partners/*/schedules",

@@ -145,6 +145,14 @@ A central libera ou suspende módulos de cada condomínio, dentro das flags glob
   seguem). Tela na central: `/central/modulos?condominio={id}` (também pelo botão "Módulos" da ficha), com estado real,
   flag global, motivo e versão; liberar/suspender exige `tenant_modules.manage`, motivo e a versão lida.
 
+## Condomínio demo (V055, CPX-046)
+
+- Aba "Condomínio demo" da central (capacidade `platform.demo.manage`, AAL2, `CP_DEMO_ENABLED`): `GET`/`POST
+  /v1/platform/demo-tenant` (chave de operação; confirmação digitando `DEMO`; motivo na trilha). Cria ou reseta o demo
+  isolado e sintético pela função `platform.demo_provision` (ADR-0012). O catálogo mostra a origem `DEMO`.
+- Vínculo de pessoas reais: convite do primeiro gestor pela ficha (o demo não tem gestor sintético), convites da gestão e
+  papel no parceiro demo pela própria aba. Passo a passo em [ROTEIRO_TESTES_HML.md](ROTEIRO_TESTES_HML.md).
+
 ## Tela web (`/central`, antes `/master`)
 
 A central administradora fica em `/central` (`/master/...` redireciona, preservando parâmetros; `/master/fila` virou

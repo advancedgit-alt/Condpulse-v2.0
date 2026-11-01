@@ -58,6 +58,13 @@ evento `PARTNER_*` da trilha da plataforma, do mesmo ator e versão, conferido n
 - Web: trocar de contexto (condomínio, central ou painel) encerra a visão anterior — a tela sai e os dados privados dela
   saem do cache antes do novo contexto montar; o painel não consulta nada até o registro terminar.
 
+## Parceiro do condomínio demo (V055)
+
+- O demo da central (CPX-046, [ROTEIRO_TESTES_HML.md](ROTEIRO_TESTES_HML.md)) cria um parceiro `[DEMO]` com equipe sintética,
+  contrato vigente e escala. Parceiro demo só contrata condomínio demo (e vice-versa); conta sintética só tem papel em
+  parceiro demo. A central concede papel no parceiro demo a uma conta real pela aba "Condomínio demo" (mesma API
+  `/v1/platform/partners/{id}/members`).
+
 ## Pendências
 
 - Parceiro piloto (responsável): nenhum parceiro real cadastrado; só dados sintéticos nos testes.

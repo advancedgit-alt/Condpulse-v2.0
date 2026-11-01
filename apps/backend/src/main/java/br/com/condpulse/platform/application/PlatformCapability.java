@@ -27,12 +27,16 @@ public enum PlatformCapability {
  /** Hierarquia de parceiro (V049, ADR-0011): lê parceiros, equipes, contratos e escalas. */
  READ_PARTNERS("partners.read"),
  /** Cria e suspende parceiros, vincula/desvincula condomínios e gerencia equipe e escala; nunca abre portão. */
- MANAGE_PARTNERS("partners.manage");
+ MANAGE_PARTNERS("partners.manage"),
+ /** Condomínio demo (CPX-046, V055): cria e reseta o demo isolado com dados sintéticos; nunca toca condomínio real. */
+ MANAGE_DEMO("platform.demo.manage");
 
  /** Capacidades que só aparecem na sessão do painel com CP_FACIAL_ACCESS_ENABLED ligada. */
  public boolean facialAccess() { return this==MANAGE_TECHNICAL_GRANTS || this==MANAGE_ACCESS_CATALOG || this==APPROVE_HOMOLOGATION; }
  /** Capacidades que só aparecem na sessão do painel com CP_PARTNERS_ENABLED ligada. */
  public boolean partners() { return this==READ_PARTNERS || this==MANAGE_PARTNERS; }
+ /** Capacidade que só aparece na sessão do painel com CP_DEMO_ENABLED ligada. */
+ public boolean demo() { return this==MANAGE_DEMO; }
 
  private final String key;
  PlatformCapability(String key) { this.key=key; }

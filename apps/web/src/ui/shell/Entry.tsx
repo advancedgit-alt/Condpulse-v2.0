@@ -6,7 +6,7 @@ import { useAuth } from '../Auth';
 import { storedInvitation } from '../invitationStorage';
 import { Empty, Icon, Loading, Notice } from '../primitives';
 import { centralPath, condoPath, condominiums, entryDecision, partnerEntries, partnerHomePath, partnerPanelLabels, partnerRoleLabels, roleLabels,
-  type PlatformAccess } from './paths';
+  isDemoTenant, type PlatformAccess } from './paths';
 
 /**
  * Papel de plataforma consultado na entrada. /v1/me ainda não informa esse papel, então a entrada pergunta a
@@ -53,13 +53,13 @@ export function EntryPage() {
       <span><strong>Central administradora</strong><span>Condomínios, financeiro, concessões técnicas, operação e auditoria da plataforma.</span></span><Icon name="arrow" /></Link> : null}
     {partners.length > 0 ? <ul className="condo-cards" aria-label="Parceiros">{partners.map((context) => <li key={context.memberId}>
       <Link className="condo-card" to={partnerHomePath(context)}><span className="round-icon"><Icon name="shield" /></span>
-        <span className="condo-card-text"><strong><bdi>{context.partnerName}</bdi> – {partnerPanelLabels[context.panel]}</strong><span>{partnerRoleLabels[context.role]}</span></span>
+        <span className="condo-card-text"><strong><bdi>{context.partnerName}</bdi> – {partnerPanelLabels[context.panel]}{context.partnerName.startsWith('[DEMO] ') ? <> <span className="status-pill demo-pill">DEMO</span></> : null}</strong><span>{partnerRoleLabels[context.role]}</span></span>
         <Icon name="arrow" /></Link></li>)}</ul> : null}
     {partners.length > 0 && condos.length === 0 ? null : decision.kind === 'empty' || condos.length === 0
       ? <div className="panel"><Empty icon="building" title="Nenhum condomínio disponível">A gestão do condomínio precisa validar seu vínculo antes do primeiro acesso. Se o cadastro acabou de ser aprovado, atualize a página.</Empty></div>
       : <ul className="condo-cards" aria-label="Condomínios">{condos.map((condo) => <li key={condo.tenantId}>
         <Link className="condo-card" to={condoPath(condo.tenantId)}><span className="round-icon"><Icon name="building" /></span>
-          <span className="condo-card-text"><strong><bdi>{condo.tenantName}</bdi></strong><span>{condo.roles.map((role) => roleLabels[role]).join(' · ')}</span></span>
+          <span className="condo-card-text"><strong><bdi>{condo.tenantName}</bdi>{isDemoTenant(identity, condo.tenantId, condo.tenantName) ? <> <span className="status-pill demo-pill">DEMO</span></> : null}</strong><span>{condo.roles.map((role) => roleLabels[role]).join(' · ')}</span></span>
           <Icon name="arrow" /></Link></li>)}</ul>}
   </div>;
 }

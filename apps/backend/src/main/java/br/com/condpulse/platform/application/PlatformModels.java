@@ -23,7 +23,7 @@ public final class PlatformModels {
  public record TenantUsage(long activeUnits,long activeMemberships,long activeManagers,Instant lastActivityAt) {}
  /** Situação da assinatura CondPulse (fase 5), somente com o financeiro ligado; null quando desligado. */
  public record TenantBilling(boolean activeSubscription,long openCharges,long overdueCharges) {}
- /** origin: ONBOARDING (manifesto operacional), PLATFORM (criado no painel) ou null (sem recibo). */
+ /** origin: DEMO (condomínio demo sintético, V055), ONBOARDING (manifesto operacional), PLATFORM (criado no painel) ou null (sem recibo). */
  public record Tenant(UUID tenantId,String name,String timeZone,boolean active,long version,Instant createdAt,
    Instant updatedAt,OnboardingReceipt onboarding,String origin,TenantUsage usage,TenantBilling billing) {
   public Tenant withBilling(TenantBilling value) {
