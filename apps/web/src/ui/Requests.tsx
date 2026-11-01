@@ -26,7 +26,7 @@ export function UnitRequests({ scope, timeZone }: { scope: Scope; timeZone: stri
   const [selected, setSelected] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ tone: 'success' | 'info'; text: string } | null>(null);
   if (hidden(list.error)) return null;
-  const active = list.data?.requests.filter((item) => item.state !== 'CLOSED').length ?? 0;
+  const active = list.data?.requests.filter((item) => item.state !== 'CLOSED' && item.state !== 'RESOLVED').length ?? 0;
   return <section className="dashboard-reservations" aria-labelledby="requests-title">
     <div className="section-heading"><div><span className="section-index">PEDIDOS DA UNIDADE</span>
       <h2 id="requests-title">Pedidos{active > 0 ? ` · ${active} em andamento` : ''}</h2></div>

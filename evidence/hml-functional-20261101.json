@@ -59,20 +59,20 @@
     ]
   },
   "not_yet_proven": [
-    "new login plus MFA after BFF correction deploy",
-    "V055 HML and replay",
-    "staff response and in-app notification",
+    "demo role links and portaria/partner real journeys",
+    "waitlist offer/accept and stay alerts in HML (workers enabled; JDBC tests passed)",
     "email recovery end to end",
     "physical hardware",
-    "HML load and latency targets (runner load completed)",
-    "backup restore",
+    "mobile device",
+    "HML load and latency targets (runner load completed, targets unmet)",
+    "backup restore and Storage backup",
     "operational production"
   ],
   "request": {
     "id": "4a523c37-1775-4318-9f89-c905b7a5b51e",
     "title": "TESTE HML 20261101 — manutenção sintética",
-    "state": "OPEN",
-    "version": 0,
+    "state": "RESOLVED",
+    "version": 3,
     "message": {
       "id": "2bf06a03-53aa-44bb-b782-6fa6a77d31e0",
       "visibility": "RESIDENT"
@@ -97,7 +97,24 @@
       "UI upload and download",
       "read-only SQL states",
       "local SHA256 comparison with downloaded bytes"
-    ]
+    ],
+    "due_on": "2026-11-03",
+    "staff_test": {
+      "request_id": "4a523c37-1775-4318-9f89-c905b7a5b51e",
+      "state": "RESOLVED",
+      "version": 3,
+      "due_on": "2026-11-03",
+      "public_messages": 3,
+      "internal_messages": 1,
+      "staff_reply_outbox": "DELIVERED",
+      "notifications_created": 4,
+      "worker_single_attempt": true,
+      "only_real_account_is_owner": true,
+      "internal_text_visible_in_resident_ui": false,
+      "public_reply_visible_in_resident_ui": true,
+      "notifications_read_in_app": 1,
+      "notifications_still_available": 3
+    }
   },
   "isolation_ui": {
     "tenant": "70b78e08-540f-4d89-a6f3-df140c19cb7f",
@@ -115,7 +132,7 @@
     "browser_journeys": 225,
     "jdbc_tests": 284,
     "code_and_security_review_head": "02a9bbbcccf6d7d2c9fb8d32fe15997001f2a982",
-    "api_deployed": false
+    "api_deployed": true
   },
   "load": {
     "run": 41322229545,
@@ -144,5 +161,34 @@
       "met": false,
       "interpretation": "Each read class exceeds 400ms; create/cancel p95 exceed 800ms. Requires profiling; runner result is not HML acceptance."
     }
+  },
+  "current_api_commit": "f7928e0605883be45181ef528c43e1a7976f0a86",
+  "current_worker_commit": "608604a85b7272260cc0140e41edc24748dbdc8e",
+  "demo": {
+    "tenant_id": "dcb28363-d009-46a7-8be4-ffb0795d1927",
+    "partner_id": "21b494e6-0847-4073-aa3d-1ef67879f84e",
+    "generation": 1,
+    "created_from_ui": true,
+    "blocks": 2,
+    "units": 32,
+    "amenities": 3,
+    "synthetic_memberships": 9,
+    "announcements": 3,
+    "parcels": 3,
+    "visits": 2,
+    "occurrences": 2,
+    "requests": 2,
+    "synthetic_partner_members": 6,
+    "schedules": 4,
+    "sample_log_events": 12,
+    "actual_security_log_rows": 24,
+    "real_account_memberships": 0
+  },
+  "announcement": {
+    "id": "502f23cc-2512-4692-aae8-30f72905f4ee",
+    "state": "PUBLISHED",
+    "version": 1,
+    "read_rows": 1,
+    "other_real_recipients": 0
   }
 }

@@ -14,6 +14,16 @@ Carga real sintética pela aplicação: reserva/convidado, visita, pedido/mensag
 
 Carga descartável 41322229545 (44c5a40): 11.999 chamadas, 100rps, zero erros/descarte, p95 geral805,6ms. Metas de latência do PRD não atendidas nesse runner; não anunciar capacidade da HML. Backup/V055/deploy e nova sessão AAL2 continuam pendentes. A conferência do backup está bloqueada pelo CAPTCHA do painel Supabase.
 
+### Continuação da rodada — implantação e jornadas concluídas
+
+PR #173 integrado em f7928e0 e PR #174 em608604a, CI/revisões concluídos. Backup físico de01/11 07:52:12 UTC conferido no painel após acesso do responsável; é anterior à carga e não inclui bytes do Storage. O bloqueio de login/CAPTCHA foi concluído, sem restaurar nem apagar dados.
+
+V055: migrate41329884896 aplicou1, replay41330443589 aplicou0, ambos validados. Demo flag: inspect41329994162/apply41330326771, somente CP_DEMO_ENABLED. Fly: inspect41330605853/apply41330874165/inspect41331032067; API41331226181 com200/UP na primeira consulta. Worker41354940226, fonte608604a: seis started, zero exits, fila/permanências ligados. Fonte backend da API e worker idêntica (árvore e6db1cb).
+
+Nova sessão, TOTP e acesso Central/gestão conferidos. Demo geração1 criado (32unidades/3áreas), sem novos papéis de conta real. Pedido da carga percorreu análise/execução/conclusão v3, resposta pública entregue por outbox e comentário interno ausente no portal residencial; leitura autenticada registrada. Aviso de teste publicado e aberto. O contador do portal foi ajustado para excluir RESOLVED de “em andamento”, com regressão no cenário e2e existente.
+
+Fonte operacional completa: [ESTADO_ATUAL.md](ESTADO_ATUAL.md), [ROTEIRO_TESTES_HML.md](ROTEIRO_TESTES_HML.md) e [release-hml-20261101.json](../evidence/release-hml-20261101.json). Dados preservados. Novos acessos ao demo, percursos reais de fila/permanência, desempenho, restore/aparelho/hardware e produção seguem pendentes; não declarar100% entregue.
+
 ## Histórico da situação registrada em 29/10/2026
 
 Os registros abaixo descrevem cada entrega na data em que ocorreu. Flags, número de migrations, papéis e bloqueios podem ter sido superados; não são inventário atual.

@@ -174,6 +174,13 @@ test('unidade abre pedido com chave pendente, conversa no próprio pedido e não
   await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Pode vir à tarde.')).toBeVisible();
   await expect(row.getByRole('list', { name: 'Conversa do pedido' }).getByText('Você')).toBeVisible();
   expect(state.messages.map((item) => item.body)).toEqual([{ body: 'Pode vir à tarde.' }]);
+  // Concluído fica no histórico e a conversa continua disponível, mas não conta como trabalho em andamento.
+  await expect(page.getByRole('heading', { name: 'Pedidos · 1 em andamento', exact: true })).toBeVisible();
+  state.items[0]!.state = 'RESOLVED';
+  state.items[0]!.resolvedAt = minutes(0);
+  await page.getByRole('button', { name: 'Atualizar pedidos', exact: true }).click();
+  await expect(row.getByText('Concluído', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pedidos', exact: true })).toBeVisible();
 });
 
 test('pedido com resultado incerto não fica pendente para a próxima conta depois de sair', async ({ page }) => {

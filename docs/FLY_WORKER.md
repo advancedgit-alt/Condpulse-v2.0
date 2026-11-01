@@ -1,6 +1,6 @@
 # Worker contínuo de homologação na Fly.io
 
-Estado em 01/11/2026: worker implantado em `condpulse-v2-0-worker`, gru, com login próprio. Outbox ligado desde PR #119; fila de espera desligada. Recibo 41269486261, commit 75c4203: seis verificações started e zero exits. Teste concreto de reserva em 01/11 gerou RESERVATION_CREATED, consumido uma vez e encerrado SKIPPED (tipo sem efeito de notificação implementado); não equivale a e-mail enviado. Estado vigente: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+Estado em 01/11/2026: worker publicado em608604a, run41354940226, seis leituras started e zero exits. Outbox, fila de espera e alertas de permanência ligados, pool1, intervalos60s; hardware sync desligado. Resposta pública da gestão já produziu DELIVERED e aviso aberto no portal. Jornadas reais de fila/permanência ainda dependem dos perfis/dados apropriados; não inferir execução só pelas flags. Recibos: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
 
 ## O que muda
 
@@ -12,8 +12,8 @@ pela API (FLY_API.md).
 - `fly.worker.toml`: sem serviço HTTP nem checagem (o perfil `worker` não abre porta), `[[restart]] on-failure`
   (até 10), VM `shared-cpu-1x` 1 GB, `kill_timeout` 35 s (a passada em curso tem até 15 s). Configuração pública em
   `[env]`, revisada por PR: `SPRING_PROFILES_ACTIVE=worker`, `DATABASE_URL` (pooler São Paulo, `verify-full`),
-  `DB_POOL_SIZE=1`, `CP_WORKER_OUTBOX_ENABLED=true`, `CP_WORKER_POLL_MILLIS=2000`, `CP_WORKER_WAITLIST_ENABLED=false`,
-  `CP_WORKER_WAITLIST_MILLIS=60000`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`, `CP_WORKER_STAYS_ENABLED=false` e
+  `DB_POOL_SIZE=1`, `CP_WORKER_OUTBOX_ENABLED=true`, `CP_WORKER_POLL_MILLIS=2000`, `CP_WORKER_WAITLIST_ENABLED=true`,
+  `CP_WORKER_WAITLIST_MILLIS=60000`, `CP_WORKER_ACCESS_SYNC_ENABLED=false`, `CP_WORKER_STAYS_ENABLED=true` e
   `CP_WORKER_STAYS_MILLIS=60000` (alertas de permanência, V055; o launcher aceita 10 s a 10 min).
 - `infra/fly-worker/Dockerfile`: mesmas bases fixadas por digest da API, JAR do backend, usuário 10001, sem `EXPOSE`.
 - `infra/fly-worker/start-worker.sh`: launcher que falha fechado (código sem valor) se o perfil não for `worker`, a URL
@@ -98,7 +98,7 @@ Sempre na branch principal, com o SHA revisado. Geração nova: `uuidgen | tr A-
 4. `inspect` de novo e `deploy` com `generation` vazio, `fly_ack=<deployAck>` e `maintenance_confirmed`: `flyctl deploy
    --config fly.worker.toml --remote-only --ha=false`; depois exige uma máquina em `gru` com estado `started` em 6
    leituras seguidas (10 s) e nenhum evento `exit` desde o início do deploy (a guarda de role encerra o processo).
-5. Conferir no log da Fly a inicialização sem erro da guarda de role, com as passadas desligadas.
+5. Conferir no log da Fly a inicialização sem erro da guarda de role e as rotinas do manifesto revisado; na HML atual, outbox/fila/permanências estão ligados.
 6. Ligar a entrega do outbox: PR trocando `CP_WORKER_OUTBOX_ENABLED` para `"true"` em `fly.worker.toml`, merge, `inspect`
    e `deploy`. Observar a fila (pendentes, falhas, arrendamentos vencidos). A fila de espera
    (`CP_WORKER_WAITLIST_ENABLED`) em PR separado, como em WORKER_IMPLANTACAO.md.
