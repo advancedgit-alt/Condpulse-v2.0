@@ -321,7 +321,7 @@ test('Comando: semáforo com dados do servidor, incidente com linha do tempo e r
   const opens = page.getByRole('list', { name: 'Aberturas remotas' });
   await expect(opens.getByText('Operador: Operador Sintético (REMOTE_OPERATOR) · motivo: Autorizado pela unidade por ligação')).toBeVisible();
   await opens.getByRole('button', { name: 'Revisar da abertura #7' }).click();
-  await page.getByLabel('Irregular').check();
+  await page.getByRole('radio', { name: 'Irregular' }).check();
   await page.getByRole('button', { name: 'Registrar revisão' }).click();
   await expect(page.getByText('Informe o motivo, com 3 a 500 caracteres.')).toBeVisible();
   await page.getByLabel('Observação (obrigatória se irregular)').fill('Sem registro da ligação');
