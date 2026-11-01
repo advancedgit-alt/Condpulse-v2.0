@@ -29,8 +29,8 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 
 - Resumo operacional vigente: [docs/ESTADO_ATUAL.md](docs/ESTADO_ATUAL.md).
 - Evidências e histórico por entrega: [docs/STATUS.md](docs/STATUS.md); antes de executar, confira o estado remoto.
-- SMTP Resend e worker outbox já foram configurados. V053/V054 já aplicadas em HML. Não tratar relatos antigos de ausência como pendência atual.
+- SMTP Resend, API/worker, outbox/fila/permanências e demo já configurados/publicados. V053–V055 aplicadas e V055 repetida sem mudança. Novo login/AAL2 exercitado. Conferência de backup/login concluída; restore ainda não aceito. Não tratar relatos antigos de ausência ou CAPTCHA como pendência atual.
 - Homologação e produção operacional são ambientes distintos. O nome Vercel Production não muda o banco de HML para produção.
 - Somente chame uma jornada de homologada quando o percurso real e as negações forem comprovados.
 - A rodada de 01/11 tem autorização para correções, testes e carga sintética na HML; os dados ficam preservados até pedido posterior de limpeza.
-- Código de fundação, casca de painel, CI e readiness não equivalem ao produto completo entregue.
+- Código de fundação, casca de painel, CI e readiness não equivalem ao produto completo entregue. Novos papéis no demo não são automáticos: confirme os vínculos específicos, preserve o escopo sintético e registre motivo.

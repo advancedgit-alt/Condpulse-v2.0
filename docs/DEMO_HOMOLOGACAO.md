@@ -1,6 +1,6 @@
 # Demo de homologação: configuração e carga
 
-Estado em 01/11/2026: CP_DEMO_ENABLED ausente na Vercel e na Fly, confirmado pelo inspect 41321868132. V053 aplicada não significa demo criado; a consulta inicial encontrou zero tenants demo. A carga funcional desta rodada usa o condomínio de teste existente, com IDs em [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+Estado em 01/11/2026: CP_DEMO_ENABLED=true na Vercel e na Fly, API publicada; geração1 criada pela Central, tenant dcb28363-d009-46a7-8be4-ffb0795d1927. Carga32 unidades/3 áreas e demais registros conferidos; zero vínculos automáticos da conta real. A inspeção41321868132 registrava ausência antes da correção, não o estado vigente. Recibos e limites em [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
 
 ## Perfil específico
 
@@ -18,7 +18,7 @@ O ACK inclui o perfil e o SHA: uma inspeção de access não autoriza demo. O es
 6. Nova inspeção e deploy com o deployAck atual, generation vazio. Conferir readiness, nova sessão e AAL2.
 7. Criar o demo pela Central, com as permissões existentes do administrador. Conferir tenants/vínculos e jornadas pela aplicação. Não fabricar ator/capacidade no SQL e não confundir fixtures sintéticas com produção.
 
-Registrar SHA, runs, flag lida de volta, IDs criados e resultado das jornadas. Preservar os dados até solicitação posterior de limpeza. A execução acima continua pendente enquanto o backup estiver bloqueado pelo CAPTCHA do painel; nenhum resultado é presumido.
+Registrar SHA, runs, flag lida de volta, IDs criados e resultado das jornadas. Preservar os dados até solicitação posterior de limpeza. Backup, V055, configuração, publicação, AAL2 e criação da geração1 já foram conferidos. O responsável concluiu o login/verificação humana; CAPTCHA não é bloqueio atual. Restam os vínculos explícitos das contas e as jornadas dos perfis ainda sem acesso. Não resetar a geração existente para repetir o procedimento.
 
 ## Verificação local do executor
 

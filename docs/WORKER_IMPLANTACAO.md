@@ -1,6 +1,6 @@
 # Implantação do worker contínuo
 
-Estado em 01/11/2026: worker contínuo já implantado na Fly em homologação; outbox ligado, fila de espera desligada. Login próprio e configuração existem. Último deploy conferido: run 41269486261, commit 75c4203, seis leituras started e zero exits. Não repetir a preparação como se ainda faltasse hospedagem. Consulte [ESTADO_ATUAL.md](ESTADO_ATUAL.md) e [FLY_WORKER.md](FLY_WORKER.md).
+Estado em 01/11/2026: worker na Fly já publicado em608604a (run41354940226), outbox/fila de espera/alertas de permanência ligados; seis leituras started, zero exits. O exemplo Compose abaixo é alternativa para primeiro provisionamento; não descreve as flags efetivas da Fly. Não repetir preparo de hospedagem/login como pendência atual. Consulte [ESTADO_ATUAL.md](ESTADO_ATUAL.md) e [FLY_WORKER.md](FLY_WORKER.md).
 
 O perfil `worker` processa a caixa interna; chamadas externas de e-mail/push/SMS não estão implementadas no OutboxEffect e não podem ser feitas dentro da transação de negócio. O SMTP do Supabase Auth, já configurado com Resend, atende outro fluxo. O procedimento Compose abaixo permanece como alternativa histórica; ele não descreve a configuração efetiva da Fly.
 
