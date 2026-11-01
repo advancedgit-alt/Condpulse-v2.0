@@ -145,6 +145,13 @@ não houve conexão ou escrita do helper no banco ou na Vercel. Naquele momento,
 com os códigos específicos antes de atribuir a causa a uma credencial ou ao
 ambiente do runner. A operação posterior concluída está registrada acima.
 
+## Dono de função (ADR-0012, V053)
+
+`RUNTIME_FUNCTION_OWNER_DIVERGED` passa a aceitar função de `platform`/`cp` com dono `cp_demo` (SECURITY DEFINER) só
+quando a role é NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem membros e sem
+ser membro de ninguém; tabelas e schemas continuam exigindo `postgres`. Este executor segue preso ao histórico V002–V005
+(`RUNTIME_HISTORY_INCOMPATIBLE` em banco além disso); a mudança mantém os três executores de login coerentes.
+
 ## TLS, falha e limites
 
 A CA pública vem do mesmo endpoint HTTPS fixo revisado para o executor de banco.

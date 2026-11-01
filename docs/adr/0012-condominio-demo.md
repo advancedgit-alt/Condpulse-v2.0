@@ -1,6 +1,6 @@
 # ADR-0012 - Condomínio demo isolado com dados sintéticos (CPX-046)
 
-Estado: proposta nesta entrega (branch `feat/cpx-condominio-demo`), pendente de revisão no PR. Referências: PRD
+Estado: proposta nesta entrega (PR #168, branch `feat/cpx-condominio-demo`), pendente de revisão; abordagem SECURITY DEFINER com dono `cp_demo` e extensão dos guards confirmada pela coordenação em 01/11/2026. Referências: PRD
 complementar Segurança v1.0 (E10.4, CPX-046), ADR-0007 (tenancy), ADR-0011 (parceiro e Log de Segurança),
 `db/migrations/V053__demo_tenant.sql`, [ROTEIRO_TESTES_HML.md](../ROTEIRO_TESTES_HML.md).
 
@@ -38,6 +38,15 @@ horários e estados vêm do banco; a API não grava `created_by` de outra conta,
    `ROLE_GRANTED` e eventos de exemplo; nenhum Log de Segurança real é tocado.
 6. **Flag.** `CP_DEMO_ENABLED` (padrão `false`) além de `CP_PLATFORM_ENABLED`. A migration não cria demo: ele só nasce
    pela ação da central. O segundo projeto Supabase (produção) não recebe a V053 sem OK do responsável.
+
+7. **Guards de dono de função.** Os cinco executores que conferem posse em `platform`/`cp` (migrate de homologação
+   e de produção, `FlyRuntimeLogin`, `FlyWorkerLogin`, `RuntimeConfiguration`) exigiam dono `postgres` (os três últimos
+   recusavam também qualquer `SECURITY DEFINER`). Passam a aceitar, **só para funções**, dono exatamente `cp_demo` quando
+   a role cumpre os invariantes: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT,
+   sem membros e sem ser membro de ninguém. Qualquer outro dono, `SECURITY DEFINER` fora de `cp_demo` ou `cp_demo` fora
+   dos invariantes continua bloqueando. Tabelas, sequências e schemas seguem exigindo `postgres`. Coberto no cenário
+   `owners` dos harnesses `DatabaseOperationsHarness` e `ProductionOperationsHarness` (aceite com `cp_demo` íntegra;
+   recusa com LOGIN, com membro, como membro, função de outro dono e definer fora de `cp_demo`).
 
 ## Consequências
 

@@ -160,7 +160,7 @@ test('exact migration guard applies official legacy baseline then replays and bl
     assert.equal(run.status,0,`Disposable guard scenarios: ${run.stderr}`);
     const versions=readdirSync(join(root,'db/migrations')).filter(name=>/^V[0-9]{3}__.+\.sql$/.test(name)).length;
     assert.deepEqual(JSON.parse(run.stdout.trim()),{passed:true,positive:versions-2,replay:0,missingBaselineDenied:true,checksumDriftDenied:true,
-      aboveHeadDenied:true,gapDenied:true,shortRangeDenied:true,resumeFrom006:versions-5});
+      aboveHeadDenied:true,gapDenied:true,shortRangeDenied:true,resumeFrom006:versions-5,demoOwnerAccepted:true,foreignOwnerDenied:true});
     assert.equal(run.stderr.trim(),'');
   } finally {
     const actual=realpathSync(temporary),base=realpathSync(tmpdir());

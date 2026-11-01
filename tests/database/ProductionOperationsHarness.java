@@ -19,7 +19,7 @@ public final class ProductionOperationsHarness {
     private static int latest;
     private static String host, port;
     private static void require(boolean ok) { if (!ok) throw new AssertionError("DISPOSABLE_GUARD_OR_ASSERTION_FAILED"); }
-    private static void databaseName(String value) { require(value != null && value.matches("condpulse_prodops_[a-f0-9]{12}_(fresh|gap|legacy|checksum|above)")); }
+    private static void databaseName(String value) { require(value != null && value.matches("condpulse_prodops_[a-f0-9]{12}_(fresh|gap|legacy|checksum|above|owners)")); }
     private static String url(String database) { return "jdbc:postgresql://" + host + ":" + port + "/" + database; }
     private static Connection open(String database) throws Exception { databaseName(database); return DriverManager.getConnection(url(database), USER, PASSWORD); }
     /** Todas as migrations versionadas do JAR revisado, em ordem; a ultima define o alvo do guard. */
@@ -38,6 +38,9 @@ public final class ProductionOperationsHarness {
         try (var stream = ProductionOperationsHarness.class.getResourceAsStream("/db/migration/" + name)) {
             require(stream != null); return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+    private static void sql(Connection c, String sql) throws Exception {
+        try (var statement = c.createStatement()) { statement.setQueryTimeout(15); statement.execute(sql); }
     }
     private static boolean relation(String database, String name) throws Exception {
         try (var c = open(database); var statement = c.prepareStatement("select to_regclass(?) is not null")) {
@@ -111,6 +114,33 @@ public final class ProductionOperationsHarness {
         require(flyway(database, "filesystem:" + directory, latest + 1).migrate().migrationsExecuted == 1);
         rejected(database, flyway(database, "classpath:db/migration", latest), 1, latest);
     }
+    /**
+     * Dono de funcao (ADR-0012): depois da migracao completa, platform.demo_provision pertence a cp_demo e a repeticao e aceita;
+     * cp_demo com LOGIN, com membro, membro de outra role, funcao de outro dono ou SECURITY DEFINER fora de cp_demo sao recusados.
+     * As alteracoes de role sao do cluster: cada negativo e desfeito antes do seguinte.
+     */
+    private static void owners(String database) throws Exception {
+        
+        var flyway = flyway(database, "classpath:db/migration", latest);
+        require(migrate(database, flyway, 1, latest) == latest);
+        require(migrate(database, flyway, 1, latest) == 0);
+        try (var c = open(database)) {
+            try (var s = c.createStatement(); var rows = s.executeQuery("select pg_get_userbyid(proowner),prosecdef from pg_proc where proname='demo_provision'")) {
+                require(rows.next() && "cp_demo".equals(rows.getString(1)) && rows.getBoolean(2));
+            }
+            for (String[] negative : new String[][] {
+                    {"alter role cp_demo login", "alter role cp_demo nologin"},
+                    {"create role cp_demo_fixture nologin; grant cp_demo_fixture to cp_demo", "revoke cp_demo_fixture from cp_demo; drop role cp_demo_fixture"},
+                    {"create role cp_demo_fixture nologin; grant cp_demo to cp_demo_fixture", "revoke cp_demo from cp_demo_fixture; drop role cp_demo_fixture"},
+                    {"create role cp_demo_fixture nologin; grant usage on schema platform to cp_demo_fixture; alter function platform.tenant_is_demo(uuid) owner to cp_demo_fixture",
+                     "alter function platform.tenant_is_demo(uuid) owner to cp_demo; revoke usage on schema platform from cp_demo_fixture; drop role cp_demo_fixture"},
+                    {"create function platform.synthetic_definer() returns int language sql security definer as 'select 1'", "drop function platform.synthetic_definer()"}}) {
+                sql(c, negative[0]);
+                try { rejected(database, flyway, 1, latest); } finally { sql(c, negative[1]); }
+            }
+        }
+        require(migrate(database, flyway, 1, latest) == 0);
+    }
     public static void main(String[] args) throws Exception {
         java.util.logging.LogManager.getLogManager().reset();
         LogFactory.setLogCreator(new BootstrapBaseline.QuietLogCreator());
@@ -131,13 +161,13 @@ public final class ProductionOperationsHarness {
                 require(rows.next() && "condpulse_ci".equals(rows.getString(1)) && USER.equals(rows.getString(2)));
             }
             try {
-                for (String suffix : List.of("fresh", "gap", "legacy", "checksum", "above")) {
+                for (String suffix : List.of("fresh", "gap", "legacy", "checksum", "above", "owners")) {
                     String database = prefix + "_" + suffix; databaseName(database);
                     try (var statement = admin.createStatement()) { statement.execute("CREATE DATABASE \"" + database + "\""); }
                     created.add(database);
                 }
                 fresh(prefix + "_fresh"); gap(prefix + "_gap"); legacy(prefix + "_legacy");
-                checksum(prefix + "_checksum", fixture.resolve("checksum")); above(prefix + "_above", fixture.resolve("above"));
+                checksum(prefix + "_checksum", fixture.resolve("checksum")); above(prefix + "_above", fixture.resolve("above")); owners(prefix + "_owners");
             } finally {
                 for (String database : created.reversed()) {
                     databaseName(database); require(database.startsWith(prefix + "_"));
@@ -146,6 +176,6 @@ public final class ProductionOperationsHarness {
             }
         }
         System.out.println("{\"passed\":true,\"fresh\":" + latest + ",\"replay\":0,\"shortRangeDenied\":true,\"gapDenied\":true,"
-            + "\"legacyBaselineDenied\":true,\"checksumDriftDenied\":true,\"aboveHeadDenied\":true}");
+            + "\"legacyBaselineDenied\":true,\"checksumDriftDenied\":true,\"aboveHeadDenied\":true,\"demoOwnerAccepted\":true,\"foreignOwnerDenied\":true}");
     }
 }

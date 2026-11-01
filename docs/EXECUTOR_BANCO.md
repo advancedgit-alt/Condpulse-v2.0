@@ -84,6 +84,13 @@ provisiona as credenciais runtime ou operacionais da aplicacao.
    ultima migration do JAR. Qualquer erro diferente de RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED
    para as versoes pendentes da faixa bloqueia antes de migrate. A validacao estrita
    continua habilitada na migracao.
+
+Dono de funcao (ADR-0012, V053): toda tabela, sequencia e schema de `platform`/`cp` continua com dono `postgres`. Para
+funcoes, o guard aceita dono `postgres` ou, somente, dono `cp_demo` quando a role cumpre os invariantes: NOLOGIN,
+NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem membros e sem ser membro de ninguem
+(`pg_auth_members` vazio nos dois sentidos). Qualquer outro dono, ou `cp_demo` fora desses invariantes, bloqueia o migrate
+antes de escrever. Cenario coberto no harness (`owners`): aceite com `cp_demo` integra e recusa com LOGIN, com membro, como
+membro, funcao de outro dono e SECURITY DEFINER fora de `cp_demo`.
 7. Registrar saida, migrationsExecutadas, validacao final, commit, JAR e aprovador.
    Baseline ou migrate nao habilitam BFF/reservas nem configuram usuarios/vinculos.
 
