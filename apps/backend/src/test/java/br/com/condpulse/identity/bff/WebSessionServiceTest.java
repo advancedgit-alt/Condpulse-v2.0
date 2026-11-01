@@ -275,4 +275,21 @@ class WebSessionServiceTest {
    ()->service().loginAcceptingInvitation("convidada@example.invalid","",(actor,email)->"ACEITO")).code());
   verifyNoInteractions(auth,store);
  }
+
+ @Test void lostProviderSessionWhileReadingMfaRemovesOnlyTheLocalSession() {
+  String raw=SessionSecrets.newToken(); var row=session(raw);
+  when(store.load(row.tokenHash())).thenReturn(row);
+  when(decoder.decode("synthetic-access")).thenReturn(jwt(row.accountId(),"synthetic-access","aal1"));
+  when(auth.totpFactors("synthetic-access")).thenThrow(new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente."));
+  assertEquals("SESSION_EXPIRED",assertThrows(BusinessProblem.class,()->service().mfaStatus(raw)).code());
+  verify(store).remove(row.tokenHash()); verify(auth,never()).signOutBestEffort(anyString());
+ }
+ @Test void lostProviderSessionDuringVerificationIsNotKeptForAnotherCode() {
+  String raw=SessionSecrets.newToken(); var row=claimed(raw);
+  when(auth.verifyTotp(anyString(),any(),anyString())).thenThrow(new BusinessProblem("SESSION_EXPIRED",401,"Entre novamente."));
+  assertEquals("SESSION_EXPIRED",assertThrows(BusinessProblem.class,()->service().verifyTotp(raw,FACTOR,"123456")).code());
+  verify(store).remove(row.tokenHash()); verify(store,never()).releaseRefresh(anyString(),any());
+  verify(store,never()).replace(anyString(),any(),any()); verify(auth,times(1)).verifyTotp(anyString(),any(),anyString());
+ }
+
 }
