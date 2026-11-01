@@ -21,7 +21,33 @@ async function json(route: Route, status: number, body: unknown) {
 
 interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean; deniedOnCursor?: boolean; refuseMutations?: boolean;
   /** Corpos das trocas de contexto recebidas (R4.4) e quantas falham com 503 antes de aceitar. */
-  switches?: Record<string, unknown>[]; switchFailures?: number }
+  switches?: Record<string, unknown>[]; switchFailures?: number;
+  /** Saídas de painel registradas (R4.4) e vínculos de condomínio da conta em /v1/me. */
+  exits?: Record<string, unknown>[]; memberships?: unknown[];
+  /** Corpos recebidos pelo Comando de Segurança (abertura de incidente, revisão). */
+  commandBodies?: Record<string, unknown>[] }
+
+// Comando de Segurança (CPX-012 a CPX-014): respostas sintéticas no formato do contrato.
+const INCIDENT = '53000000-0000-4000-8000-0000000000a1';
+const REMOTE_OPEN = '91000000-0000-4000-8000-0000000000a1';
+const LOG_EVENT = '90000000-0000-4000-8000-000000000001';
+const OPERATOR_ACCOUNT = '10000000-0000-4000-8000-0000000000b3';
+const hash = (n: number) => n.toString(16).padStart(64, '0');
+const commandIndicators = { devicesTotal: 2, devicesOffline: 1, devicesUnknown: 0, securityOccurrencesOpen: 0, criticalAlertsUnlinked: 1, incidentsOpen: 0,
+  incidentsCriticalOpen: 0, remoteOpensPendingReview: 1, operatorsOnDuty: 1 };
+const portfolioBody = { partnerId: PARTNER, generatedAt: '2026-10-31T12:00:00Z', criteria: 'cpx012-v1', unavailableIndicators: ['DOORS_HELD_OPEN', 'STAYS_OVERDUE'],
+  truncated: false, tenants: [{ tenantId: TENANT_A, tenantName: 'Residencial Sintético A', timeZone: 'America/Sao_Paulo', light: 'RED',
+    reasons: ['CRITICAL_ALERTS_UNLINKED', 'DEVICES_OFFLINE'], indicators: commandIndicators }] };
+const logEvent = (seq: number, eventType: string, severity = 'CRITICAL') => ({ eventId: seq === 1 ? LOG_EVENT : `90000000-0000-4000-8000-${String(seq).padStart(12, '0')}`,
+  seq, occurredAt: '2026-10-31T12:00:00Z', recordedAt: '2026-10-31T12:00:00Z', clockSkewMs: null, eventType, severity, source: 'REMOTE_CENTRAL', partnerId: PARTNER,
+  actorAccountId: null, actorRole: 'SECURITY_LEAD', subjectType: null, subjectId: null, unitId: null, pointId: null, deviceId: null, reason: null, evidenceRef: null,
+  correlationId: null, traceId: null, correctsId: null, details: {}, prevHash: hash(seq - 1), hash: hash(seq) });
+const incidentRow = (title: string) => ({ id: INCIDENT, tenantId: TENANT_A, tenantName: 'Residencial Sintético A', partnerId: PARTNER, title, severity: 'CRITICAL',
+  state: 'OPEN', openedBy: ACCOUNT, openedAt: '2026-10-31T12:05:00Z', assigneeMemberId: null, assignedAt: null, outcome: null, report: null, closedBy: null,
+  closedAt: null, version: 0, linkCount: 1 });
+const remoteOpenRow = (review: unknown) => ({ eventId: REMOTE_OPEN, seq: 7, occurredAt: '2026-10-31T11:00:00Z', recordedAt: '2026-10-31T11:00:00Z',
+  operatorAccountId: OPERATOR_ACCOUNT, operatorRole: 'REMOTE_OPERATOR', reason: 'Autorizado pela unidade por ligação', unitId: null, pointId: null, deviceId: null,
+  evidenceRef: null, review });
 async function installPartner(page: Page, api: ApiState, options: Options) {
   const requests: string[] = [];
   await page.route('**/auth/mfa', async (route) => { await json(route, 200, { assuranceLevel: 'AAL2', factors: [] }); });
@@ -29,7 +55,7 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
     if (!api.authenticated) { await route.fallback(); return; }
     const url = new URL(route.request().url());
     const path = url.pathname;
-    if (path === '/v1/me') { await json(route, 200, { accountId: ACCOUNT, memberships: [], tenantModules: [], partnerContexts: options.contexts }); return; }
+    if (path === '/v1/me') { await json(route, 200, { accountId: ACCOUNT, memberships: options.memberships ?? [], tenantModules: [], partnerContexts: options.contexts }); return; }
     if (path === '/v1/platform/session') { await json(route, 403, { code: 'PLATFORM_ACCESS_DENIED', status: 403 }); return; }
     if (path.startsWith('/v1/partners/')) {
       requests.push(path);
@@ -47,9 +73,51 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
         await json(route, 200, { status: 'RECORDED', recorded: 1 });
         return;
       }
+      if (path.endsWith('/context-exits')) {
+        options.exits?.push(route.request().postDataJSON() as Record<string, unknown>);
+        await json(route, 200, { status: 'RECORDED', recorded: 1 });
+        return;
+      }
       // Papel revogado entre a leitura e a ação: o servidor recusa a mutação.
       if (options.refuseMutations && route.request().method() === 'POST') {
         await json(route, 403, { status: 403, code: 'PARTNER_ACCESS_DENIED', detail: 'Esta ação não está disponível para o seu papel no parceiro.' }); return;
+      }
+      if (path.includes('/command/')) {
+        // O Comando exige também o Log de Segurança ligado.
+        if (!options.securityLogOn) { await json(route, 404, { status: 404, error: 'Not Found' }); return; }
+        const method = route.request().method();
+        if (path.endsWith('/command/portfolio')) { await json(route, 200, portfolioBody); return; }
+        if (path.endsWith('/command/team')) {
+          await json(route, 200, { partnerId: PARTNER, members: [{ memberId: OPERATOR, accountId: OPERATOR_ACCOUNT, role: 'REMOTE_OPERATOR', displayName: 'Operador Sintético' }] });
+          return;
+        }
+        if (path.endsWith('/command/incidents') && method === 'GET') {
+          const opened = (options.commandBodies ?? []).find((item) => 'title' in item);
+          await json(route, 200, { partnerId: PARTNER, state: url.searchParams.get('state') ?? 'OPEN', truncated: false,
+            incidents: opened && url.searchParams.get('state') !== 'CLOSED' ? [incidentRow(String(opened.title))] : [] });
+          return;
+        }
+        if (path.endsWith('/command/incidents') && method === 'POST') {
+          const body = route.request().postDataJSON() as Record<string, unknown>;
+          options.commandBodies?.push(body);
+          await json(route, 201, { incident: incidentRow(String(body.title)), links: [{ eventId: LOG_EVENT, linkedBy: ACCOUNT, linkedAt: '2026-10-31T12:05:00Z' }], timeline: [] });
+          return;
+        }
+        if (path.endsWith(`/incidents/${INCIDENT}`)) {
+          const opened = (options.commandBodies ?? []).find((item) => 'title' in item);
+          await json(route, 200, { incident: incidentRow(String(opened?.title ?? 'Incidente sintético')),
+            links: [{ eventId: LOG_EVENT, linkedBy: ACCOUNT, linkedAt: '2026-10-31T12:05:00Z' }],
+            timeline: [logEvent(1, 'FORCED_OPEN'), { ...logEvent(2, 'INCIDENT_OPENED'), correlationId: INCIDENT }] });
+          return;
+        }
+        if (path.endsWith('/remote-opens')) { await json(route, 200, { tenantId: TENANT_A, items: [remoteOpenRow(null)], nextBeforeSeq: null }); return; }
+        if (path.endsWith('/reviews')) {
+          const body = route.request().postDataJSON() as Record<string, unknown>;
+          options.commandBodies?.push(body);
+          await json(route, 201, remoteOpenRow({ reviewEventId: '91000000-0000-4000-8000-0000000000b1', verdict: body.verdict, note: body.note ?? null,
+            reviewedBy: ACCOUNT, reviewedAt: '2026-10-31T12:10:00Z' }));
+          return;
+        }
       }
       if (path.endsWith('/team')) {
         await json(route, 200, { partnerId: PARTNER, members: [{ id: OPERATOR, partnerId: PARTNER, accountId: '10000000-0000-4000-8000-0000000000b3',
@@ -67,6 +135,7 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
       if (options.deniedOnCursor && url.searchParams.has('beforeSeq')) {
         await json(route, 404, { status: 404, code: 'TENANT_ACCESS_DENIED', detail: 'Condomínio não disponível para este acesso.' }); return;
       }
+      if (url.searchParams.get('severity') === 'CRITICAL') { await json(route, 200, { events: [logEvent(1, 'FORCED_OPEN')], nextBeforeSeq: null }); return; }
       await json(route, 200, { events: [{ eventId: '90000000-0000-4000-8000-000000000001', seq: 1, occurredAt: '2026-10-31T12:00:00Z', recordedAt: '2026-10-31T12:00:00Z',
         clockSkewMs: null, eventType: 'ACCESS_ENTRY', severity: 'INFO', source: 'CONCIERGE', partnerId: null, actorAccountId: null, actorRole: 'CONCIERGE',
         subjectType: null, subjectId: null, unitId: null, pointId: null, deviceId: null, reason: null, evidenceRef: null, correlationId: null, traceId: null,
@@ -96,12 +165,15 @@ test('dois papéis no mesmo parceiro mostram o seletor; comando lista o que vem 
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Escolha o acesso.' })).toBeVisible();
   await page.getByRole('link', { name: /Parceiro Sintético – Comando de Segurança/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/log$`));
+  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/carteira-seguranca$`));
   const nav = page.getByRole('navigation', { name: 'Navegação principal' });
-  for (const label of ['Visão da carteira', 'Revisão de aberturas', 'Políticas de segurança', 'Lista de bloqueio']) {
+  for (const label of ['Visão da carteira', 'Incidentes', 'Revisão de aberturas', 'Log de Segurança']) await expect(nav.getByRole('link', { name: label })).toBeVisible();
+  for (const label of ['Políticas de segurança', 'Lista de bloqueio']) {
     await expect(nav.getByText(label)).toBeVisible();
     await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
   }
+  await nav.getByRole('link', { name: 'Log de Segurança' }).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/log$`));
   expect(requests.filter((path) => path.includes('security-log'))).toEqual([]);
   await page.getByRole('button', { name: 'Consultar log' }).click();
   await expect(page.getByText('#1 · ACCESS_ENTRY')).toBeVisible();
@@ -136,7 +208,8 @@ test('condomínio recusado na página seguinte tira os eventos já carregados da
   const api = await installSyntheticApi(page);
   await installPartner(page, api, { contexts: [lead], partnersOn: true, securityLogOn: true, deniedOnCursor: true });
   await signIn(page);
-  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/log$`));
+  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/carteira-seguranca$`));
+  await page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Log de Segurança' }).click();
   await page.getByRole('button', { name: 'Consultar log' }).click();
   await expect(page.getByText('#1 · ACCESS_ENTRY')).toBeVisible();
   await page.getByRole('button', { name: 'Carregar eventos anteriores' }).click();
@@ -210,4 +283,76 @@ test('R4.4: falha ao registrar a troca não abre o painel; nova tentativa usa a 
   await expect(page.getByText('Operador Sintético')).toBeVisible();
   expect(switches).toHaveLength(2);
   expect(switches[1].switchId).toBe(switches[0].switchId);
+});
+
+test('Comando: semáforo com dados do servidor, incidente com linha do tempo e revisão de abertura remota', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const commandBodies: Record<string, unknown>[] = [];
+  const requests = await installPartner(page, api, { contexts: [lead], partnersOn: true, securityLogOn: true, commandBodies });
+  await signIn(page);
+  await expect(page).toHaveURL(new RegExp(`/p/${PARTNER}/comando/carteira-seguranca$`));
+  const semaphore = page.getByRole('list', { name: 'Semáforo da carteira' });
+  await expect(semaphore.getByText('Residencial Sintético A')).toBeVisible();
+  await expect(semaphore.getByText('Semáforo: Vermelho')).toBeVisible();
+  await expect(semaphore.getByText('alerta crítico sem incidente (24 h) · equipamento fora do ar')).toBeVisible();
+  await expect(page.getByText('portas abertas, permanências vencidas')).toBeVisible();
+  await scanAccessibility(page, 'parceiro/comando/carteira');
+  // Nenhuma leitura de eventos do log sem pedido.
+  expect(requests.filter((path) => path.includes('security-log') || path.includes('remote-opens') || path.includes(`/incidents/`))).toEqual([]);
+
+  const nav = page.getByRole('navigation', { name: 'Navegação principal' });
+  await nav.getByRole('link', { name: 'Incidentes' }).click();
+  await expect(page.getByText('Nenhum incidente aberto')).toBeVisible();
+  await page.getByLabel('Título').fill('Porta forçada na garagem');
+  await page.getByLabel('Severidade', { exact: true }).selectOption('CRITICAL');
+  await page.getByRole('button', { name: 'Buscar eventos' }).click();
+  await page.getByLabel(/#1 · FORCED_OPEN/).check();
+  await page.getByRole('button', { name: 'Abrir incidente', exact: true }).click();
+  await expect(page.getByText('Incidente aberto: Porta forçada na garagem.')).toBeVisible();
+  expect(commandBodies[0]).toMatchObject({ tenantId: TENANT_A, title: 'Porta forçada na garagem', severity: 'CRITICAL', eventIds: [LOG_EVENT] });
+  const timeline = page.getByRole('list', { name: 'Linha do tempo do incidente' });
+  await expect(timeline.getByText('#1 · FORCED_OPEN')).toBeVisible();
+  await expect(timeline.getByText('#2 · INCIDENT_OPENED')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Exportar dossiê' })).toBeVisible();
+  await scanAccessibility(page, 'parceiro/comando/incidentes');
+
+  await nav.getByRole('link', { name: 'Revisão de aberturas' }).click();
+  await page.getByRole('button', { name: 'Consultar aberturas' }).click();
+  const opens = page.getByRole('list', { name: 'Aberturas remotas' });
+  await expect(opens.getByText('Operador: Operador Sintético (REMOTE_OPERATOR) · motivo: Autorizado pela unidade por ligação')).toBeVisible();
+  await opens.getByRole('button', { name: 'Revisar da abertura #7' }).click();
+  await page.getByRole('radio', { name: 'Irregular' }).check();
+  await page.getByRole('button', { name: 'Registrar revisão' }).click();
+  await expect(page.getByText('Informe o motivo, com 3 a 500 caracteres.')).toBeVisible();
+  await page.getByLabel('Observação (obrigatória se irregular)').fill('Sem registro da ligação');
+  await page.getByRole('button', { name: 'Registrar revisão' }).click();
+  await expect(page.getByText('Abertura #7 marcada como irregular.')).toBeVisible();
+  expect(commandBodies.at(-1)).toEqual({ verdict: 'IRREGULAR', note: 'Sem registro da ligação', correctsReviewId: null });
+});
+
+test('Comando com o Log de Segurança desligado no servidor: mensagem própria, sem quebrar o painel', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  await installPartner(page, api, { contexts: [lead], partnersOn: true, securityLogOn: false });
+  await signIn(page);
+  await expect(page.getByRole('heading', { name: 'Comando de Segurança indisponível neste ambiente' })).toBeVisible();
+});
+
+test('R4.4: sair do Comando direto para um condomínio por vínculo registra o lado da origem', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const exits: Record<string, unknown>[] = [];
+  const switches: Record<string, unknown>[] = [];
+  await installPartner(page, api, { contexts: [lead], partnersOn: true, securityLogOn: true, exits, switches,
+    memberships: [{ membershipId: '50000000-0000-4000-8000-000000000001', tenantId: TENANT_A, tenantName: 'Condomínio Sintético A',
+      timeZone: 'America/Sao_Paulo', unitId: '20000000-0000-4000-8000-000000000001', role: 'RESIDENT' }] });
+  await signIn(page);
+  await page.getByRole('link', { name: /Parceiro Sintético – Comando de Segurança/ }).click();
+  await expect(page.getByRole('heading', { name: 'Comando de Segurança' })).toBeVisible();
+  expect(switches).toHaveLength(1);
+  await page.getByRole('link', { name: 'CondPulse, meus acessos' }).click();
+  expect(exits, 'a entrada não é contexto: nada registrado ao passar por ela').toHaveLength(0);
+  await page.getByRole('link', { name: /Condomínio Sintético A/ }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/`));
+  await expect.poll(() => exits.length).toBe(1);
+  expect(exits[0]).toMatchObject({ role: 'SECURITY_LEAD', to: { kind: 'TENANT', tenantId: TENANT_A } });
+  expect(exits[0]!.switchId).not.toBe(switches[0]!.switchId);
 });

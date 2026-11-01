@@ -30,4 +30,11 @@ public class PartnerContextController {
   Object session=jwt.getClaims().get("session_id");
   return ok(service.record(account(jwt),assurance(jwt),session instanceof String value?value:null,partnerId,request));
  }
+ /** Saída do painel para um condomínio por vínculo ou para a central: grava o lado da origem (R4.4). */
+ @PostMapping("/v1/partners/{partnerId}/context-exits")
+ public ResponseEntity<PartnerModels.ContextSwitchResult> contextExit(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID partnerId,
+   @RequestBody(required=false) PartnerModels.ContextExitRequest request) {
+  Object session=jwt.getClaims().get("session_id");
+  return ok(service.recordExit(account(jwt),assurance(jwt),session instanceof String value?value:null,partnerId,request));
+ }
 }

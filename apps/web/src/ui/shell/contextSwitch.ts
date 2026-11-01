@@ -60,11 +60,37 @@ function forAccount(accountId: string) {
   if (state.accountId !== accountId) { state.accountId = accountId; state.current = null; state.pending = null; }
 }
 
-/** Contexto atual desta janela (condomínio ou central), sem registro no servidor. */
-export function noteContext(accountId: string, context: ContextRef): void {
+/**
+ * Contexto atual desta janela (condomínio ou central). Sair de um painel de parceiro direto para um condomínio por vínculo
+ * ou para a central devolve a saída a registrar (lado da origem, R4.4), com chave nova; senão null.
+ */
+export function noteContext(accountId: string, context: ContextRef, newId: () => string = () => globalThis.crypto.randomUUID()): PlannedSwitch | null {
   forAccount(accountId);
   if (state.pending && !sameContext(state.pending.to, context)) state.pending = null;
+  const previous = state.current;
   state.current = context;
+  if (previous?.kind === 'PARTNER' && (context.kind === 'TENANT' || context.kind === 'PLATFORM')) return { switchId: newId(), from: previous, to: context };
+  return null;
+}
+
+/**
+ * Registra a saída de um painel de parceiro (POST /v1/partners/{id}/context-exits): o servidor grava CONTEXT_SWITCHED do
+ * lado da origem para papéis de segurança. Não bloqueia o contexto novo (que é de vínculo ou da central, com a própria
+ * autorização); até três tentativas com a mesma chave quando o servidor está indisponível (o servidor não grava duas
+ * vezes a mesma chave). Recusa ou rota inexistente (flag desligada) encerram sem nova tentativa. Devolve se foi aceita.
+ */
+export async function recordExit(planned: PlannedSwitch, send: (planned: PlannedSwitch) => Promise<unknown>,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), attempts = 3): Promise<boolean> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try { await send(planned); return true; }
+    catch (error) {
+      const status = (error as { status?: unknown }).status;
+      const retryable = typeof status === 'number' && (status === 0 || status >= 500);
+      if (!retryable || attempt === attempts) return false;
+      await wait(500 * attempt);
+    }
+  }
+  return false;
 }
 
 /**
