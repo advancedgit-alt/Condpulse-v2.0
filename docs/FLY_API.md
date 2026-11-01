@@ -36,7 +36,7 @@ Vercel. Se a Fly falhar, nada precisa ser desfeito.
   - Dono de função (ADR-0012, V053): os três executores de login (`FlyRuntimeLogin`, `FlyWorkerLogin`, `RuntimeConfiguration`)
     recusavam qualquer função de `platform`/`cp` com dono diferente de `postgres` ou `SECURITY DEFINER`. Passam a aceitar,
     só para funções, dono `cp_demo` (com `SECURITY DEFINER`) quando a role é NOLOGIN, NOSUPERUSER, NOBYPASSRLS,
-    NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem membros e sem ser membro de ninguém; tabelas e schemas
+    NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem ser membro de ninguém e com vínculos só de administração (toda linha de `pg_auth_members` com inherit=false e set=false, sem membro de runtime; ADR-0012, itens 7 e 8); tabelas e schemas
     continuam exigindo `postgres`. Fora disso, `*_FUNCTION_OWNER_DIVERGED` como antes.
   - O login da Vercel continua existindo. Só ele (marker da Vercel) é tolerado; outra geração da Fly ou role
     `cp_runtime_*` desconhecida bloqueia.

@@ -502,24 +502,50 @@ BEGIN
    'memberships',n_members::text,'retiredTenantId',retired_tenant_id::text));
 END $$;
 
+-- Privilégios de execução ANTES da transferência de posse: depois dela, quem executa a migration sem ser superusuário
+-- (postgres do Supabase: CREATEROLE, membro de cp_demo só com ADMIN, sem INHERIT) não é mais dono das funções, e
+-- GRANT/REVOKE viram "no privileges were granted" silenciosos.
+REVOKE ALL ON FUNCTION platform.tenant_is_demo(uuid),platform.partner_is_demo(uuid),platform.account_is_synthetic(uuid),
+ platform.demo_provision(uuid,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.tenant_is_demo(uuid),platform.partner_is_demo(uuid),platform.account_is_synthetic(uuid)
+ TO cp_api,cp_worker,cp_onboarding;
+GRANT EXECUTE ON FUNCTION platform.demo_provision(uuid,text,text) TO cp_api;
+
 -- Dono cp_demo (sem BYPASSRLS): as funções acima só alcançam o que as políticas de cp_demo liberam. Quem executa a
--- migration precisa poder assumir cp_demo para transferir a posse (CREATE no schema só durante a transferência).
+-- migration precisa poder assumir cp_demo (SET) para transferir a posse; CREATE no schema só durante a transferência.
+--  - Superusuário (CI, PostgreSQL local): já tem SET; nada é concedido nem revogado.
+--  - Não superusuário com CREATEROLE (postgres do Supabase): ao criar cp_demo recebeu vínculo só com ADMIN OPTION
+--    (INHERIT FALSE, SET FALSE). O bloco concede SET temporariamente e, no fim, revoga só a opção SET do vínculo que ele
+--    mesmo concedeu, preservando o ADMIN (sem ele postgres perderia para sempre o controle da role e das funções).
+--  - Vínculo sem nenhuma opção restante (grantor = quem migrou) é removido, para cp_demo ficar só com vínculos de
+--    administração: inherit=false e set=false em toda linha (invariante conferido pelos guards de posse).
 DO $$
-DECLARE granted boolean:=false; fn text;
+DECLARE me name:=current_user; granted boolean:=false; fn text; leftover boolean;
 BEGIN
- IF NOT pg_has_role(current_user,'cp_demo','SET') THEN
-  EXECUTE format('GRANT cp_demo TO %I WITH INHERIT FALSE, SET TRUE',current_user);
+ IF NOT pg_has_role(me,'cp_demo','SET') THEN
+  EXECUTE format('GRANT cp_demo TO %I WITH INHERIT FALSE, SET TRUE',me);
   granted:=true;
  END IF;
  GRANT CREATE ON SCHEMA platform TO cp_demo;
  FOREACH fn IN ARRAY ARRAY['platform.tenant_is_demo(uuid)','platform.partner_is_demo(uuid)','platform.account_is_synthetic(uuid)',
    'platform.demo_provision(uuid,text,text)'] LOOP
   EXECUTE format('ALTER FUNCTION %s OWNER TO cp_demo',fn);
-  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',fn);
  END LOOP;
  REVOKE CREATE ON SCHEMA platform FROM cp_demo;
- IF granted THEN EXECUTE format('REVOKE cp_demo FROM %I',current_user); END IF;
+ IF granted THEN
+  EXECUTE format('REVOKE SET OPTION FOR cp_demo FROM %I GRANTED BY %I',me,me);
+  SELECT NOT (a.admin_option OR a.inherit_option OR a.set_option) INTO leftover FROM pg_auth_members a
+   JOIN pg_roles r ON r.oid=a.roleid JOIN pg_roles u ON u.oid=a.member JOIN pg_roles g ON g.oid=a.grantor
+   WHERE r.rolname='cp_demo' AND u.rolname=me AND g.rolname=me;
+  IF coalesce(leftover,false) THEN EXECUTE format('REVOKE cp_demo FROM %I GRANTED BY %I',me,me); END IF;
+ END IF;
+ -- Conferência final: quem migrou continua sem INHERIT/SET em cp_demo; se tinha ADMIN (não superusuário), continua tendo.
+ IF EXISTS(SELECT 1 FROM pg_auth_members a JOIN pg_roles r ON r.oid=a.roleid WHERE r.rolname='cp_demo' AND (a.inherit_option OR a.set_option)) THEN
+  RAISE EXCEPTION 'cp_demo só admite vínculos de administração (sem INHERIT e sem SET)';
+ END IF;
+ IF NOT pg_has_role(me,'cp_demo','USAGE') AND NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=me AND rolsuper)
+   AND NOT EXISTS(SELECT 1 FROM pg_auth_members a JOIN pg_roles r ON r.oid=a.roleid JOIN pg_roles u ON u.oid=a.member
+    WHERE r.rolname='cp_demo' AND u.rolname=me AND a.admin_option) THEN
+  RAISE EXCEPTION 'quem migrou perderia o controle de cp_demo (sem ADMIN OPTION)';
+ END IF;
 END $$;
-GRANT EXECUTE ON FUNCTION platform.tenant_is_demo(uuid),platform.partner_is_demo(uuid),platform.account_is_synthetic(uuid)
- TO cp_api,cp_worker,cp_onboarding;
-GRANT EXECUTE ON FUNCTION platform.demo_provision(uuid,text,text) TO cp_api;

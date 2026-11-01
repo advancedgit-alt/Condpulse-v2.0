@@ -87,10 +87,13 @@ provisiona as credenciais runtime ou operacionais da aplicacao.
 
 Dono de funcao (ADR-0012, V053): toda tabela, sequencia e schema de `platform`/`cp` continua com dono `postgres`. Para
 funcoes, o guard aceita dono `postgres` ou, somente, dono `cp_demo` quando a role cumpre os invariantes: NOLOGIN,
-NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT, sem membros e sem ser membro de ninguem
-(`pg_auth_members` vazio nos dois sentidos). Qualquer outro dono, qualquer SECURITY DEFINER fora de `cp_demo` (antes nao conferido pelo migrate) ou `cp_demo` fora
-desses invariantes bloqueia o migrate antes de escrever. Cenario coberto no harness (`owners`): aceite com `cp_demo` integra e recusa com LOGIN, com membro, como
-membro, funcao de outro dono e SECURITY DEFINER fora de `cp_demo`.
+NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION, NOINHERIT e vinculos conforme abaixo.
+Vinculos em `cp_demo`: toda linha de `pg_auth_members` precisa ter inherit_option=false e set_option=false (admin_option
+livre: e o vinculo que o `postgres` do Supabase recebe ao criar a role) e o membro nao pode ser cp_api, cp_worker,
+cp_onboarding nem cp_runtime_*/cp_worker_*/cp_onboarding_*; `cp_demo` nao e membro de ninguem. Quem migra sem ser
+superusuario conserva o ADMIN em `cp_demo` (ADR-0012, item 8): a V053 so revoga a opcao SET que concedeu a si mesma. Qualquer outro dono, qualquer SECURITY DEFINER fora de `cp_demo` (antes nao conferido pelo migrate) ou `cp_demo` fora
+desses invariantes bloqueia o migrate antes de escrever. Cenario coberto no harness (`owners`): aceite com `cp_demo` integra (inclusive com vinculo so de administracao) e recusa com LOGIN, como
+membro, com membro INHERIT/SET ou de runtime, funcao de outro dono e SECURITY DEFINER fora de `cp_demo`.
 7. Registrar saida, migrationsExecutadas, validacao final, commit, JAR e aprovador.
    Baseline ou migrate nao habilitam BFF/reservas nem configuram usuarios/vinculos.
 

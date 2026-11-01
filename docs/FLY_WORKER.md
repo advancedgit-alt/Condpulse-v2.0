@@ -46,7 +46,7 @@ gravados por `flyctl secrets import --stage` (valores só no stdin) e conferidos
   V023, nada pendente no JAR revisado.
 - Dono de função (ADR-0012, V053): como no login da API, aceita função de `platform`/`cp` com dono `cp_demo`
   (SECURITY DEFINER) só quando a role é NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOREPLICATION,
-  NOINHERIT, sem membros e sem ser membro de ninguém; demais funções seguem exigindo dono `postgres`
+  NOINHERIT, sem ser membro de ninguém e com vínculos só de administração (toda linha de `pg_auth_members` com inherit=false e set=false, sem membro de runtime; ADR-0012, itens 7 e 8); demais funções seguem exigindo dono `postgres`
   (`FLY_WORKER_FUNCTION_OWNER_DIVERGED`).
 - Outro login `cp_worker_*` (inclusive um criado por `infra/operations/worker-login.sql`) ou qualquer outro membro de
   `cp_worker` bloqueia. Roles `cp_runtime_*` só são aceitas com marker da Vercel ou da API na Fly e teto finito.
