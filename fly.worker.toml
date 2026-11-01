@@ -15,16 +15,16 @@ kill_timeout = "35s"
   DATABASE_URL = "jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/tmp/condpulse-db-ca.crt"
   # Teto do login 2 (ADR-0006): pool 1 deixa uma conexão para a sobreposição de reinício.
   DB_POOL_SIZE = "1"
-  # Passadas desligadas no primeiro deploy (WORKER_IMPLANTACAO.md, passo 4). Ligar = PR revisado trocando para "true".
+  # Homologação autorizada em 01/11: outbox e fila de espera ligados; banco V055 aplicado e validado.
   CP_WORKER_OUTBOX_ENABLED = "true"
   CP_WORKER_POLL_MILLIS = "2000"
-  CP_WORKER_WAITLIST_ENABLED = "false"
+  CP_WORKER_WAITLIST_ENABLED = "true"
   CP_WORKER_WAITLIST_MILLIS = "60000"
   # Reconciliação de credenciais só com o adaptador do parceiro físico (CP-044); o launcher recusa "true".
   CP_WORKER_ACCESS_SYNC_ENABLED = "false"
-  # Alertas de permanência N1/N2 (V055, CPX-016). Desligada até a V055 estar aplicada e o responsável ligar por PR.
+  # Alertas de permanência N1/N2 (V055, CPX-016), ligados na HML após aplicação e validação da V055.
   # O intervalo (10 s a 10 min) é a tolerância máxima entre o horário do nível e a gravação.
-  CP_WORKER_STAYS_ENABLED = "false"
+  CP_WORKER_STAYS_ENABLED = "true"
   CP_WORKER_STAYS_MILLIS = "60000"
   # Âncora diária do Log de Segurança (V050, CPX-008). O worker NÃO copia nada da Vercel (FLY_WORKER.md): ligar a flag
   # na Vercel liga só a API (via fly-api). Ligada em 01/11/2026 junto com a API, após o responsável ligar o log na Vercel.
