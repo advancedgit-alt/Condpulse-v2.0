@@ -37,10 +37,49 @@ Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na V
 | V047 publicações | `RIGHTS_PUBLICATION_QUEUED`, `DEVICE_COMMAND_SENT` (ACK), `CREDENTIAL_PUBLISHED` (CONFIRMED), `DEVICE_COMMAND_FAILED` (FAILED/PARTIAL/UNKNOWN) |
 | V048 relatórios do gateway | `EDGE_REPORT_RECEIVED` (REJECTED = atenção) |
 | Vínculos | `ROLE_GRANTED` (nasce ou passa a ACTIVE), `ROLE_REVOKED` (ACTIVE → SUSPENDED/REVOKED) |
+| API, troca de contexto (V052, R4.4) | `CONTEXT_SWITCHED` (ver abaixo) |
 
 Os tipos fora do catálogo inicial do PRD (5.2) são acréscimos para as fontes existentes, sem inferir passagem
-(R5.10). Ainda sem gravação: políticas (V043, `POLICY_PUBLISHED`), login/MFA/contexto, conector fora do ar e os épicos
+(R5.10). Ainda sem gravação: políticas (V043, `POLICY_PUBLISHED`), login/MFA, conector fora do ar e os épicos
 novos (permanência, incidentes, bloqueio, escala), que gravam ao nascer.
+
+## Troca de contexto (`CONTEXT_SWITCHED`, R4.4, V052)
+
+- **Papéis de segurança** (definição desta fatia, a partir do §4.4 do PRD complementar): papéis de parceiro com alguma
+  capacidade `security.*` ou `ops.*` — `PARTNER_ADMIN` (lê o log da carteira), `SECURITY_LEAD`, `SECURITY_SUPERVISOR` e
+  `REMOTE_OPERATOR`. `TECHNICIAN` (só `devices.commission`, já registrado por `TECH_GRANT_*`) e os papéis de condomínio
+  (portaria, gestão, moradores) ficam fora; a lista está em `cp.security_log_context_roles()` e em
+  `ContextSwitchService.SECURITY_ROLES`, conferidas entre si no teste.
+- `POST /v1/partners/{partnerId}/context-switches` (`CP_PARTNERS_ENABLED`; AAL2 quando algum lado é papel de segurança):
+  a web chama ao entrar no painel de um papel de parceiro, antes da primeira consulta do painel, com a chave da troca
+  (`switchId`), o papel de destino e o contexto anterior da janela (`ENTRY`, `PLATFORM`, `TENANT` ou `PARTNER`).
+- Na mesma transação: confere conta ativa e papel ativo no parceiro, busca em `platform.partner_reach()` os condomínios
+  ativos alcançados agora pelo destino (foco num condomínio fora do alcance → 403 `PARTNER_ACCESS_DENIED`) e, quando a
+  origem é outro papel de segurança, os que a origem ainda alcança (fim da visão anterior). Grava um evento por
+  condomínio, com o condomínio do contexto trocado a cada evento (política de gravação da V050), em ordem de id.
+- `details` só com `from`, `to` (tipo e identificadores: `partnerId`, `role`, `tenantId`) e `side` (`TO`, `FROM` ou
+  `BOTH`); `subject_type=PARTNER` e `subject_id` = parceiro do lado gravado; `INFO`; origem `REMOTE_CENTRAL`
+  (`MANAGEMENT` para `PARTNER_ADMIN`); `session_id` do token quando houver. Autoria, papel, parceiro e horários vêm do
+  banco, como nos demais eventos.
+- O banco (gatilho `security_log_a_context_switch`, antes da cadeia) recusa `CONTEXT_SWITCHED` sem ator, fora da API
+  (worker/onboarding), com forma diferente da acima ou quando o contexto do lado declarado não é papel de segurança com
+  alcance naquele condomínio (`42501`).
+- **Idempotência:** o id de cada evento deriva da conta, da chave da troca, do conteúdo (origem e destino) e do
+  condomínio. A repetição (duplo clique, nova tentativa depois de falha de rede ou 503) bate na chave primária; a
+  transação inteira é desfeita, a cabeça da cadeia não avança e a resposta é `ALREADY_RECORDED`. A web mantém a mesma
+  chave enquanto a mesma troca não termina e não chama o servidor ao voltar ao mesmo painel sem outro contexto no meio.
+- Respostas: `RECORDED` (n eventos), `ALREADY_RECORDED`, `NOT_REQUIRED` (nenhum lado é papel de segurança, ou origem =
+  destino), `NO_TENANT_REACHED` (por exemplo, operador sem escala vigente) e `LOG_DISABLED`: com
+  `CP_SECURITY_LOG_ENABLED=false` papel e alcance são conferidos e nada é gravado. Com `CP_PARTNERS_ENABLED=false` a rota
+  não existe (404) e a web segue sem registro.
+- Web: ao mudar de contexto (condomínio, central ou painel de parceiro, por qualquer caminho), a casca desmonta a tela,
+  apaga do cache os dados privados da visão anterior (fica só a decisão da entrada e o estado do segundo fator) e só então
+  monta o novo contexto. O painel de parceiro não mostra nenhuma seção nem consulta dados enquanto o registro não
+  terminar: falha mostra nova tentativa (mesma chave), recusa vai para o tratador único do painel.
+- Limites: o registro é feito pela web; não autoriza nada (cada consulta continua conferida por requisição e as leituras
+  sensíveis gravam `SENSITIVE_VIEWED`), e um cliente que não chame a rota só deixa de registrar a própria troca. Saída de
+  um painel de segurança direto para um condomínio por vínculo ou para a central ainda não grava o lado da origem (só a
+  entrada em painel de parceiro chama a rota); recarregar a página começa com origem `ENTRY`.
 
 ## Leitura, exportação e consultas sensíveis (API)
 

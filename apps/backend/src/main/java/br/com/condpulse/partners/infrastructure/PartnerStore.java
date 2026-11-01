@@ -122,4 +122,35 @@ public class PartnerStore {
   return jdbc.update("update cp.operator_schedules set status='CANCELLED',cancelled_by=?,cancel_reason=?,version=version+1 "
    +"where partner_id=? and id=? and status='ACTIVE' and version=?",actor,reason,partner,id,expectedVersion)==1;
  }
+
+ // ---- Troca de contexto (R4.4, V052) ----
+ /**
+  * Condomínios ativos que o papel da conta no parceiro alcança agora (platform.partner_reach, V049), em ordem estável de
+  * id: a gravação no log trava as cabeças nessa ordem, sem ciclo de impasse entre trocas concorrentes.
+  */
+ public List<UUID> reach(UUID partner,String role) {
+  return jdbc.queryForList("""
+   select distinct r.tenant_id from platform.partner_reach() r join platform.tenants t on t.id=r.tenant_id and t.active
+   where r.partner_id=? and r.role=? order by r.tenant_id
+   """,UUID.class,partner,role);
+ }
+ /**
+  * CONTEXT_SWITCHED no log de cada condomínio, um por vez com o condomínio no contexto da transação (política de
+  * gravação da V050); o banco confere de novo o alcance do lado declarado (V052). O contexto volta vazio no fim.
+  */
+ public void recordContextSwitch(List<ContextSwitchRow> rows,String sessionId) {
+  // Só gravação no log: nenhuma capacidade do parceiro fica publicada com condomínio no contexto.
+  jdbc.queryForObject("select set_config('app.capabilities','',true)",String.class);
+  for(var row:rows) {
+   jdbc.queryForObject("select set_config('app.tenant_id',?,true)",String.class,row.tenantId().toString());
+   jdbc.update("""
+    insert into cp.security_log(id,tenant_id,event_type,severity,source,session_id,subject_type,subject_id,details)
+    values(?,?,'CONTEXT_SWITCHED','INFO',?,?,'PARTNER',?,?::jsonb)
+    """,row.id(),row.tenantId(),row.source(),sessionId,row.subjectId(),row.details());
+  }
+  // Falha acima desfaz a transação inteira (e o contexto local com ela); no sucesso o contexto volta vazio.
+  jdbc.queryForObject("select set_config('app.tenant_id','',true)",String.class);
+ }
+ /** Evento de troca de contexto pronto para gravar: details já em JSON canônico e sem nulos. */
+ public record ContextSwitchRow(UUID id,UUID tenantId,String source,UUID subjectId,String details) {}
 }

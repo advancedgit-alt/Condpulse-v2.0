@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import br.com.condpulse.identity.application.AssuranceLevel;
 import br.com.condpulse.identity.application.CurrentIdentityQuery;
+import br.com.condpulse.partners.application.ContextSwitchService;
 import br.com.condpulse.partners.application.PartnerCapability;
 import br.com.condpulse.partners.application.PartnerModels;
 import br.com.condpulse.partners.application.PartnerService;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.dao.DataAccessException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -174,6 +176,66 @@ class PartnerHierarchyJdbcTest {
   partners.changeStatus(db.accountA,AAL2,p,new PartnerModels.ChangePartnerStatus("ACTIVE",1L,"Reativacao ficticia"));
   assertEquals(2,partners.team(admin,AAL2,p).members().stream().filter(m->m.status().equals("ACTIVE")).count());
   assertEquals("PARTNER_DUPLICATE",code(()->partner("parceiro equipe ficticio")));
+  db.assertEmptyContext();
+ }
+
+ private static long switches(UUID tenant,UUID actor) throws Exception {
+  return Long.parseLong(db.adminString("select count(*) from cp.security_log where tenant_id=? and actor_account_id=? and event_type='CONTEXT_SWITCHED'",
+   tenant,actor));
+ }
+
+ /** R4.4 (V052): troca de contexto grava CONTEXT_SWITCHED no condomínio alcançado, uma vez por troca, conferida pelo banco. */
+ @Test void contextSwitchRecordsOncePerReachedTenantOnlyForSecurityRoles() throws Exception {
+  var store=new PartnerStore(db.jdbc);
+  var switchesOn=new ContextSwitchService(new PartnerTransactionExecutor(db.jdbc,db.manager),store,true);
+  var switchesOff=new ContextSwitchService(new PartnerTransactionExecutor(db.jdbc,db.manager),store,false);
+  // Nome único: o harness SQL roda antes no mesmo banco do CI e deixa o próprio parceiro de troca (o log só acrescenta).
+  UUID p=partner("PARCEIRO TROCA JDBC "+UUID.randomUUID().toString().substring(0,8).toUpperCase());
+  member(p,lead,"SECURITY_LEAD"); member(p,operator,"REMOTE_OPERATOR"); member(p,admin,"TECHNICIAN");
+  contract(p,db.tenantA);
+  var entry=new PartnerModels.ContextRef("ENTRY",null,null,null);
+  UUID key=UUID.randomUUID();
+  var request=new PartnerModels.ContextSwitchRequest(key,"SECURITY_LEAD",null,entry);
+  assertEquals("MFA_REQUIRED",code(()->switchesOn.record(lead,AAL1,null,p,request)));
+  assertEquals("LOG_DISABLED",switchesOff.record(lead,AAL2,null,p,request).status());
+  assertEquals(0,switches(db.tenantA,lead),"Flag desligada: nada gravado");
+  assertEquals(new PartnerModels.ContextSwitchResult("RECORDED",1),switchesOn.record(lead,AAL2,"sessao-ficticia-jdbc",p,request));
+  assertEquals(1,switches(db.tenantA,lead));
+  assertEquals("SECURITY_LEAD|"+p+"|REMOTE_CENTRAL|PARTNER|"+p+"|TO|SECURITY_LEAD|ENTRY|sessao-ficticia-jdbc|INFO",
+   db.adminString("select actor_role||'|'||partner_id||'|'||source||'|'||subject_type||'|'||subject_id||'|'||(details->>'side')||'|'"
+    +"||(details->'to'->>'role')||'|'||(details->'from'->>'kind')||'|'||session_id||'|'||severity from cp.security_log "
+    +"where tenant_id=? and actor_account_id=? and event_type='CONTEXT_SWITCHED'",db.tenantA,lead));
+  assertEquals("from,side,to",db.adminString("select string_agg(k,',' order by k) from cp.security_log l,jsonb_object_keys(l.details) k "
+   +"where l.tenant_id=? and l.actor_account_id=? and l.event_type='CONTEXT_SWITCHED'",db.tenantA,lead),"details mínimo");
+  // Duplo clique / nova tentativa: mesma chave não grava de novo e a cadeia continua íntegra.
+  assertEquals(new PartnerModels.ContextSwitchResult("ALREADY_RECORDED",0),switchesOn.record(lead,AAL2,null,p,request));
+  assertEquals(1,switches(db.tenantA,lead));
+  assertEquals("t",db.adminString("select intact from cp.security_log_verify(?)",db.tenantA));
+  // Mesmo contexto de origem e destino não é troca; outra chave é outra troca.
+  var self=new PartnerModels.ContextRef("PARTNER",p,"SECURITY_LEAD",null);
+  assertEquals("NOT_REQUIRED",switchesOn.record(lead,AAL2,null,p,new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"SECURITY_LEAD",null,self)).status());
+  assertEquals("RECORDED",switchesOn.record(lead,AAL2,null,p,new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"SECURITY_LEAD",null,entry)).status());
+  assertEquals(2,switches(db.tenantA,lead));
+  // Operador sem escala não alcança nada; foco no condomínio é recusado. Técnico não é papel de segurança.
+  assertEquals("NO_TENANT_REACHED",switchesOn.record(operator,AAL2,null,p,new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"REMOTE_OPERATOR",null,entry)).status());
+  assertEquals("PARTNER_ACCESS_DENIED",code(()->switchesOn.record(operator,AAL2,null,p,
+   new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"REMOTE_OPERATOR",db.tenantA,entry))));
+  assertEquals("PARTNER_ACCESS_DENIED",code(()->switchesOn.record(operator,AAL2,null,p,
+   new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"SECURITY_LEAD",null,entry))),"Papel que a conta não tem");
+  assertEquals("NOT_REQUIRED",switchesOn.record(admin,AAL2,null,p,new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"TECHNICIAN",null,entry)).status());
+  assertEquals("PARTNER_NOT_FOUND",code(()->switchesOn.record(stranger,AAL2,null,p,request)));
+  assertEquals(0,switches(db.tenantA,operator)+switches(db.tenantA,admin));
+  // Saída do líder para o painel técnico (mesma conta com os dois papéis) grava o fim da visão de segurança (lado FROM).
+  member(p,lead,"TECHNICIAN");
+  assertEquals("RECORDED",switchesOn.record(lead,AAL2,null,p,new PartnerModels.ContextSwitchRequest(UUID.randomUUID(),"TECHNICIAN",null,self)).status());
+  assertEquals("FROM",db.adminString("select details->>'side' from cp.security_log where tenant_id=? and actor_account_id=? "
+   +"and event_type='CONTEXT_SWITCHED' order by seq desc limit 1",db.tenantA,lead));
+  // O banco recusa CONTEXT_SWITCHED para condomínio fora do alcance, mesmo gravado direto pela role da API.
+  String details="{\"from\":{\"kind\":\"ENTRY\"},\"to\":{\"kind\":\"PARTNER\",\"partnerId\":\""+p+"\",\"role\":\"SECURITY_LEAD\"},\"side\":\"TO\"}";
+  assertThrows(DataAccessException.class,()->db.context(lead,db.tenantB,null,()->db.jdbc.update("""
+   insert into cp.security_log(tenant_id,event_type,severity,source,subject_type,subject_id,details)
+   values(?,'CONTEXT_SWITCHED','INFO','REMOTE_CENTRAL','PARTNER',?,?::jsonb)""",db.tenantB,p,details)));
+  assertEquals(0,switches(db.tenantB,lead));
   db.assertEmptyContext();
  }
 }

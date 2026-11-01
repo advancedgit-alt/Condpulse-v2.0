@@ -18,6 +18,17 @@ export interface OperatorSchedule {
   id: UUID; partnerId: UUID; tenantId: UUID; memberId: UUID; accountId: UUID; status: 'ACTIVE' | 'CANCELLED'; version: number;
   startsAt: ISODateTime; endsAt: ISODateTime; cancelledAt: ISODateTime | null;
 }
+/** Contexto anterior na troca (R4.4): só tipo e identificadores. */
+export type ContextSwitchFrom =
+  | { kind: 'ENTRY' } | { kind: 'PLATFORM' } | { kind: 'TENANT'; tenantId: UUID } | { kind: 'PARTNER'; partnerId: UUID; role: PartnerRole };
+export interface ContextSwitchBody { switchId: UUID; role: PartnerRole; from: ContextSwitchFrom }
+export const contextSwitchStatuses = ['RECORDED', 'ALREADY_RECORDED', 'NOT_REQUIRED', 'NO_TENANT_REACHED', 'LOG_DISABLED'] as const;
+export interface ContextSwitchResult { status: typeof contextSwitchStatuses[number]; recorded: number }
+export function contextSwitchResult(value: unknown): ContextSwitchResult {
+  if (!record(value) || !oneOf(value.status, contextSwitchStatuses) || !isInteger(value.recorded)
+      || (value.status !== 'RECORDED' && value.recorded !== 0)) throw invalidResponse(true);
+  return { status: value.status, recorded: value.recorded };
+}
 export interface AddMemberBody { accountId: UUID; role: PartnerRole; displayName: string; reason: string }
 export interface CreateScheduleBody { memberId: UUID; tenantId: UUID; startsAt?: ISODateTime; endsAt: ISODateTime; reason: string }
 
@@ -90,6 +101,11 @@ export function createPartnersApi(client: CondPulseApi = api) {
       if (!same(schedule.id, scheduleId) || schedule.status !== 'CANCELLED') throw invalidResponse(true);
       return schedule;
     }, { method: 'POST', body: { reason } }),
+    /** R4.4: registra a entrada no painel (CONTEXT_SWITCHED para papéis de segurança); mesma chave não grava de novo. */
+    switchContext: async (partnerId: string, body: ContextSwitchBody) => client.call(`${base(partnerId)}/context-switches`, contextSwitchResult,
+      { method: 'POST', body: { switchId: identifier(body.switchId), role: body.role, from: body.from.kind === 'TENANT'
+        ? { kind: 'TENANT', tenantId: identifier(body.from.tenantId) } : body.from.kind === 'PARTNER'
+          ? { kind: 'PARTNER', partnerId: identifier(body.from.partnerId), role: body.from.role } : { kind: body.from.kind } } }),
     portfolio: async (partnerId: string, signal?: AbortSignal) => client.call(`${base(partnerId)}/portfolio`,
       (value) => page(value, partnerId, 'contracts', (item) => partnerContract(item, partnerId)), signal ? { signal } : {}),
   };

@@ -21989,6 +21989,86 @@
         }
       }
     },
+    "/v1/partners/{partnerId}/context-switches": {
+      "post": {
+        "operationId": "switchPartnerContext",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_PARTNERS_ENABLED",
+        "description": "R4.4 (PRD complementar §4.2, V052): a web chama ao entrar no painel de um papel de parceiro. Para papéis de segurança (PARTNER_ADMIN, SECURITY_LEAD, SECURITY_SUPERVISOR, REMOTE_OPERATOR) grava CONTEXT_SWITCHED no Log de Segurança de cada condomínio alcançado agora pelo destino (platform.partner_reach) e, quando a origem é outro papel de segurança, de cada condomínio que a origem ainda alcança, na mesma transação. details leva só origem, destino e lado (identificadores). Repetição com o mesmo switchId não grava de novo (ALREADY_RECORDED). Com CP_SECURITY_LOG_ENABLED=false confere o papel e o alcance e responde LOG_DISABLED sem gravar. Não autoriza nenhuma leitura: cada consulta do painel continua conferida por requisição.",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Obrigatório quando a autenticação é a sessão web BFF.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerContextSwitchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Troca conferida (e gravada quando exigido)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerContextSwitchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "CONTEXT_SWITCH_INVALID (chave, papel ou contexto de origem inválido)"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "PARTNER_ACCESS_DENIED (papel inativo neste parceiro ou condomínio fora do contrato/escala), ACCOUNT_INACTIVE, MFA_REQUIRED (papel de segurança exige segundo fator)"
+          },
+          "404": {
+            "description": "PARTNER_NOT_FOUND, ou rota inexistente com a flag desligada"
+          },
+          "503": {
+            "description": "CONTEXT_SWITCH_UNAVAILABLE (nada foi gravado; repita com o mesmo switchId)"
+          }
+        }
+      }
+    },
     "/v1/tenants/{tenantId}/security-log": {
       "get": {
         "operationId": "securityLogPage",
@@ -37703,6 +37783,102 @@
             "items": {
               "$ref": "#/components/schemas/SecurityLogEvent"
             }
+          }
+        }
+      },
+      "PartnerContextRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "description": "Contexto anterior da janela: ENTRY (nenhum), PLATFORM (central), TENANT (condomínio por vínculo) ou PARTNER (painel de papel de parceiro). Só identificadores.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ENTRY",
+              "PLATFORM",
+              "TENANT",
+              "PARTNER"
+            ]
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTNER_ADMIN",
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR",
+              "TECHNICIAN"
+            ]
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "PartnerContextSwitchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "switchId",
+          "role"
+        ],
+        "properties": {
+          "switchId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Chave da troca gerada pela web; repetir a mesma troca com a mesma chave não grava de novo."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PARTNER_ADMIN",
+              "SECURITY_LEAD",
+              "SECURITY_SUPERVISOR",
+              "REMOTE_OPERATOR",
+              "TECHNICIAN"
+            ],
+            "description": "Papel do painel de destino; precisa estar ativo para a conta neste parceiro."
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Foco opcional num condomínio; precisa estar no alcance do papel."
+          },
+          "from": {
+            "$ref": "#/components/schemas/PartnerContextRef"
+          }
+        }
+      },
+      "PartnerContextSwitchResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "recorded"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECORDED",
+              "ALREADY_RECORDED",
+              "NOT_REQUIRED",
+              "NO_TENANT_REACHED",
+              "LOG_DISABLED"
+            ]
+          },
+          "recorded": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Eventos CONTEXT_SWITCHED gravados nesta chamada (um por condomínio)."
           }
         }
       }

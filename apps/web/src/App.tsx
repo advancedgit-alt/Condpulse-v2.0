@@ -24,6 +24,7 @@ import { ConciergeIndex, CondoHome, CondoIndex, CondoModuleOff, ResidentUnitPick
 import { ENTRY_PATH, centralPath, condoAreas, condominiums, currentPartnerSection, legacyTarget, maintenancePath, partnerContextOf, partnerPanelLabels, partnerPath,
   partnerSections, placeModules, placeOf, residentRoot, sectionEnabled, type AreaId } from './ui/shell/paths';
 import { MaintenancePage, maintenanceSections } from './ui/maintenance/MaintenancePage';
+import { contextKeyOf, contextRefOfKey, isPreviousContextData, noteContext } from './ui/shell/contextSwitch';
 import { PartnerPage } from './ui/partner/PartnerPage';
 import { Brand, Icon, Loading, OfflineNotice, type IconName } from './ui/primitives';
 import { BrandingProvider, ThemeProvider, ThemeToggle, useBrandingStyle } from './ui/theme/ThemeContext';
@@ -182,6 +183,24 @@ function Shell() {
     ...(residential ? [{ id: 'encomendas', label: 'Encomendas', icon: 'box' as const }] : []),
     ...(financeMember ? [{ id: 'financeiro', label: 'Financeiro', icon: 'card' as const }] : []),
     ...(owner ? [ownerItem] : [])]).filter((item) => sectionEnabled(condo, 'morador', item.id));
+  // R4.4: trocar de contexto (condomínio, central ou painel de parceiro, por qualquer caminho: cartão da entrada, link ou
+  // endereço) encerra a visão anterior. A tela anterior sai, os dados privados dela saem do cache e só então o contexto
+  // novo é montado; o painel de parceiro registra a troca no servidor antes da primeira consulta (PartnerPage).
+  const contextKey = contextKeyOf(place);
+  const [shownContext, setShownContext] = useState<string | null>(contextKey);
+  const closingPrevious = contextKey !== null && shownContext !== null && contextKey !== shownContext;
+  useEffect(() => {
+    if (contextKey === null || !accountId) return;
+    const reference = contextRefOfKey(contextKey);
+    if (shownContext !== null && shownContext !== contextKey) {
+      // Só consultas sem tela observando: as da visão anterior (já desmontada); as do contexto novo ficam.
+      const predicate = (query: { queryKey: readonly unknown[]; getObserversCount(): number }) =>
+        isPreviousContextData(query.queryKey) && query.getObserversCount() === 0;
+      void queries.cancelQueries({ predicate }); queries.removeQueries({ predicate });
+    }
+    if (reference) noteContext(accountId, reference);
+    if (shownContext !== contextKey) setShownContext(contextKey);
+  }, [contextKey, shownContext, accountId, queries]);
   // Troca de unidade ou de condomínio: os dados privados do contexto anterior saem do cache (a decisão da entrada fica).
   async function changeContext(to: string) {
     if (switching || operations.locked) return;
@@ -237,5 +256,5 @@ function Shell() {
         {mastering ? <><span className="nav-group-label">EM BREVE</span>{navItems.filter((item) => item.to === null).map((item) => renderItem(item, 'nav-item'))}</> : null}</nav>
       <div className="sidebar-bottom"><div className="sidebar-line" /><span className="sidebar-caption">Um condomínio.<br />Muitas boas conexões.</span><p>CondPulse · Vida em comunidade</p></div></aside>
     <div className="sidebar-backdrop" aria-hidden="true" onClick={closeMenu} />
-    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand compact /></div><span className="header-breadcrumb">{breadcrumb}<span aria-hidden="true"> / </span><strong><bdi>{breadcrumbName}</bdi></strong></span></div><div className="header-actions">{switchTarget ? <button className="button button-secondary button-compact" onClick={() => void changeContext(switchTarget.to)} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : switchTarget.label}</span></button> : null}<ThemeToggle /><button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.filter((item) => item.id !== 'financeiro' || residentSection === 'financeiro').map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{contextSelected && residential && accountId && tenantId && unitId ? <UnitEvents accountId={accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice />{moduleOff ? <CondoModuleOff tenantId={tenantId!} modules={requiredModules!} /> : contextSelected && owner && ownerRental.isPending ? <Loading label="Conferindo a locação da unidade…" /> : rented && residentSection !== 'inquilinos' ? <Navigate to={`${residence}/inquilinos`} replace /> : <Outlet />}</main><footer className="app-footer"><span>CondPulse</span><span>{footer}</span></footer></div></div></BrandingProvider>;
+    <div className="app-body" inert={menuOpen || undefined}><header className="app-header"><div className="header-start"><button ref={menuToggle} type="button" className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuOpen} aria-controls="app-sidebar" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><div className="header-mobile-brand"><Brand compact /></div><span className="header-breadcrumb">{breadcrumb}<span aria-hidden="true"> / </span><strong><bdi>{breadcrumbName}</bdi></strong></span></div><div className="header-actions">{switchTarget ? <button className="button button-secondary button-compact" onClick={() => void changeContext(switchTarget.to)} disabled={switching || operations.locked}><Icon name="home" /><span>{switching ? 'Trocando…' : switchTarget.label}</span></button> : null}<ThemeToggle /><button className="logout-button" disabled={operations.locked || switching} onClick={() => void auth.logout()}><Icon name="exit" /><span>Sair</span></button></div></header>{contextSelected ? <nav className="resident-tabs" aria-label="Navegação da unidade">{residentItems.filter((item) => item.id !== 'financeiro' || residentSection === 'financeiro').map((item) => <Link key={item.id} to={`${residence}/${item.id}`} aria-current={item.id === residentSection ? 'page' : undefined}><Icon name={item.icon} />{item.label}</Link>)}</nav> : null}<main id="main-content" className="app-main">{!closingPrevious && contextSelected && residential && accountId && tenantId && unitId ? <UnitEvents accountId={accountId} tenantId={tenantId} unitId={unitId} /> : null}<StaleDataNotice />{moduleOff ? <CondoModuleOff tenantId={tenantId!} modules={requiredModules!} /> : contextSelected && owner && ownerRental.isPending ? <Loading label="Conferindo a locação da unidade…" /> : rented && residentSection !== 'inquilinos' ? <Navigate to={`${residence}/inquilinos`} replace /> : closingPrevious ? <Loading label="Encerrando a visão anterior…" /> : <Outlet />}</main><footer className="app-footer"><span>CondPulse</span><span>{footer}</span></footer></div></div></BrandingProvider>;
 }

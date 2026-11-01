@@ -19,7 +19,9 @@ async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) });
 }
 
-interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean; deniedOnCursor?: boolean; refuseMutations?: boolean }
+interface Options { contexts: unknown[]; partnersOn: boolean; securityLogOn: boolean; deniedOnCursor?: boolean; refuseMutations?: boolean;
+  /** Corpos das trocas de contexto recebidas (R4.4) e quantas falham com 503 antes de aceitar. */
+  switches?: Record<string, unknown>[]; switchFailures?: number }
 async function installPartner(page: Page, api: ApiState, options: Options) {
   const requests: string[] = [];
   await page.route('**/auth/mfa', async (route) => { await json(route, 200, { assuranceLevel: 'AAL2', factors: [] }); });
@@ -33,6 +35,18 @@ async function installPartner(page: Page, api: ApiState, options: Options) {
       requests.push(path);
       // Flag desligada: a rota não existe no servidor.
       if (!options.partnersOn) { await json(route, 404, { status: 404, error: 'Not Found' }); return; }
+      // R4.4: registro da entrada no painel; a mesma chave repetida não grava de novo no servidor.
+      if (path.endsWith('/context-switches')) {
+        const body = route.request().postDataJSON() as Record<string, unknown>;
+        options.switches?.push(body);
+        if ((options.switchFailures ?? 0) > 0) {
+          options.switchFailures! -= 1;
+          await json(route, 503, { status: 503, code: 'CONTEXT_SWITCH_UNAVAILABLE', detail: 'Não foi possível registrar a troca de contexto. Tente novamente.' });
+          return;
+        }
+        await json(route, 200, { status: 'RECORDED', recorded: 1 });
+        return;
+      }
       // Papel revogado entre a leitura e a ação: o servidor recusa a mutação.
       if (options.refuseMutations && route.request().method() === 'POST') {
         await json(route, 403, { status: 403, code: 'PARTNER_ACCESS_DENIED', detail: 'Esta ação não está disponível para o seu papel no parceiro.' }); return;
@@ -149,4 +163,51 @@ test('recusa numa exportação tira o log da tela; recusa numa ação de equipe 
   await page.getByRole('button', { name: 'Confirmar revogação' }).click();
   await expect(page.getByText('Os dados exibidos foram removidos.')).toBeVisible();
   await expect(page.getByText('Operador Sintético')).toHaveCount(0);
+});
+
+test('R4.4: cada troca de painel é registrada com a origem; voltar ao mesmo painel não registra de novo', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const switches: Record<string, unknown>[] = [];
+  const requests = await installPartner(page, api, { contexts: [admin, lead], partnersOn: true, securityLogOn: true, switches });
+  await signIn(page);
+  await page.getByRole('link', { name: /Parceiro Sintético – Comando de Segurança/ }).click();
+  await expect(page.getByRole('heading', { name: 'Comando de Segurança' })).toBeVisible();
+  expect(switches).toHaveLength(1);
+  expect(switches[0]).toMatchObject({ role: 'SECURITY_LEAD', from: { kind: 'ENTRY' } });
+  await page.getByRole('link', { name: 'CondPulse, meus acessos' }).click();
+  await page.getByRole('link', { name: /Parceiro Sintético – Painel do Parceiro/ }).click();
+  await expect(page.getByText('Operador Sintético')).toBeVisible();
+  expect(switches).toHaveLength(2);
+  expect(switches[1]).toMatchObject({ role: 'PARTNER_ADMIN', from: { kind: 'PARTNER', partnerId: PARTNER, role: 'SECURITY_LEAD' } });
+  expect(switches[1].switchId).not.toBe(switches[0].switchId);
+  // O registro vem antes da primeira consulta do painel.
+  expect(requests.indexOf(`/v1/partners/${PARTNER}/context-switches`)).toBeLessThan(requests.indexOf(`/v1/partners/${PARTNER}/team`));
+  await page.getByRole('link', { name: 'CondPulse, meus acessos' }).click();
+  await page.getByRole('link', { name: /Parceiro Sintético – Painel do Parceiro/ }).click();
+  await expect(page.getByText('Operador Sintético')).toBeVisible();
+  expect(switches, 'mesmo painel sem outro contexto no meio não é troca').toHaveLength(2);
+  // Sair e entrar de novo na mesma janela (sem recarregar): a sessão nova começa com origem ENTRY e chave nova.
+  await page.getByRole('button', { name: 'Sair' }).click();
+  await page.getByLabel('E-mail', { exact: true }).fill('morador-sintetico@example.invalid');
+  await page.getByLabel('Senha', { exact: true }).fill('SYNTHETIC-TEST-PASSWORD');
+  await page.getByLabel('Senha', { exact: true }).press('Enter');
+  await page.getByRole('link', { name: /Parceiro Sintético – Painel do Parceiro/ }).click();
+  await expect(page.getByText('Operador Sintético')).toBeVisible();
+  expect(switches, 'novo login registra a entrada no mesmo painel').toHaveLength(3);
+  expect(switches[2]).toMatchObject({ role: 'PARTNER_ADMIN', from: { kind: 'ENTRY' } });
+  expect(switches[2].switchId).not.toBe(switches[1].switchId);
+});
+
+test('R4.4: falha ao registrar a troca não abre o painel; nova tentativa usa a mesma chave', async ({ page }) => {
+  const api = await installSyntheticApi(page);
+  const switches: Record<string, unknown>[] = [];
+  const requests = await installPartner(page, api, { contexts: [admin], partnersOn: true, securityLogOn: true, switches, switchFailures: 1 });
+  await signIn(page);
+  await expect(page.getByText('O registro da entrada no painel está temporariamente indisponível.')).toBeVisible();
+  expect(requests.filter((path) => path.endsWith('/team'))).toEqual([]);
+  await expect(page.getByText('Operador Sintético')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(page.getByText('Operador Sintético')).toBeVisible();
+  expect(switches).toHaveLength(2);
+  expect(switches[1].switchId).toBe(switches[0].switchId);
 });

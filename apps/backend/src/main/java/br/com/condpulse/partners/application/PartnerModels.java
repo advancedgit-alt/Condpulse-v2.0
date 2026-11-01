@@ -31,4 +31,17 @@ public final class PartnerModels {
  public record Reason(String reason) {}
  public record AddMember(UUID accountId,String role,String displayName,String reason) {}
  public record CreateSchedule(UUID memberId,UUID tenantId,Instant startsAt,Instant endsAt,String reason) {}
+ /**
+  * Contexto da web na troca (R4.4): ENTRY (sem contexto anterior nesta janela), PLATFORM (central), TENANT (condomínio
+  * por vínculo) ou PARTNER (painel de um papel de parceiro, opcionalmente focado num condomínio). Só identificadores.
+  */
+ public record ContextRef(String kind,UUID partnerId,String role,UUID tenantId) {}
+ /** Entrada no painel do papel role do parceiro da rota; switchId é a chave da troca (repetição não grava de novo). */
+ public record ContextSwitchRequest(UUID switchId,String role,UUID tenantId,ContextRef from) {}
+ /**
+  * RECORDED (recorded eventos gravados), ALREADY_RECORDED (mesma troca já gravada), NOT_REQUIRED (nenhum lado é papel de
+  * segurança ou o contexto não mudou), NO_TENANT_REACHED (papel de segurança sem condomínio alcançado agora) ou
+  * LOG_DISABLED (CP_SECURITY_LOG_ENABLED=false: conferido, nada gravado).
+  */
+ public record ContextSwitchResult(String status,int recorded) {}
 }

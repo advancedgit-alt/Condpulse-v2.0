@@ -7,6 +7,7 @@ import { Brand, ErrorState, Icon, Loading, Notice, RateLimitNotice, errorMessage
 import { useCooldown } from './cooldown';
 import { forgetInvitation, storedInvitation } from './invitationStorage';
 import { pendingOperation } from './operationIntent';
+import { resetContextTracker } from './shell/contextSwitch';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated' | 'blocked' | 'unavailable' | 'logoutPending' | 'logoutUnconfirmed';
 interface AuthValue {
@@ -32,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setModeError(failure);
     setMode(failure instanceof ApiError && failure.status === 401 ? 'anonymous'
       : failure instanceof ApiError && failure.code === 'ACCOUNT_INACTIVE' ? 'blocked' : 'unavailable');
-    void queries.cancelQueries(); queries.clear();
+    void queries.cancelQueries(); queries.clear(); resetContextTracker();
     // Envio pendente pertence à sessão encerrada: a próxima entrada nesta aba não o herda.
     pendingOperation.clearAll();
   }), [queries]);
@@ -60,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status === 'blocked' || status === 'unavailable') {
       void queries.cancelQueries({ queryKey: ['private'] });
-      queries.removeQueries({ queryKey: ['private'] });
+      queries.removeQueries({ queryKey: ['private'] }); resetContextTracker();
     }
   }, [queries, status]);
 
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pendingOperation.clearAll();
     let accepted = false;
     try {
-      await queries.cancelQueries(); queries.clear(); api.clearSession();
+      await queries.cancelQueries(); queries.clear(); resetContextTracker(); api.clearSession();
       await api.login({ email, password }); accepted = true;
       if (epoch !== authEpoch.current) throw new DOMException('Acesso substituído.', 'AbortError');
       const account = await api.currentIdentity();
@@ -95,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pendingOperation.clearAll();
     let accepted = false;
     try {
-      await queries.cancelQueries(); queries.clear(); api.clearSession();
+      await queries.cancelQueries(); queries.clear(); resetContextTracker(); api.clearSession();
       const result = await api.acceptInvitationWithLogin({ email, password, token, kind }); accepted = true;
       // Aceite gravado: o resultado volta à tela mesmo se a identidade não puder ser lida agora (nova consulta depois).
       if (epoch !== authEpoch.current) return result;
@@ -121,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Convite pendente pertence a quem abriu o link: a próxima conta desta aba não o herda.
     forgetInvitation();
     pendingOperation.clearAll();
-    await queries.cancelQueries(); queries.clear(); api.clearSession();
+    await queries.cancelQueries(); queries.clear(); resetContextTracker(); api.clearSession();
     try { await api.logout(); if (epoch === authEpoch.current) setMode('ready'); }
     catch (failure) { if (epoch === authEpoch.current) { setModeError(failure); setMode('logoutUnconfirmed'); } }
   }

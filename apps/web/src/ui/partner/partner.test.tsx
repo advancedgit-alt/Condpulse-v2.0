@@ -7,7 +7,9 @@ import { ApiError, CondPulseApi } from '../../api/client';
 import { createPartnersApi } from '../../api/partners';
 import { createSecurityLogApi } from '../../api/securityLog';
 import type { PartnerContext } from '../../api/types';
-import { FailureState, PartnerConsole, PartnerScopeProvider } from './PartnerPage';
+import { FailureState, PartnerConsole, PartnerGate, PartnerScopeProvider } from './PartnerPage';
+import { mfaStatusKey } from '../Mfa';
+import { planSwitch, resetContextTracker } from '../shell/contextSwitch';
 import { applyRefusal, exportBody, failureKind, initialRefusalState, logAccessFailure, logFilter, logRequest, logRequestKey, memberBody, partnerKey, refusalOf,
   reachedTenant, scheduleBody, securityLogKey, stillReached } from './model';
 
@@ -159,6 +161,8 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
       run: (c) => c.partners.createSchedule(partnerId, { memberId, tenantId: tenant, endsAt: '2026-11-01T21:00:00Z', reason: 'Turno' }) },
     { name: 'cancelar escala', keys: [partnerKey(own, partnerId, 'schedules')], run: (c) => c.partners.cancelSchedule(partnerId, scheduleId, 'Troca') },
     { name: 'carteira', keys: [partnerKey(own, partnerId, 'portfolio')], run: (c) => c.partners.portfolio(partnerId) },
+    { name: 'registro da troca de contexto', keys: [partnerKey(own, partnerId, 'context-switch', 'SECURITY_LEAD', memberId)],
+      run: (c) => c.partners.switchContext(partnerId, { switchId: memberId, role: 'SECURITY_LEAD', from: { kind: 'ENTRY' } }) },
     { name: 'log', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.page(tenant) },
     { name: 'integridade', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')], run: (c) => c.log.integrity(tenant) },
     { name: 'exportação', tenantId: tenant, keys: [logRequestKey(own, tenant, logRequest(null, {})), securityLogKey(own, tenant, 'integrity')],
@@ -191,5 +195,34 @@ describe('tratador único de recusa: todos os pedidos das telas de parceiro', ()
       const error = await createPartnersApi(new CondPulseApi({ fetch: respond(status, code) })).team(partnerId).then(() => null, (failure: unknown) => failure);
       expect(refusalOf(error, tenant), code).toBeNull();
     }
+  });
+});
+
+describe('R4.4: o painel só consulta depois de registrar a troca de contexto', () => {
+  const lead = context('SECURITY_LEAD', 'comando', ['security.command', 'security.log.read'],
+    [{ tenantId: tenant, tenantName: 'Condomínio Sintético', timeZone: 'America/Sao_Paulo' }]);
+  const gate = (prefill: (queries: QueryClient) => void) => {
+    const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queries.setQueryData(mfaStatusKey(own), { assuranceLevel: 'AAL2' });
+    prefill(queries);
+    return renderToStaticMarkup(<QueryClientProvider client={queries}><MemoryRouter>
+      <PartnerGate accountId={own} context={lead} section="log" /></MemoryRouter></QueryClientProvider>);
+  };
+  it('enquanto a troca não é registrada, nenhuma seção aparece', () => {
+    resetContextTracker();
+    const html = gate(() => undefined);
+    expect(html).toContain('Registrando a entrada no painel');
+    expect(html).not.toContain('Log de Segurança');
+  });
+  it('troca registrada (ou log desligado) libera o painel', () => {
+    for (const status of ['RECORDED', 'LOG_DISABLED']) {
+      resetContextTracker();
+      const planned = planSwitch(own, { kind: 'PARTNER', partnerId: lead.partnerId, role: lead.role }, () => memberId)!;
+      const html = gate((queries) => queries.setQueryData(partnerKey(own, lead.partnerId, 'context-switch', lead.role, planned.switchId),
+        { status, recorded: status === 'RECORDED' ? 1 : 0 }));
+      expect(html, status).not.toContain('Registrando a entrada no painel');
+      expect(html, status).toContain('Comando de Segurança');
+    }
+    resetContextTracker();
   });
 });
