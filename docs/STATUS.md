@@ -1,8 +1,14 @@
-# Estado verificável - 29/10/2026
+# Estado verificável do CondPulse
 
-## Situação atual (29/10/2026, fim da tarde)
+## Situação vigente — 01/11/2026
 
-Esta seção resume o estado vigente; as seções seguintes são o histórico de cada entrega como estava na época e não devem ser lidas como estado atual.
+A fonte resumida do estado operacional é [ESTADO_ATUAL.md](ESTADO_ATUAL.md). Leia esse arquivo antes do histórico.
+SMTP, worker outbox e migrations V053/V054 já foram realizados; não repetir perguntas ou operações com base nos relatos antigos abaixo.
+A rodada autorizada de 01/11 corrige sessão/MFA e cobertura JDBC, integra permanências e prepara testes com dados sintéticos preservados.
+
+## Histórico da situação registrada em 29/10/2026
+
+Os registros abaixo descrevem cada entrega na data em que ocorreu. Flags, número de migrations, papéis e bloqueios podem ter sido superados; não são inventário atual.
 
 - **Homologação** (`rpnrqfrfwywglvyykgrg`): V001-V026 no histórico Flyway (baseline 002 + SQL 003-026; V020 a V026 nas seções do CP-037 ao CP-046). V019 (anexos privados de pedido, CP-017) aplicada em 29/10/2026 pelo executor protegido no merge `aba5408` (migrate 40958018877; repetição 40958254298 sem linha nova; 18 linhas no histórico): `cp.attachments` com ENABLE/FORCE RLS e dono `postgres`, `cp_api` sem DELETE, sem INSERT de estado e sem UPDATE da chave do objeto, nenhuma tabela `cp` sem RLS completa, zero anexos. V018 (importação de unidades, CP-016) aplicada em 29/10/2026 pelo executor protegido no merge `953ae94` (migrate 40951606378; repetição 40951942737 sem linha nova; 17 linhas no histórico). Leitura depois: `cp.import_batches`/`cp.import_rows` com ENABLE/FORCE RLS e dono `postgres`, nenhuma tabela `cp` sem RLS completa, `cp_api` sem DELETE nem INSERT de autoria. Onboarding aplicado (inspect 40917252737, apply 40917560570): um condomínio, unidade 101, uma conta com vínculos de gestão e morador até 28/11/2026, área "Salão de festas". Nenhum papel de plataforma. Registro: [evidence/onboarding-hml-20261029.md](evidence/onboarding-hml-20261029.md).
 - **Vercel Production do projeto `condpulse`** aponta para a homologação, com BFF, reservas, gestão, plataforma, cobrança, encomendas, visitas, caixa interna, avisos e pedidos ligados. Recuperação por e-mail (sem SMTP) e worker do outbox (não implantado) desligados. Smoke público verde depois de cada merge; o readiness tinha 503 `OUT_OF_SERVICE` na primeira consulta após início a frio — causa e correção em [READINESS_VERCEL.md](READINESS_VERCEL.md) (PR #52).

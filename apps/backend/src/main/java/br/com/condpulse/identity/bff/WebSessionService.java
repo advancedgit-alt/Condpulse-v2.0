@@ -149,7 +149,12 @@ public final class WebSessionService {
  /** Estado do segundo fator da própria sessão; nunca devolve tokens do provedor. */
  public MfaStatus mfaStatus(String raw) {
   var current=current(raw);
-  return new MfaStatus(assurance(current.jwt()),auth.totpFactors(current.accessToken()));
+  try {
+   return new MfaStatus(assurance(current.jwt()),auth.totpFactors(current.accessToken()));
+  } catch(BusinessProblem ex) {
+   if("SESSION_EXPIRED".equals(ex.code())) store.remove(hash(raw));
+   throw ex;
+  }
  }
  public SupabaseAuthClient.TotpEnrollment enrollTotp(String raw) {
   return auth.enrollTotp(current(raw).accessToken());

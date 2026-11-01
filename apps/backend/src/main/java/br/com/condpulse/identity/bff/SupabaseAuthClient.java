@@ -126,6 +126,10 @@ public final class SupabaseAuthClient {
  }
  private static BusinessProblem mfaProblem(RestClientResponseException ex) {
   int status=ex.getStatusCode().value();
+  // O provedor usa 403 também para sessão encerrada. Não é erro de código TOTP:
+  // invalida o contexto local e pede login novo, sem repetir o desafio com o mesmo token.
+  if((status==400 || status==401 || status==403 || status==422) && providerSessionEnded(ex))
+   return new BusinessProblem("SESSION_EXPIRED",401,"A sessão de autenticação terminou. Entre novamente para continuar.");
   if(status==400 || status==422)
    return new BusinessProblem("MFA_CODE_REJECTED",422,"Código inválido, expirado ou fator não disponível.");
   if(status==401)
@@ -138,6 +142,25 @@ public final class SupabaseAuthClient {
    return new BusinessProblem("AUTH_RATE_LIMITED",429,"Aguarde antes de tentar novamente.");
   return unavailable();
  }
+
+ private static boolean providerSessionEnded(RestClientResponseException ex) {
+  try {
+   ProviderError body=ex.getResponseBodyAs(ProviderError.class);
+   if(body==null) return false;
+   return endedSessionCode(body.error_code()) || endedSessionCode(body.code());
+  } catch(RuntimeException invalidBody) {
+   // Corpo ausente, inválido ou incompatível mantém a classificação pelo HTTP; nunca expor detalhes.
+   return false;
+  }
+ }
+ private static boolean endedSessionCode(String code) {
+  return "session_not_found".equals(code) || "session_expired".equals(code);
+ }
+ @JsonIgnoreProperties(ignoreUnknown=true)
+ public record ProviderError(String code,String error_code) {
+  @Override public String toString() { return "ProviderError[REDACTED]"; }
+ }
+
  /**
   * Fatores da conta para a recuperação: o TOTP verificado (se houver) e se existe fator verificado de outro tipo
   * (telefone, webauthn), que a web não sabe exigir. A conta devolvida pelo provedor é conferida com o token.
