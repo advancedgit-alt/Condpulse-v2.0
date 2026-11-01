@@ -218,7 +218,7 @@ test('fly.worker.toml: app/região fixas, imagem do worker, sem HTTP, pool 1, pa
   const toml=read('fly.worker.toml');
   for(const line of ['app = "condpulse-v2-0-worker"','primary_region = "gru"','dockerfile = "infra/fly-worker/Dockerfile"',
     'SPRING_PROFILES_ACTIVE = "worker"','DB_POOL_SIZE = "1"','CP_WORKER_OUTBOX_ENABLED = "true"','CP_WORKER_POLL_MILLIS = "2000"',
-    'CP_WORKER_WAITLIST_ENABLED = "false"','CP_WORKER_WAITLIST_MILLIS = "60000"','CP_WORKER_ACCESS_SYNC_ENABLED = "false"','CP_SECURITY_LOG_ENABLED = "false"',
+    'CP_WORKER_WAITLIST_ENABLED = "false"','CP_WORKER_WAITLIST_MILLIS = "60000"','CP_WORKER_ACCESS_SYNC_ENABLED = "false"','CP_SECURITY_LOG_ENABLED = "true"',
     'policy = "on-failure"','size = "shared-cpu-1x"','memory = "1gb"',
     'DATABASE_URL = "jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/tmp/condpulse-db-ca.crt"'])
     assert.ok(toml.includes(line),line);
