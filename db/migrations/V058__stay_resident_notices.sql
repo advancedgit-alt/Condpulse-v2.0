@@ -11,13 +11,17 @@ CREATE POLICY outbox_stay_api_source ON cp.outbox AS RESTRICTIVE FOR INSERT TO c
   WHERE s.tenant_id=cp.outbox.tenant_id AND s.id=cp.outbox.aggregate_id AND s.unit_id::text=cp.outbox.payload->>'unitId'
    AND s.l1_alerted_at IS NOT NULL AND s.state='OPEN' AND cp.stay_control_enabled(s.tenant_id,s.kind)));
 
--- O worker só ganha INSERT das colunas de conteúdo; estado/prazo/tentativas continuam exclusivamente do banco.
-GRANT INSERT(tenant_id,event_type,aggregate_id,aggregate_version,payload) ON cp.outbox TO cp_worker;
-CREATE POLICY outbox_stay_worker_insert ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_worker
- WITH CHECK(event_type='STAY_OVERDUE' AND state='PENDING' AND attempts=0 AND lease_until IS NULL
-  AND EXISTS(SELECT 1 FROM cp.stays s WHERE s.tenant_id=cp.outbox.tenant_id AND s.id=cp.outbox.aggregate_id
-   AND s.unit_id::text=cp.outbox.payload->>'unitId' AND s.l1_alerted_at IS NOT NULL AND s.state='OPEN'
-   AND cp.stay_control_enabled(s.tenant_id,s.kind)));
+-- Mantém a fronteira original da fila e acrescenta somente STAY_OVERDUE com fonte validada.
+-- Políticas RESTRICTIVE são combinadas por AND; substituir a original evita bloquear a fila existente.
+DROP POLICY outbox_worker_insert ON cp.outbox;
+CREATE POLICY outbox_worker_insert ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_worker
+ WITH CHECK(state='PENDING' AND attempts=0 AND lease_until IS NULL AND processed_at IS NULL AND last_error IS NULL
+  AND ((event_type IN ('WAITLIST_OFFERED','RESERVATION_EXPIRED') AND jsonb_typeof(payload->'amenityId')='string'
+    AND cp.waitlist_offering(tenant_id,(payload->>'amenityId')::uuid))
+   OR (event_type='STAY_OVERDUE' AND EXISTS(SELECT 1 FROM cp.stays s
+    WHERE s.tenant_id=cp.outbox.tenant_id AND s.id=cp.outbox.aggregate_id
+     AND s.unit_id::text=cp.outbox.payload->>'unitId' AND s.l1_alerted_at IS NOT NULL AND s.state='OPEN'
+     AND cp.stay_control_enabled(s.tenant_id,s.kind)))));
 
 CREATE FUNCTION cp.stay_resident_notice() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
