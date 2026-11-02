@@ -2417,7 +2417,7 @@
             }
           }
         ],
-        "description": "Convite individual (1 a 14 dias). O token aparece somente nesta resposta; papel MANAGER não é oferecido.",
+        "description": "Convite individual (1 a 14 dias) emitido pela gestão atual com AAL2. O token aparece somente nesta resposta. MANAGER adicional exige unidade ausente ou null; o aceite pela conta destinatária cria vínculo PENDING, aprovado por outro gestor com AAL2. Autoaprovação é recusada.",
         "requestBody": {
           "required": true,
           "content": {
@@ -25347,7 +25347,8 @@
               "string",
               "null"
             ],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Obrigatório para papéis residenciais; MANAGER exige unidade ausente ou null."
           },
           "role": {
             "type": "string",
@@ -25357,7 +25358,8 @@
               "DEPENDENT",
               "OWNER",
               "CONCIERGE",
-              "MAINTENANCE"
+              "MAINTENANCE",
+              "MANAGER"
             ]
           },
           "displayName": {

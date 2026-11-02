@@ -4,7 +4,7 @@
 
 A fonte resumida do estado operacional é [ESTADO_ATUAL.md](ESTADO_ATUAL.md). Leia esse arquivo antes do histórico.
 SMTP, worker outbox e migrations V053/V054 já foram realizados; não repetir perguntas ou operações com base nos relatos antigos abaixo.
-A rodada autorizada de 01/11 corrigiu sessão/MFA, cobertura JDBC e roteamento HTTP de log/permanências; API/worker publicados. Gestão e parceiro do demo ativos; portaria PENDING por recusa de autoaprovação e morador sem convite até confirmar a unidade. Os recibos iniciais abaixo são históricos e foram superados pelas continuações.
+A rodada autorizada de 01/11 corrigiu sessão/MFA, cobertura JDBC e roteamento HTTP de log/permanências; API/worker publicados. Gestão e parceiro do demo ativos; portaria e morador A-101 aceitos/PENDING por aprovação de outro gestor. Unidade e segunda conta já confirmadas. PR #178 integrado e V056 aplicada/repetida; publicação do novo fluxo ainda pendente após interrupção do controle de navegador. Os recibos iniciais abaixo são históricos e foram superados pelas continuações.
 
 ### Recibo inicial da rodada de 01/11 — anterior à implantação
 
@@ -33,11 +33,24 @@ O responsável confirmou no chat os papéis da própria conta, limitados à gera
 | Gestão do condomínio demo | ACTIVE; convite da Central aceito pela própria conta; gestão com AAL2 aberta | Nenhum novo consentimento para este vínculo já concluído |
 | Gestor do parceiro demo | ACTIVE; concessão na Central e painel com AAL2 aberto | Carteira com1 contrato, equipe com7 pessoas/papéis e4 escalas sintéticas consultadas |
 | Portaria do condomínio demo | Convite aceito, vínculo PENDING | Outro gestor ativo precisa aprovar; autoaprovação recusada com409 MEMBERSHIP_SELF_DECISION_DENIED |
-| Morador do condomínio demo | Convite não criado | Confirmar explicitamente a unidade fictícia; revisão automática recusou a escolha A-101 por não constar no consentimento |
+| Morador do condomínio demo | Convite da Torre A fictícia,101 criado e aceito; vínculo PENDING, conferido por SELECT | Outro gestor ativo precisa aprovar; confirmação da unidade já recebida |
 
-A recusa de autoaprovação é regra de segurança válida, não erro para remover. Não trocar ator no SQL, não aprovar diretamente na tabela e não conceder gestão a uma segunda conta sem autorização específica. A autorização geral de testes não deve ser repetida como se os vínculos de gestão/parceiro ainda estivessem pendentes.
+A recusa de autoaprovação é regra de segurança válida, não erro para remover. Não trocar ator no SQL nem aprovar diretamente na tabela. O responsável já confirmou especificamente a unidade A-101 e uma segunda conta de teste existente como gestor adicional; essa autorização não deve ser pedida novamente. O segundo convite de gestor ainda não foi criado: depende da publicação descrita abaixo e de aceite/autenticação pela própria conta.
 
 O Log de Segurança e as permanências tinham controllers e regras de domínio, mas faltavam os caminhos autenticados em SecurityConfiguration. A consulta real pela web recebia403 antes do serviço. PR #176 inclui os caminhos/métodos exatos e sete testes HTTP (identidade/parâmetros, CSRF/Bearer, MFA/negações, anônimos, métodos vizinhos e flags desligadas); não amplia papéis nem altera RLS. CI 41369953058 no head ba80806 e revisões concluídos. Publicação da API 41371039046 e worker 41371155348, fonte b1d4598273cb14c3f37834de8a779e47424a15ae. Conferência publicada: log consultado, cadeia íntegra com28 eventos e duas leituras SENSITIVE_VIEWED registradas; seção residencial de permanências vazia carregada com vínculo pré-existente na outra HML. A conta também é MANAGER local, portanto esse ensaio não comprova conta exclusivamente de parceiro. Entrada/alerta/saída operacional permanecem não executados. Recibo: [demo-access-hml-20261101.json](../evidence/demo-access-hml-20261101.json).
+
+## Gestor adicional e V056 — continuação de 01/11/2026
+
+A Central permite convidar o primeiro gestor, mas encaminha os gestores adicionais à gestão local. O formulário, serviço e constraint locais ainda recusavam MANAGER. O PR #178 fecha essa lacuna com a decisão explícita [ADR-0013](adr/0013-convite-de-gestor-local.md): gestor atual com AAL2 emite convite sem unidade; somente a conta destinatária aceita; o vínculo permanece PENDING até aprovação de outro gestor com AAL2. A proibição de autoaprovação e a proteção do último gestor permanecem. SUPPORT continua excluído.
+
+- Fonte integrada: `6686a6cbc9d2bd743ca7348ebf79267ef9e3df8e`. CI [41373167469](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41373167469): cinco jobs success,346 Vitest,226 jornadas Chromium e286 JDBC sem falha/erro/ignorado no estágio JDBC; revisões de código e segurança concluídas.
+- V056 aplicada pelo executor protegido [41374111396](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374111396): target056,validated,migrationsExecuted1. Repetição [41374484966](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374484966): validated,migrationsExecuted0. Histórico Flyway e constraints confirmados por SELECT; sem escrita SQL de vínculos.
+- Backup físico de01/11 07:52:12UTC reconferido antes da migration; continua anterior à carga e sem bytes do Storage, sem aceite de restore/RPO/RTO.
+- Inspeção da API [41374557917](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374557917) concluída com sucesso na fonte6686a6c: login existente READY/eligible. Nenhum apply ou deploy foi executado nessa continuação.
+- A conexão de controle do navegador caiu antes de iniciar a inspeção do worker. A coleção de runs foi conferida após a interrupção: nenhum novo run do worker nessa fonte. API/worker continuam na versão b1d4598, com os recibos de #176 acima. **O novo fluxo de gestor ainda não foi validado na HML publicada.**
+- Retomada: recuperar o controle de navegador, conferir a fonte atual, inspecionar API/worker e publicar pelo workflow protegido com os ACKs da fonte vigente; preservar logins, pools e flags. Depois criar o convite autorizado, obter aceite da segunda conta, aprovação pela gestão atual e AAL2 na segunda conta. Essa conta ainda não tem fator MFA cadastrado; o responsável configura a credencial de segundo fator no fluxo normal, sem expor segredo/QR. Somente então aprovar os vínculos PENDING de morador/portaria e executar as jornadas operacionais.
+
+Recibo atualizado: [demo-access-hml-20261101.json](../evidence/demo-access-hml-20261101.json).
 
 ## Histórico da situação registrada em 29/10/2026
 
