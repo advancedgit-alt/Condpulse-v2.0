@@ -3,7 +3,7 @@
 Referências: PRD complementar Segurança v1.0 (`docs/prd/CondPulse_PRD_Complementar_Seguranca_v1.0.md`, §7.2/E1, §5.2 e
 fluxo §8.1), ADR-0011, [LOG_SEGURANCA.md](LOG_SEGURANCA.md), [PARCEIROS.md](PARCEIROS.md). Migration:
 `db/migrations/V055__stays.sql`. API atrás de `CP_VISITS_ENABLED` (mesma flag e módulo `visits` do registro de entrada e
-saída). Worker de alertas atrás de `CP_WORKER_STAYS_ENABLED` (padrão `false`). **V055 não aplicada em nenhum banco remoto.**
+saída). Worker de alertas atrás de `CP_WORKER_STAYS_ENABLED` (padrão `false`). **HML conferida em 01/11/2026: V055 aplicada e repetida sem nova migration; alertas ligados no worker (run 41354940226). Produção operacional não foi alterada.** Consulte [ESTADO_ATUAL.md](ESTADO_ATUAL.md) para os recibos e as jornadas ainda não aceitas.
 
 ## Fontes de entrada conferidas no código
 
@@ -83,4 +83,4 @@ Leituras da equipe gravam `SENSITIVE_VIEWED` (`STAYS_NOW`, `STAY_DAY_CLOSE` com 
 - Saída automática por facial nas duas direções (E1.8) e permanência por facial/QR: dependem de equipamento real.
 - Tela da gestão para editar as regras de tempo (só API nesta fatia); justificativa pelo painel do parceiro (API pronta,
   web só leitura).
-- Ligar `CP_WORKER_STAYS_ENABLED` só depois de aplicar a V055, por PR revisado.
+- Worker de HML já ligado após V055, por PR #174 revisado e deploy 41354940226. Ensaio real de entrada/alerta/saída ainda exige os perfis operacionais ativos e dados apropriados; flag ligada não comprova essa jornada.

@@ -1,0 +1,116 @@
+{
+  "date_local": "2026-11-01",
+  "time_zone": "America/Sao_Paulo",
+  "tenant_id": "dcb28363-d009-46a7-8be4-ffb0795d1927",
+  "partner_id": "21b494e6-0847-4073-aa3d-1ef67879f84e",
+  "generation": 1,
+  "authorization": {
+    "current_account_roles_confirmed": [
+      "MANAGER",
+      "RESIDENT",
+      "CONCIERGE"
+    ],
+    "partner_role_confirmed": "PARTNER_ADMIN",
+    "scope": "only existing synthetic demo and its partner",
+    "unit_not_specified": true
+  },
+  "roles": {
+    "MANAGER": "ACTIVE",
+    "PARTNER_ADMIN": "ACTIVE",
+    "CONCIERGE": "PENDING",
+    "RESIDENT": "NOT_CREATED"
+  },
+  "verified": {
+    "manager_invitation_accepted": true,
+    "manager_ui_aal2": true,
+    "partner_ui_aal2": true,
+    "partner_team_visible": 7,
+    "partner_contracts_visible": 1,
+    "partner_schedules_visible": 4,
+    "concierge_invitation_accepted": true,
+    "security_log_query_visible": true,
+    "security_log_integrity": {
+      "intact": true,
+      "checked_events": 28,
+      "anchors_checked": 0
+    },
+    "sensitive_views_recorded": 2,
+    "sensitive_views_actor_role": "MANAGER",
+    "note": "Current account also has active local MANAGER; tenant authorization prioritizes local memberships. This UI check does not prove a partner-only account.",
+    "existing_hml_resident_stays": "empty list loaded successfully using existing unit access",
+    "no_demo_resident_grant": true,
+    "live_entry_alert_exit_journey": "not executed"
+  },
+  "denials": {
+    "concierge_self_approval": {
+      "code": "MEMBERSHIP_SELF_DECISION_DENIED",
+      "status": 409,
+      "expected": true,
+      "unchanged": "PENDING",
+      "needs": "different active manager"
+    },
+    "resident_invitation": {
+      "source": "automatic approval review",
+      "attempted_unit_label": "Torre A (fictícia) · 101",
+      "created": false,
+      "reason": "Residential unit was not specified by the user; do not retry before specific confirmation."
+    }
+  },
+  "security": {
+    "no_direct_sql_writes": true,
+    "no_impersonation": true,
+    "no_security_rules_weakened": true,
+    "no_reset_or_delete": true,
+    "no_production_or_advanced_changes": true
+  },
+  "http_fix": {
+    "pr": 176,
+    "source_head": "ba808065183e67b14b9de5414db9311dce092193",
+    "ci_run": 41369953058,
+    "observed": "UI log query denied before service because authenticated matcher absent",
+    "new_security_integration_tests": 7,
+    "status": "merged, API and worker published; live log and existing resident stay listing verified",
+    "merge_sha": "b1d4598273cb14c3f37834de8a779e47424a15ae",
+    "ci_jobs": "5 success",
+    "new_security_integration_tests_result": "7 run, 0 failures, 0 errors, 0 skipped",
+    "jdbc": "284 run, 0 failures, 0 errors, 0 skipped",
+    "web_journeys": 225,
+    "api_inspect_run": 41370753421,
+    "api_deploy_run": 41371039046,
+    "api_readiness": {
+      "status": 200,
+      "body": "UP",
+      "attempt": 1
+    },
+    "worker_inspect_run": 41370815083,
+    "worker_deploy_run": 41371155348,
+    "worker_stability": {
+      "polls": 6,
+      "startedStreak": 6,
+      "exits": 0
+    },
+    "database_inspection": {
+      "api": {
+        "state": "READY",
+        "eligible": true,
+        "code": ""
+      },
+      "worker": {
+        "state": "READY",
+        "eligible": true,
+        "code": ""
+      },
+      "budget": {
+        "maxConnections": 60,
+        "otherBackends": 18,
+        "runtimeLimits": 20,
+        "workerLimit": 2,
+        "margin": 20,
+        "total": 60,
+        "fits": true
+      }
+    },
+    "same_release_for_api_and_worker": true,
+    "secret_values_exposed": false
+  }
+}

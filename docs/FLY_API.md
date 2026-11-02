@@ -1,6 +1,6 @@
 # API de homologação na Fly.io
 
-Estado em 01/11/2026: API publicada em f7928e0, run41331226181, readiness200/UP na primeira consulta, uma máquina gru; /auth e /v1 pela Vercel. V055 aplicada/repetida, demo ativado e novo login/TOTP/Central/gestão exercitados. Login e chaves existentes foram preservados. API/worker têm a mesma árvore backend e6db1cb. Recibos vigentes: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+Estado em 01/11/2026: API atualizada pelo PR #176, fonte b1d4598273cb14c3f37834de8a779e47424a15ae, deploy41371039046, readiness200/UP na primeira consulta, uma máquina gru. Inspect41370753421 confirmou o login existente READY/eligible; não houve apply, nova geração, rotação de chaves ou mudança de flags. Correção dos caminhos HTTP de Log de Segurança e permanências publicada e consulta/integridade do log conferidas pela web. API e worker publicados na mesma release. Recibos vigentes: [ESTADO_ATUAL.md](ESTADO_ATUAL.md) e [demo-access-hml-20261101.json](../evidence/demo-access-hml-20261101.json).
 
 ## O que muda
 

@@ -4,15 +4,15 @@
 
 A fonte resumida do estado operacional é [ESTADO_ATUAL.md](ESTADO_ATUAL.md). Leia esse arquivo antes do histórico.
 SMTP, worker outbox e migrations V053/V054 já foram realizados; não repetir perguntas ou operações com base nos relatos antigos abaixo.
-A rodada autorizada de 01/11 corrige sessão/MFA e cobertura JDBC, integra permanências e prepara testes com dados sintéticos preservados.
+A rodada autorizada de 01/11 corrigiu sessão/MFA, cobertura JDBC e roteamento HTTP de log/permanências; API/worker publicados. Gestão e parceiro do demo ativos; portaria PENDING por recusa de autoaprovação e morador sem convite até confirmar a unidade. Os recibos iniciais abaixo são históricos e foram superados pelas continuações.
 
-### Recibo da rodada de 01/11
+### Recibo inicial da rodada de 01/11 — anterior à implantação
 
-PR #172 integrado em 44c5a40, CI 41321268569 com cinco jobs success, revisões de código e segurança no head 02a9bbb. São 346 testes web unitários, 225 jornadas Chromium e 284 JDBC habilitados sem falha/erro/ignorado. A correção ainda não foi publicada na Fly.
+PR #172 integrado em 44c5a40, CI 41321268569 com cinco jobs success, revisões de código e segurança no head 02a9bbb. São 346 testes web unitários, 225 jornadas Chromium e 284 JDBC habilitados sem falha/erro/ignorado. Naquele momento a correção ainda não estava publicada na Fly; a publicação foi concluída na continuação abaixo.
 
 Carga real sintética pela aplicação: reserva/convidado, visita, pedido/mensagem, upload/download idêntico por SHA-256, arquivo inválido recusado, cota de reserva recusada sem segunda gravação e barreira de unidade cruzada na interface. IDs, fuso, resultados e limitações em [ESTADO_ATUAL.md](ESTADO_ATUAL.md) e [hml-functional-20261101.json](../evidence/hml-functional-20261101.json). Dados preservados.
 
-Carga descartável 41322229545 (44c5a40): 11.999 chamadas, 100rps, zero erros/descarte, p95 geral805,6ms. Metas de latência do PRD não atendidas nesse runner; não anunciar capacidade da HML. Backup/V055/deploy e nova sessão AAL2 continuam pendentes. A conferência do backup está bloqueada pelo CAPTCHA do painel Supabase.
+Carga descartável 41322229545 (44c5a40): 11.999 chamadas, 100rps, zero erros/descarte, p95 geral805,6ms. Metas de latência do PRD não atendidas nesse runner; não anunciar capacidade da HML. Naquele momento backup/V055/deploy e nova sessão AAL2 estavam pendentes, e o painel exigia CAPTCHA. Essas etapas foram concluídas na continuação abaixo; não são bloqueios atuais.
 
 ### Continuação da rodada — implantação e jornadas concluídas
 
@@ -23,6 +23,21 @@ V055: migrate41329884896 aplicou1, replay41330443589 aplicou0, ambos validados. 
 Nova sessão, TOTP e acesso Central/gestão conferidos. Demo geração1 criado (32unidades/3áreas), sem novos papéis de conta real. Pedido da carga percorreu análise/execução/conclusão v3, resposta pública entregue por outbox e comentário interno ausente no portal residencial; leitura autenticada registrada. Aviso de teste publicado e aberto. O contador do portal foi ajustado para excluir RESOLVED de “em andamento”, com regressão no cenário e2e existente.
 
 Fonte operacional completa: [ESTADO_ATUAL.md](ESTADO_ATUAL.md), [ROTEIRO_TESTES_HML.md](ROTEIRO_TESTES_HML.md) e [release-hml-20261101.json](../evidence/release-hml-20261101.json). Dados preservados. Novos acessos ao demo, percursos reais de fila/permanência, desempenho, restore/aparelho/hardware e produção seguem pendentes; não declarar100% entregue.
+
+## Vínculos explícitos do demo — continuação de 01/11/2026
+
+O responsável confirmou no chat os papéis da própria conta, limitados à geração1 e ao parceiro fictício. Foram exercitados os fluxos normais da aplicação, sem escrita direta de autorização no SQL:
+
+| Papel | Estado observado | Próximo requisito |
+| --- | --- | --- |
+| Gestão do condomínio demo | ACTIVE; convite da Central aceito pela própria conta; gestão com AAL2 aberta | Nenhum novo consentimento para este vínculo já concluído |
+| Gestor do parceiro demo | ACTIVE; concessão na Central e painel com AAL2 aberto | Carteira com1 contrato, equipe com7 pessoas/papéis e4 escalas sintéticas consultadas |
+| Portaria do condomínio demo | Convite aceito, vínculo PENDING | Outro gestor ativo precisa aprovar; autoaprovação recusada com409 MEMBERSHIP_SELF_DECISION_DENIED |
+| Morador do condomínio demo | Convite não criado | Confirmar explicitamente a unidade fictícia; revisão automática recusou a escolha A-101 por não constar no consentimento |
+
+A recusa de autoaprovação é regra de segurança válida, não erro para remover. Não trocar ator no SQL, não aprovar diretamente na tabela e não conceder gestão a uma segunda conta sem autorização específica. A autorização geral de testes não deve ser repetida como se os vínculos de gestão/parceiro ainda estivessem pendentes.
+
+O Log de Segurança e as permanências tinham controllers e regras de domínio, mas faltavam os caminhos autenticados em SecurityConfiguration. A consulta real pela web recebia403 antes do serviço. PR #176 inclui os caminhos/métodos exatos e sete testes HTTP (identidade/parâmetros, CSRF/Bearer, MFA/negações, anônimos, métodos vizinhos e flags desligadas); não amplia papéis nem altera RLS. CI 41369953058 no head ba80806 e revisões concluídos. Publicação da API 41371039046 e worker 41371155348, fonte b1d4598273cb14c3f37834de8a779e47424a15ae. Conferência publicada: log consultado, cadeia íntegra com28 eventos e duas leituras SENSITIVE_VIEWED registradas; seção residencial de permanências vazia carregada com vínculo pré-existente na outra HML. A conta também é MANAGER local, portanto esse ensaio não comprova conta exclusivamente de parceiro. Entrada/alerta/saída operacional permanecem não executados. Recibo: [demo-access-hml-20261101.json](../evidence/demo-access-hml-20261101.json).
 
 ## Histórico da situação registrada em 29/10/2026
 
