@@ -148,7 +148,7 @@ class MembershipInvitationJdbcTest {
   assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->invitations.create(db.accountC,db.tenantA,AssuranceLevel.AAL1,
    new MembershipModels.CreateInvitation(db.unitA,"RESIDENT","X","x@example.invalid",7))).code());
   assertEquals("INVITATION_ROLE_INVALID",assertThrows(BusinessProblem.class,()->invitations.create(db.accountC,db.tenantA,AAL2,
-   new MembershipModels.CreateInvitation(null,"MANAGER","X","x@example.invalid",7))).code());
+   new MembershipModels.CreateInvitation(null,"SUPPORT","X","x@example.invalid",7))).code());
   assertEquals("INVITATION_UNIT_REQUIRED",assertThrows(BusinessProblem.class,()->invitations.create(db.accountC,db.tenantA,AAL2,
    new MembershipModels.CreateInvitation(null,"RESIDENT","X","x@example.invalid",7))).code());
   assertEquals("UNIT_NOT_FOUND",assertThrows(BusinessProblem.class,()->invitations.create(db.accountC,db.tenantA,AAL2,
@@ -168,6 +168,57 @@ class MembershipInvitationJdbcTest {
   assertTrue(all.stream().noneMatch(m->db.unitB.equals(m.unitId())),"Nunca lista vínculo de outro condomínio");
   assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
    ()->memberships.memberships(db.accountC,db.tenantB,AAL2,null)).code());
+  db.assertEmptyContext();
+ }
+
+ @Test void additionalManagerInvitationRequiresCurrentManagerAal2AndNoUnit() throws Exception {
+  var input=new MembershipModels.CreateInvitation(null,"MANAGER","GESTOR CONVIDADO FICTICIO","gestor@example.invalid",7);
+  assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->invitations.create(db.accountA,db.tenantA,AAL2,input)).code());
+  assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,
+   ()->invitations.create(db.accountC,db.tenantA,AssuranceLevel.AAL1,input)).code());
+  assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+   ()->invitations.create(db.accountC,db.tenantB,AAL2,input)).code());
+  assertEquals("INVITATION_UNIT_INVALID",assertThrows(BusinessProblem.class,
+   ()->invitations.create(db.accountC,db.tenantA,AAL2,
+    new MembershipModels.CreateInvitation(db.unitA,"MANAGER","GESTOR FICTICIO","gestor@example.invalid",7))).code());
+  var invalid=assertThrows(java.sql.SQLException.class,()->db.adminUpdate("""
+   insert into cp.membership_invitations(tenant_id,unit_id,role,display_name,email_hash,token_hash,expires_at,created_by)
+   values(?,?,'MANAGER','GESTOR FICTICIO',?, ?,now()+interval '1 day',?)
+   """,db.tenantA,db.unitA,"a".repeat(64),"b".repeat(64),db.accountC));
+  assertEquals("23514",invalid.getSQLState(),"A ausência de unidade também é exigida pelo banco");
+  db.assertEmptyContext();
+ }
+
+ @Test void additionalManagerAcceptsPendingAndOnlyAnotherActiveManagerActivatesIt() throws Exception {
+  String email="gestor."+UUID.randomUUID().toString().substring(0,8)+"@example.invalid";
+  UUID person=newcomer();
+  var created=invitations.create(db.accountC,db.tenantA,AAL2,
+   new MembershipModels.CreateInvitation(null,"MANAGER","GESTOR CONVIDADO FICTICIO",email,7));
+  assertEquals("INVITATION_NOT_AVAILABLE",assertThrows(BusinessProblem.class,
+   ()->invitations.accept(person,"outro@example.invalid",new MembershipModels.AcceptInvitation(created.token()))).code());
+  var accepted=invitations.accept(person,email,new MembershipModels.AcceptInvitation(created.token()));
+  try {
+   assertEquals("PENDING",accepted.status());
+   assertEquals("TENANT_ACCESS_DENIED",assertThrows(BusinessProblem.class,
+    ()->memberships.memberships(person,db.tenantA,AAL2,null)).code(),"Aceite não concede gestão");
+   var pending=memberships.memberships(db.accountC,db.tenantA,AAL2,"PENDING").memberships().stream()
+    .filter(m->m.membershipId().equals(accepted.membershipId())).findFirst().orElseThrow();
+   assertEquals("MANAGER",pending.role()); assertNull(pending.unitId());
+   var active=memberships.decide(db.accountC,db.tenantA,AAL2,pending.membershipId(),
+    new MembershipModels.Decision("APPROVE",pending.version(),"Segundo gestor fictício conferido"));
+   assertEquals("ACTIVE",active.status());
+   assertFalse(memberships.memberships(person,db.tenantA,AAL2,null).memberships().isEmpty());
+   assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,
+    ()->memberships.memberships(person,db.tenantA,AssuranceLevel.AAL1,null)).code());
+   assertEquals("INVITATION_NOT_AVAILABLE",assertThrows(BusinessProblem.class,
+    ()->invitations.accept(person,email,new MembershipModels.AcceptInvitation(created.token()))).code());
+  } finally {
+   var current=memberships.memberships(db.accountC,db.tenantA,AAL2,null).memberships().stream()
+    .filter(m->m.membershipId().equals(accepted.membershipId())).findFirst().orElseThrow();
+   memberships.revoke(db.accountC,db.tenantA,AAL2,current.membershipId(),
+    new MembershipModels.Revocation(current.version(),"Fim do ensaio descartável de segundo gestor"));
+  }
   db.assertEmptyContext();
  }
 

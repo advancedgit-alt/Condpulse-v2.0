@@ -6,7 +6,7 @@ import { formatWhen } from '../dateTime';
 import { RentalsPanel } from './Rentals';
 import { ActionFeedback, ReasonForm, managementKey, membershipStatusLabels, roleLabels, statusTone, useAccessGuard, useAction, useManagement, type ActionResult } from './shared';
 
-const invitationRoles: InvitationRole[] = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE'];
+const invitationRoles: InvitationRole[] = ['RESIDENT', 'RESPONSIBLE', 'DEPENDENT', 'OWNER', 'CONCIERGE', 'MAINTENANCE', 'MANAGER'];
 const invitationStatus: Record<string, string> = { PENDING: 'Pendente', ACCEPTED: 'Aceito', REVOKED: 'Revogado', EXPIRED: 'Expirado' };
 
 function MembershipItem({ membership, onDone }: { membership: ManagedMembership; onDone(result: ActionResult): void }) {
@@ -83,7 +83,7 @@ function InvitationForm() {
   const [validDays, setValidDays] = useState('7');
   const [created, setCreated] = useState<InvitationCreated | null>(null);
   const [copied, setCopied] = useState(false);
-  const staff = role === 'CONCIERGE' || role === 'MAINTENANCE';
+  const staff = role === 'CONCIERGE' || role === 'MAINTENANCE' || role === 'MANAGER';
   async function submit(event: FormEvent) {
     event.preventDefault();
     setCreated(null); setCopied(false);
@@ -102,6 +102,7 @@ function InvitationForm() {
     <h3>Novo convite</h3>
     {units.isError ? <Notice tone="error">Não foi possível carregar as unidades: {errorMessage(units.error)} <button className="text-button" type="button" onClick={() => void units.refetch()}>Tentar novamente</button></Notice> : null}
     <p className="field-help">A pessoa precisa entrar com uma conta já criada pela operação usando o mesmo e-mail. O vínculo fica pendente até a sua aprovação.</p>
+    {role === 'MANAGER' ? <Notice tone="warning">Gestão dá acesso aos cadastros e decisões deste condomínio. O aceite fica pendente; outro gestor ativo aprova com segundo fator. A conta convidada não aprova o próprio vínculo.</Notice> : null}
     <div className="two-fields"><div><label htmlFor="invite-role">Papel</label>
       <select id="invite-role" value={role} onChange={(event) => setRole(event.target.value as InvitationRole)} disabled={action.state.pending}>
         {invitationRoles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select></div>

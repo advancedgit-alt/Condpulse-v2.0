@@ -25,8 +25,8 @@ class InvitationRulesTest {
   assertFalse(new MembershipModels.InvitationCreated(UUID.randomUUID(),token,java.time.Instant.now()).toString().contains(token));
   assertFalse(new MembershipModels.AcceptInvitation(token).toString().contains(token));
  }
- @Test void managerRoleIsNeverOfferedByInvitation() {
-  assertFalse(InvitationService.ROLES.contains("MANAGER")); assertFalse(InvitationService.ROLES.contains("SUPPORT"));
+ @Test void supportRoleIsNeverOfferedByLocalInvitation() {
+  assertFalse(InvitationService.ROLES.contains("SUPPORT"));
  }
  /** Zeladoria (V046): convidada pela gestão como a portaria, com capacidade própria e nada de gestão, portaria ou finanças. */
  @Test void maintenanceIsInvitableStaffWithItsOwnCapabilityOnly() {
