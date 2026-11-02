@@ -97,6 +97,15 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/access-events","/v1/tenants/*/units/*/access-events").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/access-events/entries","/v1/tenants/*/access-events/*/exit",
       "/v1/tenants/*/access-events/*/correction").authenticated()
+    // Log de Segurança (V050): leitura/verificação com AAL2 e capacidade; exportação com motivo no serviço/banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/security-log","/v1/tenants/*/security-log/integrity").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/security-log/exports").authenticated()
+    // Permanências (V055): equipe com alcance ou unidade autorizada; papel/AAL2 e transições no serviço/banco.
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/stays","/v1/tenants/*/stays/day-close",
+      "/v1/tenants/*/units/*/stays","/v1/tenants/*/stay-rules").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/stays/*/justification",
+      "/v1/tenants/*/units/*/stays/*/exit-confirmation").authenticated()
+    .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/stay-rules/*").authenticated()
     // Avisos da gestão: autenticação aqui; capacidade com AAL2 (gestão) ou público e vínculo (unidade) no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/announcements","/v1/tenants/*/units/*/announcements").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/announcements","/v1/tenants/*/management/announcements/*/publish",
