@@ -60,7 +60,7 @@ test('abas da gestão em uma linha, roláveis e com a aba atual visível no celu
   await page.setViewportSize({ width: 390, height: 844 });
   await openManagement(page, 'auditoria');
   const tabs = page.getByRole('navigation', { name: 'Seções da gestão' });
-  await expect(tabs.getByRole('link')).toHaveCount(14);
+  await expect(tabs.getByRole('link')).toHaveCount(15);
   const metrics = await tabs.evaluate((nav) => {
     const links = [...nav.querySelectorAll('a')];
     const tops = new Set(links.map((link) => Math.round(link.getBoundingClientRect().top)));
