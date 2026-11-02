@@ -1,0 +1,42 @@
+{
+  "date_local": "2026-11-01",
+  "time_zone": "America/Sao_Paulo",
+  "environment": "HML",
+  "source_sha": "a8f1b3af376014512ac57d9bce5e800ea51a8e66",
+  "phase_plan": "docs/PLANO_FINALIZACAO_HML.md",
+  "execution": "active session cycle; no background service or automation created",
+  "phase_1": {
+    "status": "VERIFIED",
+    "api_inspect_run": 41378128601,
+    "worker_inspect_run": 41378055107,
+    "api_deploy_run": 41378543488,
+    "api_readiness": {
+      "status": 200,
+      "body": "UP",
+      "attempt": 1
+    },
+    "worker_deploy_run": 41378365139,
+    "worker_stable": {
+      "polls": 6,
+      "startedStreak": 6,
+      "exits": 0
+    },
+    "existing_database_logins_preserved": true,
+    "pools_and_flags_unchanged": true
+  },
+  "phase_2": {
+    "status": "BLOCKED_BY_OWN_AUTHENTICATION",
+    "primary_session": "expired",
+    "second_manager_authorized": true,
+    "second_manager_invitation_created": false,
+    "original_account_resident": "PENDING",
+    "original_account_concierge": "PENDING",
+    "self_approval_denial_preserved": true
+  },
+  "phase_3": "real outstanding journeys pending",
+  "phase_4": "requirements-to-implementation backlog; see phase plan",
+  "phase_5": "performance targets and restore not accepted",
+  "phase_6": "pilot acceptance pending",
+  "data_preserved": true,
+  "production_and_advanced_unchanged": true
+}

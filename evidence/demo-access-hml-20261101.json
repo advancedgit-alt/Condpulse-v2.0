@@ -146,26 +146,41 @@
       "history_and_constraints_confirmed_by_select": true
     },
     "api_inspect": {
-      "run": 41374557917,
+      "run": 41378128601,
       "conclusion": "success",
       "database": {
         "state": "READY",
         "eligible": true
       },
-      "source_sha": "6686a6cbc9d2bd743ca7348ebf79267ef9e3df8e"
+      "source_sha": "a8f1b3af376014512ac57d9bce5e800ea51a8e66"
     },
     "worker_inspect": {
-      "run": null,
-      "status": "not started; no new worker run found after browser timeout"
+      "run": 41378055107,
+      "conclusion": "success",
+      "database": {
+        "state": "READY",
+        "eligible": true
+      },
+      "source_sha": "a8f1b3af376014512ac57d9bce5e800ea51a8e66"
     },
-    "api_deploy_run": null,
-    "worker_deploy_run": null,
-    "live_backend_sha": "b1d4598273cb14c3f37834de8a779e47424a15ae",
+    "api_deploy_run": 41378543488,
+    "worker_deploy_run": 41378365139,
+    "live_backend_sha": "a8f1b3af376014512ac57d9bce5e800ea51a8e66",
     "live_manager_flow_verified": false,
     "additional_manager_invitation": "not created",
     "second_account_auth": "existing confirmed account; no MFA factor enrolled; own sign-in and factor setup still required",
-    "blocker": "Browser control connection interrupted; no supported dispatch surface currently available.",
-    "next": "Restore browser control, verify main head, inspect and deploy API/worker through protected workflows using ACKs for current source. Then invite/accept/approve additional manager, enroll own MFA, and approve original account pending memberships."
+    "blocker": "Browser control restored. Primary account session expired; secure own login required.",
+    "next": "Secure primary login; authorized second manager invitation/acceptance/PENDING approval and own MFA; second manager approves pending original account resident/concierge. Follow phase plan.",
+    "api_readiness": {
+      "status": 200,
+      "body": "UP",
+      "attempt": 1
+    },
+    "worker_stable": {
+      "polls": 6,
+      "startedStreak": 6,
+      "exits": 0
+    }
   },
   "backup_rechecked": {
     "type": "PHYSICAL",

@@ -26,7 +26,7 @@ Morador: a unidade Torre A fictícia,101 já foi confirmada. O convite foi criad
 
 ## Continuação do segundo gestor autorizado
 
-PR #178/ADR-0013 e V056 implementam o convite local de gestão adicional. CI e migration/replay passaram; a API/worker publicados ainda são b1d4598. A inspeção da API41374557917 passou, mas o controle do navegador caiu antes de iniciar a inspeção do worker. Recuperar esse acesso e publicar pelo executor protegido na fonte vigente, após novas inspeções/ACKs quando o head mudar. Não usar o formulário novo contra backend antigo como prova de funcionamento.
+PR #178/ADR-0013 e V056 implementam o convite local de gestão adicional. CI e migration/replay passaram. Inspeções41378055107/41378128601 e deploys worker41378365139/API41378543488 concluídos em a8f1b3a, com6started/0exits e200/UP na primeira consulta. O navegador foi recuperado; a sessão da primeira conta expirou e precisa de novo login seguro. O fluxo adicional ainda precisa da jornada real.
 
 Depois: gestão atual com AAL2 → Pessoas → convite Gestão, sem unidade, para a segunda conta já confirmada; essa conta aceita e fica PENDING. A gestão atual aprova o segundo gestor. O responsável configura o segundo fator dessa conta no fluxo normal (ainda não há fator cadastrado). Com AAL2, o segundo gestor aprova os vínculos PENDING de morador/portaria da primeira conta. Não copiar credenciais, ler segredo/QR ou substituir esses passos por SQL. Esse percurso ainda não foi executado.
 
@@ -35,3 +35,5 @@ Depois: gestão atual com AAL2 → Pessoas → convite Gestão, sem unidade, par
 Oferta/aceite real da fila, alertas reais de permanência e funções dos perfis ainda sem vínculo; desempenho da hospedagem, recuperação completa, aparelho/hardware e restauração. Fila e alertas já estão ligados no worker e têm testes JDBC, mas isso não substitui uma jornada real.
 
 Recibos, IDs e limites em [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+
+Plano completo por fases e critérios: [PLANO_FINALIZACAO_HML.md](PLANO_FINALIZACAO_HML.md).

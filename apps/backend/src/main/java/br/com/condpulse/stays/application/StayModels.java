@@ -12,7 +12,7 @@ import java.util.UUID;
  */
 public final class StayModels {
  private StayModels() {}
- public static final List<String> KINDS=List.of("VISITOR","SERVICE_PROVIDER","DELIVERY","CONSTRUCTION");
+ public static final List<String> KINDS=List.of("VISITOR","SERVICE_PROVIDER","DELIVERY","CONSTRUCTION","EVENT_GUEST");
  public static final Set<String> KIND_SET=Set.copyOf(KINDS);
  public static final int PAGE=200;
  public static final int DAY_CLOSE_LIMIT=500;
@@ -27,10 +27,16 @@ public final class StayModels {
  public record Stay(UUID stayId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,String kind,
    String origin,String basis,Instant enteredAt,Instant expectedExitAt,String expectedSource,String state,String closure,Instant closedAt,
    String level,String recordedLevel,boolean overdue,boolean justified,String justification,Instant justifiedAt,UUID entryEventId,
+   UUID exitEventId,UUID reservationId,String amenityName,boolean controlEnabled) {
+  public Stay(UUID stayId,UUID unitId,String unitLabel,String blockName,String visitorName,String documentLast4,String kind,
+   String origin,String basis,Instant enteredAt,Instant expectedExitAt,String expectedSource,String state,String closure,Instant closedAt,
+   String level,String recordedLevel,boolean overdue,boolean justified,String justification,Instant justifiedAt,UUID entryEventId,
    UUID exitEventId) {
+   this(stayId,unitId,unitLabel,blockName,visitorName,documentLast4,kind,origin,basis,enteredAt,expectedExitAt,expectedSource,state,closure,closedAt,level,recordedLevel,overdue,justified,justification,justifiedAt,entryEventId,exitEventId,null,null,true);
+  }
   public Stay forUnit() {
    return new Stay(stayId,unitId,unitLabel,blockName,visitorName,documentLast4,kind,origin,basis,enteredAt,expectedExitAt,expectedSource,
-    state,closure,closedAt,level,recordedLevel,overdue,justified,null,justifiedAt,entryEventId,exitEventId);
+    state,closure,closedAt,level,recordedLevel,overdue,justified,null,justifiedAt,entryEventId,exitEventId,reservationId,amenityName,controlEnabled);
   }
  }
  public record StayPage(List<Stay> stays,boolean truncated,Instant generatedAt) {
@@ -43,10 +49,20 @@ public final class StayModels {
  }
  public record Justify(String reason) {}
  public record Mutation(Stay stay,boolean replayed) {}
- public record Rule(String kind,int maxMinutes,int l1AfterMinutes,int l2AfterMinutes,String source,Long version) {}
+ public record Rule(String kind,int maxMinutes,int l1AfterMinutes,int l2AfterMinutes,String source,Long version,
+   boolean enabled,String startsLocal,String endsLocal) {
+  public Rule(String kind,int maxMinutes,int l1AfterMinutes,int l2AfterMinutes,String source,Long version) {
+   this(kind,maxMinutes,l1AfterMinutes,l2AfterMinutes,source,version,true,null,null);
+  }
+ }
  public record Rules(List<Rule> rules) {
   public Rules { rules=List.copyOf(rules); }
  }
  /** version null cria a regra do tipo; com versão, atualiza só se ainda for a mesma. */
- public record RuleChange(Integer maxMinutes,Integer l1AfterMinutes,Integer l2AfterMinutes,Long version) {}
+ public record RuleChange(Integer maxMinutes,Integer l1AfterMinutes,Integer l2AfterMinutes,Long version,
+   Boolean enabled,Boolean scheduleEnabled,String startsLocal,String endsLocal) {
+  public RuleChange(Integer maxMinutes,Integer l1AfterMinutes,Integer l2AfterMinutes,Long version) {
+   this(maxMinutes,l1AfterMinutes,l2AfterMinutes,version,null,null,null,null);
+  }
+ }
 }

@@ -82,7 +82,7 @@ export const panelModules = {
   'gestao.pendencias.pessoas': null, 'gestao.pendencias.reservas': 'reservations',
   'gestao.reservas': 'reservations', 'gestao.areas': 'reservations', 'gestao.avisos': 'announcements', 'gestao.pedidos': 'requests',
   'gestao.mudancas': 'requests', 'gestao.acesso': 'access_credentials', 'gestao.mapa-acesso': 'facial_access', 'gestao.ocorrencias': 'visits',
-  'gestao.financeiro': 'finance',
+  'gestao.financeiro': 'finance', 'gestao.permanencias': 'visits',
   'implantacao': 'facial_access',
 } as const satisfies Record<string, TenantModuleId | null>;
 export type PanelId = keyof typeof panelModules;

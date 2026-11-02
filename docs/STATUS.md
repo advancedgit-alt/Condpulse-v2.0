@@ -4,7 +4,14 @@
 
 A fonte resumida do estado operacional é [ESTADO_ATUAL.md](ESTADO_ATUAL.md). Leia esse arquivo antes do histórico.
 SMTP, worker outbox e migrations V053/V054 já foram realizados; não repetir perguntas ou operações com base nos relatos antigos abaixo.
-A rodada autorizada de 01/11 corrigiu sessão/MFA, cobertura JDBC e roteamento HTTP de log/permanências; API/worker publicados. Gestão e parceiro do demo ativos; portaria e morador A-101 aceitos/PENDING por aprovação de outro gestor. Unidade e segunda conta já confirmadas. PR #178 integrado e V056 aplicada/repetida; publicação do novo fluxo ainda pendente após interrupção do controle de navegador. Os recibos iniciais abaixo são históricos e foram superados pelas continuações.
+A rodada autorizada de 01/11 corrigiu sessão/MFA, cobertura JDBC e roteamento HTTP de log/permanências; API/worker publicados. Gestão e parceiro do demo ativos; portaria e morador A-101 aceitos/PENDING por aprovação de outro gestor. Unidade e segunda conta já confirmadas. PR #178 integrado e V056 aplicada/repetida; novo fluxo publicado em a8f1b3a: API41378543488 com200/UP, worker41378365139 com6started/0exits. Navegador recuperado, sessão atual expirada; login/convite adicional e aprovação pendentes. Os recibos iniciais abaixo são históricos e foram superados pelas continuações.
+
+## Execução em ciclos — fase1 concluída, 01/11/2026
+
+- Controle do navegador recuperado. Inspeções worker41378055107 e API41378128601: logins existentes READY/eligible, fonte a8f1b3af376014512ac57d9bce5e800ea51a8e66. Publicação do worker41378365139:6started/0exits; API41378543488: readiness200/UP na primeira consulta. O fluxo de gestor adicional está publicado, mas seu convite/aceite/aprovação ainda não foi exercitado na HML.
+- Próximo passo: a sessão da primeira conta expirou; refazer login pelo fluxo seguro. Criar o convite já autorizado, obter aceite da segunda conta, aprovação pela gestão atual e AAL2 na segunda conta. O responsável configura o próprio MFA dessa conta sem expor segredo/QR. Depois, o segundo gestor aprova RESIDENT A-101/CONCIERGE PENDING. Não repetir consentimentos nem contornar a autoaprovação.
+
+Plano de seis fases e critérios: [PLANO_FINALIZACAO_HML.md](PLANO_FINALIZACAO_HML.md). Recibo: [loop-validation-hml-20261101.json](../evidence/loop-validation-hml-20261101.json). CI do merge a8f1b3a:41377057542 success; smoke público41377057585 success. Nenhum novo apply, login, pool ou flag alterado nesta publicação. Dados preservados; produção operacional/Advanced sem alteração. As seções seguintes são recibos de momentos anteriores da rodada.
 
 ### Recibo inicial da rodada de 01/11 — anterior à implantação
 
@@ -47,8 +54,8 @@ A Central permite convidar o primeiro gestor, mas encaminha os gestores adiciona
 - V056 aplicada pelo executor protegido [41374111396](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374111396): target056,validated,migrationsExecuted1. Repetição [41374484966](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374484966): validated,migrationsExecuted0. Histórico Flyway e constraints confirmados por SELECT; sem escrita SQL de vínculos.
 - Backup físico de01/11 07:52:12UTC reconferido antes da migration; continua anterior à carga e sem bytes do Storage, sem aceite de restore/RPO/RTO.
 - Inspeção da API [41374557917](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374557917) concluída com sucesso na fonte6686a6c: login existente READY/eligible. Nenhum apply ou deploy foi executado nessa continuação.
-- A conexão de controle do navegador caiu antes de iniciar a inspeção do worker. A coleção de runs foi conferida após a interrupção: nenhum novo run do worker nessa fonte. API/worker continuam na versão b1d4598, com os recibos de #176 acima. **O novo fluxo de gestor ainda não foi validado na HML publicada.**
-- Retomada: recuperar o controle de navegador, conferir a fonte atual, inspecionar API/worker e publicar pelo workflow protegido com os ACKs da fonte vigente; preservar logins, pools e flags. Depois criar o convite autorizado, obter aceite da segunda conta, aprovação pela gestão atual e AAL2 na segunda conta. Essa conta ainda não tem fator MFA cadastrado; o responsável configura a credencial de segundo fator no fluxo normal, sem expor segredo/QR. Somente então aprovar os vínculos PENDING de morador/portaria e executar as jornadas operacionais.
+- Recibo anterior à publicação atual: o navegador caiu antes da inspeção do worker; naquele momento API/worker permaneciam b1d4598. Esse bloqueio foi resolvido e os recibos atuais estão na seção Execução em ciclos. O convite/aceite real do gestor adicional continua pendente.
+- Próximas etapas foram reorganizadas no plano de seis fases e no recibo atual no início deste arquivo.
 
 Recibo atualizado: [demo-access-hml-20261101.json](../evidence/demo-access-hml-20261101.json).
 

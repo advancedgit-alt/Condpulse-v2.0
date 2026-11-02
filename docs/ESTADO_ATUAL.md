@@ -63,9 +63,9 @@ A Central permite convidar o primeiro gestor, mas encaminha os gestores adiciona
 - Fonte integrada: `6686a6cbc9d2bd743ca7348ebf79267ef9e3df8e`. CI [41373167469](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41373167469): cinco jobs success,346 Vitest,226 jornadas Chromium e286 JDBC sem falha/erro/ignorado no estágio JDBC; revisões de código e segurança concluídas.
 - V056 aplicada pelo executor protegido [41374111396](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374111396): target056,validated,migrationsExecuted1. Repetição [41374484966](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374484966): validated,migrationsExecuted0. Histórico Flyway e constraints confirmados por SELECT; sem escrita SQL de vínculos.
 - Backup físico de01/11 07:52:12UTC reconferido antes da migration; continua anterior à carga e sem bytes do Storage, sem aceite de restore/RPO/RTO.
-- Inspeção da API [41374557917](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374557917) concluída com sucesso na fonte6686a6c: login existente READY/eligible. Nenhum apply ou deploy foi executado nessa continuação.
-- A conexão de controle do navegador caiu antes de iniciar a inspeção do worker. A coleção de runs foi conferida após a interrupção: nenhum novo run do worker nessa fonte. API/worker continuam na versão b1d4598, com os recibos de #176 acima. **O novo fluxo de gestor ainda não foi validado na HML publicada.**
-- Retomada: recuperar o controle de navegador, conferir a fonte atual, inspecionar API/worker e publicar pelo workflow protegido com os ACKs da fonte vigente; preservar logins, pools e flags. Depois criar o convite autorizado, obter aceite da segunda conta, aprovação pela gestão atual e AAL2 na segunda conta. Essa conta ainda não tem fator MFA cadastrado; o responsável configura a credencial de segundo fator no fluxo normal, sem expor segredo/QR. Somente então aprovar os vínculos PENDING de morador/portaria e executar as jornadas operacionais.
+- Inspeção anterior da API [41374557917](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41374557917) concluída com sucesso na fonte6686a6c: login existente READY/eligible. Naquele ponto ainda não havia deploy; recibos atuais na linha seguinte.
+- Controle do navegador recuperado. Inspeções worker41378055107 e API41378128601: logins existentes READY/eligible, fonte a8f1b3af376014512ac57d9bce5e800ea51a8e66. Publicação do worker41378365139:6started/0exits; API41378543488: readiness200/UP na primeira consulta. O fluxo de gestor adicional está publicado, mas seu convite/aceite/aprovação ainda não foi exercitado na HML.
+- Próximo passo: a sessão da primeira conta expirou; refazer login pelo fluxo seguro. Criar o convite já autorizado, obter aceite da segunda conta, aprovação pela gestão atual e AAL2 na segunda conta. O responsável configura o próprio MFA dessa conta sem expor segredo/QR. Depois, o segundo gestor aprova RESIDENT A-101/CONCIERGE PENDING. Não repetir consentimentos nem contornar a autoaprovação.
 
 Recibo atualizado: [demo-access-hml-20261101.json](../evidence/demo-access-hml-20261101.json).
 
@@ -75,12 +75,20 @@ CI do contador residencial (#175): 41356383522, cinco jobs success, 346 testes u
 
 Carga [41322229545](https://github.com/advancedgit-alt/Condpulse-v2.0/actions/runs/41322229545), SHA44c5a40:100rps/120s/1.000sessões/pool2,11.999chamadas, zero erros/descarte e62 recusas de regra esperadas. p50=18,9ms/p95=805,6ms/p99=1.738,3ms. As classes de leitura ultrapassaram400ms e criação/cancelamento ultrapassaram800ms. O job terminou com sucesso, mas as metas de latência não foram atendidas. Relatório: [load-synthetic-20261101.json](../evidence/load-synthetic-20261101.json). API, banco e gerador estavam no mesmo runner descartável; não é capacidade da HML.
 
+## Execução por fases
+
+O responsável solicitou continuidade em ciclos de verificar/corrigir/testar/registrar. Plano e critérios: [PLANO_FINALIZACAO_HML.md](PLANO_FINALIZACAO_HML.md). Fase1 concluída; fase2 depende de login/aceite/aprovação/MFA próprios. Não há execução permanente em segundo plano criada por este plano. Recibo: [loop-validation-hml-20261101.json](../evidence/loop-validation-hml-20261101.json).
+
 ## Pendências reais
 
-1. Concluir publicação do fluxo de gestor adicional (#178/V056), aceite/autenticação e aprovação da segunda conta já autorizada. A unidade A-101 foi confirmada e o convite de morador aceito/PENDING; portaria também PENDING. Outro gestor ativo com AAL2 deve aprovar ambos. A conexão de navegador interrompida bloqueia a continuação da operação; não repetir consentimentos nem contornar a autoaprovação.
+1. Concluir login da primeira conta e convite/aceite/autenticação/aprovação da segunda conta já autorizada. #178 está publicado; V056 aplicada/repetida. Morador A-101 e portaria seguem aceitos/PENDING até aprovação de outro gestor ativo com AAL2. Navegador recuperado; impedimento atual: sessão expirada. Não repetir consentimentos.
 2. Jornada real de portaria/parceiro, oferta/aceite da fila e alertas de permanência, após os vínculos autorizados. Rotinas publicadas/ligadas não equivalem a esses percursos concluídos; o demo nasceu sem permanências abertas.
 3. Profiling da cauda de latência, carga representativa na hospedagem e metas p95.
 4. Recuperação completa por e-mail, aparelho mobile, hardware/firmware piloto, backup do Storage e restore cronometrado, RPO/RTO e promoção operacional.
 5. Console/fila/SLA, passagem de turno e demais lacunas CPX; Log de Segurança da gestão ainda sem seção web própria. Administradora ERP D1–D9 é outra entrega, não implementação concluída por esta homologação.
 
 Não chamar o sistema inteiro de entregue só por CI, healthcheck ou dados de demonstração. Não repetir como pendência SMTP, hospedagem do worker, V053–V055, configuração do demo ou autenticação que já têm os recibos acima.
+
+## Controle de prestadores/visitantes/festas solicitado nesta continuação
+
+Nova prioridade: [ADR-0014](adr/0014-controle-de-permanencia-e-reentrada.md). Em implementação: V057 e tela de regras com ativação, janela diária, tolerâncias e vínculo da permanência com reserva/área. Não aplicada/publicada nesta etapa. Aviso real ao morador, vinculação de identidade entre cadastros, restrição/liberação responsável de reentrada e confirmação em equipamento ainda precisam ser concluídos/testados. O registro de entrada/saída e os alertas de V055 já existentes não equivalem a essa entrega integral.

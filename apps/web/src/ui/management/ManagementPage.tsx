@@ -18,6 +18,7 @@ import { AmenitySection, UnitSection } from './Setup';
 import { OccurrenceSection } from '../concierge/Occurrences';
 import { FinanceSection } from './Finance';
 import { AccessMapSection } from './AccessMap';
+import { StayRulesSection } from './StayRules';
 import { ManagementProvider, type ManagementScope } from './shared';
 import { ENTRY_PATH, condoOf, panelEnabled, sectionEnabled, type Condo } from '../shell/paths';
 import './Management.css';
@@ -35,6 +36,7 @@ export const managementSections = [
   { id: 'acesso', label: 'Acesso', icon: 'key' },
   { id: 'mapa-acesso', label: 'Mapa de acesso', icon: 'door' },
   { id: 'ocorrencias', label: 'Ocorrências', icon: 'alert' },
+  { id: 'permanencias', label: 'Permanências', icon: 'clock' },
   { id: 'financeiro', label: 'Financeiro', icon: 'card' },
   { id: 'auditoria', label: 'Auditoria', icon: 'clock' },
 ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
@@ -106,6 +108,7 @@ function ManagementConsole({ scope, section }: { scope: ManagementScope; section
     {section === 'acesso' ? <><AccessHealthSection /><CredentialManagementSection /></> : null}
     {section === 'mapa-acesso' ? <AccessMapSection /> : null}
     {section === 'ocorrencias' ? <OccurrenceSection canPickUnit={false} /> : null}
+    {section === 'permanencias' ? <StayRulesSection /> : null}
     {section === 'financeiro' ? <FinanceSection /> : null}
     {section === 'auditoria' ? <AuditSection /> : null}
   </>;

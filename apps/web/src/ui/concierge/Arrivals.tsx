@@ -498,7 +498,7 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
     <label htmlFor={`${id}-kind`}>Tipo de permanência</label>
     <select id={`${id}-kind`} value={stayKind} onChange={(event) => setStayKind(event.target.value as StayKind | '')} disabled={busy} aria-describedby={`${id}-kind-help`}>
       <option value="">Padrão (visitante; prestador recorrente fica como prestador)</option>
-      {stayKinds.map((kind) => <option key={kind} value={kind}>{stayKindLabels[kind]}</option>)}
+      {stayKinds.filter((kind) => kind !== 'EVENT_GUEST').map((kind) => <option key={kind} value={kind}>{stayKindLabels[kind]}</option>)}
     </select>
     <span className="field-help" id={`${id}-kind-help`}>A entrada abre a permanência: a saída prevista vem do convite, da janela do prestador ou do tempo do tipo no condomínio.</span>
     <label htmlFor={`${id}-note`}>Observação interna (opcional)</label>

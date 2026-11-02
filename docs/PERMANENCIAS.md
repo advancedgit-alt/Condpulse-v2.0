@@ -84,3 +84,7 @@ Leituras da equipe gravam `SENSITIVE_VIEWED` (`STAYS_NOW`, `STAY_DAY_CLOSE` com 
 - Tela da gestão para editar as regras de tempo (só API nesta fatia); justificativa pelo painel do parceiro (API pronta,
   web só leitura).
 - Worker de HML já ligado após V055, por PR #174 revisado e deploy 41354940226. Ensaio real de entrada/alerta/saída ainda exige os perfis operacionais ativos e dados apropriados; flag ligada não comprova essa jornada.
+
+## Extensão solicitada em01/11 — em implementação
+
+[ADR-0014](adr/0014-controle-de-permanencia-e-reentrada.md): controle editável e ativável por categoria; janela diária no fuso do condomínio; exemplo08–17, portaria no vencimento, morador+30min, restrição de nova entrada+60min e liberação com responsabilidade. V057 adiciona configuração de horário/ativação, categoria EVENT_GUEST e referência da reserva/área no painel; testes ainda devem concluir antes de aplicar/publicar. Não modifica V055 aplicada. As próximas partes fecham avisos ao morador, identidade verificada entre cadastros, restrição e aceite do morador confirmado na portaria. Equipamento exige publicação/retorno do adaptador; saída nunca é bloqueada.
