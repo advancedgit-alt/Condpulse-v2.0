@@ -2,7 +2,7 @@
 
 Referências: PRD complementar Segurança v1.0 (`docs/prd/CondPulse_PRD_Complementar_Seguranca_v1.0.md`, seção 5 e §7.6/E11),
 ADR-0011 item 3, `docs/prd/DECISOES_COMPLEMENTAR.md`. Migration: `db/migrations/V050__security_log.sql`.
-Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; não ligada na Vercel nem na Fly).
+Flag: `CP_SECURITY_LOG_ENABLED` (API e worker, padrão `false`; ligada na homologação Vercel/Fly em 01/11/2026). Configuração e publicação já conferidas; recibos e limites em [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
 
 ## O que existe
 

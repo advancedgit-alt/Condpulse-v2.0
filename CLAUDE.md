@@ -34,3 +34,5 @@ Instruções persistentes do projeto. Consulte também AGENTS.md.
 - Somente chame uma jornada de homologada quando o percurso real e as negações forem comprovados.
 - A rodada de 01/11 tem autorização para correções, testes e carga sintética na HML; os dados ficam preservados até pedido posterior de limpeza.
 - Código de fundação, casca de painel, CI e readiness não equivalem ao produto completo entregue. Novos papéis no demo não são automáticos: confirme os vínculos específicos, preserve o escopo sintético e registre motivo.
+
+- Continuação da rodada: o responsável confirmou gestão, morador e portaria da conta atual somente no demo e gestor do parceiro fictício. Gestão e PARTNER_ADMIN já ACTIVE pela aplicação; CONCIERGE aceito/PENDING, autoaprovação409 MEMBERSHIP_SELF_DECISION_DENIED preservada. Morador não criado: revisão automática exige confirmação da unidade exata. Não pedir de novo os vínculos concluídos; não conceder gestor a outra conta sem confirmação específica nem contornar a autoaprovação. Recibos em evidence/demo-access-hml-20261101.json.

@@ -18,7 +18,11 @@ Não apagar anexos, cancelar a reserva ou resetar o demo apenas para “limpar a
 
 Na Central → Condomínio demo há geração1 com2torres/32unidades/3áreas, pessoas e parceiro fictícios, avisos, encomendas, visitas, ocorrências, pedidos, escalas e log. Nenhuma conta real foi vinculada automaticamente.
 
-Para executar os percursos de gestão/morador/portaria/parceiro nesse demo, é necessário aprovar os vínculos específicos. A Central orienta convite de gestor; depois Gestão → Pessoas para unidade/equipe e concessão de papel no parceiro. Operador/supervisor também precisam de escala. Respeitar o escopo demo e registrar motivo; não alterar contas ou contratos de produção.
+A conta atual já abriu a gestão do demo e a gestão do parceiro com AAL2, após vínculos especificamente confirmados no chat. Pelo parceiro, Equipe mostra7 registros; Carteira mostra somente o contrato do demo; Escala mostra4 escalas fictícias. Consulte o Log de Segurança sob pedido e use Verificar integridade; cada leitura grava evento. A correção das rotas HTTP está no PR #176 e os recibos de publicação estão em ESTADO_ATUAL.
+
+Portaria: o convite foi aceito, mas está PENDING. Outro gestor precisa aprovar em Gestão → Pessoas → Situação Pendente, com sua própria conta. A tentativa pela mesma conta foi recusada por MEMBERSHIP_SELF_DECISION_DENIED. Não aprovar por SQL ou fabricar ator. A gestão dessa segunda conta ainda precisa de autorização específica.
+
+Morador: ainda não há vínculo real no demo. Confirmar primeiro a unidade fictícia exata (proposta: Torre A,101); o controle automático bloqueou o convite porque a unidade não tinha sido indicada. Após confirmação, criar e aceitar o convite e obter aprovação de outro gestor. Operador/supervisor do parceiro também exigem papel e escala próprios; a confirmação de Gestor do parceiro não concede esses papéis adicionais.
 
 ## Ainda não aceito
 

@@ -1,6 +1,6 @@
 # Worker contínuo de homologação na Fly.io
 
-Estado em 01/11/2026: worker publicado em608604a, run41354940226, seis leituras started e zero exits. Outbox, fila de espera e alertas de permanência ligados, pool1, intervalos60s; hardware sync desligado. Resposta pública da gestão já produziu DELIVERED e aviso aberto no portal. Jornadas reais de fila/permanência ainda dependem dos perfis/dados apropriados; não inferir execução só pelas flags. Recibos: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+Estado em 01/11/2026: worker atualizado à mesma fonte da API, b1d4598273cb14c3f37834de8a779e47424a15ae, deploy41371155348: seis leituras started, zero exits, gru. Inspect41370815083 confirmou login existente READY/eligible e orçamento60/60 com margem20. Outbox/fila/permanências continuam ligados, pool1 e intervalos60s, hardware sync desligado; sem nova geração, apply ou alteração de flags. Jornadas operacionais de entrada/alerta/saída e fila continuam pendentes dos perfis/dados apropriados. Recibos: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
 
 ## O que muda
 
