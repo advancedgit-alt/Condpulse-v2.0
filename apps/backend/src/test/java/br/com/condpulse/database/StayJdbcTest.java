@@ -236,6 +236,10 @@ class StayJdbcTest {
   var entry=access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(null,first.permitId(),"DOCUMENT_CHECKED",null)).record();
   var left=access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(null,second.permitId(),"DOCUMENT_CHECKED",null)).record();
   var stay=stayOf(entry.entryId()); var closedStay=stayOf(left.entryId());
+  var premature=assertThrows(org.springframework.dao.DataAccessException.class,()->new TenantTransactionExecutor(db.jdbc,db.manager)
+   .execute(db.accountA,db.tenantA,AssuranceLevel.AAL1,ctx->db.jdbc.update("insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) values(?,'STAY_OVERDUE',?,0,jsonb_build_object('unitId',?::text)) on conflict do nothing",db.tenantA,stay,db.unitA)));
+  assertEquals("42501",br.com.condpulse.shared.infrastructure.SqlStates.of(premature),"API não pode consumir a chave de aviso antes da fonte real");
+
   long wait=Duration.between(Instant.now(),until.plusMillis(300)).toMillis(); if(wait>0) Thread.sleep(wait);
   job.runOnce(); job.runOnce();
   assertEquals("1",db.adminString("select count(*) from cp.outbox where aggregate_id=? and event_type='STAY_OVERDUE'",stay));

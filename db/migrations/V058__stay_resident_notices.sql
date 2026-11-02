@@ -5,6 +5,12 @@ ALTER TABLE cp.notifications ADD CONSTRAINT notifications_kind_check
  CHECK(kind IN ('ARRIVAL_WAITING','PARCEL_RECEIVED','WAITLIST_OFFERED','REQUEST_UPDATED','MOVE_DECIDED','STAY_OVERDUE'));
 CREATE UNIQUE INDEX outbox_stay_notice_once ON cp.outbox(tenant_id,aggregate_id) WHERE event_type='STAY_OVERDUE';
 
+-- A API já insere outros eventos: não pode antecipar uma tarefa falsa e consumir a chave idempotente antes do N1.
+CREATE POLICY outbox_stay_api_source ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_api
+ WITH CHECK(event_type<>'STAY_OVERDUE' OR EXISTS(SELECT 1 FROM cp.stays s
+  WHERE s.tenant_id=cp.outbox.tenant_id AND s.id=cp.outbox.aggregate_id AND s.unit_id::text=cp.outbox.payload->>'unitId'
+   AND s.l1_alerted_at IS NOT NULL AND s.state='OPEN' AND cp.stay_control_enabled(s.tenant_id,s.kind)));
+
 -- O worker só ganha INSERT das colunas de conteúdo; estado/prazo/tentativas continuam exclusivamente do banco.
 GRANT INSERT(tenant_id,event_type,aggregate_id,aggregate_version,payload) ON cp.outbox TO cp_worker;
 CREATE POLICY outbox_stay_worker_insert ON cp.outbox AS RESTRICTIVE FOR INSERT TO cp_worker
