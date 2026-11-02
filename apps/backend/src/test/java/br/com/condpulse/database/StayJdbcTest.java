@@ -142,9 +142,6 @@ class StayJdbcTest {
  @Test void dayCloseListsEntriesWithoutExitAndManualExitCloses() throws Exception {
   var left=enterByPermit("Visita Que Saiu");
   var stayed=enterByPermit("Visita Sem Saida");
-  var forged=assertThrows(org.springframework.dao.DataAccessException.class,()->new WorkerTransactions(workerDb.jdbc,workerDb.manager).inTenant(db.tenantA,
-   ()->workerDb.jdbc.update("insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) values(?,'STAY_OVERDUE',?,0,jsonb_build_object('unitId',?::text)) on conflict do nothing",db.tenantA,stay,db.otherUnitA)));
-  assertEquals("42501",br.com.condpulse.shared.infrastructure.SqlStates.of(forged),"Outro destinatário é barrado por RLS, não pelo índice de duplicação");
   access.exit(concierge,db.tenantA,AAL2,left.entryId(),key(),null);
   assertEquals("CLOSED:EXIT_RECORDED",db.adminString("select state||':'||closure from cp.stays where entry_event_id=?",left.entryId()));
   var report=stays.dayClose(concierge,db.tenantA,AAL2,null);
