@@ -6,6 +6,317 @@
     "description": "Identidade, BFF condicional e primeira fatia residencial; conferir flags e limites da ADR-0004."
   },
   "paths": {
+    "/v1/tenants/{tenantId}/stay-identities/source": {
+      "get": {
+        "operationId": "visitorIdentitySource",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "permitId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Portaria AAL2: conferência da origem. Exatamente um dos identificadores.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorIdentitySource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Vínculo/AAL2/CSRF/módulo não permitido"
+          },
+          "404": {
+            "description": "Origem não disponível"
+          },
+          "409": {
+            "description": "Identidade/versão/identificador de repetição em conflito"
+          },
+          "503": {
+            "description": "Dependência indisponível; consultar antes de repetir"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/stay-identities": {
+      "get": {
+        "operationId": "searchVisitorIdentities",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 80
+            }
+          }
+        ],
+        "description": "Portaria AAL2. Busca auditada e literal por início de nome, sem associação automática.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorIdentityCandidates"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Vínculo/AAL2/CSRF/módulo não permitido"
+          },
+          "404": {
+            "description": "Origem não disponível"
+          },
+          "409": {
+            "description": "Identidade/versão/identificador de repetição em conflito"
+          },
+          "503": {
+            "description": "Dependência indisponível; consultar antes de repetir"
+          }
+        }
+      },
+      "post": {
+        "operationId": "verifyVisitorIdentity",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Portaria AAL2. Mesmo requestId/conteúdo/autor repete sem evento adicional. Sessão web exige CSRF.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorIdentityCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Vínculo/AAL2/CSRF/módulo não permitido"
+          },
+          "404": {
+            "description": "Origem não disponível"
+          },
+          "409": {
+            "description": "Identidade/versão/identificador de repetição em conflito"
+          },
+          "503": {
+            "description": "Dependência indisponível; consultar antes de repetir"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorIdentityVerify"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenantId}/stay-identities/{checkId}/void": {
+      "post": {
+        "operationId": "voidVisitorIdentity",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "x-feature-flag": "CP_VISITS_ENABLED",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "checkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Gestão de vínculos/AAL2. Anula com versão e motivo, preservando histórico. Sessão web exige CSRF.",
+        "responses": {
+          "200": {
+            "description": "Resultado autorizado",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorIdentityCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pedido inválido"
+          },
+          "401": {
+            "description": "Autenticação necessária"
+          },
+          "403": {
+            "description": "Vínculo/AAL2/CSRF/módulo não permitido"
+          },
+          "404": {
+            "description": "Origem não disponível"
+          },
+          "409": {
+            "description": "Identidade/versão/identificador de repetição em conflito"
+          },
+          "503": {
+            "description": "Dependência indisponível; consultar antes de repetir"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorIdentityVoid"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/me": {
       "get": {
         "operationId": "currentIdentity",
@@ -24181,6 +24492,167 @@
       }
     },
     "schemas": {
+      "VisitorIdentityCheck": {
+        "type": "object",
+        "required": [
+          "checkId",
+          "visitorId",
+          "canonicalVisitorId",
+          "state",
+          "version",
+          "checkedAt"
+        ],
+        "properties": {
+          "checkId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "visitorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "canonicalVisitorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "VOIDED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "VisitorIdentitySource": {
+        "type": "object",
+        "required": [
+          "check"
+        ],
+        "properties": {
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitorIdentityCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "VisitorIdentityVerify": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "reason"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "arrivalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "permitId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "canonicalVisitorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "description": "Exatamente uma origem. canonicalVisitorId nulo registra raiz nova; outra identidade exige raiz já conferida. Documento conferido pessoalmente pela portaria; sem biometria."
+      },
+      "VisitorIdentityVoid": {
+        "type": "object",
+        "required": [
+          "version",
+          "reason"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "VisitorIdentityCandidates": {
+        "type": "object",
+        "required": [
+          "candidates"
+        ],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "required": [
+                "checkId",
+                "visitorId",
+                "name",
+                "documentLast4",
+                "version"
+              ],
+              "properties": {
+                "checkId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "visitorId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "documentLast4": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      },
       "CurrentIdentity": {
         "type": "object",
         "required": [

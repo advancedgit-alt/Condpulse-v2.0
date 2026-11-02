@@ -212,6 +212,7 @@ final class JdbcDisposableDatabase implements AutoCloseable {
  private void deleteStays(Connection connection) throws SQLException {
   update(connection,"set session_replication_role=replica");
   try {
+   update(connection,"delete from cp.visitor_identity_checks where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.stays where tenant_id in (?,?)",tenantA,tenantB);
    update(connection,"delete from cp.stay_rules where tenant_id in (?,?)",tenantA,tenantB);
   } finally { update(connection,"set session_replication_role=origin"); }
@@ -297,3 +298,4 @@ final class JdbcDisposableDatabase implements AutoCloseable {
   } finally { pool.close(); }
  }
 }
+
