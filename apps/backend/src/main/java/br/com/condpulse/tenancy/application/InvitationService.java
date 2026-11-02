@@ -31,7 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Service @Profile("api")
 public class InvitationService {
- static final Set<String> ROLES=Set.of("RESIDENT","RESPONSIBLE","DEPENDENT","OWNER","CONCIERGE","MAINTENANCE");
+ static final Set<String> ROLES=Set.of("RESIDENT","RESPONSIBLE","DEPENDENT","OWNER","CONCIERGE","MAINTENANCE","MANAGER");
  private static final Set<String> RESIDENTIAL=Set.of("RESIDENT","RESPONSIBLE","DEPENDENT","OWNER");
  private static final SecureRandom RANDOM=new SecureRandom();
  private final TenantTransactionExecutor transactions;

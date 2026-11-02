@@ -124,3 +124,23 @@ test('conta só de gestão abre a gestão sem formulário de unidade residencial
   await expect(areas.getByText('Zeladoria')).toHaveCount(0);
   expect(unitRequests).toEqual([]);
 });
+
+test('gestor adicional é convidado sem unidade e o aceite continua pendente de aprovação', async ({ page }) => {
+  await installSyntheticApi(page, { manager: true });
+  const state = await installManagementApi(page, { assurance: 'AAL2', verifiedFactor: true });
+  await signIn(page);
+  await page.goto(`/c/${TENANT_A}/gestao/pessoas`);
+  await page.getByLabel('Papel', { exact: true }).selectOption('MANAGER');
+  await expect(page.getByLabel('Unidade', { exact: true })).toBeDisabled();
+  await expect(page.getByText('A conta convidada não aprova o próprio vínculo.', { exact: false })).toBeVisible();
+  await page.getByLabel('Nome', { exact: true }).fill('Gestor Convidado Sintético');
+  await page.getByLabel('E-mail da conta').fill('gestor-sintetico@example.invalid');
+  await page.getByRole('button', { name: 'Criar convite', exact: true }).click();
+  await expect(page.getByText(/Copie o link agora/)).toBeVisible();
+  expect(state.invitationBodies).toEqual([{ role: 'MANAGER', unitId: null,
+    displayName: 'Gestor Convidado Sintético', email: 'gestor-sintetico@example.invalid', validDays: 7 }]);
+  await page.goto(`/convite#token=${INVITATION_TOKEN}`);
+  await page.getByRole('button', { name: 'Aceitar convite', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pedido de vínculo enviado.', exact: true })).toBeVisible();
+  expect(state.membershipDecisions).toHaveLength(0);
+});

@@ -7,7 +7,7 @@ import type { ISODateTime, ReservationPolicy, UUID } from './types';
  */
 export type MembershipRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE' | 'MANAGER' | 'SUPPORT';
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
-export type InvitationRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE';
+export type InvitationRole = 'RESIDENT' | 'RESPONSIBLE' | 'DEPENDENT' | 'OWNER' | 'CONCIERGE' | 'MAINTENANCE' | 'MANAGER';
 export type ReservationStatus = 'HELD' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
 
 export interface ManagedBlock { blockId: UUID; name: string }
