@@ -26,6 +26,7 @@ public class NotificationStore {
     when 'WAITLIST_OFFERED' then(select case when w.state='OFFERED' and w.offer_expires_at<=clock_timestamp() then 'EXPIRED' else w.state end
      from cp.reservation_waitlist w where w.tenant_id=n.tenant_id and w.id=n.resource_id)
     when 'REQUEST_UPDATED' then(select s.state from cp.service_requests s where s.tenant_id=n.tenant_id and s.id=n.resource_id)
+    when 'STAY_OVERDUE' then(select s.state from cp.stays s where s.tenant_id=n.tenant_id and s.id=n.resource_id)
     when 'MOVE_DECIDED' then(select v.state from cp.move_requests v where v.tenant_id=n.tenant_id and v.id=n.resource_id)
    end as resource_state
   """;

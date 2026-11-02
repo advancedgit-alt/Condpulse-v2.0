@@ -12,7 +12,7 @@ const REQUEST = '93000000-0000-4000-8000-000000000005';
 const MOVE = '93000000-0000-4000-8000-000000000006';
 
 interface Notice {
-  notificationId: string; unitId: string; kind: 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED'; resourceId: string; resourceState: string | null;
+  notificationId: string; unitId: string; kind: 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED' | 'STAY_OVERDUE'; resourceId: string; resourceState: string | null;
   state: 'AVAILABLE' | 'READ_IN_APP'; createdAt: string; readAt: string | null;
 }
 async function json(route: Route, status: number, body: unknown) {
@@ -134,4 +134,22 @@ test('caixa desligada no ambiente não aparece nem mostra erro técnico', async 
   await expect(page.getByRole('heading', { name: 'Próximas reservas da unidade' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Caixa da unidade/ })).toHaveCount(0);
   await expect(page.getByText('SYNTHETIC_TEST_ROUTE_NOT_FOUND')).toHaveCount(0);
+});
+
+test('aviso de atraso exige abertura autenticada e leva à conferência da permanência', async ({ page }) => {
+  await installSyntheticApi(page);
+  const state = await installInbox(page);
+  const notice = '93000000-0000-4000-8000-000000000007';
+  state.items = [{ notificationId: notice, unitId: UNIT_A, kind: 'STAY_OVERDUE', resourceId: 'a0000000-0000-4000-8000-000000000001',
+    resourceState: 'OPEN', state: 'AVAILABLE', createdAt: minutes(-1), readAt: null }];
+  await signIn(page);
+  await page.goto(`/c/${TENANT_A}/morador/${UNIT_A}/inicio`);
+  const row = page.getByRole('list', { name: 'Avisos da unidade' }).getByRole('listitem').filter({ hasText: 'Prazo de permanência vencido' });
+  await expect(row.getByText('Não aberto')).toBeVisible();
+  await expect(row.getByText(/Sem registro de saída após o prazo/)).toBeVisible();
+  expect(state.opens).toHaveLength(0);
+  await row.getByRole('button', { name: 'Abrir e conferir permanência' }).click();
+  await expect(page).toHaveURL(new RegExp(`/c/${TENANT_A}/morador/${UNIT_A}/acessos$`));
+  expect(state.opens.map((item) => item.id)).toEqual([notice]);
+  expect(state.opens[0]!.csrf).toBeTruthy();
 });

@@ -142,6 +142,9 @@ class StayJdbcTest {
  @Test void dayCloseListsEntriesWithoutExitAndManualExitCloses() throws Exception {
   var left=enterByPermit("Visita Que Saiu");
   var stayed=enterByPermit("Visita Sem Saida");
+  var forged=assertThrows(org.springframework.dao.DataAccessException.class,()->new WorkerTransactions(workerDb.jdbc,workerDb.manager).inTenant(db.tenantA,
+   ()->workerDb.jdbc.update("insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) values(?,'STAY_OVERDUE',?,0,jsonb_build_object('unitId',?::text)) on conflict do nothing",db.tenantA,stay,db.otherUnitA)));
+  assertEquals("42501",br.com.condpulse.shared.infrastructure.SqlStates.of(forged),"Outro destinatário é barrado por RLS, não pelo índice de duplicação");
   access.exit(concierge,db.tenantA,AAL2,left.entryId(),key(),null);
   assertEquals("CLOSED:EXIT_RECORDED",db.adminString("select state||':'||closure from cp.stays where entry_event_id=?",left.entryId()));
   var report=stays.dayClose(concierge,db.tenantA,AAL2,null);
@@ -222,6 +225,53 @@ class StayJdbcTest {
   stays.changeRule(manager,db.tenantA,AAL2,"VISITOR",new StayModels.RuleChange(240,0,60,0L,true,false,null,null));
   job.runOnce(); job.runOnce(); assertEquals(1,events(stay,"STAY_DUE")); assertEquals(1,events(stay,"STAY_OVERDUE_L1"));
   access.exit(concierge,db.tenantA,AAL2,entry.entryId(),key(),null);
+  assertEquals("CLOSED",db.adminString("select state from cp.stays where id=?",stay));
+ }
+
+ @Test void overdueResidentNoticeIsDeliveredOnceAndClosedStayIsSkipped() throws Exception {
+  stays.changeRule(manager,db.tenantA,AAL2,"VISITOR",new StayModels.RuleChange(240,0,60,null,true,false,null,null));
+  var until=now().plusSeconds(8);
+  var first=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),new VisitModels.CreatePermit("Aviso Permanencia JDBC",null,null,now(),until)).permit();
+  var second=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),new VisitModels.CreatePermit("Saida Antes Aviso JDBC",null,null,now(),until)).permit();
+  var entry=access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(null,first.permitId(),"DOCUMENT_CHECKED",null)).record();
+  var left=access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(null,second.permitId(),"DOCUMENT_CHECKED",null)).record();
+  var stay=stayOf(entry.entryId()); var closedStay=stayOf(left.entryId());
+  long wait=Duration.between(Instant.now(),until.plusMillis(300)).toMillis(); if(wait>0) Thread.sleep(wait);
+  job.runOnce(); job.runOnce();
+  assertEquals("1",db.adminString("select count(*) from cp.outbox where aggregate_id=? and event_type='STAY_OVERDUE'",stay));
+  var forged=assertThrows(org.springframework.dao.DataAccessException.class,()->new WorkerTransactions(workerDb.jdbc,workerDb.manager).inTenant(db.tenantA,
+   ()->workerDb.jdbc.update("insert into cp.outbox(tenant_id,event_type,aggregate_id,aggregate_version,payload) values(?,'STAY_OVERDUE',?,0,jsonb_build_object('unitId',?::text)) on conflict do nothing",db.tenantA,stay,db.otherUnitA)));
+  assertEquals("42501",br.com.condpulse.shared.infrastructure.SqlStates.of(forged),"Outro destinatário é barrado por RLS, não pelo índice de duplicação");
+  access.exit(concierge,db.tenantA,AAL2,left.entryId(),key(),null);
+  var delivery=new br.com.condpulse.notifications.application.OutboxWorker(
+   new WorkerTransactions(workerDb.jdbc,workerDb.manager),new br.com.condpulse.notifications.infrastructure.OutboxStore(workerDb.jdbc),
+   java.util.List.of(new br.com.condpulse.notifications.application.InboxEffect(new br.com.condpulse.notifications.infrastructure.InboxStore(workerDb.jdbc))));
+  delivery.runTenant(db.tenantA); delivery.runTenant(db.tenantA);
+  assertEquals("1",db.adminString("select count(*) from cp.notifications where resource_id=? and kind='STAY_OVERDUE'",stay));
+  assertEquals("0",db.adminString("select count(*) from cp.notifications where resource_id=? and kind='STAY_OVERDUE'",closedStay));
+  assertEquals("SKIPPED",db.adminString("select state from cp.outbox where aggregate_id=? and event_type='STAY_OVERDUE'",closedStay));
+  var notifications=new br.com.condpulse.notifications.application.NotificationService(new TenantTransactionExecutor(db.jdbc,db.manager),
+   new br.com.condpulse.notifications.infrastructure.NotificationStore(db.jdbc));
+  var page=notifications.unit(db.accountA,db.tenantA,db.unitA);
+  var notice=page.items().stream().filter(n->n.resourceId().equals(stay)).findFirst().orElseThrow();
+  assertEquals("AVAILABLE",notice.state()); assertEquals("OPEN",notice.resourceState());
+  assertFalse(notifications.unit(db.accountC,db.tenantA,db.otherUnitA).items().stream().anyMatch(n->n.resourceId().equals(stay)));
+  assertEquals("READ_IN_APP",notifications.open(db.accountA,db.tenantA,notice.notificationId()).state());
+  assertEquals("1",db.adminString("select count(*) from cp.notifications where resource_id=? and kind='STAY_OVERDUE'",stay));
+ }
+
+ @Test void configuredWindowDeniesActualEntryAndSwitchOffAllowsItWithoutErasingHistory() throws Exception {
+  int hour=Instant.now().atZone(java.time.ZoneId.of("America/Sao_Paulo")).getHour();
+  String start=hour<12?"18:00":"01:00",end=hour<12?"19:00":"02:00";
+  stays.changeRule(manager,db.tenantA,AAL2,"SERVICE_PROVIDER",new StayModels.RuleChange(540,30,60,null,true,true,start,end));
+  assertEquals("STAY_ENTRY_OUTSIDE_SCHEDULE",assertThrows(BusinessProblem.class,()->enterByArrival("Horario Negado JDBC","SERVICE_PROVIDER")).code());
+  assertEquals("0",db.adminString("select count(*) from cp.access_events where tenant_id=? and event_type='MANUAL_IN'",db.tenantA));
+  stays.changeRule(manager,db.tenantA,AAL2,"SERVICE_PROVIDER",new StayModels.RuleChange(540,30,60,0L,false,true,start,end));
+  var admitted=enterByArrival("Horario Desligado JDBC","SERVICE_PROVIDER");
+  UUID stay=stayOf(admitted.entryId());
+  assertEquals("OPEN",db.adminString("select state from cp.stays where id=?",stay));
+  assertFalse(stays.unitOpen(db.accountA,db.tenantA,db.unitA).stays().stream().filter(x->x.stayId().equals(stay)).findFirst().orElseThrow().controlEnabled());
+  access.exit(concierge,db.tenantA,AAL2,admitted.entryId(),key(),null);
   assertEquals("CLOSED",db.adminString("select state from cp.stays where id=?",stay));
  }
 }
