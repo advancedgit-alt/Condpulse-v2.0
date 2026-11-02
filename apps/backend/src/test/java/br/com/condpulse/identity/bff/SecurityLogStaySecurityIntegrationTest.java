@@ -18,6 +18,8 @@ import br.com.condpulse.securitylog.application.SecurityLogService;
 import br.com.condpulse.shared.api.ProblemHandler;
 import br.com.condpulse.shared.application.BusinessProblem;
 import br.com.condpulse.stays.api.StayController;
+import br.com.condpulse.stays.api.VisitorIdentityController;
+import br.com.condpulse.stays.application.VisitorIdentityService;
 import br.com.condpulse.stays.application.StayModels;
 import br.com.condpulse.stays.application.StayService;
 import org.junit.jupiter.api.AfterEach;
@@ -199,11 +201,32 @@ class SecurityLogStaySecurityIntegrationTest {
   verifyNoInteractions(log(),stays());
  }
 
+
+ @Test void identityRoutesRequireAuthenticationAndCookieCsrfAndPassActorAndAssurance() throws Exception {
+  start(true);
+  var service=context.getBean(VisitorIdentityService.class);
+  String route=BASE+"/stay-identities",source=route+"/source",raw=session("aal2");
+  assertEquals(401,mvc.perform(get(source).servletPath(source).secure(true).param("permitId",STAY.toString())).andReturn().getResponse().getStatus());
+  when(service.source(ACCOUNT,TENANT,AssuranceLevel.AAL2,null,STAY)).thenReturn(new VisitorIdentityService.Source(null));
+  ok(read(source,raw).param("permitId",STAY.toString()));
+  verify(service).source(ACCOUNT,TENANT,AssuranceLevel.AAL2,null,STAY);
+  assertEquals(403,mvc.perform(post(route).servletPath(route).secure(true).cookie(new Cookie(BffCookies.SESSION,raw))
+   .contentType(MediaType.APPLICATION_JSON).content("{}")).andReturn().getResponse().getStatus());
+  var request=new VisitorIdentityService.Verify(UNIT,null,STAY,null,"Documento conferido");
+  var checked=new VisitorIdentityService.Check(UNIT,STAY,STAY,"ACTIVE",0,NOW);
+  when(service.verify(ACCOUNT,TENANT,AssuranceLevel.AAL2,request)).thenReturn(checked);
+  ok(write(post(route),route,raw,csrf()).content("{\"requestId\":\""+UNIT+"\",\"permitId\":\""+STAY+"\",\"reason\":\"Documento conferido\"}"));
+  verify(service).verify(ACCOUNT,TENANT,AssuranceLevel.AAL2,request);
+  String voidRoute=route+"/"+UNIT+"/void";
+  when(service.voidCheck(ACCOUNT,TENANT,AssuranceLevel.AAL2,UNIT,new VisitorIdentityService.VoidCheck(0L,"Associação incorreta"))).thenReturn(checked);
+  ok(write(post(voidRoute),voidRoute,raw,csrf()).content("{\"version\":0,\"reason\":\"Associação incorreta\"}"));
+ }
  @Configuration(proxyBeanMethods=false) @EnableWebMvc @EnableWebSecurity
- @Import({SecurityConfiguration.class,SecurityLogController.class,StayController.class,ProblemHandler.class})
+ @Import({SecurityConfiguration.class,SecurityLogController.class,StayController.class,VisitorIdentityController.class,ProblemHandler.class})
  static class TestConfiguration {
   @Bean WebSessionService testSessions() { return mock(WebSessionService.class); }
   @Bean SecurityLogService testLog() { return mock(SecurityLogService.class); }
+  @Bean VisitorIdentityService testIdentity() { return mock(VisitorIdentityService.class); }
   @Bean StayService testStays() { return mock(StayService.class); }
   @Bean @Primary JwtDecoder testDecoder() { return mock(JwtDecoder.class); }
   @Bean CsrfTokenRepository testCsrfRepository() { return new BffConfiguration().bffCsrfRepository(); }
@@ -216,3 +239,4 @@ class SecurityLogStaySecurityIntegrationTest {
   }
  }
 }
+

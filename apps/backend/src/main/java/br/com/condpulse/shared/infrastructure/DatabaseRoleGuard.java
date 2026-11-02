@@ -336,6 +336,13 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
      or coalesce(has_any_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'UPDATE'),false)
      or coalesce(has_table_privilege(current_user,to_regclass('platform.security_log_anchors'),'DELETE,TRUNCATE'),false)
      or coalesce(has_column_privilege(current_user,to_regclass('platform.security_log_anchors'),'anchored_at','INSERT'),false)
+     -- Conferências de identidade (V059): origem/autor/horário imutáveis; só anulação versionada com motivo.
+     or coalesce(has_table_privilege(current_user,to_regclass('cp.visitor_identity_checks'),'DELETE,TRUNCATE'),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'UPDATE')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.visitor_identity_checks') and c.attnum>0 and not c.attisdropped
+        and c.attname not in ('state','void_reason','version')),false)
+     or coalesce((select bool_or(has_column_privilege(current_user,c.attrelid,c.attname,'INSERT')) from pg_attribute c
+       where c.attrelid=to_regclass('cp.visitor_identity_checks') and c.attname in ('checked_at','state','void_reason','voided_by','voided_at','version')),false)
      -- Permanências (V055): nunca apagadas; abertas só pela entrada (unidade, pessoa, horários e prazos vêm do banco); a API
      -- muda só estado, confirmação e justificativa; o worker só marca os alertas, sem ler a pessoa.
      or coalesce(has_table_privilege(current_user,to_regclass('cp.stays'),'DELETE,TRUNCATE'),false)
@@ -389,3 +396,4 @@ public class DatabaseRoleGuard implements SmartInitializingSingleton {
    throw new IllegalStateException("Schema de negócio sem proteção RLS completa.");
  }
 }
+

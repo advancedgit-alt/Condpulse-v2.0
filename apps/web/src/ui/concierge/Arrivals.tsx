@@ -1,3 +1,4 @@
+import { VisitorIdentity } from './VisitorIdentity';
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parcels } from '../../api/parcels';
@@ -495,6 +496,7 @@ function EntryForm({ basis, visitorName, unit, close }: { basis: { arrivalId: st
       <label className="weekday-option"><input type="radio" name={`${id}-evidence`} value="RECOGNIZED_BY_UNIT" checked={evidence === 'RECOGNIZED_BY_UNIT'}
         onChange={() => setEvidence('RECOGNIZED_BY_UNIT')} disabled={busy} />Reconhecida por quem autorizou, na portaria</label>
     </fieldset>
+    <VisitorIdentity basis={basis} busy={busy} />
     <label htmlFor={`${id}-kind`}>Tipo de permanência</label>
     <select id={`${id}-kind`} value={stayKind} onChange={(event) => setStayKind(event.target.value as StayKind | '')} disabled={busy} aria-describedby={`${id}-kind-help`}>
       <option value="">Padrão (visitante; prestador recorrente fica como prestador)</option>
@@ -619,3 +621,4 @@ function AccessSummary({ record, timeZone }: { record: AccessRecord; timeZone: s
     {record.exit ? <span>Saída registrada pela portaria em {formatWhen(record.exit.exitedAt, timeZone)}{record.exit.recordedByMe ? ' (com a sua conta)' : ''}{record.exit.note ? ` · ${record.exit.note}` : ''}</span> : null}
     {record.exit?.correction ? <span>Saída corrigida em {formatWhen(record.exit.correction.correctedAt, timeZone)}: <bdi>{record.exit.correction.reason}</bdi></span> : null}</div>;
 }
+

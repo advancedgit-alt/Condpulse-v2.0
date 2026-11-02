@@ -661,3 +661,38 @@ test('convite encerrado não oferece link', async ({ page }) => {
   await expect(page.getByRole('list', { name: 'Convites encerrados' }).getByText('Visita Antiga')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Compartilhar link' })).toHaveCount(0);
 });
+
+
+test('portaria vincula convite a identidade conferida sem criar entrada automaticamente', async ({ page }) => {
+  const state = await openConcierge(page);
+  state.arrivals.push(arrivalFixture({ visitorName: 'Nova Visita Ficticia', state: 'APPROVED', decidedAt: minutes(-1), decisionSource: 'APP', version: 1 }));
+  const canonical = '91000000-0000-4000-8000-000000000001';
+  const checkId = '91000000-0000-4000-8000-000000000002';
+  const posts: { body: Record<string, unknown>; csrf: string | undefined }[] = [];
+  await page.route('**/v1/tenants/*/stay-identities**', async (route) => {
+    const request = route.request(); const url = new URL(request.url());
+    if (url.pathname.endsWith('/source')) return json(route, 200, { check: null });
+    if (request.method() === 'GET') return json(route, 200, { candidates: [{ checkId, visitorId: canonical, name: 'Pessoa Conferida Ficticia', documentLast4: '7788', version: 0 }] });
+    const body = request.postDataJSON() as Record<string, unknown>;
+    posts.push({ body, csrf: request.headers()['x-csrf-token'] });
+    return json(route, 200, { checkId, visitorId: '91000000-0000-4000-8000-000000000003', canonicalVisitorId: canonical, state: 'ACTIVE', version: 0, checkedAt: new Date().toISOString() });
+  });
+  await page.goto('/c/' + TENANT_A + '/portaria/visitas');
+  const row = page.getByRole('list', { name: 'Chegadas' }).getByRole('listitem').filter({ hasText: 'Nova Visita Ficticia' });
+  await row.getByRole('button', { name: 'Registrar entrada' }).click();
+  const form = page.getByRole('form', { name: 'Registrar entrada de Nova Visita Ficticia' });
+  await form.getByLabel('Buscar identidade já conferida').fill('Pessoa');
+  await form.getByRole('button', { name: 'Buscar cadastro anterior' }).click();
+  await form.getByRole('radio', { name: 'Pessoa Conferida Ficticia · final 7788' }).check();
+  await expect(form.getByRole('button', { name: 'Vincular à identidade conferida' })).toBeDisabled();
+  await form.getByLabel('Conferi o documento e a associação escolhida pessoalmente').check();
+  await form.getByLabel('Motivo da conferência').fill('Documento conferido pessoalmente, mesma pessoa');
+  await form.getByRole('button', { name: 'Vincular à identidade conferida' }).click();
+  await expect(form.getByText('Este cadastro tem conferência ativa da portaria.', { exact: false })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0]!.body).toMatchObject({ arrivalId: ARRIVAL, permitId: null, canonicalVisitorId: canonical, reason: 'Documento conferido pessoalmente, mesma pessoa' });
+  expect(posts[0]!.body.requestId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(posts[0]!.csrf).toBeTruthy();
+  expect(state.entryPosts).toHaveLength(0);
+});
+

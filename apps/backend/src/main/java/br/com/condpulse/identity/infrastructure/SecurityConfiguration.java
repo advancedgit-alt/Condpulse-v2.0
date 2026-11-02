@@ -106,6 +106,8 @@ public class SecurityConfiguration {
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/stays/*/justification",
       "/v1/tenants/*/units/*/stays/*/exit-confirmation").authenticated()
     .requestMatchers(HttpMethod.PUT,"/v1/tenants/*/stay-rules/*").authenticated()
+    .requestMatchers(HttpMethod.GET,"/v1/tenants/*/stay-identities","/v1/tenants/*/stay-identities/source").authenticated()
+    .requestMatchers(HttpMethod.POST,"/v1/tenants/*/stay-identities","/v1/tenants/*/stay-identities/*/void").authenticated()
     // Avisos da gestão: autenticação aqui; capacidade com AAL2 (gestão) ou público e vínculo (unidade) no serviço e no banco.
     .requestMatchers(HttpMethod.GET,"/v1/tenants/*/management/announcements","/v1/tenants/*/units/*/announcements").authenticated()
     .requestMatchers(HttpMethod.POST,"/v1/tenants/*/management/announcements","/v1/tenants/*/management/announcements/*/publish",
@@ -272,4 +274,5 @@ public class SecurityConfiguration {
    .build();
  }
 }
+
 
