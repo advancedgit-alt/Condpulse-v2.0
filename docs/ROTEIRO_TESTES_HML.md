@@ -20,9 +20,15 @@ Na Central → Condomínio demo há geração1 com2torres/32unidades/3áreas, pe
 
 A conta atual já abriu a gestão do demo e a gestão do parceiro com AAL2, após vínculos especificamente confirmados no chat. Pelo parceiro, Equipe mostra7 registros; Carteira mostra somente o contrato do demo; Escala mostra4 escalas fictícias. Consulte o Log de Segurança sob pedido e use Verificar integridade; cada leitura grava evento. A correção das rotas HTTP está no PR #176 e os recibos de publicação estão em ESTADO_ATUAL.
 
-Portaria: o convite foi aceito, mas está PENDING. Outro gestor precisa aprovar em Gestão → Pessoas → Situação Pendente, com sua própria conta. A tentativa pela mesma conta foi recusada por MEMBERSHIP_SELF_DECISION_DENIED. Não aprovar por SQL ou fabricar ator. A gestão dessa segunda conta ainda precisa de autorização específica.
+Portaria: o convite foi aceito, mas está PENDING. Outro gestor precisa aprovar em Gestão → Pessoas → Situação Pendente, com sua própria conta. A tentativa pela mesma conta foi recusada por MEMBERSHIP_SELF_DECISION_DENIED. Não aprovar por SQL ou fabricar ator. O responsável já autorizou uma segunda conta de teste existente como gestor adicional; não repetir a confirmação.
 
-Morador: ainda não há vínculo real no demo. Confirmar primeiro a unidade fictícia exata (proposta: Torre A,101); o controle automático bloqueou o convite porque a unidade não tinha sido indicada. Após confirmação, criar e aceitar o convite e obter aprovação de outro gestor. Operador/supervisor do parceiro também exigem papel e escala próprios; a confirmação de Gestor do parceiro não concede esses papéis adicionais.
+Morador: a unidade Torre A fictícia,101 já foi confirmada. O convite foi criado e aceito pelo fluxo normal; vínculo PENDING conferido por SELECT. Outro gestor ativo com AAL2 deve aprovar. Operador/supervisor do parceiro também exigem papel e escala próprios; a confirmação de Gestor do parceiro não concede esses papéis adicionais.
+
+## Continuação do segundo gestor autorizado
+
+PR #178/ADR-0013 e V056 implementam o convite local de gestão adicional. CI e migration/replay passaram; a API/worker publicados ainda são b1d4598. A inspeção da API41374557917 passou, mas o controle do navegador caiu antes de iniciar a inspeção do worker. Recuperar esse acesso e publicar pelo executor protegido na fonte vigente, após novas inspeções/ACKs quando o head mudar. Não usar o formulário novo contra backend antigo como prova de funcionamento.
+
+Depois: gestão atual com AAL2 → Pessoas → convite Gestão, sem unidade, para a segunda conta já confirmada; essa conta aceita e fica PENDING. A gestão atual aprova o segundo gestor. O responsável configura o segundo fator dessa conta no fluxo normal (ainda não há fator cadastrado). Com AAL2, o segundo gestor aprova os vínculos PENDING de morador/portaria da primeira conta. Não copiar credenciais, ler segredo/QR ou substituir esses passos por SQL. Esse percurso ainda não foi executado.
 
 ## Ainda não aceito
 

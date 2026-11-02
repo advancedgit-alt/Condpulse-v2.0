@@ -12,13 +12,16 @@
     ],
     "partner_role_confirmed": "PARTNER_ADMIN",
     "scope": "only existing synthetic demo and its partner",
-    "unit_not_specified": true
+    "unit_not_specified": false,
+    "unit_id": "51d38433-1af7-4682-a144-3ecbc5178c91",
+    "unit_label": "Torre A (fictícia) · 101",
+    "second_test_account_manager_confirmed": true
   },
   "roles": {
     "MANAGER": "ACTIVE",
     "PARTNER_ADMIN": "ACTIVE",
     "CONCIERGE": "PENDING",
-    "RESIDENT": "NOT_CREATED"
+    "RESIDENT": "PENDING"
   },
   "verified": {
     "manager_invitation_accepted": true,
@@ -38,8 +41,9 @@
     "sensitive_views_actor_role": "MANAGER",
     "note": "Current account also has active local MANAGER; tenant authorization prioritizes local memberships. This UI check does not prove a partner-only account.",
     "existing_hml_resident_stays": "empty list loaded successfully using existing unit access",
-    "no_demo_resident_grant": true,
-    "live_entry_alert_exit_journey": "not executed"
+    "live_entry_alert_exit_journey": "not executed",
+    "resident_invitation_accepted": true,
+    "demo_resident_grant": "accepted via application; PENDING, confirmed by SELECT"
   },
   "denials": {
     "concierge_self_approval": {
@@ -53,7 +57,9 @@
       "source": "automatic approval review",
       "attempted_unit_label": "Torre A (fictícia) · 101",
       "created": false,
-      "reason": "Residential unit was not specified by the user; do not retry before specific confirmation."
+      "reason": "Earlier unit-specific consent was missing; this is no longer a current blocker.",
+      "historical": true,
+      "resolved": "User specifically confirmed A-101; invitation created and accepted through normal UI afterward."
     }
   },
   "security": {
@@ -112,5 +118,60 @@
     },
     "same_release_for_api_and_worker": true,
     "secret_values_exposed": false
+  },
+  "manager_invitation_release": {
+    "pr": 178,
+    "adr": "0013-convite-de-gestor-local.md",
+    "source_head": "e36aa187ecba6a3abfaf01dca8512bffee088a42",
+    "merge_sha": "6686a6cbc9d2bd743ca7348ebf79267ef9e3df8e",
+    "ci_run": 41373167469,
+    "ci_jobs": "5 success",
+    "vitest": 346,
+    "chromium": 226,
+    "jdbc": {
+      "run": 286,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "workflow": "database-operations",
+    "migration": {
+      "version": "056",
+      "run": 41374111396,
+      "migrationsExecuted": 1,
+      "validated": true,
+      "replay_run": 41374484966,
+      "replay_migrationsExecuted": 0,
+      "replay_validated": true,
+      "history_and_constraints_confirmed_by_select": true
+    },
+    "api_inspect": {
+      "run": 41374557917,
+      "conclusion": "success",
+      "database": {
+        "state": "READY",
+        "eligible": true
+      },
+      "source_sha": "6686a6cbc9d2bd743ca7348ebf79267ef9e3df8e"
+    },
+    "worker_inspect": {
+      "run": null,
+      "status": "not started; no new worker run found after browser timeout"
+    },
+    "api_deploy_run": null,
+    "worker_deploy_run": null,
+    "live_backend_sha": "b1d4598273cb14c3f37834de8a779e47424a15ae",
+    "live_manager_flow_verified": false,
+    "additional_manager_invitation": "not created",
+    "second_account_auth": "existing confirmed account; no MFA factor enrolled; own sign-in and factor setup still required",
+    "blocker": "Browser control connection interrupted; no supported dispatch surface currently available.",
+    "next": "Restore browser control, verify main head, inspect and deploy API/worker through protected workflows using ACKs for current source. Then invite/accept/approve additional manager, enroll own MFA, and approve original account pending memberships."
+  },
+  "backup_rechecked": {
+    "type": "PHYSICAL",
+    "timestamp_utc": "2026-11-01T07:52:12Z",
+    "predates_test_data": true,
+    "includes_storage_bytes": false,
+    "restore_accepted": false
   }
 }
