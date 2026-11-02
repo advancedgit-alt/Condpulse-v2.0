@@ -40804,7 +40804,8 @@
               "VISITOR",
               "SERVICE_PROVIDER",
               "DELIVERY",
-              "CONSTRUCTION"
+              "CONSTRUCTION",
+              "EVENT_GUEST"
             ]
           },
           "origin": {
@@ -40916,6 +40917,23 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "reservationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "amenityName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "controlEnabled": {
+            "type": "boolean",
+            "description": "Controle de escalada ativo agora; entrada/saída permanecem registradas quando desligado."
           }
         }
       },
@@ -41022,7 +41040,10 @@
           "l1AfterMinutes",
           "l2AfterMinutes",
           "source",
-          "version"
+          "version",
+          "enabled",
+          "startsLocal",
+          "endsLocal"
         ],
         "properties": {
           "kind": {
@@ -41031,7 +41052,8 @@
               "VISITOR",
               "SERVICE_PROVIDER",
               "DELIVERY",
-              "CONSTRUCTION"
+              "CONSTRUCTION",
+              "EVENT_GUEST"
             ]
           },
           "maxMinutes": {
@@ -41062,6 +41084,23 @@
               "null"
             ],
             "minimum": 0
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "startsLocal": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9](:00)?$"
+          },
+          "endsLocal": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9](:00)?$"
           }
         }
       },
@@ -41088,7 +41127,7 @@
           "l1AfterMinutes",
           "l2AfterMinutes"
         ],
-        "description": "version ausente cria a regra do tipo; com versão, atualiza só se ainda for a mesma (RULE_CHANGED no log).",
+        "description": "version ausente cria a regra do tipo; com versão, atualiza só se ainda for a mesma (RULE_CHANGED no log). Horário no fuso do condomínio, no mesmo dia (início anterior ao fim). Não reescreve prazos de entradas anteriores.",
         "properties": {
           "maxMinutes": {
             "type": "integer",
@@ -41111,6 +41150,34 @@
               "null"
             ],
             "minimum": 0
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Ausente preserva o valor atual; desligado suspende alertas."
+          },
+          "scheduleEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "true configura o horário diário; false remove; ausente preserva."
+          },
+          "startsLocal": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "endsLocal": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
           }
         }
       }

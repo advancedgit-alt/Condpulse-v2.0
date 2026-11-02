@@ -179,4 +179,49 @@ class StayJdbcTest {
   db.adminUpdateWithoutTriggers("delete from cp.stay_rules where tenant_id=?",db.tenantA);
   db.assertEmptyContext();
  }
+
+ @Test void dailyScheduleUsesCondominiumZoneAndHasExactBoundaries() throws Exception {
+  assertEquals("20:00",db.adminString("select to_char(cp.stay_daily_exit('2030-01-02T11:00:00Z'::timestamptz,'America/Sao_Paulo','08:00'::time,'17:00'::time) at time zone 'UTC','HH24:MI')"));
+  assertEquals("17:00",db.adminString("select to_char(cp.stay_daily_exit('2030-01-02T11:00:00Z'::timestamptz,'UTC','08:00'::time,'17:00'::time) at time zone 'UTC','HH24:MI')"));
+  var before=assertThrows(java.sql.SQLException.class,()->db.adminString("select cp.stay_daily_exit('2030-01-02T10:59:59Z'::timestamptz,'America/Sao_Paulo','08:00'::time,'17:00'::time)::text"));
+  assertEquals("P5701",before.getSQLState());
+  var after=assertThrows(java.sql.SQLException.class,()->db.adminString("select cp.stay_daily_exit('2030-01-02T20:00:00Z'::timestamptz,'America/Sao_Paulo','08:00'::time,'17:00'::time)::text"));
+  assertEquals("P5701",after.getSQLState());
+  assertNull(db.adminString("select cp.stay_daily_exit('2030-01-02T00:00:00Z'::timestamptz,'America/Sao_Paulo',null,null)::text"));
+ }
+
+ @Test void scheduleIsVersionedAndLegacyUpdatesPreserveActivationAndHours() throws Exception {
+  var configured=stays.changeRule(manager,db.tenantA,AAL2,"SERVICE_PROVIDER",new StayModels.RuleChange(540,30,60,null,true,true,"08:00","17:00"))
+   .rules().stream().filter(r->r.kind().equals("SERVICE_PROVIDER")).findFirst().orElseThrow();
+  assertTrue(configured.enabled()); assertTrue(configured.startsLocal().startsWith("08:00")); assertTrue(configured.endsLocal().startsWith("17:00"));
+  assertEquals("STAY_SCHEDULE_INVALID",assertThrows(BusinessProblem.class,()->stays.changeRule(manager,db.tenantA,AAL2,"SERVICE_PROVIDER",
+   new StayModels.RuleChange(540,30,60,0L,true,true,"17:00","08:00"))).code());
+  assertEquals("MFA_REQUIRED",assertThrows(BusinessProblem.class,()->stays.changeRule(manager,db.tenantA,AssuranceLevel.AAL1,"SERVICE_PROVIDER",
+   new StayModels.RuleChange(540,30,60,0L,false,false,null,null))).code());
+  assertEquals("STAFF_ACCESS_DENIED",assertThrows(BusinessProblem.class,()->stays.changeRule(db.accountA,db.tenantA,AAL2,"SERVICE_PROVIDER",
+   new StayModels.RuleChange(540,30,60,0L,false,false,null,null))).code());
+  var preserved=stays.changeRule(manager,db.tenantA,AAL2,"SERVICE_PROVIDER",new StayModels.RuleChange(600,30,60,0L))
+   .rules().stream().filter(r->r.kind().equals("SERVICE_PROVIDER")).findFirst().orElseThrow();
+  assertTrue(preserved.enabled()); assertEquals(configured.startsLocal(),preserved.startsLocal());
+  assertEquals("STAY_RULE_VERSION_CONFLICT",assertThrows(BusinessProblem.class,()->stays.changeRule(manager,db.tenantA,AAL2,"SERVICE_PROVIDER",
+   new StayModels.RuleChange(540,30,60,0L,false,false,null,null))).code());
+  assertEquals("true:08:00:00:17:00:00",db.adminString("select (details->>'enabled')||':'||(details->>'startsLocal')||':'||(details->>'endsLocal') from cp.security_log where tenant_id=? and event_type='RULE_CHANGED' and details->>'kind'='SERVICE_PROVIDER' order by seq desc limit 1",db.tenantA));
+ }
+
+ @Test void disabledControlKeepsTheStayButSuppressesAlertsAndReactivationIsIdempotent() throws Exception {
+  stays.changeRule(manager,db.tenantA,AAL2,"VISITOR",new StayModels.RuleChange(240,0,60,null,false,false,null,null));
+  var until=now().plusSeconds(8);
+  var permit=visits.createPermit(db.accountA,db.tenantA,db.unitA,key(),new VisitModels.CreatePermit("Controle Desligado JDBC",null,null,now(),until)).permit();
+  var entry=access.entry(concierge,db.tenantA,AAL2,key(),new AccessModels.RecordEntry(null,permit.permitId(),"DOCUMENT_CHECKED",null)).record();
+  UUID stay=stayOf(entry.entryId());
+  assertFalse(stays.unitOpen(db.accountA,db.tenantA,db.unitA).stays().stream().filter(r->r.stayId().equals(stay)).findFirst().orElseThrow().controlEnabled());
+  // O relógio real vence; nenhum gatilho, RLS ou relógio foi alterado para produzir o atraso.
+  long wait=Duration.between(Instant.now(),until.plusMillis(300)).toMillis(); if(wait>0) Thread.sleep(wait);
+  job.runOnce(); assertEquals(0,events(stay,"STAY_DUE")); assertEquals(0,events(stay,"STAY_OVERDUE_L1"));
+  assertEquals("OPEN",db.adminString("select state from cp.stays where id=?",stay));
+  stays.changeRule(manager,db.tenantA,AAL2,"VISITOR",new StayModels.RuleChange(240,0,60,0L,true,false,null,null));
+  job.runOnce(); job.runOnce(); assertEquals(1,events(stay,"STAY_DUE")); assertEquals(1,events(stay,"STAY_OVERDUE_L1"));
+  access.exit(concierge,db.tenantA,AAL2,entry.entryId(),key(),null);
+  assertEquals("CLOSED",db.adminString("select state from cp.stays where id=?",stay));
+ }
 }

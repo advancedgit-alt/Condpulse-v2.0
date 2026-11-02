@@ -89,7 +89,7 @@ sem dado pessoal (por isso a carteira não grava `SENSITIVE_VIEWED`):
 
 Verde: nenhum item amarelo ou vermelho. A lista vem do mais grave para o mais leve e mostra os motivos. **Sem fonte nesta
 versão** (aparecem como indisponíveis, nunca como zero): portas abertas (`DOOR_HELD_OPEN` não é gravado por nenhuma fonte;
-`DOOR_OPENED` do equipamento não informa fechamento) e permanências vencidas (`cp.stays`, CPX-015, ainda não existe).
+`DOOR_OPENED` do equipamento não informa fechamento) e contagem de permanências vencidas no semáforo v1. A tabela `cp.stays` e suas telas já existem na V055, com consulta própria; o semáforo de SecurityCommandStore ainda não agrega essa fonte.
 Leitura nova concedida ao líder com alcance (só `SELECT`): equipamentos, conectores e saúde (V026/V028/V048/V051) e
 ocorrências (a política restritiva da V033 foi separada por comando: só a leitura ganhou o líder; gravação e encerramento
 seguem como antes); escala e equipe do próprio parceiro (mesmo padrão da leitura do gestor, V049).
@@ -145,7 +145,7 @@ políticas do §4.3.4.
 - Os eventos de parceiro (equipe, contrato, escala) vão para a trilha da plataforma; o Log de Segurança por condomínio
   está em [LOG_SEGURANCA.md](LOG_SEGURANCA.md).
 - Web: painéis de turno, console e técnico dependem do backend de E2/E11; homologação visual com dados reais (inclusive do
-  Comando) depende da V054 aplicada e de login real com AAL2.
+  Comando) depende dos perfis corretos com AAL2. V054/V055 já aplicadas na HML; o percurso completo do líder/supervisor/operador ainda não foi homologado. A conta já usada como PARTNER_ADMIN também é MANAGER local e não comprova perfil exclusivamente de parceiro.
 - Troca de contexto: a saída é registrada pela web sem segurar o contexto novo; se as três tentativas falharem, a saída fica
   sem registro (a entrada seguinte num painel de parceiro continua registrada).
 - Outros tipos de contrato (integradora) aguardam decisão; só `SECURITY_OPERATOR` existe.

@@ -2,7 +2,9 @@
 Versão de execução 0.1 — 27/10/2026. Referência: PRD CondPulse v1.0.
 Decisão técnica, implementação e homologação são estados diferentes.
 
-Estado operacional conferido em 01/11/2026: web na Vercel, API e worker contínuo na Fly (gru), banco HML até V055. SMTP Resend do Auth, outbox, fila de espera e alertas de permanência já configurados; demo carregado e jornadas reais registradas. Este plano nasceu em 27/10 e suas estimativas não substituem o estado atual: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+Estado operacional conferido em 01/11/2026: web na Vercel, API e worker contínuo na Fly (gru), banco HML até V056. SMTP Resend do Auth, outbox, fila de espera e alertas de permanência já configurados; demo carregado e jornadas reais registradas. Este plano nasceu em 27/10 e suas estimativas não substituem o estado atual: [ESTADO_ATUAL.md](ESTADO_ATUAL.md).
+
+Execução atual por fases e critérios: [PLANO_FINALIZACAO_HML.md](PLANO_FINALIZACAO_HML.md). Migrações/publicações têm recibos no estado atual; não repetir configurações antigas.
 
 ## 1. Objetivo e limite
 Morador: vínculo, reserva, convite, encomenda, avisos, documentos e pedidos.

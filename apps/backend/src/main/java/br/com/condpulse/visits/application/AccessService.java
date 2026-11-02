@@ -77,7 +77,7 @@ public class AccessService {
    throw invalid("STAY_KIND_INVALID","Tipo de permanência inválido: use visitante, prestador, entregador ou obra.");
   String hash=VisitRequestHash.entry(request.arrivalId(),request.permitId(),request.evidence(),note,request.stayKind());
   String route="/v1/tenants/"+tenant+"/access-events/entries";
-  return execute(actor,tenant,assurance,Map.of("23505",AccessService::entryRecorded,"23514",AccessService::stateChanged),context->{
+  return execute(actor,tenant,assurance,Map.of("23505",AccessService::entryRecorded,"23514",AccessService::stateChanged,"P5701",AccessService::outsideStaySchedule),context->{
    context.requireCapability(StaffCapability.OPERATE_CONCIERGE);
    var previous=visits.begin(tenant,actor,route,key,hash);
    if(!previous.fresh()) return replay(tenant,previous);
@@ -218,6 +218,8 @@ public class AccessService {
  private static BusinessProblem alreadyCorrected() {
   return new BusinessProblem("ACCESS_ALREADY_CORRECTED",409,"Este registro já foi corrigido. Atualize a lista.");
  }
+ private static BusinessProblem outsideStaySchedule() { return new BusinessProblem("STAY_ENTRY_OUTSIDE_SCHEDULE",409,
+  "Entrada fora do horário permitido para esta categoria. Confira a regra do condomínio."); }
  private static BusinessProblem stateChanged() {
   return new BusinessProblem("ACCESS_STATE_CHANGED",409,"A autorização ou o registro mudou. Atualize a lista antes de repetir.");
  }

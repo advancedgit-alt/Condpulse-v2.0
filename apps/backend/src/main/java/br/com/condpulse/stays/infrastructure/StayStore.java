@@ -22,7 +22,7 @@ public class StayStore {
  public StayStore(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
  private static final String SELECT="""
-  select s.id,s.unit_id,u.label as unit_label,b.name as block_name,v.full_name,v.document_last4,s.kind,s.origin,s.basis,s.entered_at,
+  select s.reservation_id,a.name as amenity_name,coalesce(cr.enabled,true) as control_enabled,s.id,s.unit_id,u.label as unit_label,b.name as block_name,v.full_name,v.document_last4,s.kind,s.origin,s.basis,s.entered_at,
     s.expected_exit_at,s.expected_source,s.state,s.closure,s.closed_at,s.entry_event_id,s.exit_event_id,s.justification,s.justified_at,
     case when s.state<>'OPEN' then 'NONE' when s.l2_at<=clock_timestamp() then 'L2' when s.l1_at<=clock_timestamp() then 'L1'
      when s.expected_exit_at<=clock_timestamp() then 'DUE' else 'NONE' end as level,
@@ -33,13 +33,16 @@ public class StayStore {
   join cp.units u on u.tenant_id=s.tenant_id and u.id=s.unit_id
   left join cp.blocks b on b.tenant_id=u.tenant_id and b.id=u.block_id
   left join cp.visitors v on v.tenant_id=s.tenant_id and v.id=s.visitor_id
+  left join cp.reservations rv on rv.tenant_id=s.tenant_id and rv.id=s.reservation_id
+  left join cp.amenities a on a.tenant_id=rv.tenant_id and a.id=rv.amenity_id
+  left join cp.stay_rules cr on cr.tenant_id=s.tenant_id and cr.kind=s.kind
   """;
  private static final RowMapper<StayModels.Stay> STAY=(r,n)->new StayModels.Stay(r.getObject("id",UUID.class),r.getObject("unit_id",UUID.class),
   r.getString("unit_label"),r.getString("block_name"),r.getString("full_name"),r.getString("document_last4"),r.getString("kind"),
   r.getString("origin"),r.getString("basis"),instant(r,"entered_at"),instant(r,"expected_exit_at"),r.getString("expected_source"),
   r.getString("state"),r.getString("closure"),instant(r,"closed_at"),r.getString("level"),r.getString("recorded_level"),r.getBoolean("overdue"),
   r.getString("justification")!=null,r.getString("justification"),instant(r,"justified_at"),r.getObject("entry_event_id",UUID.class),
-  r.getObject("exit_event_id",UUID.class));
+  r.getObject("exit_event_id",UUID.class),r.getObject("reservation_id",UUID.class),r.getString("amenity_name"),r.getBoolean("control_enabled"));
  private static Instant instant(ResultSet r,String column) throws SQLException {
   Timestamp value=r.getTimestamp(column);
   return value==null?null:value.toInstant();
@@ -87,24 +90,26 @@ public class StayStore {
 
  public List<StayModels.Rule> rules(UUID tenant) {
   return jdbc.query("""
-   select k.kind,e.max_minutes,e.l1_after_minutes,e.l2_after_minutes,e.rule_source,r.version
+   select k.kind,e.max_minutes,e.l1_after_minutes,e.l2_after_minutes,e.rule_source,r.version,coalesce(r.enabled,true) as enabled,r.starts_local,r.ends_local
    from unnest(cp.stay_kinds()) with ordinality k(kind,position)
    cross join lateral cp.stay_rule(?,k.kind) e
    left join cp.stay_rules r on r.tenant_id=? and r.kind=k.kind
    order by k.position
    """,(r,n)->new StayModels.Rule(r.getString("kind"),r.getInt("max_minutes"),r.getInt("l1_after_minutes"),r.getInt("l2_after_minutes"),
-    r.getString("rule_source"),(Long)r.getObject("version",Long.class)),tenant,tenant);
+    r.getString("rule_source"),(Long)r.getObject("version",Long.class),r.getBoolean("enabled"),r.getString("starts_local"),r.getString("ends_local")),tenant,tenant);
  }
- public int createRule(UUID tenant,String kind,int max,int l1,int l2,UUID actor) {
+ public int createRule(UUID tenant,String kind,int max,int l1,int l2,UUID actor,Boolean enabled,Boolean schedule,String start,String end) {
   return jdbc.update("""
-   insert into cp.stay_rules(tenant_id,kind,max_minutes,l1_after_minutes,l2_after_minutes,updated_by) values(?,?,?,?,?,?)
+   insert into cp.stay_rules(tenant_id,kind,max_minutes,l1_after_minutes,l2_after_minutes,updated_by,enabled,starts_local,ends_local) values(?,?,?,?,?,?,coalesce(?,true),?::time,?::time)
    on conflict (tenant_id,kind) do nothing
-   """,tenant,kind,max,l1,l2,actor);
+   """,tenant,kind,max,l1,l2,actor,enabled,start,end);
  }
- public int updateRule(UUID tenant,String kind,int max,int l1,int l2,long version,UUID actor) {
+ public int updateRule(UUID tenant,String kind,int max,int l1,int l2,long version,UUID actor,Boolean enabled,Boolean schedule,String start,String end) {
   return jdbc.update("""
-   update cp.stay_rules set max_minutes=?,l1_after_minutes=?,l2_after_minutes=?,updated_by=?,version=version+1
+   update cp.stay_rules set max_minutes=?,l1_after_minutes=?,l2_after_minutes=?,updated_by=?,version=version+1,
+    enabled=coalesce(?,enabled),starts_local=case when ?::boolean is null then starts_local else ?::time end,
+    ends_local=case when ?::boolean is null then ends_local else ?::time end
    where tenant_id=? and kind=? and version=?
-   """,max,l1,l2,actor,tenant,kind,version);
+   """,max,l1,l2,actor,enabled,schedule,start,schedule,end,tenant,kind,version);
  }
 }

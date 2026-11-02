@@ -16,6 +16,8 @@ export function StayList({ stays, timeZone, label, action, showJustification = t
     return <li key={stay.stayId} className="management-row" data-overdue={stay.overdue ? 'true' : undefined}>
       <div><strong><bdi>{stay.visitorName ?? 'Pessoa sem nome visível'}</bdi></strong> <span className={`status-pill ${status.tone}`}>{status.label}</span>
         <span>{stayKindLabels[stay.kind]} · unidade {place(stay)} · entrada em {formatWhen(stay.enteredAt, timeZone)}</span>
+        {stay.reservationId ? <span>Festa/área: <bdi>{stay.amenityName ?? 'Área da reserva'}</bdi> · reserva {stay.reservationId.slice(0, 8)}</span> : null}
+        {stay.controlEnabled === false ? <span className="status-pill status-neutral">Controle desligado</span> : null}
         <span>Saída prevista {formatWhen(stay.expectedExitAt, timeZone)} ({expectedSourceLabels[stay.expectedSource]})</span>
         <span className="field-help">Origem: {stayOrigin(stay)}. Sem registro de saída não prova que a pessoa continua no condomínio.</span>
         {stay.closure && stay.closedAt ? <span>Encerrada: {closureLabels[stay.closure]} em {formatWhen(stay.closedAt, timeZone)}</span> : null}

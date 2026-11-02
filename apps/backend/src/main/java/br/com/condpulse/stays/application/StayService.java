@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.List;
@@ -134,11 +136,23 @@ public class StayService {
      || change.maxMinutes()<5 || change.maxMinutes()>1440 || change.l1AfterMinutes()<0 || change.l1AfterMinutes()>720
      || change.l2AfterMinutes()<=change.l1AfterMinutes() || change.l2AfterMinutes()>1440)
    throw new BusinessProblem("STAY_RULE_INVALID",400,"Tempo máximo de 5 a 1.440 minutos; N1 de 0 a 720; N2 maior que N1 e até 1.440.");
+  String starts=null,ends=null;
+  if(Boolean.TRUE.equals(change.scheduleEnabled())) {
+   try {
+    LocalTime from=LocalTime.parse(change.startsLocal()); LocalTime until=LocalTime.parse(change.endsLocal());
+    if(!from.isBefore(until) || from.getSecond()!=0 || until.getSecond()!=0 || from.getNano()!=0 || until.getNano()!=0) throw new IllegalArgumentException();
+    starts=from.toString(); ends=until.toString();
+   } catch(DateTimeParseException | NullPointerException error) { throw invalidSchedule(); }
+   catch(IllegalArgumentException error) { throw invalidSchedule(); }
+  } else if(change.startsLocal()!=null || change.endsLocal()!=null) {
+   if(change.scheduleEnabled()==null) throw invalidSchedule();
+  }
+  final String start=starts,end=ends;
   return execute(actor,tenant,assurance,context->{
    context.requireCapability(StaffCapability.EDIT_POLICIES);
    int changed=change.version()==null
-    ?store.createRule(tenant,kind,change.maxMinutes(),change.l1AfterMinutes(),change.l2AfterMinutes(),actor)
-    :store.updateRule(tenant,kind,change.maxMinutes(),change.l1AfterMinutes(),change.l2AfterMinutes(),change.version(),actor);
+    ?store.createRule(tenant,kind,change.maxMinutes(),change.l1AfterMinutes(),change.l2AfterMinutes(),actor,change.enabled(),change.scheduleEnabled(),start,end)
+    :store.updateRule(tenant,kind,change.maxMinutes(),change.l1AfterMinutes(),change.l2AfterMinutes(),change.version(),actor,change.enabled(),change.scheduleEnabled(),start,end);
    if(changed!=1) throw new BusinessProblem("STAY_RULE_VERSION_CONFLICT",409,"A regra mudou desde a leitura. Atualize antes de salvar.");
    return new StayModels.Rules(store.rules(tenant));
   });
@@ -181,6 +195,8 @@ public class StayService {
    throw unavailable();
   }
  }
+ private static BusinessProblem invalidSchedule() { return new BusinessProblem("STAY_SCHEDULE_INVALID",400,
+  "Informe início e fim no formato HH:mm, no mesmo dia, com início anterior ao fim."); }
  private static BusinessProblem unavailable() {
   return new BusinessProblem("STAY_DEPENDENCY_UNAVAILABLE",503,"Não foi possível concluir a operação. Atualize e confira antes de repetir.");
  }
