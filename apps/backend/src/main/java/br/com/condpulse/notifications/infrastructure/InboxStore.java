@@ -49,6 +49,14 @@ public class InboxStore {
    (r,n)->new Resource(r.getObject("unit_id",UUID.class),r.getBoolean("open")),tenant,move);
   return rows.isEmpty()?null:rows.getFirst();
  }
+ /** Aviso de permanência: identificador/unidade/estado, sem nome nem documento. Não avisa situação já encerrada. */
+ public Resource stay(UUID tenant,UUID stay) {
+  var rows=jdbc.query("""
+   select unit_id,state='OPEN' and justified_at is null and l1_alerted_at is not null
+    and cp.stay_control_enabled(tenant_id,kind) as open from cp.stays where tenant_id=? and id=?
+   """,(r,n)->new Resource(r.getObject("unit_id",UUID.class),r.getBoolean("open")),tenant,stay);
+  return rows.isEmpty()?null:rows.getFirst();
+ }
  /** A retenção vem do próprio evento (o worker não lê a fila fora da passada de oferta); vale enquanto HELD no prazo. */
  public Offer offer(UUID tenant,UUID outbox) {
   var rows=jdbc.query("""

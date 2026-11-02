@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 public class InboxEffect implements OutboxEffect {
  static final Map<String,String> KINDS=Map.of("ARRIVAL_REQUESTED","ARRIVAL_WAITING","PARCEL_RECEIVED","PARCEL_RECEIVED",
   "WAITLIST_OFFERED","WAITLIST_OFFERED","REQUEST_UPDATED","REQUEST_UPDATED","REQUEST_MESSAGE_ADDED","REQUEST_UPDATED",
-  "MOVE_APPROVED","MOVE_DECIDED","MOVE_REJECTED","MOVE_DECIDED");
+  "MOVE_APPROVED","MOVE_DECIDED","MOVE_REJECTED","MOVE_DECIDED","STAY_OVERDUE","STAY_OVERDUE");
  private final InboxStore store;
  public InboxEffect(InboxStore store) { this.store=store; }
  @Override public boolean handles(String eventType) { return KINDS.containsKey(eventType); }
@@ -41,6 +41,7 @@ public class InboxEffect implements OutboxEffect {
    case "ARRIVAL_WAITING"->store.arrival(tenant,event.aggregateId());
    case "REQUEST_UPDATED"->store.request(tenant,event.aggregateId());
    case "MOVE_DECIDED"->store.move(tenant,event.aggregateId());
+   case "STAY_OVERDUE"->store.stay(tenant,event.aggregateId());
    default->store.parcel(tenant,event.aggregateId());
   };
   if(resource==null) throw new OutboxModels.PermanentFailure("Registro do evento não encontrado no condomínio.");

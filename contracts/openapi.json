@@ -27779,7 +27779,8 @@
               "PARCEL_RECEIVED",
               "WAITLIST_OFFERED",
               "REQUEST_UPDATED",
-              "MOVE_DECIDED"
+              "MOVE_DECIDED",
+              "STAY_OVERDUE"
             ]
           },
           "resourceId": {
@@ -27791,7 +27792,7 @@
               "string",
               "null"
             ],
-            "description": "Situação atual do registro para quem lê (chegada: WAITING, APPROVED, DENIED, EXPIRED, CANCELLED; encomenda: RECEIVED, DELIVERED; oferta da fila: OFFERED, ACCEPTED, LEFT, EXPIRED, CLOSED; pedido: OPEN, TRIAGED, IN_PROGRESS, WAITING_RESIDENT, RESOLVED, CLOSED; mudança: REQUESTED, APPROVED, REJECTED, CANCELLED). null quando o registro não está mais visível (ex.: encomenda anulada)."
+            "description": "Situação atual do registro para quem lê (chegada: WAITING, APPROVED, DENIED, EXPIRED, CANCELLED; encomenda: RECEIVED, DELIVERED; oferta da fila: OFFERED, ACCEPTED, LEFT, EXPIRED, CLOSED; pedido: OPEN, TRIAGED, IN_PROGRESS, WAITING_RESIDENT, RESOLVED, CLOSED; mudança: REQUESTED, APPROVED, REJECTED, CANCELLED). null quando o registro não está mais visível (ex.: encomenda anulada). Permanência: OPEN, CLOSED, VOIDED. Sem registro de saída não prova presença."
           },
           "state": {
             "type": "string",

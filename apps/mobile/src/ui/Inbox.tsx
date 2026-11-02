@@ -14,7 +14,7 @@ import { colors, touch } from './theme';
  */
 const kindText: Record<InboxNotification['kind'], string> = {
   ARRIVAL_WAITING: 'Chegada aguardando resposta da unidade', PARCEL_RECEIVED: 'Encomenda recebida na portaria',
-  WAITLIST_OFFERED: 'Vaga da fila de espera', REQUEST_UPDATED: 'Atualização no pedido da unidade', MOVE_DECIDED: 'Decisão sobre a mudança',
+  WAITLIST_OFFERED: 'Vaga da fila de espera', REQUEST_UPDATED: 'Atualização no pedido da unidade', MOVE_DECIDED: 'Decisão sobre a mudança', STAY_OVERDUE: 'Prazo de permanência vencido',
 };
 const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> = {
   ARRIVAL_WAITING: {
@@ -32,12 +32,14 @@ const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> =
     OPEN: 'Situação atual: enviado.', TRIAGED: 'Situação atual: em análise.', IN_PROGRESS: 'Situação atual: em execução.',
     WAITING_RESIDENT: 'Situação atual: aguardando a resposta da unidade.', RESOLVED: 'Situação atual: concluído.', CLOSED: 'Situação atual: encerrado.',
   },
+  STAY_OVERDUE: { OPEN: 'Sem registro de saída após o prazo. Contate a portaria para localizar e solicitar a saída.', CLOSED: 'A saída já foi registrada.', VOIDED: 'O registro de entrada foi corrigido.' },
   MOVE_DECIDED: {
     REQUESTED: 'Situação atual: aguardando a gestão.', APPROVED: 'Situação atual: mudança aprovada.', REJECTED: 'Situação atual: mudança recusada.',
     CANCELLED: 'Situação atual: pedido de mudança cancelado.',
   },
 };
 const opened: Record<InboxNotification['kind'], string> = {
+  STAY_OVERDUE: 'Aviso aberto. Há prazo de permanência vencido sem registro de saída; contate a portaria para conferir e solicitar a saída.',
   ARRIVAL_WAITING: 'Aviso aberto. A chegada aparece em “Visitas”, nesta tela, para responder.',
   PARCEL_RECEIVED: 'Aviso aberto. A encomenda aparece em “Encomendas”, nesta tela.',
   WAITLIST_OFFERED: 'Aviso aberto. A oferta aparece em “Fila de espera”, nas reservas desta tela, para aceitar no prazo.',
@@ -45,7 +47,7 @@ const opened: Record<InboxNotification['kind'], string> = {
   MOVE_DECIDED: 'Aviso aberto. A mudança está em “Mudança e entrega de móveis”, nesta tela.',
 };
 const section: Record<InboxNotification['kind'], string> = { ARRIVAL_WAITING: 'visits', PARCEL_RECEIVED: 'parcels', WAITLIST_OFFERED: 'waitlist',
-  REQUEST_UPDATED: 'requests', MOVE_DECIDED: 'moves' };
+  REQUEST_UPDATED: 'requests', MOVE_DECIDED: 'moves', STAY_OVERDUE: 'visits' };
 const message = (error: unknown) => error instanceof ApiError ? error.message : 'Não foi possível concluir agora. Tente novamente.';
 const uncertain = (error: unknown) => error instanceof ApiError && error.uncertain;
 /** Recurso desligado ou vínculo que mudou: a caixa some sem erro técnico. */

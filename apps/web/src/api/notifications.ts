@@ -6,7 +6,7 @@ import type { ISODateTime, UUID } from './types';
  * abertura autenticada pelo destinatário. O aviso não traz dado do registro (nome do visitante, descrição): a tela leva
  * à página que consulta o detalhe com as permissões de quem abre. resourceState é a situação atual do registro.
  */
-export type NotificationKind = 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED';
+export type NotificationKind = 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED' | 'STAY_OVERDUE';
 export type NotificationState = 'AVAILABLE' | 'READ_IN_APP';
 const arrivalStates = ['WAITING', 'APPROVED', 'DENIED', 'EXPIRED', 'CANCELLED'] as const;
 const parcelStates = ['RECEIVED', 'DELIVERED'] as const;
@@ -14,7 +14,7 @@ const offerStates = ['OFFERED', 'ACCEPTED', 'LEFT', 'EXPIRED', 'CLOSED'] as cons
 const requestStates = ['OPEN', 'TRIAGED', 'IN_PROGRESS', 'WAITING_RESIDENT', 'RESOLVED', 'CLOSED'] as const;
 const moveStates = ['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
 const statesOf: Record<NotificationKind, readonly string[]> = { ARRIVAL_WAITING: arrivalStates, PARCEL_RECEIVED: parcelStates, WAITLIST_OFFERED: offerStates,
-  REQUEST_UPDATED: requestStates, MOVE_DECIDED: moveStates };
+  REQUEST_UPDATED: requestStates, MOVE_DECIDED: moveStates, STAY_OVERDUE: ['OPEN', 'CLOSED', 'VOIDED'] };
 export interface InboxNotification {
   notificationId: UUID; unitId: UUID; kind: NotificationKind; resourceId: UUID; resourceState: string | null; state: NotificationState;
   createdAt: ISODateTime; readAt: ISODateTime | null;
@@ -22,7 +22,7 @@ export interface InboxNotification {
 export interface InboxPage { items: InboxNotification[]; unread: number }
 
 export function inboxNotification(value: unknown, uncertain = false): InboxNotification {
-  if (!record(value) || !isUUID(value.notificationId) || !isUUID(value.unitId) || !oneOf(value.kind, ['ARRIVAL_WAITING', 'PARCEL_RECEIVED', 'WAITLIST_OFFERED', 'REQUEST_UPDATED', 'MOVE_DECIDED'])
+  if (!record(value) || !isUUID(value.notificationId) || !isUUID(value.unitId) || !oneOf(value.kind, ['ARRIVAL_WAITING', 'PARCEL_RECEIVED', 'WAITLIST_OFFERED', 'REQUEST_UPDATED', 'MOVE_DECIDED', 'STAY_OVERDUE'])
       || !isUUID(value.resourceId) || !oneOf(value.state, ['AVAILABLE', 'READ_IN_APP']) || !isDate(value.createdAt)
       || !(value.readAt === null || isDate(value.readAt)) || (value.state === 'READ_IN_APP') !== (value.readAt !== null)
       || !(value.resourceState === null || oneOf(value.resourceState, statesOf[value.kind])))

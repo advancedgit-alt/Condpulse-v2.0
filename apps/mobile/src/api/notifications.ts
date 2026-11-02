@@ -5,7 +5,7 @@ import { ContractError } from './reservations';
  * READ_IN_APP só existe depois da abertura autenticada pelo destinatário. O aviso não traz dado do registro (nome do
  * visitante, descrição): a tela aponta a seção que consulta o detalhe com as permissões de quem abre.
  */
-export type NotificationKind = 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED';
+export type NotificationKind = 'ARRIVAL_WAITING' | 'PARCEL_RECEIVED' | 'WAITLIST_OFFERED' | 'REQUEST_UPDATED' | 'MOVE_DECIDED' | 'STAY_OVERDUE';
 export interface InboxNotification {
   notificationId: string; unitId: string; kind: NotificationKind; resourceId: string; resourceState: string | null;
   state: 'AVAILABLE' | 'READ_IN_APP'; createdAt: string; readAt: string | null;
@@ -20,7 +20,7 @@ const arrivalStates = ['WAITING', 'APPROVED', 'DENIED', 'EXPIRED', 'CANCELLED'];
 const parcelStates = ['RECEIVED', 'DELIVERED'];
 const offerStates = ['OFFERED', 'ACCEPTED', 'LEFT', 'EXPIRED', 'CLOSED'];
 const statesOf: Record<NotificationKind, string[]> = { ARRIVAL_WAITING: arrivalStates, PARCEL_RECEIVED: parcelStates, WAITLIST_OFFERED: offerStates,
-  REQUEST_UPDATED: ['OPEN', 'TRIAGED', 'IN_PROGRESS', 'WAITING_RESIDENT', 'RESOLVED', 'CLOSED'], MOVE_DECIDED: ['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'] };
+  REQUEST_UPDATED: ['OPEN', 'TRIAGED', 'IN_PROGRESS', 'WAITING_RESIDENT', 'RESOLVED', 'CLOSED'], MOVE_DECIDED: ['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'], STAY_OVERDUE: ['OPEN', 'CLOSED', 'VOIDED'] };
 function check(condition: boolean): asserts condition { if (!condition) throw new ContractError(); }
 
 export function inboxNotification(value: unknown, unitId: string | null = null): InboxNotification {

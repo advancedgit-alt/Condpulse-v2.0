@@ -11,12 +11,12 @@ import './management/Management.css';
 
 const kindText: Record<InboxNotification['kind'], string> = {
   ARRIVAL_WAITING: 'Chegada aguardando resposta da unidade', PARCEL_RECEIVED: 'Encomenda recebida na portaria',
-  WAITLIST_OFFERED: 'Vaga da fila de espera', REQUEST_UPDATED: 'Atualização no pedido da unidade', MOVE_DECIDED: 'Decisão sobre a mudança',
+  WAITLIST_OFFERED: 'Vaga da fila de espera', REQUEST_UPDATED: 'Atualização no pedido da unidade', MOVE_DECIDED: 'Decisão sobre a mudança', STAY_OVERDUE: 'Prazo de permanência vencido',
 };
 /** Página do detalhe e rótulo do botão de cada tipo; pedido e mudança ficam nesta mesma página (sem navegação). */
 const destination: Record<InboxNotification['kind'], [string | null, string]> = {
   ARRIVAL_WAITING: ['acessos', 'Abrir e ver acessos'], PARCEL_RECEIVED: ['encomendas', 'Abrir e ver encomendas'],
-  WAITLIST_OFFERED: ['reservas', 'Abrir e ver reservas'], REQUEST_UPDATED: [null, 'Abrir e ver pedidos'], MOVE_DECIDED: [null, 'Abrir e ver mudanças'],
+  WAITLIST_OFFERED: ['reservas', 'Abrir e ver reservas'], REQUEST_UPDATED: [null, 'Abrir e ver pedidos'], MOVE_DECIDED: [null, 'Abrir e ver mudanças'], STAY_OVERDUE: ['acessos', 'Abrir e conferir permanência'],
 };
 /** Consultas da própria página a atualizar ao abrir o aviso (a conversa aberta do pedido também). */
 export function localRefresh(kind: InboxNotification['kind'], resourceId: string): string[][] {
@@ -44,13 +44,14 @@ const resourceTexts: Record<InboxNotification['kind'], Record<string, string>> =
     OPEN: 'Situação atual: enviado.', TRIAGED: 'Situação atual: em análise.', IN_PROGRESS: 'Situação atual: em execução.',
     WAITING_RESIDENT: 'Situação atual: aguardando a resposta da unidade.', RESOLVED: 'Situação atual: concluído.', CLOSED: 'Situação atual: encerrado.',
   },
+  STAY_OVERDUE: { OPEN: 'Sem registro de saída após o prazo. Contate a portaria para localizar e solicitar a saída.', CLOSED: 'A saída já foi registrada.', VOIDED: 'O registro de entrada foi corrigido.' },
   MOVE_DECIDED: {
     REQUESTED: 'Situação atual: aguardando a gestão.', APPROVED: 'Situação atual: mudança aprovada.', REJECTED: 'Situação atual: mudança recusada.',
     CANCELLED: 'Situação atual: pedido de mudança cancelado.',
   },
 };
 const icons: Record<InboxNotification['kind'], 'door' | 'box' | 'calendar' | 'bell' | 'home'> = {
-  ARRIVAL_WAITING: 'door', PARCEL_RECEIVED: 'box', WAITLIST_OFFERED: 'calendar', REQUEST_UPDATED: 'bell', MOVE_DECIDED: 'home',
+  ARRIVAL_WAITING: 'door', PARCEL_RECEIVED: 'box', WAITLIST_OFFERED: 'calendar', REQUEST_UPDATED: 'bell', MOVE_DECIDED: 'home', STAY_OVERDUE: 'door',
 };
 /** Recurso desligado no ambiente ou vínculo que mudou: a caixa some sem erro técnico (o resumo trata o vínculo). */
 const hidden = (error: unknown) => ['API_NOT_AVAILABLE', 'UNIT_ACCESS_DENIED', 'TENANT_ACCESS_DENIED'].includes(codeOf(error));
