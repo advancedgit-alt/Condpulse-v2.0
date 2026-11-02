@@ -61,6 +61,7 @@ BEGIN
   NEW.reservation_id:=venue;
   IF venue IS NOT NULL THEN NEW.kind:='EVENT_GUEST'; END IF;
  END IF;
+ IF NEW.kind='EVENT_GUEST' AND venue IS NULL THEN RAISE EXCEPTION 'Convidado de festa exige reserva vinculada.' USING ERRCODE='23514'; END IF;
  SELECT * INTO eff FROM cp.stay_rule(NEW.tenant_id,NEW.kind);
  SELECT r.enabled,r.starts_local,r.ends_local INTO cfg FROM cp.stay_rules r WHERE r.tenant_id=NEW.tenant_id AND r.kind=NEW.kind;
  IF FOUND AND cfg.enabled AND cfg.starts_local IS NOT NULL THEN

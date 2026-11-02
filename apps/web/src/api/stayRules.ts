@@ -31,7 +31,7 @@ export function stayRules(value: unknown, uncertain = false): StayRule[] {
 export function createStayRulesApi(client: CondPulseApi = api) {
   const base = (tenantId: string) => `/v1/tenants/${identifier(tenantId)}/stay-rules`;
   return {
-    list: (tenantId: string, signal?: AbortSignal) => client.call(base(tenantId), stayRules, signal ? { signal } : {}),
+    list: (tenantId: string, signal?: AbortSignal) => client.call(base(tenantId), (value) => stayRules(value), signal ? { signal } : {}),
     update: (tenantId: string, kind: StayKind, body: StayRuleChange) =>
       client.call(`${base(tenantId)}/${kind}`, (value) => stayRules(value, true), { method: 'PUT', body }),
   };

@@ -9,11 +9,11 @@ const rules = () => stayKinds.map((kind) => ({ kind, maxMinutes: 540, l1AfterMin
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
 describe('regras de permanência do condomínio', () => {
   it('exige categorias únicas, horário válido e escaladas ordenadas', () => {
-    expect(stayRules({ rules: rules() })[0].startsLocal).toBe('08:00');
-    const repeated = rules(); repeated[1] = repeated[0];
+    expect(stayRules({ rules: rules() })[0]!.startsLocal).toBe('08:00');
+    const repeated = rules(); repeated[1] = repeated[0]!;
     expect(() => stayRules({ rules: repeated })).toThrow();
     for (const invalid of [{ startsLocal: '25:00' }, { endsLocal: '08:00' }, { endsLocal: null }, { enabled: 'false' }, { l2AfterMinutes: 30 }]) {
-      const rows = rules(); Object.assign(rows[0], invalid); expect(() => stayRules({ rules: rows })).toThrow();
+      const rows = rules(); Object.assign(rows[0]!, invalid); expect(() => stayRules({ rules: rows })).toThrow();
     }
   });
   it('desliga por versão, usa CSRF e não repete automaticamente a gravação', async () => {
@@ -25,7 +25,7 @@ describe('regras de permanência do condomínio', () => {
       scheduleEnabled: false, startsLocal: null, endsLocal: null };
     await client.update(tenant, 'SERVICE_PROVIDER', body);
     const calls = fetcher.mock.calls.filter(([input]) => String(input).includes('/stay-rules/'));
-    expect(calls).toHaveLength(1); expect(calls[0][1]?.method).toBe('PUT');
-    expect(JSON.parse(String(calls[0][1]?.body))).toEqual(body);
+    expect(calls).toHaveLength(1); expect(calls[0]![1]?.method).toBe('PUT');
+    expect(JSON.parse(String(calls[0]![1]?.body))).toEqual(body);
   });
 });
